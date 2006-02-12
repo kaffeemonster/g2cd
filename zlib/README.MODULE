@@ -1,0 +1,18 @@
+You can directly compile in the zlib into G2CD.
+
+Just drop the zlib source into this directory and then use "make withzlib" or
+"make finalwithzlib" in the distribution root directory.
+
+This hopefully gives a little performance gain.
+
+But be WARNED:
+* whenever there is a problem with your used zlib version, you have to rebuild
+  G2CD this way (you don't have this prob with shared libs, best maintained by
+  your OS package system)
+* This is just a test, an alpha feature in an alpha software.
+
+This feature may also be handy for people where zlib is not part of the OS
+Distribution, but beware of the drawbacks. There will be no new versions or
+fixup releases of G2CD when a zlib problem arises to remember you to update.
+To stress this out the zlib source is left out of the G2CD distriubution
+package.

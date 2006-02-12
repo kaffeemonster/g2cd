@@ -1,0 +1,50 @@
+{
+	local:
+		main;
+	# tasks
+		G2UDP;
+		G2Accept;
+		G2Handler;
+		timeout_timer_task;
+	# packet handling
+		g2_packet_decide;
+		g2_packet_extract_from_stream;
+		g2_packet_clean;
+		_g2_packet_free;
+	# con handling
+		g2_con_free;
+		g2_con_alloc;
+		_g2_con_clear;
+	# con pooling
+		get_free_con;
+		return_free_con;
+		recycle_con;
+	# io helper
+		do_read;
+		do_write;
+		handle_socket_abnorm;
+	# time outs
+		cancel_timeout;
+		add_timeout;
+	# epoll compat
+		my_epoll_wait;
+		my_epoll_ctl;
+		my_epoll_init;
+		my_epoll_create;
+		my_epoll_close;
+	# bitops
+		memxor;
+		flsst;
+		popcountst;
+	# more compat
+		strnlen;
+	# logging
+		logg;
+		logg_more;
+	# vars
+		KNOWN_HEADER_FIELDS;
+		KNOWN_ENCODINGS;
+		packet_uprod;
+		packet_uprod_length;
+		server;
+};

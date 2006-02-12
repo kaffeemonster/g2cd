@@ -1,0 +1,324 @@
+	G2CD - Gnutella 2 Server Daemon
+
+	Copyright (c) 2004, Jan Seiffert  ->  redbully@cc.fh-luh.de
+	
+	This file is part of g2cd.
+
+	g2cd is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation; either version 2 of the License, or
+	any later version.
+
+	g2cd is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with g2cd; if not, write to the Free Software
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+	
+0. Introduction
+---------------
+	This is a server-only implementation for the Gnutella 2 P2P-protocol
+	(www.gnutella2.com).
+
+	 Gnutella and Gnutella 2 are self-organizing, "server-less" P2P-networks.
+	But, to maintain network-connectivity, some network nodes become,
+	dynamicaly, special nodes (Ultra-peers/Hubs).
+	 The main idea behind this piece of software is to be able to set up a
+	dedicated Gnutella 2 Hub to maintain the G2 network connectivity.
+	 With its ability to run on a typical server grade machine
+	(UNIX® system / 24-7 / static IP / high Bandwidth / SMP), it will
+	hopefully be able to improve the overall Gnutella 2 performance.
+
+1. Status
+---------
+	This isn't even pre-alpha, this is more like nothing.
+
+	It is able to:
+	* run, spawn several threads
+	* accept incoming connections
+	* handshake Gnutella 2 communication
+	* parse the packet-stream
+	* answer some packets
+	but there is still a lot to do...
+
+2. Installation
+---------------
+	 This is just called "Intallation" for convenience, there is just nothing
+	to install, this is more a description how to compile and run it.
+
+	What you need:
+	* A typical UNIX® system (as in IEEE Std 1003.1 (POSIX), ISO/IEC 9945)
+	* A C99 capable C-Compiler (GCC recommended)
+	* A make-program (GNU-make recommended)
+	* Your systems header files (libc etc.)
+	* The zlib (library and header-files)
+
+	recommended:
+	* An Editor
+	* Programming skills
+	* Using-the-system skills
+	* Brain 1.0
+	
+	What to do:
+	 First of all unpack the .tar.bz2 to some place. The first thing you can
+	try is to simply make it, you know ... or in long terms:
+	 Open a shell, go to the place where you unpacked all this and type in
+	"make" followed by a gentle pressure on enter.
+	 If you believe in wonders, there is a chance this piece of software will
+	simply compile on your machine.
+	 You're kidding? But now, with this little test, there is a high chance,
+	that you have some error-messages from the compiler, and, using the
+	recommended programming skills from above, fix it, until it compiles ;)
+	 Ok, since I'm a real buddy, first some "expert"-tips where to search
+	first. Hopefully with these even someone new to programming will get it
+	also working (muhahaha).
+	a)  Move your recommended editor to the Makefile. Most people will simply
+	   have problems when their GCC < version XYZ don't like options new to
+	   GCC XYZ.
+	    Look at the top of the Makefile, mostly all options will be set there.
+	   Comment them in or out as you need it (thats why they are "one at a
+	   line").
+	    Also interesting here are the arch-specific settings (search for
+	   "ARCH_FLAGS") for users with something else than a cheap x86 or older
+	   than a Pentium2.
+	    Users with special system-setups (for paths/headers) are also advised
+	   to look in the Makefile.
+	    Users with an other compiler than the GCC are on their own and really
+	   should know what they are doing (but they should do it in the
+	   Makefile ;).
+	    Oh, just before i forget about it, the only macro (the "-D"-things)
+	   needed by my source is "-DHAVE_CONFIG_H", all the other are to lower
+	   warnings and other magic.
+	b)  If the Makefile did not do the trick for you, you now really should
+	   have some programming experience, the ability to understand
+	   compiler-error-msg. (hahaha) and the "config.h" opened in your editor.
+	   There are alternatives for some things I had problems on my own test
+	   platforms. Comment them out, as you need it.
+	c)  If you read this, you are on your own... You have to fix it, alone.
+	   work-around's go into "other.h" (mostly), the switches for them into
+	   "config.h". Don't forget to diff and send it to me. Oh, and i like my
+	   diffs in "-u".
+
+	 If you had success compiling it, you are nearly ready to start. What you
+	need next is a file called "guid.txt" in the same directory as the
+	executable.
+	 To create it, there is a shell-script called "gen_guid.sh" (side note:
+	only runs with bash, anyone?). But, if you are suspicious about my shell-
+	scripting skills (a thing you should), you could just create "guid.txt"
+	with your editor.
+	 Generate 16 byte-sized hex-values, separated by colon and drop it in the
+	"guid.txt". Afterwards it should look like:
+
+	01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef
+
+	Fine, ok, whats next? Oh, sure, start it. (You know -> "./g2cd")
+
+	And now?
+	 There are not many things to see, until some G2-Client connects, and as
+	long as this software is so limited, this surely will not happen by
+	accident. So grep a G2-client and connect to your new "hub" (side note:
+	Warning! This software listens on port 5000 on all interfaces in your
+	machine. Your development machine isn't directly connected to the
+	Internet?). I personally use Shareaza with Wine. If you connect, you
+	should see some debug-text. To stop it, use CTRL-C, you should see it
+	going down.
+
+	OK, not impressed?
+	 Look at the Version number... now it's your turn. Again, fire up your
+	editor, use your programming skills, write some code to accomplish the
+	needed functionality, send the "diff -u" to me. That's how it looks
+	like at time.
+
+3. Bugs / TODO
+--------------
+	Main Bug: Program not finished
+	Second Bug: Hard to build/install
+	Other Bugs: to be filled in
+
+	TODO:
+	- complete packet-handling
+	- timeout-handling
+	- autoconf?
+	- lots of other things
+	- adding a BSD-kqueue wrapper to my_epoll.[c|h] (some BSD'ler around?)
+	- finish Solaris-/dev/poll wrapper to my_epoll.[c|h]
+	- portability issues of the build (make, compiler, shell)
+
+	What's needed?
+	 Programming wizards, the tooth fairy and santa claus would be nice ;)
+	 An expert for autoconf to make the building simpler... but you have to
+	know, I'm not an autoconf fan (setting it up myself failed in not being a
+	autoconf expert).
+	 People with different systems, different linux-distri's/unices on
+	different arch'es, to test the build and function.
+	 Some portability-gurus, checking the *code* for portability-problems.
+	 Some security-gurus checking for security concerns.
+
+4. Coding-Style
+---------------
+	 OK, maybe I'm not a talented programmer and it's presumptuous to come
+	around with such a thing, I surely have to be happy if someone decides to
+	write just a simple line of code for this, but... at sometime you come to
+	a point where you don't want to mess with ugly code anymore, at least in
+	your own project...
+	So, lets get started:
+	 First of all some words about my develop-environment. No fancy IDE, just
+	(G)Vim, a shell and a Browser to view man-pages/search the web.
+	 I really *please* you to use *real* Tabs. No soft-tabs, no other fancy
+	technique (they all fail), only real plain Tabs. With this everyone could
+	adjust his favorite indentation-width, thats my believe. I use 3 as
+	indentation-width.
+	 And with this you got my position in the great flame-wars, you will find
+	me on the pro-Vi and pro-Tab side. I'm aware of the discussion about
+	"tabs-have-to-be-8", but the world is not Black-White :).
+	 Which editor you use, I don't really care, you could use a chalkboard,
+	as long as the results are digitally processable and it is capable of
+	producing real tabs.
+	 Another point where i won't discuss is the position of a "one-liner"
+	after a keyword (or places where you not open a block). It comes on a new
+	line (thats the important part), one indent (the not so important part).
+	To illustrate it:
+
+		while(foo)
+			x++;
+	or:
+		if(a <= b)
+			bar();
+		else
+			y = baz();
+
+	 And, that's the good news, this style doesn't have an occult source. No,
+	it has a real technical reason (one of the only style-things I know of,
+	which has a reason besides taste), which, hopefully, convinces you:
+		Try to set a breakpoint in your debugger at the "one-liner" and *not*
+		on the keyword when they are both written on one line...
+	 From this reason you could also see the importance of the form of the
+	style. The newline is what technically matters, the indent is taste.
+
+	 That are the main facts. You will see the other things when you look at
+	the Source (hopefully, i am getting messy...):
+	a) I like the "new-block-braces" on a line of their own with the same
+	   indent as the keyword above (which incorporates very fine with
+	   folding ;)
+	b) I like lower-case letters (do you want to do keyboard-gymnastics with
+	   shift?) filenames are a exception (you write them only sometimes, with
+	   tab complition), constants are all-upper-case.
+	c) I like under-scores
+	d) I like something *between* u**x-shortness (su, ls, cd) and talking
+	   names (this_is_the_most_freaqently_used_variable). Hmmm, hard to
+	   explain, sigh, you need a feeling for it.
+	e) Unfortunately, i didn't do it enough, but in the normal case I like
+	   comments, but don't comment the obvious (OK, again a hard thing, what's
+	   obvious and what's not...)
+	f) This one gets a little bit complicated: I'm *not* going to evangelize
+	   about the 80 chars per line (even if i am now fighting with printing),
+	   on most text terminals today we have got a little more. *But* your line
+	   has to end somewhere[1]. One *exception* are comments, they have to be
+	   split at 64 chars. Why? When the source ever gets wraped at 72 chars
+	   for any reason, the compiler will still eat (word wise) split C
+	   constructs, but yell at spurious words fallen of a comments (and not in
+	   a comment any more).
+	   [1] Think of a modern worker with X and a display of 1024x768. (So,
+	   saying it fits on your dual-headed 1920*1240 workspace is not an
+	   argument)
+	g) It's OK to be a little paranoid with parenthesis, as long as you don't
+	   build a lisp-like parenthesis-labyrinth. Try to reduce them but it's
+	   perfect to be cautious.
+	h) No parenthesis at the "return"-statement, this is not a function-call.
+	i) I know that the standard assures that a zero will evaluate to a perfect
+	   null-pointer, but: "NULL" for pointers, "0" for ints, '\0' for chars,
+	   to help the reader.
+	j) If you see a "sizeof(char)" -> sorry. I know it will always evaluate to
+	   one, it was surely done for the reader on *appropriate* places...
+	k) casts are a bad thing, avoid them (side note: This is C source,
+	   whoever casts *alloc or compiles it with a C++ compiler will be shoot ;)
+	l) I don't like mega-macro mumbo-jumbo on the one hand (ever saw average
+	   hashing code which unfolds it rounds in macros? Uarg. Or multi type
+	   auto code generation [C++ template like]? *self shoot*), but the prepro-
+	   cessor-magic was the thing I mostly missed in Java... so make a sensible
+	   decision.
+	m) Hmmm, while we're at the preprocessor, defines and ifdefs and such alike
+	   are also indented. The hash mark stays on column 1 (some compiler are
+	   picky about that), but the text is indented, with one *space* per level.
+	n) You can automatically generate a TODO list from the source. Besides of
+	   working on things on this list, it is even more important to put things
+	   on the list, especially the long term unsolved things, or you will
+	   forget about it. So feel free to add items to the list, but respect the
+	   syntax, or it will not show up at all or the right way:
+	   * item must start with the literale "// TODO: "
+	   * item must be at column 1
+	   * item must be a one liner, on a line of its own
+	     -> if you have to say a lot, simply make it longer or split it up in a
+	        brief description and a explanation
+	o) There is no decision about the official comment style now. Since C99
+	   gives you C++ like comments, which I normaly prefer, to be able to
+	   comment out big block of code with // comments inside with the /**/
+	   comment, so they are fine. But using the traditional comments give you
+	   portability at no cost for non C99 compilers (but it's a bit nonsense,
+	   since the compiler has to provide some extensions for things new to C99,
+	   and the C++ comment is the most frequent extension). Real big Comments
+	   should be made with traditional comments. Maybe incorporate a sed?
+	p) A little bit late, but... in C99 you can intermix code and variable
+	   defines, but: again we can get backward compatibility for now cost but
+	   writing it in the classic C90 way (at the beginning of a block). Since
+	   this cannot be fixed with a sed -> make it so. (Even with the nonsense
+	   part from above in mind)
+	q) There are maybe places, where something differs from the normal layout.
+	   This is maybe an accident, i changed my mind how such a thing has to
+	   look and i didn't looked over it again, or it was my intention, since
+	   it was OK for this situation. -> ups, deadlock ;) (did i mention that
+	   i am getting messy?)
+
+	Non-format things:
+	* Security is a main concern. We are writing a server here. So:
+		while(not_sure)
+			not_sure = do_think(AGAIN, upsides, downsides, &problem);
+	* I don't want to support every system that ever was, but everything should
+	  be written with portability in mind, since this software should be able
+	  to run on big-iron and big-iron is surely different from your PC (Hey, be
+	  honest, you always dreamed of seeing your little soft running on a
+	  brutal-bignum-SMP-64bit-mainframe from IBM® [you know, such a thing with
+	  thousands of LEDs on its front] with tera-bytes of RAM and an exotic OS
+	  you never heard of ;). And mostly, portability will cost you nothing but
+	  using your Brain 1.0 and not hack together some code fast (also look at
+	  the points below).
+	  (side note: such a portability hurdle today widely encountered is the
+	  AMD64 architecture, enough programs have issues about types "suddenly"
+	  being 64 Bit)
+	* I try to avoid BadHacks[tm], especially because of the portability-thing,
+	  so should you (see the fall-back-thing below). But to be honest, I surely
+	  make a lot of mistakes doing so, until now I could think of at least
+	  three places. Thats why I also cry out loud for a portability-guru...
+	* Don't make any presumptions about data-types, especially about the basic
+	  types (most beloved: int). Become familiar with the type system according
+	  to the C standard. Use the appropriate data-type for the task, there are
+	  lots of predefined "_t" types which "guarantee" you some property (and
+	  hopefully portability and maybe security). (side note: C99 knows boolean,
+	  use it, i hate those hordes of functions returning int for *just*
+	  OK/ERROR...)
+	* Never read a multi-byte value at once from a byte-organized buffer. Read
+	  it byte-by-byte, don't assume any alignment. I think the only platform
+	  which "only" penalties unaligned reads by performance is x86, other
+	  platforms give you a SIGBUS (or emulate the read with a system trap 
+	  -> extra slow and not portable [Linux® on $PROCESSOR may do it, FreeBSD®
+	  on $PROCESSOR maybe not]), core dump, game over.
+	* Furthermore we have to deal with endianess. Some protocol-values have a
+	  fixed endianess, some have the endianess of the sending host and we have
+	  our own (at write time of code unknown) on the receiving side. (so
+	  byte-by-byte handling is ideal to also swap endianess while reading the
+	  value)
+	* If you want to use any tricks, you must provide a fall back anyway, so
+	  simply write it in the first round.
+
+Z. Legal
+--------
+	Trademark Legend:
+
+	UNIX is a registered trademark of The Open Group in the USA and other countries.
+	IBM is a registered trademarks of International Business Machines Corporation in the United States, other countries, or both.
+	Linux is a registered trademark of Linus Torvalds in the United States.
+	FreeBSD is a registered trademark of The FreeBSD Foundation in the US and other countries.
+	Other company, product, or service names may be trademarks or service marks of others.
