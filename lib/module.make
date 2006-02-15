@@ -107,8 +107,6 @@ LIBCOMMON = $(MPL)/libcommon.a
 alll:
 	$(MAKE) -C .. $(LIBCOMMON)
 
-#$(LIBCOMMON): $(LIBOBJS)
-#	$(AR) $(ARFLAGS) $@ $%
 $(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 	$(RANLIB) $@
 $(LIBCOMMON)($(LIBOBJS)):
