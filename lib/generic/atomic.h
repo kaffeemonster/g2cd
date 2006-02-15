@@ -28,7 +28,7 @@
  */
 
 #ifndef LIB_IMPL_ATOMIC_H
-#define LIB_IMPL_ATOMIC_H
+# define LIB_IMPL_ATOMIC_H
 
 /*
  * this _should_ be save on every arch, as long as the compiler
@@ -36,23 +36,45 @@
  * memory...)
  * No, its not, weak memory order...
  */
-# define atomic_pread(x)	((x)->d)
-# define atomic_pset(x, y)	(((x)->d) = (y))
-# define atomic_read(x)	((x)->d)
-# define atomic_set(x, y)	(((x)->d) = (y))
-# define atomic_sread(x)	((x)->next)
-# define atomic_sset(x, y) ((x)->next = (y))
+# ifndef atomic_pread
+#  define atomic_pread(x)	((x)->d)
+# endif
+# ifndef atomic_pset
+#  define atomic_pset(x, y)	(((x)->d) = (y))
+# endif
+# ifndef atomic_read
+#  define atomic_read(x)	((x)->d)
+# endif
+# ifndef atomic_set
+#  define atomic_set(x, y)	(((x)->d) = (y))
+# endif
+# ifndef atomic_sread
+#  define atomic_sread(x)	((x)->next)
+# endif
+# ifndef atomic_sset
+#  define atomic_sset(x, y) ((x)->next = (y))
+# endif
 
-# define atomic_inc(x)	gen_atomic_inc((x))
-# define atomic_dec(x)	gen_atomic_dec((x))
-# define atomic_x(x, y)	gen_atomic_x((x), (y))
-# define atomic_px(x, y)	gen_atomic_py((x), (y))
-# define atomic_cmppx(x, y, z)	gen_atomic_cmppx((x), (y), (z))
+# ifndef atomic_inc
+#  define atomic_inc(x)	gen_atomic_inc((x))
+# endif
+# ifndef atomic_dec
+#  define atomic_dec(x)	gen_atomic_dec((x))
+# endif
+# ifndef atomic_x
+#  define atomic_x(x, y)	gen_atomic_x((x), (y))
+# endif
+# ifndef atomic_px
+#  define atomic_px(x, y)	gen_atomic_px((x), (y))
+# endif
+# ifndef atomic_cmppx
+#  define atomic_cmppx(x, y, z)	gen_atomic_cmppx((x), (y), (z))
+# endif
 
 extern void gen_atomic_inc(atomic_t *);
 extern void gen_atomic_dec(atomic_t *);
 extern int  gen_atomic_x(int, atomic_t *);
 extern void *gen_atomic_px(void *, atomicptr_t *);
-extern void *gen_atomic_cmppx(void *nval, void *oval, atomicptr_t *);
+extern void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *);
 
 #endif /* LIB_IMPL_ATOMIC_H */

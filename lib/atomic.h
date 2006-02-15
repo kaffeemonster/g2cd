@@ -110,20 +110,21 @@ typedef union xxxxxx4
 
 static inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
-	atomicst_t *tmp;
+	intptr_t tmp;
 	do
-		tmp = atomic_sset(node, atomic_sread(head));
-	while(atomic_cmpalx(node, tmp, head) != tmp);
+		tmp = (intptr_t) atomic_sset(node, atomic_sread(head));
+	while((intptr_t) atomic_cmpalx(node, (void *) tmp, head) != tmp);
 }
 
 static inline atomicst_t *atomic_pop(atomicst_t *head)
 {
-	atomicst_t *ret_val, *tmp;
+	intptr_t tmp;
+	atomicst_t *ret_val;
 	do
 	{
-		if(!(tmp = atomic_sread(head)))
+		if(!(tmp = (intptr_t) atomic_sread(head)))
 			return NULL;
-	} while((ret_val = atomic_cmpalx(atomic_sread(tmp), tmp, head)) != tmp);
+	} while((intptr_t)(ret_val = atomic_cmpalx(atomic_sread((atomicst_t *)tmp), (void *)tmp, head)) != tmp);
 	/* ABA race */
 	return ret_val;
 }

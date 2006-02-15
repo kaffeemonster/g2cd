@@ -60,7 +60,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 	return val;
 }
 
-extern void *_illigal_ptr_size(void *,atomicptr_t *);
+extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(*val))
@@ -157,7 +157,7 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return _illigal_int_size(nval, ptr);
 }
 
-static inline void *atomic_cmppx_32(void nval, void oval, atomicptr_t *ptr)
+static inline void *atomic_cmppx_32(volatile void nval, volatile void oval, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		MEMBAR_1
@@ -171,7 +171,7 @@ static inline void *atomic_cmppx_32(void nval, void oval, atomicptr_t *ptr)
 	return nval;
 }
 
-static inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
+static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		MEMBAR_1
@@ -185,7 +185,7 @@ static inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
 	return nval;
 }
 
-static inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
+static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{

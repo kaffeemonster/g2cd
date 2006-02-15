@@ -65,7 +65,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	return val;
 }
 
-static inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
+static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(

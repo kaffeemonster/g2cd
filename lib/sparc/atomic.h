@@ -38,6 +38,7 @@
 # define atomic_sset(x, y) ((x)->next = (y))
 
 /* could make problems on _real_ old Fujitsu build sparcs */
+# define atomic_px atomic_px
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
@@ -49,6 +50,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return val;
 }
 
+# define atomic_p atomic_p
 static inline int atomic_p(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
@@ -60,9 +62,7 @@ static inline int atomic_p(int val, atomic_t *ptr)
 	return val;
 }
 
-# define atomic_inc(x) gen_atomic_inc((x))
-# define atomic_dec(x) gen_atomic_dec((x))
-
+# undef LIB_IMPL_ATOMIC_H
 # include "../generic/atomic.h"
 
 #endif /* LIB_IMPL_ATOMIC_H */
