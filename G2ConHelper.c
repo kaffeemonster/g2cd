@@ -49,6 +49,7 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/my_epoll.h"
+#include "lib/atomic.h"
 
 inline g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 {
@@ -269,18 +270,7 @@ inline bool recycle_con(
 		if(ret_val)
 			logg_errno(LOGF_DEBUG, "closing bad socket");
 
-		if(!shortlock_t_lock(&server.status.lock_act_connection_sum))
-		{
-			server.status.act_connection_sum--;
-			if(shortlock_t_unlock(&server.status.lock_act_connection_sum))
-			{
-				logg_errno(LOGF_ERR, "unlocking act_connection_sum");
-				clean_up(poll_me, work_cons, epoll_fd, abort_fd);
-				pthread_exit(NULL);
-			}
-		}
-		else
-			logg_errno(LOGF_NOTICE, "locking act_connection_sum");
+		atomic_dec(&server.status.act_connection_sum);
 
 		// return datastructure to FreeCons
 		if(!return_free_con(tmp_con, __FILE__, __func__, __LINE__))

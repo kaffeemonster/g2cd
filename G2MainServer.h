@@ -39,6 +39,7 @@
 #include "G2Connection.h"
 #include "G2Packet.h"
 #include "lib/log_facility.h"
+#include "lib/atomic.h"
 
 #define THREAD_SUM		3
 #define THREAD_ACCEPTOR		0
@@ -88,14 +89,13 @@ _G2MAIN_EXTRNVAR( struct
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;
 			size_t default_max_g2_packet_length;
-			__volatile__ size_t max_connection_sum;
+			volatile int max_connection_sum;
 			uint8_t our_guid[16];
 			bool want_2_send_profile;
 		} settings;
 		struct
 		{
-			shortlock_t lock_act_connection_sum;
-			__volatile__ size_t act_connection_sum;
+			atomic_t act_connection_sum;
 			bool all_abord[THREAD_SUM];
 			bool our_server_upeer;
 			bool our_server_upeer_needed;

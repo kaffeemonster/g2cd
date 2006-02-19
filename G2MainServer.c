@@ -66,6 +66,7 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
+#include "lib/atomic.h"
 #include "version.h"
 #include "builtin_defaults.h"
 
@@ -781,7 +782,7 @@ static inline void handle_config(void)
 
 	// whats fixed
 	server.status.our_server_upeer_needed = true;
-	server.status.act_connection_sum = 0;
+	atomic_set(&server.status.act_connection_sum, 0);
 
 // TODO: read from config files
 	// var settings
@@ -921,11 +922,11 @@ static inline void setup_resources(void)
 			our_limit.rlim_max == RLIM_INFINITY ? "RLIM_INFINITY" : "",
 			(unsigned long)our_limit.rlim_cur);
 
-		if((server.settings.max_connection_sum + FD_RESSERVE) > our_limit.rlim_cur)
+		if(server.settings.max_connection_sum + FD_RESSERVE > our_limit.rlim_cur)
 		{
 			rlim_t old_cur = our_limit.rlim_cur;
 
-			if((server.settings.max_connection_sum + FD_RESSERVE) > our_limit.rlim_max)
+			if(server.settings.max_connection_sum + FD_RESSERVE > our_limit.rlim_max)
 			{
 				logg(LOGF_NOTICE,
 					"Warning: Not enough maximal open Files on your System to handle %lu G2-connections\n\t-> lowering to %lu\n",
@@ -953,12 +954,6 @@ static inline void setup_resources(void)
 	if(pthread_mutex_init(&free_cons_mutex, NULL))
 	{
 		logg_errno(LOGF_CRIT, "creating free_cons mutex");
-		exit(EXIT_FAILURE);
-	}
-
-	if(shortlock_t_init(&server.status.lock_act_connection_sum))
-	{
-		logg_errno(LOGF_CRIT, "creating act_connection_sum lock");
 		exit(EXIT_FAILURE);
 	}
 
@@ -1202,7 +1197,6 @@ static inline void clean_up(void)
 
 	// what should i do if this fails?
 	pthread_mutex_destroy(&free_cons_mutex);
-	shortlock_t_destroy(&server.status.lock_act_connection_sum);
 
 	fclose(stdin);
 	fclose(stdout); // get a sync if we output to a file

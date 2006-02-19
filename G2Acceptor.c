@@ -54,6 +54,7 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/my_epoll.h"
+#include "lib/atomic.h"
 
 #define EVENT_SPACE 8
 
@@ -413,7 +414,7 @@ static inline bool handle_accept_in(
 
 
 	/* check if our total server connection limit is reached */
-	if(server.status.act_connection_sum >= server.settings.max_connection_sum)
+	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum)
 	{
 		logg_pos(LOGF_INFO, "too many connections\n");
 		while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
@@ -421,25 +422,10 @@ static inline bool handle_accept_in(
 	}
 // TODO: Little race, but its only the connection limit
 	/* increase our total server connection sum */
-	if(!shortlock_t_lock(&server.status.lock_act_connection_sum))
-	{
-		server.status.act_connection_sum++;
-		if(shortlock_t_unlock(&server.status.lock_act_connection_sum))
-		{
-			logg_errno(LOGF_ERR, "unlocking act_connection_sum");
-			clean_up_a(poll_me, work_cons, epoll_fd, abort_fd);
-			pthread_exit(NULL);
-		}
-	}
-	else
-	{
-		logg_errno(LOGF_NOTICE, "locking act_connection_sum");
-		while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
-		return false;
-	}
-	
+	atomic_inc(&server.status.act_connection_sum);
 
 	/* room for another connection? */
+	/* originaly ment to be reallocated */
 	if(work_cons->limit == work_cons->capacity)
 	{
 		goto err_out_after_count;
@@ -486,18 +472,7 @@ static inline bool handle_accept_in(
 
 err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
-	if(!shortlock_t_lock(&server.status.lock_act_connection_sum))
-	{
-		server.status.act_connection_sum--;
-		if(shortlock_t_unlock(&server.status.lock_act_connection_sum))
-		{
-			logg_errno(LOGF_ERR, "unlocking act_connection_sum");
-			clean_up_a(poll_me, work_cons, epoll_fd, abort_fd);
-			pthread_exit(NULL);
-		}
-	}
-	else
-		logg_errno(LOGF_WARN, "The max. connection limit have become inaccurate! While locking act_connection_sum");
+	atomic_dec(&server.status.act_connection_sum);
 	
 	while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
 	return false;
