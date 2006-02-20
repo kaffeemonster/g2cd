@@ -35,7 +35,7 @@
 #include "../log_facility.h"
 
 #define ATOMIC_HASH_SIZE 4
-#define L1_CACHE_BYTES 16
+#define L1_CACHE_BYTES 64
 #define ATOMIC_HASH(y) \
 	(&(gen_atomic_lock[ (((intptr_t) (y))/L1_CACHE_BYTES) & (ATOMIC_HASH_SIZE-1) ]))
 static shortlock_t gen_atomic_lock[ATOMIC_HASH_SIZE];
@@ -71,34 +71,36 @@ void gen_atomic_dec(atomic_t *x)
 	shortlock_t_unlock(ATOMIC_HASH(x));
 }
 
-// TODO: write this stuff
-extern int invalid_int_size(int, atomic_t *);
 int gen_atomic_x(int nval, atomic_t *oval)
 {
-	switch(sizeof(nval))
-	{
-	default:
-		return invalid_int_size(nval, oval);
-	}
+	int tmp;
+	shortlock_t_lock(ATOMIC_HASH(oval));
+	tmp = oval->d;
+	oval->d = nval;
+	shortlock_t_unlock(ATOMIC_HASH(oval));
+	return tmp;
 }
 
-extern void *invalid_pointer_size(volatile void *, volatile void *, void *);
 void *gen_atomic_px(void *nval, atomicptr_t *oval)
 {
-	switch(sizeof(nval))
-	{
-	default:
-		return invalid_pointer_size(nval, oval, NULL);
-	}
+	void *tmp;
+	shortlock_t_lock(ATOMIC_HASH(oval));
+	tmp = oval->d;
+	oval->d = nval;
+	shortlock_t_unlock(ATOMIC_HASH(oval));
+	return tmp;
 }
 
 void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *x)
 {
-	switch(sizeof(nval))
-	{
-	default:
-		return invalid_pointer_size(nval, oval, x);
-	}
+	void *ret_val = oval;
+	shortlock_t_lock(ATOMIC_HASH(x));
+	if(oval == x->d)
+		x->d = nval;
+	else
+		ret_val = nval;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+	return ret_val;
 }
 
 static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
