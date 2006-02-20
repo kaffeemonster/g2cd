@@ -1,0 +1,104 @@
+/*
+ * atomic.c
+ * generic implementation of atomic ops
+ * 
+ * Thanks to the Linux kernel
+ * 
+ * Copyright (c) 2006, Jan Seiffert
+ * 
+ * This file is part of g2cd.
+ *
+ * g2cd is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2
+ * of the License, or any later version.
+ * 
+ * g2cd is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public
+ * License along with g2cd; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA  02111-1307  USA
+ *
+ * $Id:$
+ * 
+ */
+
+#include <stdlib.h>
+#include <pthread.h>
+
+#define NEED_GENERIC
+#include "../atomic.h"
+#include "../log_facility.h"
+
+#define ATOMIC_HASH_SIZE 4
+#define L1_CACHE_BYTES 16
+#define ATOMIC_HASH(y) \
+	(&(gen_atomic_lock[ (((intptr_t) (y))/L1_CACHE_BYTES) & (ATOMIC_HASH_SIZE-1) ]))
+static shortlock_t gen_atomic_lock[ATOMIC_HASH_SIZE];
+
+/* you better not remove this prototype... */
+static void gen_atomic_init(void) GCC_ATTR_CONSTRUCT;
+static void gen_atomic_init(void)
+{
+	int i = ATOMIC_HASH_SIZE - 1;
+	do
+	{
+		if(shortlock_t_init(gen_atomic_lock + i))
+		{
+			logg_errno(LOGF_CRIT, "initialising generic atomic locks");
+			exit(EXIT_FAILURE);
+		}
+	}
+	while(i);
+}
+
+// TODO: catch errors?
+void gen_atomic_inc(atomic_t *x)
+{
+	shortlock_t_lock(ATOMIC_HASH(x));
+	x->d++;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+}
+
+void gen_atomic_dec(atomic_t *x)
+{
+	shortlock_t_lock(ATOMIC_HASH(x));
+	x->d--;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+}
+
+// TODO: write this stuff
+extern int invalid_int_size(int, atomic_t *);
+int gen_atomic_x(int nval, atomic_t *oval)
+{
+	switch(sizeof(nval))
+	{
+	default:
+		return invalid_int_size(nval, oval);
+	}
+}
+
+extern void *invalid_pointer_size(volatile void *, volatile void *, void *);
+void *gen_atomic_px(void *nval, atomicptr_t *oval)
+{
+	switch(sizeof(nval))
+	{
+	default:
+		return invalid_pointer_size(nval, oval, NULL);
+	}
+}
+
+void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *x)
+{
+	switch(sizeof(nval))
+	{
+	default:
+		return invalid_pointer_size(nval, oval, x);
+	}
+}
+
+static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";

@@ -90,7 +90,7 @@ typedef union xxxxxx4
 /* same for atomicptr_t and atomicst_t */
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
 
-# ifdef I_LIKE_ASM
+# if (!defined NEED_GENERIC) && (defined I_LIKE_ASM)
 #  ifdef __i386__
 #   include "i386/atomic.h"
 #  elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)

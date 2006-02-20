@@ -45,6 +45,7 @@ EPOLLSRS = \
 # 
 ATOMSRC = \
 	$(MPL)/generic/atomic.h \
+	$(MPL)/generic/atomic.c \
 	$(MPL)/i386/atomic.h \
 	$(MPL)/sparc/atomic.h \
 	$(MPL)/sparc64/atomic.h
@@ -86,7 +87,8 @@ LIBSRCS = \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
 	$(MPL)/strnlen.c \
-	$(MPL)/hzp.c
+	$(MPL)/hzp.c \
+	$(MPL)/atomic.c
 
 # base objectfiles
 LIBOBJS = \
@@ -95,7 +97,8 @@ LIBOBJS = \
 	$(MPL)/memxor.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
-	$(MPL)/hzp.o
+	$(MPL)/hzp.o \
+	$(MPL)/atomic.o
 
 # with autoconf it will be added dynamically
 LIBOBJS += $(MPL)/strnlen.o
