@@ -170,7 +170,8 @@ CFLAGS += $(OPT_FLAGS) #-fprofile-use
 # Libs
 #
 # Libraries from the System (which will never be modules)
-LDLIBS_BASE = #-lm
+#	Solaris...
+LDLIBS_BASE = -ldl #-lm
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
 # either you set this and the appropreate flags below, or you
@@ -180,7 +181,6 @@ LDLIBS_BASE = #-lm
 #LDLIBS_BASE += -lresolv
 #LDLIBS_BASE += -lsocket
 #LDLIBS_BASE += -lnsl
-#LDLIBS_BASE += -ldl
 #LDLIBS_BASE += -lrt
 #
 #	All libs if we don't use modules 
@@ -581,12 +581,12 @@ ccdrv: ccdrv.c Makefile
 		$(PORT_PR) "\$${CC} \$${@}\n" >> $@; \
 		chmod a+x $@ )
 
-.INTERMEDIATE: data.o
+# .INTERMEDIATE: data.o
 data.o: $(TARED_FILES)
 	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -9 | \
 	od -v -A n -t x1 | tr -s [:space:] ':' | \
-	awk 'BEGIN { RS = ":"; ORS = " "; print "const char src_ctrl[]= {\n"} /[0-9a-fA-F][0-9a-fA-F]/{print "0x" $$1 ","; if ( NR % 14  == 13) printf "\n"; } END { print "\n};\nconst unsigned long src_ctrl_len = sizeof(src_ctrl);\n\n"}' | \
-	$(CC) -x c - -c -o $@ 2> /dev/null || touch $@
+	awk 'BEGIN { RS = ":"; ORS = " "; print "static const char s_base_data[]= {\n"} /[0-9a-fA-F][0-9a-fA-F]/{print "0x" $$1 ","; if ( NR % 14  == 13) printf "\n"; } END { ORS = "\n"; print "\n};\n\nconst struct s_data {\n\tconst unsigned long len;\n\tconst char *data;\n} s_data = {sizeof(s_base_data), &s_base_data[0]};"}' | \
+	$(CC) -x c - -c -o $@ || touch $@
 
 calltree: calltree.c Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@ $(LDFLAGS)

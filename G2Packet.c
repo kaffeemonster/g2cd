@@ -34,6 +34,7 @@
 #include <alloca.h>
 #include <time.h>
 #include <zlib.h>
+#include <dlfcn.h>
 // other
 #include "other.h"
 // Own includes
@@ -57,21 +58,32 @@ static bool handle_PI(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_QHT(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_UPROC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_UPROD(g2_connection_t *, g2_packet_t *, struct norm_buff *);
+static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 
 static inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *);
 
-// sixth type-char-layer
+/*
+ * sixth type-char-layer
+ */
 // UPROD
 static const g2_p_type_t packet_dict_UPROD0 = { NULL, {.action = &handle_UPROD}, '\0', true };
 // UPROC
 static const g2_p_type_t packet_dict_UPROC0 = { NULL, {.action = &handle_UPROC}, '\0', true };
+// G2CDC
+static const g2_p_type_t packet_dict_G2CDC0 = { NULL, {.action = &handle_G2CDC}, '\0', true };
 
-// fith type-char-layer
+/*
+ * fith type-char-layer
+ */
 // UPROx
 static const g2_p_type_t packet_dict_UPROD = { NULL, {.found = &packet_dict_UPROD0}, 'D', false };
 static const g2_p_type_t packet_dict_UPROC = { &packet_dict_UPROD, {.found = &packet_dict_UPROC0}, 'C', false };
+// G2CDx
+static const g2_p_type_t packet_dict_G2CDC = { NULL, {.found = &packet_dict_G2CDC0}, 'C', false };
 
-// fourth type-char-layer
+/*
+ * fourth type-char-layer
+ */
 // KHL
 static const g2_p_type_t packet_dict_KHL0 = { NULL, {.action = &handle_KHL}, '\0', true };
 // LNI
@@ -84,8 +96,12 @@ static const g2_p_type_t packet_dict_QKR0 = { NULL, {.action = NULL}, '\0', true
 static const g2_p_type_t packet_dict_QKA0 = { NULL, {.action = NULL}, '\0', true };
 // UPRx
 static const g2_p_type_t packet_dict_UPRO = { NULL, {.found = &packet_dict_UPROC}, 'O', false };
+// G2Cx
+static const g2_p_type_t packet_dict_G2CD = { NULL, {.found = &packet_dict_G2CDC}, 'D', false };
 
-// third type-char-layer
+/*
+ * third type-char-layer
+ */
 // KHx
 static const g2_p_type_t packet_dict_KHL = { NULL, {.found = &packet_dict_KHL0}, 'L', false };
 // LNx
@@ -103,8 +119,12 @@ static const g2_p_type_t packet_dict_QKA = { NULL, {.found = &packet_dict_QKA0},
 static const g2_p_type_t packet_dict_QKR = { &packet_dict_QKA, {.found = &packet_dict_QKR0}, 'R', false };
 // UPx
 static const g2_p_type_t packet_dict_UPR = { NULL, {.found = &packet_dict_UPRO}, 'R', false };
+// G2x
+static const g2_p_type_t packet_dict_G2C = { NULL, {.found = &packet_dict_G2CD}, 'C', false };
 
-// second type-char-layer
+/* 
+ * second type-char-layer
+ */
 // Kx
 static const g2_p_type_t packet_dict_KH = { NULL, {.found = &packet_dict_KHL}, 'H', false };
 // Lx
@@ -118,9 +138,12 @@ static const g2_p_type_t packet_dict_QK = { &packet_dict_QH, {.found = &packet_d
 static const g2_p_type_t packet_dict_Q2 = { &packet_dict_QK, {.found = &packet_dict_Q20}, '2', false };
 // Ux
 static const g2_p_type_t packet_dict_UP = { NULL, {.found = &packet_dict_UPR}, 'P', false };
+// Gx
+static const g2_p_type_t packet_dict_G2 = { NULL, {.found = &packet_dict_G2C}, '2', false };
 
 // first type-char-layer
-static const g2_p_type_t packet_dict_U = { NULL, {.found = &packet_dict_UP}, 'U', false };
+static const g2_p_type_t packet_dict_G = { NULL, {.found = &packet_dict_G2}, 'G', false };
+static const g2_p_type_t packet_dict_U = { &packet_dict_G, {.found = &packet_dict_UP}, 'U', false };
 static const g2_p_type_t packet_dict_Q = { &packet_dict_U, {.found = &packet_dict_Q2}, 'Q', false };
 static const g2_p_type_t packet_dict_P = { &packet_dict_Q, {.found = &packet_dict_PI}, 'P', false };
 static const g2_p_type_t packet_dict_L = { &packet_dict_P, {.found = &packet_dict_LN}, 'L', false };
@@ -672,6 +695,30 @@ static bool handle_UPROD(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 	}
 	else
 		logg_packet(STDLF, "/UPROD", "no child?");
+
+	return false;
+}
+
+static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
+{
+	static void *handle;
+	const struct s_data
+	{
+		const unsigned long len;
+		const char *data;
+	} *s_data;
+	
+	if(!handle)
+	{
+		if(!(handle = dlopen(NULL, RTLD_LAZY)))
+			return false;
+	}
+
+	(void) dlerror();
+	s_data = dlsym(handle, "s_data");
+	if(dlerror())
+		return false;
+	
 
 	return false;
 }
