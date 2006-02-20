@@ -119,12 +119,14 @@ $(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/strnlen.o: $(MPL)/my_b
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
+$(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h G2MainServer.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
+$(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/my_bitops.h: other.h
 $(MPL)/my_bitopsm.h: other.h config.h
-$(MPL)/my_epoll.o: $(MPL)/my_epoll.h
+$(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: other.h config.h
 
 # give all files the std deps, so get rebuilt if something changes

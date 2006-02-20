@@ -242,8 +242,9 @@ int main(int argc, char **args)
 					logg_pos(LOGF_ERR, "We've lost someone! Going down!\n");
  				}
  			}
-		//	putchar('+');
-		//	fflush(stdout);
+			/* service our memleak ;) */
+			num_poll = hzp_scan(NORM_HZP_THRESHOLD);
+			logg_develd("HZP reclaimed chunks: %i\n", num_poll);
 			break;
 		// Something bad happened
 		case -1:

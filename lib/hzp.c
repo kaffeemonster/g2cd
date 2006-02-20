@@ -44,7 +44,12 @@ struct hzp
 };
 
 static pthread_key_t key2hzp;
-static atomicst_t hzp_head;
+static union lists
+{
+	atomicst_t head;
+	char _padding[64]; /* get padding between the atomic vars for ppc et al. */
+} hzp_threads, hzp_freelist;
+static atomic_t nr_free;
 
 /* Protos */
 	/* You better not kill this proto, our it wount work ;) */
@@ -69,8 +74,8 @@ static void hzp_init(void)
 
 /*
  * hzp_alloc - allocate mem and lay it in the TSD
- * A thread wonts to play with us, so he needs a little storage
- * and put within list.
+ * If thread wants to play with us, he needs a little storage
+ * where we can put a list within.
  *
  * returns: true - everythings fine
  *          false - ooops
@@ -90,7 +95,7 @@ static inline struct hzp *hzp_alloc_intern(void)
 		return NULL;
 
 	new_hzp->flags.used = true;
-	atomic_push(&hzp_head, &new_hzp->lst);
+	atomic_push(&hzp_threads.head, &new_hzp->lst);
 
 	if(pthread_setspecific(key2hzp, new_hzp))
 	{
@@ -163,11 +168,11 @@ inline void hzp_unref(enum hzps key)
 
 /*
  * hzp_deferfree - called for hzp freeing
- * When a chunk shared memory under hzp should be freed
- * (meaning your accuierd a _seperate_ writer lock and installed
+ * When a chunk shared memory under hzp controll should be freed
+ * (meaning you acquired a _seperate_ writer lock and installed
  * some kind of substitute: new mem or NULL, whatever the program
- * flow can accept), it can not be freed immidiatly, because some
- * thread maybe still works with it (thats why we track references).
+ * flow can accept), it can not be freed immediately, because some
+ * thread maybe still work with it (thats why we track references).
  * 
  * So we put it in a "to Free" list, and when all references are
  * gone, we can finaly free it, with the supplied callback (the
@@ -176,14 +181,122 @@ inline void hzp_unref(enum hzps key)
  * This has to be maintained by a cyclic collector (and has to be
  * written, ATM here is a nice mem leak ;)
  *
- * params: data - the mem to free (and the callback understands)
+ * Nice sideffect: can be used as poormans gc. Drop in what you want,
+ * someone else will actually free it, so the calling thread can save
+ * the free method latency.
+ * 
+ * params: item - memory to manage the free list
+ *         data - the mem to free (and the callback understands)
  *         free_func - the free callback, either libc free or 
  *                     your own allocator for this object.
  */
-inline void hzp_deferfree(void *data, void (*free_func)(void *))
+inline void hzp_deferfree(struct hzp_free *item, void *data, void (*free_func)(void *))
 {
-	logg_develd("would free: %p\twith: %p\n", data, free_func);
-// TODO: nice memory leak...
+	item->data = data;
+	item->free_func = free_func;
+	atomic_push(&hzp_freelist.head, &item->st);
+	atomic_inc(&nr_free);
+	logg_develd("would free: %p\n", data);
+}
+
+/*
+ * hzp_scan helper
+ */
+struct hzp_fs
+{
+	struct hzp_fs *next;
+	void *ptr;
+};
+
+static inline void hzp_fs_push(struct hzp_fs *head, struct hzp_fs *new)
+{
+	new->next = head->next;
+	head->next = new;
+}
+
+static inline bool hzp_fs_contains(struct hzp_fs *head, const void *data)
+{
+	while(head)
+	{
+		if(head->ptr == data)
+			return true;
+		head = head->next;
+	}
+	return false;
+}
+
+/*
+ * hzp_scan - scan the freelist
+ * 
+ *
+ */
+inline int hzp_scan(int threshold)
+{
+	atomicst_t thead = ATOMIC_INIT(NULL), mhead = ATOMIC_INIT(NULL);
+	atomicst_t *whead = NULL;
+	struct hzp_fs *uhead = NULL;
+	int freed = 0;
+
+	if(threshold > atomic_read(&nr_free))
+		return 0;
+
+	/* get all to free entrys */
+	atomic_pxs(&mhead.next, &hzp_freelist.head);
+	atomic_set(&nr_free, 0);
+
+	if(!atomic_sread(&mhead))
+		return 0;
+
+	/* gather list of used mem */
+	atomic_sset(&thead, atomic_sread(&hzp_threads.head));
+	whead = &thead;
+	while(atomic_sread(whead))
+	{
+		int i;
+		struct hzp *entry = container_of(deatomic(atomic_sread(whead)), struct hzp, lst);
+		if(entry->flags.used)
+		{
+			for(i = 0; i < HZP_MAX; i++)
+			{
+				void *hptr = deatomic(entry->ptr[i]);
+				if(hptr)
+				{
+					struct hzp_fs *tmp = alloca(sizeof(*tmp));
+					tmp->ptr = hptr;
+					hzp_fs_push(uhead, tmp);
+				}
+			}
+			/* shut up, we want to travers the list... */
+			whead = deatomic(atomic_sread(whead));
+		}
+		else
+		{
+			logg_develd("unused hzp entry: %p\t%p\t%p, trying to free....\n",
+				(void *)whead, deatomic(atomic_sread(whead)), (void *)entry);
+			free(atomic_pop(whead));
+		}
+	}
+
+	/* check gathered list against our to-free list */
+	while((whead = atomic_pop(&mhead)))
+	{
+		struct hzp_free *mentry = container_of(whead, struct hzp_free, st);
+		if(hzp_fs_contains(uhead, mentry->data))
+		{
+			atomic_push(&hzp_freelist.head, whead);
+			atomic_inc(&nr_free);
+		}
+		else
+		{
+			void (*tmp_free_func)(void *) = mentry->free_func;
+			void *tmp_data = mentry->data;
+			logg_develd("freeing %p\t%p\n", (void *)mentry, tmp_data);
+			tmp_free_func(tmp_data);
+			/* attention! *mentry is now freed and invalid */
+			freed++;
+		}
+	}
+	return freed;
 }
 
 /*
@@ -199,7 +312,10 @@ inline void hzp_deferfree(void *data, void (*free_func)(void *))
 static void hzp_free(void *dt_hzp)
 {
 	if(dt_hzp)
-		((struct hzp *) dt_hzp)->flags.used = false;
+	{
+		struct hzp *tmp = (struct hzp *) dt_hzp;
+		tmp->flags.used = false;
+	}
 }
 
 static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: $";

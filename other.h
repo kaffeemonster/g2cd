@@ -206,6 +206,9 @@ typedef void (*sighandler_t)(int);
 # include <inttypes.h>
 #endif /* HAVE_STDINT_H */
 
+#include <stddef.h>
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+
 /* most things won't work if BITS_PER_CHAR = 8 isn't true, but you never know */
 #ifdef __CHAR_BIT__
 # if __CHAR_BIT__ > 0

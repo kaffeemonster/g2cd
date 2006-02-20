@@ -42,6 +42,9 @@
 
 # define ATOMIC_INIT(x) {(x)}
 
+/* warm beer and cheap tricks... */
+# define deatomic(x) ((void *)(intptr_t)(x))
+
 typedef struct xxxxxx1
 {
 	volatile int d;
@@ -87,6 +90,7 @@ typedef union xxxxxx4
 
 /* atomicptra_t and atomicptr_t should be abi compatible */
 #define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
+#define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
 /* same for atomicptr_t and atomicst_t */
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
 
@@ -110,21 +114,20 @@ typedef union xxxxxx4
 
 static inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
-	intptr_t tmp;
+	void *tmp;
 	do
-		tmp = (intptr_t) atomic_sset(node, atomic_sread(head));
-	while((intptr_t) atomic_cmpalx(node, (void *) tmp, head) != tmp);
+		tmp = deatomic(atomic_sset(node, atomic_sread(head)));
+	while(atomic_cmpalx(node, tmp, head) != tmp);
 }
 
 static inline atomicst_t *atomic_pop(atomicst_t *head)
 {
-	intptr_t tmp;
-	atomicst_t *ret_val;
+	atomicst_t *ret_val, *tmp;
 	do
 	{
-		if(!(tmp = (intptr_t) atomic_sread(head)))
+		if(!(tmp = deatomic(atomic_sread(head))))
 			return NULL;
-	} while((intptr_t)(ret_val = atomic_cmpalx(atomic_sread((atomicst_t *)tmp), (void *)tmp, head)) != tmp);
+	} while((ret_val = atomic_cmpalx(atomic_sread(tmp), tmp, head)) != tmp);
 	/* ABA race */
 	return ret_val;
 }

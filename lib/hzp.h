@@ -28,6 +28,7 @@
 #define LIB_HZP_H
 
 #include "../other.h"
+#include "atomic.h"
 
 # define LIB_HZP_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
@@ -38,9 +39,17 @@ enum hzps
 	HZP_MAX
 };
 
+struct hzp_free
+{
+	atomicst_t st;
+	void *data;
+	void (*free_func)(void *);
+};
+
 LIB_HZP_EXTRN(inline bool hzp_alloc(void));
 LIB_HZP_EXTRN(inline void hzp_ref(enum hzps, void *));
 LIB_HZP_EXTRN(inline void hzp_unref(enum hzps));
-LIB_HZP_EXTRN(inline void hzp_deferfree(void *, void (*)(void *)));
-
+LIB_HZP_EXTRN(inline void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)));
+LIB_HZP_EXTRN(inline int hzp_scan(int));
+	
 #endif

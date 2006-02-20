@@ -52,5 +52,6 @@
 
 // real constants, should not be run-time configurable
 #define NORM_BUFF_CAPACITY 4096
+#define NORM_HZP_THRESHOLD	5
 
 #endif // _BUILTIN_DEFAULTS_H

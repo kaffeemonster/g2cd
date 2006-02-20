@@ -50,17 +50,21 @@
 #define EPDATA_POISON	0xFEEBDAEDFEEBDAEDUL
 #define CAPACITY_INCREMENT 100
 static pthread_mutex_t my_epoll_wmutex;
-// TODO: max_fd merge in fd_data, so they get atomic
-static int max_fd;
-static volatile epoll_data_t *fd_data;
+volatile static struct dev_poll_data
+{
+	struct hzp_free hzp;
+	int max_fd;
+	epoll_data_t data[DYN_ARRAY_LEN];
+} *fds;
 
 /*
  * Must be called with the writerlock held!
  */
 static int realloc_fddata(int new_max)
 {
-	epoll_data_t *old_data = fd_data;
-	epoll_data_t *tmp_data = malloc((new_max + 1) * sizeof(*fd_data));
+	struct dev_poll_data *old_data = fds;
+	int old_max = fds->max_fd; /* we are under writer lock */
+	struct dev_poll_data *tmp_data = malloc(sizeof(*tmp_data) + (sizeof(epoll_data_t) * (new_max + 1)));
 	if(!tmp_data)
 	{
 		logg_errno(LOGF_ERR, "allocating fd_data memory");
@@ -69,34 +73,35 @@ static int realloc_fddata(int new_max)
 	}
 
 	/* copy data */
-	memcpy(tmp_data, fd_data, (new_max > max_fd) ? max_fd: new_max);
+	memcpy(tmp_data, old_data, sizeof(*old_data) + (sizeof(epoll_data_t) * (((new_max > old_max) ? old_max : new_max) + 1)));
 	/* poisen new array */
-	if(new_max > max_fd)
+	if(new_max > old_max)
 	{
 		/* keep max_fd low till we filled the new entries with poison */
 		/* -1 since fd 0 is not in the range */
-		int tmp_fd = new_max - max_fd - 1;
+		int tmp_fd = new_max - old_max - 1;
 		/* +1 to get behind act. last entry */
-		epoll_data_t *wptr = tmp_data + max_fd + 1;
+		epoll_data_t *wptr = tmp_data->data + max_fd + 1;
 		/* at least one entry must be filled, or we would not be here */
 		do
 			wptr[tmp_fd].u64 = EPDATA_POISON;
 		while(tmp_fd--);
 	}
 	/* test fd_data, just in case */
-	if(old_data != fd_data)
+	if(old_data != fds)
 	{
 		logg_pos("fd_data changed even under writer lock???");
 		free(tmp_data);
 		errno = EAGAIN;
 		return -1;
 	}
+
+	tmp_data->max_fd = new_max;
 	/* make sure memory comes back in place */
-	fd_data = tmp_data;
-	max_fd = new_max;
+	fds = tmp_data;
 
 	/* mark old data for free */
-	hzp_deferfree(old_data, free);
+	hzp_deferfree(&old_data->hzp, old_data, free);
 	
 	return 0;
 }
@@ -111,14 +116,6 @@ static void my_epoll_init(void)
 {
 	int tmp_fd;
 
-	/* get a key for TLS */
-// TODO: pass cleanup func (for hzp)
-	if(pthread_key_create(&key2hzp, NULL))
-	{
-		logg_errno(LOGF_CRIT, "getting key for my_epoll TLS");
-		exit(EXIT_FAILURE);
-	}
-
 	/* generate a lock for shared free_cons */
 	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
 	{
@@ -126,16 +123,16 @@ static void my_epoll_init(void)
 		exit(EXIT_FAILURE);
 	}
 	
-	fd_data = malloc(sizeof(*fd_data) * ((size_t)EPOLL_QUEUES * 20 + 1));
-	if(!fd_data)
+	fds = malloc(sizeof(*fds) + (sizeof(epoll_data_t) * ((size_t)EPOLL_QUEUES * 20 + 1)));
+	if(!fds)
 	{
 		logg_errno(LOGF_CRIT, "allocating my_epoll memory");
 		exit(EXIT_FAILURE);
 	}
 	
-	max_fd = EPOLL_QUEUES * 20;
-	for(tmp_fd = 0; tmp_fd <= max_fd; tmp_fd++)
-		fd_data[tmp_fd].u64 = EPDATA_POISON;	
+	for(tmp_fd = 0; tmp_fd <= EPOLL_QUEUES * 20; tmp_fd++)
+		fds->data[tmp_fd].u64 = EPDATA_POISON;	
+	fds->max_fd = EPOLL_QUEUES * 20;
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
@@ -163,7 +160,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 	if(!pthread_mutex_lock(&my_epoll_wmutex))
 	{
-		if(fd > max_fd)
+		if(fd > fds->max_fd)
 		{
 			if(EPOLL_CTL_ADD == op)
 			{
@@ -178,7 +175,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 			}
 		}
 
-		if(EPDATA_POISON == fd_data[fd].u64)
+		if(EPDATA_POISON == fds->data[fd].u64)
 		{
 			if(EPOLL_CTL_ADD == op)
 			{
@@ -191,7 +188,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 				while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 				if(sizeof(tmp_poll) == w_val)
-					fd_data[fd] = event->data;
+					fds->data[fd] = event->data;
 				else
 				{
 					logg_errno(LOGF_ERR, "adding new fd to /dev/poll");
@@ -223,7 +220,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 				while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 				if(sizeof(tmp_poll) == w_val)
-					fd_data[fd].u64 = EPDATA_POISON;
+					fds->data[fd].u64 = EPDATA_POISON;
 				else
 				{
 					logg_errno(LOGF_ERR, "removing fd to /dev/poll");
@@ -235,7 +232,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 					tmp_poll.events = event->events;
 					while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 					if(sizeof(tmp_poll) == w_val)
-						fd_data[fd] = event->data;
+						fds->data[fd] = event->data;
 					else
 					{
 						logg_errno(LOGF_ERR, "readding modified fd to /dev/poll");
@@ -297,23 +294,22 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	{
 	default:
 		/* accuire a reference on the data array */
-		epoll_data_t *loc_data;
-		size_t loc_max_fd;
+		struct dev_poll_data *loc_data;
 		do
-			hzp_ref(HZP_EPOLL, (loc_data = fd_data));
-		while(loc_data != fd_data);
-		loc_max_fd =  max_fd; /* a little bit racy */
+			hzp_ref(HZP_EPOLL, (loc_data = fds));
+		while(loc_data != fds);
 
 		for(; num_poll; num_poll--, wptr++, poll_buf++)
 		{
-			if(poll_buf->fd > loc_max_fd)
+			/* totaly bogus fd, close it */
+			if(poll_buf->fd > loc_data->max_fd)
 			{
-// TODO: handle bogus fd's, and maybe closed
-				/* error */
+				close(poll_buf->fd);
+				continue;
 			}
 //			if(!(p_wptr->revents & POLLNVAL))
 
-			wptr->data = loc_data[poll_buf->fd];
+			wptr->data = loc_data->data[poll_buf->fd];
 			wptr->events = poll_buf->revents;
 			ret_val++;
 		}
@@ -341,15 +337,15 @@ int my_epoll_create(int size)
 	if(1 > size)
 		return -1;
 
-	if(0 > (dpfd = open("/dev/poll", O_RDWR)))
-		return -1;
-
 	if(!hzp_alloc())
 		return -1;
 	
+	if(0 > (dpfd = open("/dev/poll", O_RDWR)))
+		return -1;
+
 	if(!pthread_mutex_lock(&my_epoll_wmutex))
 	{
-		if(realloc_fddata(max_fd + size))
+		if(realloc_fddata(fds->max_fd + size))
 		{
 			close(dpfd);
 			dpfd = -1;
