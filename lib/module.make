@@ -61,7 +61,7 @@ FLSSTSRC = \
 POPCOUNSTSRC = \
 	$(MPL)/generic/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
-	$(MPL)/sparc/popcountst.c \
+	$(MPL)/sparc64/popcountst.c \
 	$(MPL)/ppc64/popcountst.c \
 	$(MPL)/alpha/popcountst.c
 MEMXORSRC = \

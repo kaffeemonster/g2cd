@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <alloca.h>
 
 #include "log_facility.h"
 #include "atomic.h"

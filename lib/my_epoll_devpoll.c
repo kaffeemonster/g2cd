@@ -50,20 +50,21 @@
 #define EPDATA_POISON	0xFEEBDAEDFEEBDAEDUL
 #define CAPACITY_INCREMENT 100
 static pthread_mutex_t my_epoll_wmutex;
-volatile static struct dev_poll_data
+struct dev_poll_data
 {
 	struct hzp_free hzp;
 	int max_fd;
 	epoll_data_t data[DYN_ARRAY_LEN];
-} *fds;
+};
+static volatile struct dev_poll_data *fds;
 
 /*
  * Must be called with the writerlock held!
  */
 static int realloc_fddata(int new_max)
 {
-	struct dev_poll_data *old_data = fds;
-	int old_max = fds->max_fd; /* we are under writer lock */
+	struct dev_poll_data *old_data = deatomic(fds);
+	int old_max = old_data->max_fd; /* we are under writer lock */
 	struct dev_poll_data *tmp_data = malloc(sizeof(*tmp_data) + (sizeof(epoll_data_t) * (new_max + 1)));
 	if(!tmp_data)
 	{
@@ -81,7 +82,7 @@ static int realloc_fddata(int new_max)
 		/* -1 since fd 0 is not in the range */
 		int tmp_fd = new_max - old_max - 1;
 		/* +1 to get behind act. last entry */
-		epoll_data_t *wptr = tmp_data->data + max_fd + 1;
+		epoll_data_t *wptr = tmp_data->data + old_max + 1;
 		/* at least one entry must be filled, or we would not be here */
 		do
 			wptr[tmp_fd].u64 = EPDATA_POISON;
@@ -90,7 +91,7 @@ static int realloc_fddata(int new_max)
 	/* test fd_data, just in case */
 	if(old_data != fds)
 	{
-		logg_pos("fd_data changed even under writer lock???");
+		logg_pos(LOGF_WARN, "fd_data changed even under writer lock???");
 		free(tmp_data);
 		errno = EAGAIN;
 		return -1;
@@ -265,7 +266,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	struct pollfd *poll_buf;
 	struct epoll_event *wptr = events;
 	struct dvpoll do_poll;
-	int num_poll, ret_val = 0, i;
+	int num_poll, ret_val = 0;
 
 	if(0 > epfd)
 	{
@@ -292,11 +293,11 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	num_poll = ioctl(epfd, DP_POLL, &do_poll);
 	switch(num_poll)
 	{
+		struct dev_poll_data *loc_data;
 	default:
 		/* accuire a reference on the data array */
-		struct dev_poll_data *loc_data;
 		do
-			hzp_ref(HZP_EPOLL, (loc_data = fds));
+			hzp_ref(HZP_EPOLL, (loc_data = deatomic(fds)));
 		while(loc_data != fds);
 
 		for(; num_poll; num_poll--, wptr++, poll_buf++)

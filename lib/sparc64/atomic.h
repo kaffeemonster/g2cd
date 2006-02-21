@@ -63,7 +63,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
-	switch(sizeof(*val))
+	switch(sizeof(val))
 	{
 	case 4:
 		return atomic_px_32(val, ptr);
@@ -73,12 +73,13 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return _illigal_ptr_size(val, ptr);
 }
 
+// TODO: hmmm, really no swapx and swap deprecatet on sparc v9?
 static inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
 		: "=&r" (val),
-		  "=m" (atomic_read(ptr)),
+		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		  "0" (val));
 	return val;
@@ -95,7 +96,7 @@ static inline int atomic_x_32(int val, atomic_t *ptr)
 	return val;
 }
 
-extern int _illigal_int_size(int, atomic_t *)
+extern int _illigal_int_size(int, atomic_t *);
 static inline int atomic_x(int val, atomic_t *ptr)
 {
 	switch(sizeof(val))
@@ -105,7 +106,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	case 8:
 		return atomic_x_64(val, ptr);
 	}
-	return _illigal_int_size(val, ptr)
+	return _illigal_int_size(val, ptr);
 }
 
 # ifdef HAVE_SMP
@@ -157,32 +158,35 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return _illigal_int_size(nval, ptr);
 }
 
-static inline void *atomic_cmppx_32(volatile void nval, volatile void oval, atomicptr_t *ptr)
+static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
+	void *prev;
 	__asm__ __volatile__(
 		MEMBAR_1
 		"cas %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (nval),
+		: "=&r" (prev),
 		  "=m" (atomic_pread(ptr))
 		: "r" (oval),
 		  "m" (atomic_pread(ptr)),
 		  "0" (nval));
-	return nval;
+	return prev;
 }
 
+// TODO: gcc happiliy chooses the 64 bit variant, but issues ld not ldx loads, BUG?
 static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
+	void *prev;
 	__asm__ __volatile__(
 		MEMBAR_1
 		"casx %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (nval),
+		: "=&r" (prev),
 		  "=m" (atomic_pread(ptr))
 		: "r" (oval),
 		  "m" (atomic_pread(ptr)),
 		  "0" (nval));
-	return nval;
+	return prev;
 }
 
 static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
@@ -197,7 +201,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return _illigal_ptr_size(nval, ptr);
 }
 
-static inline void atomic_add_return(int val, atomic_t *ptr)
+static inline int atomic_add_return(int val, atomic_t *ptr)
 {
 	int res;
 	do
@@ -206,7 +210,7 @@ static inline void atomic_add_return(int val, atomic_t *ptr)
 	return res;
 }
 
-static inline void atomic_sub_return(int val, atomic_t *ptr)
+static inline int atomic_sub_return(int val, atomic_t *ptr)
 {
 	int res;
 	do

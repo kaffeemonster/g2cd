@@ -1,8 +1,8 @@
 /*
  * popcountst.c
- * calculate popcount in size_t
+ * calculate popcount in size_t, sparc64 implementation
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2005,2006 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,32 +24,11 @@
  * $Id:$
  */
 
-#include "../config.h"
-#include "../other.h"
+inline size_t popcountst(size_t n)
+{
+	size_t tmp;
+	__asm__ ("popc\t%1, %0\n" : "=r" (tmp) : "r" (n));
+	return tmp;
+}
 
-#include "my_bitops.h"
-#include "my_bitopsm.h"
-
-/*
- * popcountst - count the bits set in a size_t
- * n: the size_t to count
- *
- * return value: number of bits set
- */
-/* inline size_t popcountst(size_t n) */
-
-#ifdef I_LIKE_ASM
-# ifdef __IA64__
-#  include "ia64/popcountst.c"
-# elif defined(__sparcv8) || defined(__sparcv9) || defined(__sparc_v9__)
-#  include "sparc/popcountst.c"
-# elif __powerpc64__
-#  include "ppc64/popcountst.c"
-# elif __alpha__
-#  include "alpha/popcountst.c"
-# else
-#  include "generic/popcountst.c"
-# endif
-#else
-# include "generic/popcountst.c"
-#endif
+static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";

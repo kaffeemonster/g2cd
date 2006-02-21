@@ -44,13 +44,15 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <unistd.h>
-#if defined __GLIBC__ && defined WANT_BACKTRACES
-# include <execinfo.h>
-# include <ucontext.h>
-# include <malloc.h>
+#ifdef WANT_BACKTRACES
 # include <setjmp.h>
-# ifdef __linux__
-#  include <syscall.h>
+# include <ucontext.h>
+# ifdef __GLIBC__
+#  include <execinfo.h>
+#  include <malloc.h>
+#  ifdef __linux__
+#   include <syscall.h>
+#  endif
 # endif
 #endif
 //#include <zlib.h>
@@ -319,7 +321,7 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 	static volatile sig_atomic_t critical = 0;
 	static char path[4096];
 	const char *osl = NULL, *isl = NULL;
-	char *wptr = NULL; 
+	static char *wptr = NULL; 
 	struct ucontext *uc = vuc;
 # ifdef __GLIBC__
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
@@ -497,8 +499,8 @@ So no BT, maybe a core.\n"
 			*wptr++ = '"';
 			for(i = 0; i < 64; i++)
 			{
-				char c = ((char *)si->si_addr)[i];
-				*wptr++ = isprint(c) ? c : isspace(c) ? ' ' : '.';
+				unsigned char c = ((unsigned char *)si->si_addr)[i];
+				*wptr++ = isprint(c) ? c : (isspace(c) ? ' ' : '.');
 			}
 			*wptr++= '"'; 
 		}

@@ -388,7 +388,7 @@ static inline bool handle_accept_in(
 	int abort_fd,
 	struct epoll_event *poll_me)
 {
-	struct epoll_event tmp_eevent;
+	struct epoll_event tmp_eevent = {0,{0}};
 	int tmp_fd;
 	int fd_flags;
 

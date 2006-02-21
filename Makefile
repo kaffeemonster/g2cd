@@ -581,10 +581,10 @@ ccdrv: ccdrv.c Makefile
 		$(PORT_PR) "\$${CC} \$${@}\n" >> $@; \
 		chmod a+x $@ )
 
-# .INTERMEDIATE: data.o
+.INTERMEDIATE: data.o
 data.o: $(TARED_FILES)
 	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -9 | \
-	od -v -A n -t x1 | tr -s [:space:] ':' | \
+	od -v -A n -t x1 | tr -s '\n\t ' ':::' | \
 	awk 'BEGIN { RS = ":"; ORS = " "; print "static const char s_base_data[]= {\n"} /[0-9a-fA-F][0-9a-fA-F]/{print "0x" $$1 ","; if ( NR % 14  == 13) printf "\n"; } END { ORS = "\n"; print "\n};\n\nconst struct s_data {\n\tconst unsigned long len;\n\tconst char *data;\n} s_data = {sizeof(s_base_data), &s_base_data[0]};"}' | \
 	$(CC) -x c - -c -o $@ || touch $@
 

@@ -29,9 +29,14 @@
 	# epoll compat
 		my_epoll_wait;
 		my_epoll_ctl;
-		my_epoll_init;
 		my_epoll_create;
 		my_epoll_close;
+	# hzp
+		hzp_alloc;
+		hzp_deferfree;
+		hzp_ref;
+		hzp_unref;
+		hzp_scan;
 	# bitops
 		memxor;
 		flsst;
@@ -44,6 +49,7 @@
 	# vars
 		KNOWN_HEADER_FIELDS;
 		KNOWN_ENCODINGS;
+		g2_packet_dict;
 		packet_uprod;
 		packet_uprod_length;
 		server;

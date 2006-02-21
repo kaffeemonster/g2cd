@@ -27,6 +27,7 @@
 #ifndef LIB_HZP_H
 #define LIB_HZP_H
 
+#include <stdbool.h>
 #include "../other.h"
 #include "atomic.h"
 
