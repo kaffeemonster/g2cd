@@ -306,8 +306,10 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 			if(poll_buf->fd > loc_data->max_fd)
 			{
 				close(poll_buf->fd);
+				logg_pos(LOGF_INFO, "hit FD out of lockup arry?")
 				continue;
 			}
+// TODO: handle POLLNVAL, epoll does not deliver it 
 //			if(!(p_wptr->revents & POLLNVAL))
 
 			wptr->data = loc_data->data[poll_buf->fd];
