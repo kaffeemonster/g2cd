@@ -105,6 +105,8 @@ typedef union xxxxxx4
 #   include "sparc64/atomic.h"
 #  elif defined(__sparc__) || defined(__sparc)
 #   include "sparc/atomic.h"
+#  elif defined(__powerpc__)
+#   include "ppc/atomic.h"
 #  else
 #   include "generic/atomic.h"
 #  endif

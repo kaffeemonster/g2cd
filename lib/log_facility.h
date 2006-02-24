@@ -29,7 +29,9 @@
 
 #include "../other.h"
 
-#define str_size(x)		(sizeof(x) - 1)
+#define str_size(x)	(sizeof(x) - 1)
+#define str_it2(x)	#x
+#define str_it(x)	str_it2(x)
 
 #ifdef DEBUG_DEVEL
 # define logg_devel(x) logg_more(LOGF_DEVEL, __FILE__, __func__, __LINE__, 0, x)
