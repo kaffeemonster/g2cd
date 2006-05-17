@@ -67,10 +67,7 @@ static inline struct hzp *hzp_alloc_intern(void);
 static void hzp_init(void) 
 {
 	if(pthread_key_create(&key2hzp, hzp_free))
-	{
-		logg_errno(LOGF_EMERG, "couldn't create TLS key for hzp");
-		exit(EXIT_FAILURE);
-	}
+		diedie("couldn't create TLS key for hzp");
 }
 
 /*
@@ -137,7 +134,7 @@ inline void hzp_ref(enum hzps key, void *new_ref)
 	{
 		if(!(t_hzp = hzp_alloc_intern()))
 		{
-			logg_errno(LOGF_EMERG, "thread with no hzp, couldn't get one, were doomed!!");
+			logg_errno(LOGF_ALERT, "thread with no hzp, couldn't get one, were doomed!!");
 			return;
 		}
 	}

@@ -119,17 +119,11 @@ static void my_epoll_init(void)
 
 	/* generate a lock for shared free_cons */
 	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
-	{
-		logg_errno(LOGF_CRIT, "creating my_epoll writes mutex");
-		exit(EXIT_FAILURE);
-	}
+		diedie("creating my_epoll writes mutex");
 	
 	fds = malloc(sizeof(*fds) + (sizeof(epoll_data_t) * ((size_t)EPOLL_QUEUES * 20 + 1)));
 	if(!fds)
-	{
-		logg_errno(LOGF_CRIT, "allocating my_epoll memory");
-		exit(EXIT_FAILURE);
-	}
+		diedie("allocating my_epoll memory");
 	
 	for(tmp_fd = 0; tmp_fd <= EPOLL_QUEUES * 20; tmp_fd++)
 		fds->data[tmp_fd].u64 = EPDATA_POISON;	
@@ -247,10 +241,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 UNLOCK:
 		if(pthread_mutex_unlock(&my_epoll_wmutex))
-		{
-			logg_errno(LOGF_CRIT, "unlocking my_epoll writers mutex");
-			exit(EXIT_FAILURE);
-		}
+			diedie("unlocking my_epoll writers mutex");
 	}
 	else
 	{
@@ -355,10 +346,7 @@ int my_epoll_create(int size)
 		}
 
 		if(pthread_mutex_unlock(&my_epoll_wmutex))
-		{
-			logg_errno(LOGF_CRIT, "unlocking my_epoll writes mutex");
-			exit(EXIT_FAILURE);
-		}
+			diedie("unlocking my_epoll writes mutex");
 	}
 	else
 	{

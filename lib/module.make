@@ -110,9 +110,14 @@ LIBCOMMON = $(MPL)/libcommon.a
 alll:
 	$(MAKE) -C .. $(LIBCOMMON)
 
-$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
+# not parralel compatible
+#$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
+#	$(RANLIB) $@
+#$(LIBCOMMON)($(LIBOBJS)):
+
+$(LIBCOMMON): $(LIBOBJS)
+	$(AR) $(ARFLAGS) $@ $^
 	$(RANLIB) $@
-$(LIBCOMMON)($(LIBOBJS)):
 
 # Dependencies
 $(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/strnlen.o: $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h

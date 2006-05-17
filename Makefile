@@ -43,8 +43,8 @@ CC_VER_INFO = --version
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
-AR = @./ccdrv -s$(VERBOSE) "AR[$@ $<]" ar
-ARFLAGS = cr
+AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ar
+ARFLAGS = cru
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ranlib
 #	ctags, anyone?
 CTAGS = ctags

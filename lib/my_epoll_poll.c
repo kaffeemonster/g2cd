@@ -53,24 +53,15 @@ static void my_epoll_init(void)
 {
 	// generate a lock for shared free_cons
 	if(pthread_mutex_init(&my_epoll_mutex, NULL))
-	{
-		logg_errno(LOGF_CRIT, "creating my_epoll mutex");
-		exit(EXIT_FAILURE);
-	}
+		diedie("creating my_epoll mutex");
 	
 	pi_control = calloc(sizeof(struct poll_info *), (size_t)EPOLL_QUEUES);
 	if(!pi_control)
-	{
-		logg_errno(LOGF_CRIT, "allocating my_epoll memory");
-		exit(EXIT_FAILURE);
-	}
+		diedie("allocating my_epoll memory");
 
 	ei_control = calloc(sizeof(struct epoll_info *), (size_t)EPOLL_QUEUES);
 	if(!ei_control)
-	{
-		logg_errno(LOGF_CRIT, "allocating my_epoll memory");
-		exit(EXIT_FAILURE);
-	}
+		diedie("allocating my_epoll memory");
 	
 	count = EPOLL_QUEUES;
 }
@@ -361,19 +352,13 @@ int my_epoll_create(int size)
 			}
 
 			if(pthread_mutex_unlock(&my_epoll_mutex))
-			{
-				logg_errno(LOGF_CRIT, "unlocking my_epoll mutex");
-				exit(EXIT_FAILURE);
-			}
+				diedie("unlocking my_epoll mutex");
 			return efd;
 		}
 
 		/* just in case we come here */
 		if(pthread_mutex_unlock(&my_epoll_mutex))
-		{
-			logg_errno(LOGF_CRIT, "unlocking my_epoll mutex");
-			exit(EXIT_FAILURE);
-		}
+			diedie("unlocking my_epoll mutex");
 
 		return -1;
 	}
@@ -411,10 +396,7 @@ int my_epoll_close(int epfd)
 			ei_control[epfd] = NULL;
 
 			if(pthread_mutex_unlock(&my_epoll_mutex))
-			{
-				logg_errno(LOGF_CRIT, "unlocking my_epoll mutex");
-				exit(EXIT_FAILURE);
-			}
+				diedie("unlocking my_epoll mutex");
 			else
 				return 0;
 		}
@@ -422,10 +404,7 @@ int my_epoll_close(int epfd)
 			errno = EINVAL;
 
 		if(pthread_mutex_unlock(&my_epoll_mutex))
-		{
-			logg_errno(LOGF_CRIT, "unlocking my_epoll mutex");
-			exit(EXIT_FAILURE);
-		}
+			diedie("unlocking my_epoll mutex");
 
 		return -1;
 	}

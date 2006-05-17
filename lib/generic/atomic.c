@@ -48,10 +48,7 @@ static void gen_atomic_init(void)
 	do
 	{
 		if(shortlock_t_init(gen_atomic_lock + i))
-		{
-			logg_errno(LOGF_CRIT, "initialising generic atomic locks");
-			exit(EXIT_FAILURE);
-		}
+			diedie("initialising generic atomic locks");
 	}
 	while(i);
 }

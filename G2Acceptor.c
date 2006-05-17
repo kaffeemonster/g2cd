@@ -96,10 +96,7 @@ void *G2Accept(void *param)
 	if(!init_con(&accept_so, &our_addr))
 	{
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
-		{
-			logg_errno(LOGF_CRIT, "initiating stop");
-			exit(EXIT_FAILURE); // hate doing this, but now it's to late
-		}
+			diedie("initiating stop"); // hate doing this, but now it's to late
 		logg_pos(LOGF_ERR, "should go down\n");
 		server.status.all_abord[THREAD_ACCEPTOR] = false;
 		pthread_exit(NULL);
@@ -109,10 +106,7 @@ void *G2Accept(void *param)
 	{
 		close(accept_so);
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
-		{
-			logg_errno(LOGF_CRIT, "initiating stop");
-			exit(EXIT_FAILURE); // hate doing this, but now it's to late
-		}
+			diedie("initiating stop"); // hate doing this, but now it's to late
 		logg_pos(LOGF_ERR, "should go down\n");
 		server.status.all_abord[THREAD_ACCEPTOR] = false;
 		pthread_exit(NULL);
@@ -564,10 +558,7 @@ static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_con
 	size_t i;
 
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
-	{
-		logg_errno(LOGF_CRIT, "initiating stop");
-		exit(EXIT_FAILURE); // hate doing this, but now it's to late
-	}
+		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
 	free(poll_me);

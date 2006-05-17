@@ -689,10 +689,7 @@ static inline void parse_cmdl_args(int argc, char **args)
 		case 'l':
 				logg(LOGF_INFO, "will log to: %s\n", optarg);
 				if(-1 == (log_to_fd = open(optarg, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)))
-				{
-					logg_errno(LOGF_ERR, "opening logfile");
-					exit(EXIT_FAILURE);
-				}
+					diedie("opening logfile");
 				break;
 		case '?':
 				logg_develd_old("unknown OptChar: %c\n", (char)optopt);
@@ -718,10 +715,8 @@ static inline void fork_to_background(void)
 	// child
 	case 0:
 		if(-1 == setsid())
-		{
-			logg_errno(LOGF_ERR, "becomming session-leader");
-			exit(EXIT_FAILURE);
-		}
+			diedie("becomming session-leader");
+
 		switch((child = fork()))
 		{
 		// child
@@ -736,16 +731,10 @@ static inline void fork_to_background(void)
 			// connect stdin with dave null,
 			// maybe stderr and stdout
 			if(-1 == (tmp_fd = open("/dev/null", O_RDONLY)))
-			{
-				logg_errno(LOGF_ERR, "opening /dev/null");
-				exit(EXIT_FAILURE);
-			}
+				diedie("opening /dev/null");
 			
 			if(STDIN_FILENO != dup2(tmp_fd, STDIN_FILENO))
-			{
-				logg_errno(LOGF_ERR, "mapping stdin");
-				exit(EXIT_FAILURE);
-			}
+				diedie("mapping stdin");
 
 			// maybe the log-to-file option already
 			// defined a log-file
@@ -755,9 +744,7 @@ static inline void fork_to_background(void)
 				close(tmp_fd);
 			break;
 		case -1:
-			logg_errno(LOGF_ERR, "forking for daemon-mode");
-			while(true)
-				exit(EXIT_FAILURE);
+			diedie("forking for daemon-mode");
 		// parent
 		default:
 			while(true)
@@ -765,9 +752,7 @@ static inline void fork_to_background(void)
 		}
 		break;
 	case -1:
-		logg_errno(LOGF_ERR, "forking for daemon-mode");
-		while(true)
-			exit(EXIT_FAILURE);
+		diedie("forking for daemon-mode");
 	// parent
 	default:
 		logg_develd_old("own pid %i\tchild %i\n", getpid(), child);
@@ -803,20 +788,14 @@ static inline void handle_config(void)
 
 	// set the GUID
 	if(!(config = fopen(guid_file_name, "r")))
-	{
-		logg_errno(LOGF_ERR, "opening guid-file");
-		exit(EXIT_FAILURE);
-	}
+		diedie("opening guid-file");
 
 	if(16 != fscanf(config,
 		"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		tmp_id, tmp_id+1, tmp_id+2, tmp_id+3, tmp_id+4, tmp_id+5,
 		tmp_id+6, tmp_id+7, tmp_id+8, tmp_id+9, tmp_id+10,
 		tmp_id+11, tmp_id+12, tmp_id+13, tmp_id+14, tmp_id+15))
-	{
-		logg_errno(LOGF_ERR, "reading guid");
-		exit(EXIT_FAILURE);
-	}
+		diedie("reading guid");
 		
 	for(i = 0; i < sizeof(server.settings.our_guid); i++)
 		server.settings.our_guid[i] = (uint8_t)tmp_id[i];
@@ -836,10 +815,7 @@ static inline void change_the_user(void)
 	struct passwd *nameinfo;
 	errno = 0;
 	if(!(nameinfo = getpwnam(user_name)))
-	{
-		logg_errno(LOGF_CRIT, "getting user-entry");
-		exit(EXIT_FAILURE);
-	}
+		diedie("getting user-entry");
 
 	if(setgid((gid_t) nameinfo->pw_gid))
 	{
@@ -892,10 +868,7 @@ static inline void change_the_user(void)
 	// maybe we could at least stop using the admin-account
 	logg_develd("uid = %lu\n", (unsigned long) getuid());
 	if(500 == getuid())
-	{
-		logg(LOGF_ERR, "We don't want to use the Admin-account!\n");
-		exit(EXIT_FAILURE);
-	}
+		die("We don't want to use the Admin-account!\n");
 #endif // __CYGWIN__
 }
 
@@ -955,10 +928,7 @@ static inline void setup_resources(void)
 	// mutexes
 	// generate a lock for shared free_cons
 	if(pthread_mutex_init(&free_cons_mutex, NULL))
-	{
-		logg_errno(LOGF_CRIT, "creating free_cons mutex");
-		exit(EXIT_FAILURE);
-	}
+		diedie("creating free_cons mutex");
 
 	// getting memory
 	// memory for free_cons
@@ -994,16 +964,10 @@ static inline void setup_resources(void)
 		}
 
 		if(pthread_mutex_unlock(&free_cons_mutex))
-		{
-			logg_errno(LOGF_CRIT, "unlocking free_cons mutex");
-			exit(EXIT_FAILURE);
-		}
+			diedie("unlocking free_cons mutex");
 	}
 	else
-	{
-		logg_errno(LOGF_CRIT, "first locking free_cons");
-		exit(EXIT_FAILURE);
-	}
+		diedie("first locking free_cons");
 
 	// IPC
 	// open Sockets for IPC

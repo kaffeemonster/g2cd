@@ -85,11 +85,7 @@ void *G2UDP(void *param)
 	if(!init_con(&udp_so, &our_addr))
 	{
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
-		{
-			logg_errno(LOGF_CRIT, "initiating stop");
-			// hate doing this, but now it's to late
-			exit(EXIT_FAILURE);
-		}
+			diedie("initiating stop"); // hate doing this, but now it's to late
 		logg_pos(LOGF_ERR, "should go down\n");
 		server.status.all_abord[THREAD_UDP] = false;
 		pthread_exit(NULL);
@@ -408,11 +404,7 @@ static inline bool init_con(int *udp_so, struct sockaddr_in *our_addr)
 static inline void clean_up(int udp_so, int out_file, int who_to_say)
 {
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
-	{
-		logg_errno(LOGF_CRIT, "initiating stop");
-		// hate doing this, but now it's to late
-		exit(EXIT_FAILURE);
-	}
+		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
 	close(udp_so);

@@ -90,10 +90,7 @@ void *G2Handler(void *param)
 	if(!init_memory_h(&eevents, &work_cons, &epoll_fd))
 	{ 
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
-		{
-			logg_errno(LOGF_CRIT, "initiating stop");
-			exit(EXIT_FAILURE); // hate doing this, but now it's to late
-		}
+			diedie("initiating stop"); // hate doing this, but now it's to late
 		logg_pos(LOGF_ERR, "should go down\n");
 		server.status.all_abord[THREAD_HANDLER] = false;
 		pthread_exit(NULL);
@@ -282,8 +279,7 @@ static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_a
 		if(NULL == tmp_pointer)
 		{
 			logg_errno(LOGF_DEBUG, "reallocing work_con[]");
-			while(-1 == close(recvd_con->com_socket) && EINTR == errno);
-			return false;
+			goto clean_up;
 		}
 		*work_cons = tmp_pointer;
 		(*work_cons)->capacity += WC_CAPACITY_INCREMENT;
@@ -295,13 +291,18 @@ static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_a
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, recvd_con->com_socket, &tmp_eevent))
 	{
 		logg_errno(LOGF_DEBUG, "adding new socket to EPoll");
-		while(-1 == close(recvd_con->com_socket) && EINTR == errno);
-		return false;
+		goto clean_up;
 	}
 
 	(*work_cons)->data[(*work_cons)->limit] = recvd_con;
 	(*work_cons)->limit++;	
 	return true;
+clean_up:
+	while(-1 == close(recvd_con->com_socket) && EINTR == errno);
+	g2_con_clear(recvd_con);
+	if(!return_free_con(recvd_con, __FILE__, __func__, __LINE__))
+		die("returning g2 con failed, will go down");
+	return false;
 }
 
 static inline g2_connection_t **handle_socket_io(struct epoll_event *p_entry, int epoll_fd)
@@ -455,10 +456,7 @@ static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_con
 	size_t i;
 
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
-	{
-		logg_errno(LOGF_CRIT, "initiating stop");
-		exit(EXIT_FAILURE); // hate doing this, but now it's to late
-	}
+		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
 	free(poll_me);

@@ -33,8 +33,7 @@ static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
 static void my_epoll_init(void)
 {
 // num = EPOLL_QUEUES
-	logg_pos(LOGF_EMERG, "Your kidding? No epoll emulation, no go");
-	exit(EXIT_FAILURE);
+	die("Your kidding? No epoll emulation, no go");
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
