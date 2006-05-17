@@ -76,8 +76,6 @@
 static pthread_t main_threads[THREAD_SUM];
 static int sock_com[THREAD_SUM][2];
 static int accept_2_handler[2];
-static struct g2_con_info *free_cons = NULL;
-static pthread_mutex_t free_cons_mutex;
 static struct pollfd sock_poll[THREAD_SUM];
 static volatile sig_atomic_t server_running = true;
 
@@ -568,107 +566,6 @@ out:
 }
 #endif
 
-inline g2_connection_t *get_free_con(const char *from_file, const char *from_func, const unsigned int from_line)
-{
-	g2_connection_t *ret_val = NULL;
-	// Getting the first Connections to work with
-	if(!pthread_mutex_lock(&free_cons_mutex))
-	{
-		if(FC_TRESHOLD >= free_cons->limit)
-		{
-			size_t i;
-			for(i = free_cons->limit; i < free_cons->capacity; i++, free_cons->limit++)
-			{
-				if(!(free_cons->data[i] = g2_con_alloc(1)))
-				{
-					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "free_cons memory");
-					break;
-				}
-			}
-		}
-
-		if(free_cons->limit)
-		{
-			free_cons->limit--;
-			ret_val = free_cons->data[free_cons->limit];
-			free_cons->data[free_cons->limit] = NULL;
-		}
-
-		if(pthread_mutex_unlock(&free_cons_mutex))
-		{
-// TODO: shouldn't we stop everything?
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-			if(ret_val)
-			{
-				g2_con_free(ret_val);
-				ret_val = NULL;
-			}
-		}
-	}
-	else
-	{
-		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
-		if(!(ret_val = g2_con_alloc(1)))
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "no new free_con");
-	}
-
-	return(ret_val);
-}
-
-inline bool return_free_con(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
-{
-	if(!pthread_mutex_lock(&free_cons_mutex))
-	{
-		if(free_cons->limit == free_cons->capacity)
-		{
-			if(FC_END_CAPACITY <= free_cons->limit)
-			{
-				g2_con_free(to_return);
-
-				if(pthread_mutex_unlock(&free_cons_mutex))
-				{
-					logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-					return false;
-				}
-				return true;
-			}
-			else
-			{
-				struct g2_con_info *tmp_pointer = realloc(free_cons, sizeof(struct g2_con_info) + ((free_cons->capacity + FC_CAPACITY_INCREMENT) * sizeof(g2_connection_t *)));
-				if(!tmp_pointer)
-				{				
-					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "reallocating free_cons");
-					g2_con_free(to_return);
-					if(pthread_mutex_unlock(&free_cons_mutex))
-					{
-						logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-						return false;
-					}
-					return true;
-				}
-				free_cons = tmp_pointer;
-				free_cons->capacity += FC_CAPACITY_INCREMENT;
-			}
-		}
-					
-		free_cons->data[free_cons->limit] = to_return;
-		free_cons->limit++;
-
-		if(pthread_mutex_unlock(&free_cons_mutex))
-		{
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-			return false;
-		}
-	}
-	else
-	{
-		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
-		g2_con_free(to_return);
-	}
-
-	return true;
-}
-
 static inline void parse_cmdl_args(int argc, char **args)
 {
 	// seeking our options
@@ -925,50 +822,6 @@ static inline void setup_resources(void)
 	else
 		logg_errno(LOGF_WARN, "geting FD-limit");
 
-	// mutexes
-	// generate a lock for shared free_cons
-	if(pthread_mutex_init(&free_cons_mutex, NULL))
-		diedie("creating free_cons mutex");
-
-	// getting memory
-	// memory for free_cons
-	if(!pthread_mutex_lock(&free_cons_mutex))
-	{
-		if(!(free_cons = calloc(1, sizeof(struct g2_con_info) + (FC_START_CAPACITY * sizeof(g2_connection_t *)))))
-		{
-			logg_errno(LOGF_CRIT, "free_cons[] memory");
-			if(pthread_mutex_unlock(&free_cons_mutex))
-				logg_errno(LOGF_CRIT, "unlocking free_cons mutex");
-			exit(EXIT_FAILURE);
-		}
-		free_cons->capacity = FC_START_CAPACITY;
-
-		for(i = 0; i < free_cons->capacity; i++, free_cons->limit++)
-		{
-			if(!(free_cons->data[i] = g2_con_alloc(1)))
-			{
-				logg_errno(LOGF_CRIT, "free_cons memory");
-				if(FC_TRESHOLD >= free_cons->limit)
-					break;
-
-				for(; i > 0; --i)
-				{
-					g2_con_free(free_cons->data[i]);
-					free_cons->limit--;
-				}
-				free(free_cons);
-				if(pthread_mutex_unlock(&free_cons_mutex))
-					logg_errno(LOGF_CRIT, "unlocking free_cons mutex");
-				exit(EXIT_FAILURE);
-			}
-		}
-
-		if(pthread_mutex_unlock(&free_cons_mutex))
-			diedie("unlocking free_cons mutex");
-	}
-	else
-		diedie("first locking free_cons");
-
 	// IPC
 	// open Sockets for IPC
 	for(i = 0; i < THREAD_SUM; i++)
@@ -1154,16 +1007,16 @@ static inline void clean_up(void)
 	// no locking here, since maybe we are here because a thread
 	// already has trouble with it and by the way... it
 	// shouldn't matter anyhow at this point
-	for(i = free_cons->limit; i; i--, free_cons->limit--)
-		g2_con_free(free_cons->data[i-1]);
+//	for(i = free_cons->limit; i; i--, free_cons->limit--)
+//		g2_con_free(free_cons->data[i-1]);
 
-	free(free_cons);
+//	free(free_cons);
 
 	if(packet_uprod)
 		free(packet_uprod);
 
 	// what should i do if this fails?
-	pthread_mutex_destroy(&free_cons_mutex);
+//	pthread_mutex_destroy(&free_cons_mutex);
 
 	fclose(stdin);
 	fclose(stdout); // get a sync if we output to a file

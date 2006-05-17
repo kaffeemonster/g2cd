@@ -300,7 +300,7 @@ static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_a
 clean_up:
 	while(-1 == close(recvd_con->com_socket) && EINTR == errno);
 	g2_con_clear(recvd_con);
-	if(!return_free_con(recvd_con, __FILE__, __func__, __LINE__))
+	if(!g2_con_ret_free(recvd_con))
 		die("returning g2 con failed, will go down");
 	return false;
 }

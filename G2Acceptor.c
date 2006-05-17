@@ -145,7 +145,7 @@ void *G2Accept(void *param)
 	}
 
 	// Getting the first Connections to work with
-	if(!(work_entry = get_free_con(__FILE__, __func__, __LINE__)))
+	if(!(work_entry = g2_con_get_free()))
 	{
 		clean_up_a(eevents, work_cons, epoll_fd, sock2main);
 		close(accept_so);
@@ -216,7 +216,8 @@ void *G2Accept(void *param)
 									{
 										logg_errno(LOGF_NOTICE, "sending connection to Handler");
 										close(tmp_con->com_socket);
-										if(!return_free_con(tmp_con, __FILE__, __func__, __LINE__))
+										g2_con_clear(tmp_con);
+										if(!g2_con_ret_free(tmp_con))
 										{
 											clean_up_a(eevents, work_cons, epoll_fd, sock2main);
 											close(accept_so);
@@ -455,7 +456,7 @@ static inline bool handle_accept_in(
 
 	work_cons->data[work_cons->limit] = *work_entry;
 	work_cons->limit++;
-	*work_entry = get_free_con(__FILE__, __func__, __LINE__);
+	*work_entry = g2_con_get_free();
 	if(!*work_entry)
 	{
 		clean_up_a(poll_me, work_cons, epoll_fd, abort_fd);

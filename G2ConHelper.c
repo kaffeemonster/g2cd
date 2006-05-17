@@ -273,7 +273,8 @@ inline bool recycle_con(
 		atomic_dec(&server.status.act_connection_sum);
 
 		// return datastructure to FreeCons
-		if(!return_free_con(tmp_con, __FILE__, __func__, __LINE__))
+		g2_con_clear(tmp_con);
+		if(!g2_con_ret_free(tmp_con))
 		{
 			clean_up(poll_me, work_cons, epoll_fd, abort_fd);
 			pthread_exit(NULL);

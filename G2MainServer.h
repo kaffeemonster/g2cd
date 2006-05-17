@@ -105,9 +105,6 @@ _G2MAIN_EXTRNVAR( struct
 _G2MAIN_EXTRNVAR(size_t packet_uprod_length);
 _G2MAIN_EXTRNVAR(char *packet_uprod);
 
-_G2MAIN_EXTRN(inline g2_connection_t *get_free_con(const char *, const char *, const unsigned int));
-_G2MAIN_EXTRN(inline bool return_free_con(g2_connection_t *, const char *, const char *, const unsigned int));
-
 /*static inline void wrap_perror(const char *which_file, const char *which_func, const unsigned int where, const char *when)
 {
 	int whats_wrong = errno;

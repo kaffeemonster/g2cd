@@ -199,9 +199,13 @@ _G2CON_EXTRNVAR(const action_string *KNOWN_ENCODINGS[];)
 _G2CON_EXTRNVAR(const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM];)
 
 #define g2_con_clear(x) _g2_con_clear((x), 0);
+#define g2_con_get_free() _g2_con_get_free(__FILE__, __func__, __LINE__)
+#define g2_con_ret_free(x) _g2_con_ret_free((x), __FILE__, __func__, __LINE__)
 _G2CON_EXTRN(inline g2_connection_t *g2_con_alloc(size_t));
 _G2CON_EXTRN(inline void _g2_con_clear(g2_connection_t *, int));
 _G2CON_EXTRN(inline void g2_con_free(g2_connection_t *));
+_G2CON_EXTRN(inline g2_connection_t *_g2_con_get_free(const char *, const char *, const unsigned int));
+_G2CON_EXTRN(inline bool _g2_con_ret_free(g2_connection_t *, const char *, const char *, const unsigned int));
 
 #endif // _G2CONNECTION_H
 //EOF

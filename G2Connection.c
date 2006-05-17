@@ -42,17 +42,10 @@
 
 #define PACKET_SPACE_START_CAP 128
 
-// encoding
-static const action_string enc_as00	= {NULL,		str_size(ENC_NONE_S),		ENC_NONE_S};
-static const action_string enc_as01	= {NULL,		str_size(ENC_DEFLATE_S),	ENC_DEFLATE_S};
-
-const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
-{
-	&enc_as00,
-	&enc_as01,
-};
-
-// internal action-prototypes
+/* Protos */
+	/* You better not kill this proto, our it wount work ;) */
+static void g2_con_init(void) GCC_ATTR_CONSTRUCT;
+	/* internal action-prototypes */
 static bool empty_action(g2_connection_t *, size_t);
 static bool accept_what(g2_connection_t *, size_t);
 static bool remote_ip_what(g2_connection_t *, size_t);
@@ -63,8 +56,20 @@ static bool ulpeer_what(g2_connection_t *, size_t);
 static bool content_what(g2_connection_t *, size_t);
 static bool listen_what(g2_connection_t *, size_t);
 
+/* Vars */
+	/* con buffer */
+static struct g2_con_info *free_cons;
+static pthread_mutex_t free_cons_mutex;
+	/* encoding */
+static const action_string enc_as00	= {NULL,		str_size(ENC_NONE_S),		ENC_NONE_S};
+static const action_string enc_as01	= {NULL,		str_size(ENC_DEFLATE_S),	ENC_DEFLATE_S};
 
-// headerfields
+const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
+{
+	&enc_as00,
+	&enc_as01,
+};
+	/* headerfields */
 static const action_string h_as00 = {&accept_what,		str_size(ACCEPT_KEY),		ACCEPT_KEY};
 static const action_string h_as01 = {&uagent_what,		str_size(UAGENT_KEY),		UAGENT_KEY};
 static const action_string h_as02 = {&a_encoding_what,str_size(ACCEPT_ENC_KEY),	ACCEPT_ENC_KEY};
@@ -79,7 +84,6 @@ static const action_string h_as10 = {&empty_action,	str_size(GGEP_KEY),			GGEP_K
 static const action_string h_as11 = {&empty_action,	str_size(PONG_C_KEY),		PONG_C_KEY};
 static const action_string h_as12 = {&empty_action,	str_size(QUERY_ROUTE_KEY),	QUERY_ROUTE_KEY};
 static const action_string h_as13 = {&empty_action,	str_size(VEND_MSG_KEY),		VEND_MSG_KEY};
-
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") = 
 {
@@ -98,6 +102,53 @@ const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("
 	&h_as12,
 	&h_as13,
 };
+
+
+/* 
+ * Funcs
+ */
+	/* constructor */
+static void g2_con_init(void)
+{
+	size_t i;
+
+	/* generate a lock for shared free_cons */
+	if(pthread_mutex_init(&free_cons_mutex, NULL))
+		diedie("creating free_cons mutex");
+
+	/* memory for free_cons */
+	if(!pthread_mutex_lock(&free_cons_mutex))
+	{
+		if(!(free_cons = calloc(1, sizeof(struct g2_con_info) + (FC_START_CAPACITY * sizeof(g2_connection_t *)))))
+			diedie("allocating free_cons[] memory");
+
+		free_cons->capacity = FC_START_CAPACITY;
+		for(i = 0; i < free_cons->capacity; i++, free_cons->limit++)
+		{
+			if(!(free_cons->data[i] = g2_con_alloc(1)))
+			{
+				logg_errno(LOGF_CRIT, "free_cons memory");
+				if(FC_TRESHOLD >= free_cons->limit)
+					break;
+
+				for(; i > 0; --i)
+				{
+					g2_con_free(free_cons->data[i]);
+					free_cons->limit--;
+				}
+				free(free_cons);
+				if(pthread_mutex_unlock(&free_cons_mutex))
+					logg_errno(LOGF_CRIT, "unlocking free_cons mutex");
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		if(pthread_mutex_unlock(&free_cons_mutex))
+			diedie("unlocking free_cons mutex");
+	}
+	else
+		diedie("first locking free_cons");
+}
 
 inline g2_connection_t *g2_con_alloc(size_t num)
 {
@@ -293,7 +344,108 @@ inline void g2_con_free(g2_connection_t *to_free)
 	free(to_free);
 }
 
-// actionstring-functions
+inline g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
+{
+	g2_connection_t *ret_val = NULL;
+	// Getting the first Connections to work with
+	if(!pthread_mutex_lock(&free_cons_mutex))
+	{
+		if(FC_TRESHOLD >= free_cons->limit)
+		{
+			size_t i;
+			for(i = free_cons->limit; i < free_cons->capacity; i++, free_cons->limit++)
+			{
+				if(!(free_cons->data[i] = g2_con_alloc(1)))
+				{
+					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "free_cons memory");
+					break;
+				}
+			}
+		}
+
+		if(free_cons->limit)
+		{
+			free_cons->limit--;
+			ret_val = free_cons->data[free_cons->limit];
+			free_cons->data[free_cons->limit] = NULL;
+		}
+
+		if(pthread_mutex_unlock(&free_cons_mutex))
+		{
+// TODO: shouldn't we stop everything?
+			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
+			if(ret_val)
+			{
+				g2_con_free(ret_val);
+				ret_val = NULL;
+			}
+		}
+	}
+	else
+	{
+		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
+		if(!(ret_val = g2_con_alloc(1)))
+			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "no new free_con");
+	}
+
+	return(ret_val);
+}
+
+inline bool _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
+{
+	if(!pthread_mutex_lock(&free_cons_mutex))
+	{
+		if(free_cons->limit == free_cons->capacity)
+		{
+			if(FC_END_CAPACITY <= free_cons->limit)
+			{
+				g2_con_free(to_return);
+
+				if(pthread_mutex_unlock(&free_cons_mutex))
+				{
+					logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
+					return false;
+				}
+				return true;
+			}
+			else
+			{
+				struct g2_con_info *tmp_pointer = realloc(free_cons, sizeof(struct g2_con_info) + ((free_cons->capacity + FC_CAPACITY_INCREMENT) * sizeof(g2_connection_t *)));
+				if(!tmp_pointer)
+				{				
+					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "reallocating free_cons");
+					g2_con_free(to_return);
+					if(pthread_mutex_unlock(&free_cons_mutex))
+					{
+						logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
+						return false;
+					}
+					return true;
+				}
+				free_cons = tmp_pointer;
+				free_cons->capacity += FC_CAPACITY_INCREMENT;
+			}
+		}
+					
+		free_cons->data[free_cons->limit] = to_return;
+		free_cons->limit++;
+
+		if(pthread_mutex_unlock(&free_cons_mutex))
+		{
+			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
+			return false;
+		}
+	}
+	else
+	{
+		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
+		g2_con_free(to_return);
+	}
+
+	return true;
+}
+
+	/* actionstring-functions */
 static bool content_what(g2_connection_t *to_con, size_t distance)
 {
 	to_con->flags.content_ok = true;
