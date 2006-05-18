@@ -641,7 +641,7 @@ G2PacketSerializer.o: G2Packet.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h lib/atomic.h
-G2Connection.h: G2Packet.h version.h
+G2Connection.h: G2Packet.h lib/atomic.h lib/hzp.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
 G2Packet.h: lib/sec_buffer.h
 

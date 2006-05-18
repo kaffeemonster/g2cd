@@ -39,6 +39,7 @@
 #define _G2CONNECTION_C
 #include "G2Connection.h"
 #include "lib/log_facility.h"
+#include "lib/atomic.h"
 #include "lib/hzp.h"
 
 #define PACKET_SPACE_START_CAP 128

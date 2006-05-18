@@ -134,7 +134,7 @@ inline int logg_more(
 	total_len += log_errno ? str_size(": ") + STRERROR_R_SIZE + 1 : 0;
 	total_len += add_date_time ? LOG_TIME_MAXLEN : 0;
 	/* other nity peaces inserted */
-	total_len += str_size(", ") + str_size("(), ") + str_size(": ") + 1;
+	total_len += str_size(":") + str_size("()@") + str_size(": ") + 1;
 
 	new_fmt    = alloca(total_len);
 	w_ptr      = new_fmt;
@@ -143,13 +143,11 @@ inline int logg_more(
 		w_ptr  += add_time_to_buffer(w_ptr);
 
 	w_ptr      = strcpy(w_ptr, file) + file_len;
-	*w_ptr++   = ',';
-	*w_ptr++   = ' ';
+	*w_ptr++   = ':';
 	w_ptr      = strcpy(w_ptr, func) + func_len;
 	*w_ptr++   = '('; 
 	*w_ptr++   = ')';
-	*w_ptr++   = ',';
-	*w_ptr++   = ' ';
+	*w_ptr++   = '@';
 	if((INT_PR_LENGTH + 1) > (unsigned)(tmp_len = snprintf(w_ptr, INT_PR_LENGTH + 1, "%u", line)))
 		w_ptr  += tmp_len;
 	else
