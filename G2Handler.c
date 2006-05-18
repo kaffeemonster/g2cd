@@ -149,7 +149,7 @@ void *G2Handler(void *param)
 						{
 							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
 							if(NULL != tmp_con_holder)
-								recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, false, &clean_up_h);
+								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							else
 							{
 								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
@@ -163,7 +163,7 @@ void *G2Handler(void *param)
 							g2_connection_t **tmp_con_holder = handle_socket_io(e_wptr, epoll_fd);
 							if(NULL != tmp_con_holder)
 							{
-								recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, false, &clean_up_h);
+								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							}
 						}
 					}
@@ -300,8 +300,7 @@ static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_a
 clean_up:
 	while(-1 == close(recvd_con->com_socket) && EINTR == errno);
 	g2_con_clear(recvd_con);
-	if(!g2_con_ret_free(recvd_con))
-		die("returning g2 con failed, will go down");
+	g2_con_ret_free(recvd_con);
 	return false;
 }
 

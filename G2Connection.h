@@ -37,6 +37,7 @@
 #include "version.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/hzp.h"
 
 enum g2_connection_states
 {
@@ -81,6 +82,7 @@ struct qhtable
 
 typedef struct g2_connection
 {
+	struct hzp_free		hzp;
 	// System Com-Things
 	struct sockaddr_in	remote_host;
 	socklen_t				sin_size;
@@ -205,7 +207,7 @@ _G2CON_EXTRN(inline g2_connection_t *g2_con_alloc(size_t));
 _G2CON_EXTRN(inline void _g2_con_clear(g2_connection_t *, int));
 _G2CON_EXTRN(inline void g2_con_free(g2_connection_t *));
 _G2CON_EXTRN(inline g2_connection_t *_g2_con_get_free(const char *, const char *, const unsigned int));
-_G2CON_EXTRN(inline bool _g2_con_ret_free(g2_connection_t *, const char *, const char *, const unsigned int));
+_G2CON_EXTRN(inline void _g2_con_ret_free(g2_connection_t *, const char *, const char *, const unsigned int));
 
 #endif // _G2CONNECTION_H
 //EOF

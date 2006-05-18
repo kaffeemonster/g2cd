@@ -192,7 +192,7 @@ void *G2Accept(void *param)
 						{
 							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
 							if(tmp_con_holder)
-								recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, false, &clean_up_a);
+								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							else
 							{
 								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
@@ -207,26 +207,21 @@ void *G2Accept(void *param)
 							if(tmp_con_holder)
 							{
 								if((*tmp_con_holder)->flags.dismissed)
-									recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, false, &clean_up_a);
+									recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 								else if(G2CONNECTED == (*tmp_con_holder)->connect_state)
 								{
 									g2_connection_t *tmp_con = *tmp_con_holder;
-									recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, true, &clean_up_a);
+									recycle_con(tmp_con_holder, work_cons, epoll_fd, true);
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
 										logg_errno(LOGF_NOTICE, "sending connection to Handler");
 										close(tmp_con->com_socket);
 										g2_con_clear(tmp_con);
-										if(!g2_con_ret_free(tmp_con))
-										{
-											clean_up_a(eevents, work_cons, epoll_fd, sock2main);
-											close(accept_so);
-											pthread_exit(NULL);
-										}										
+										g2_con_ret_free(tmp_con);
 									}
 								}	
 								else
-									recycle_con(eevents, tmp_con_holder, work_cons, epoll_fd, sock2main, false, &clean_up_a);
+									recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							}
 						}
 					}

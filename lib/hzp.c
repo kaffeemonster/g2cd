@@ -166,7 +166,7 @@ inline void hzp_unref(enum hzps key)
 
 /*
  * hzp_deferfree - called for hzp freeing
- * When a chunk shared memory under hzp controll should be freed
+ * When a chunk shared memory under hzp control should be freed
  * (meaning you acquired a _seperate_ writer lock and installed
  * some kind of substitute: new mem or NULL, whatever the program
  * flow can accept), it can not be freed immediately, because some
@@ -176,8 +176,7 @@ inline void hzp_unref(enum hzps key)
  * gone, we can finaly free it, with the supplied callback (the
  * freemethod).
  *
- * This has to be maintained by a cyclic collector (and has to be
- * written, ATM here is a nice mem leak ;)
+ * This has to be maintained by a cyclic collector.
  *
  * Nice sideffect: can be used as poormans gc. Drop in what you want,
  * someone else will actually free it, so the calling thread can save
@@ -286,6 +285,7 @@ inline int hzp_scan(int threshold)
 		}
 		else
 		{
+			/* copy struct hzp_free entrys, may lay in freed mem */
 			void (*tmp_free_func)(void *) = mentry->free_func;
 			void *tmp_data = mentry->data;
 			logg_develd("freeing %p\t%p\n", (void *)mentry, tmp_data);

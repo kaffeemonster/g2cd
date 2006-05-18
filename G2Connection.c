@@ -39,6 +39,7 @@
 #define _G2CONNECTION_C
 #include "G2Connection.h"
 #include "lib/log_facility.h"
+#include "lib/hzp.h"
 
 #define PACKET_SPACE_START_CAP 128
 
@@ -58,8 +59,8 @@ static bool listen_what(g2_connection_t *, size_t);
 
 /* Vars */
 	/* con buffer */
-static struct g2_con_info *free_cons;
-static pthread_mutex_t free_cons_mutex;
+#define anum(x) (sizeof((x))/sizeof(*(x)))
+static atomicptra_t free_cons[FC_CAP_START];
 	/* encoding */
 static const action_string enc_as00	= {NULL,		str_size(ENC_NONE_S),		ENC_NONE_S};
 static const action_string enc_as01	= {NULL,		str_size(ENC_DEFLATE_S),	ENC_DEFLATE_S};
@@ -111,43 +112,32 @@ const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("
 static void g2_con_init(void)
 {
 	size_t i;
-
-	/* generate a lock for shared free_cons */
-	if(pthread_mutex_init(&free_cons_mutex, NULL))
-		diedie("creating free_cons mutex");
-
 	/* memory for free_cons */
-	if(!pthread_mutex_lock(&free_cons_mutex))
+	for(i = 0; i < anum(free_cons); i++)
 	{
-		if(!(free_cons = calloc(1, sizeof(struct g2_con_info) + (FC_START_CAPACITY * sizeof(g2_connection_t *)))))
-			diedie("allocating free_cons[] memory");
-
-		free_cons->capacity = FC_START_CAPACITY;
-		for(i = 0; i < free_cons->capacity; i++, free_cons->limit++)
+		g2_connection_t *tmp = g2_con_alloc(1);
+		if(tmp)
 		{
-			if(!(free_cons->data[i] = g2_con_alloc(1)))
+			if((tmp = atomic_pxa(tmp, &free_cons[i])))
 			{
-				logg_errno(LOGF_CRIT, "free_cons memory");
-				if(FC_TRESHOLD >= free_cons->limit)
-					break;
-
-				for(; i > 0; --i)
-				{
-					g2_con_free(free_cons->data[i]);
-					free_cons->limit--;
-				}
-				free(free_cons);
-				if(pthread_mutex_unlock(&free_cons_mutex))
-					logg_errno(LOGF_CRIT, "unlocking free_cons mutex");
-				exit(EXIT_FAILURE);
+				logg_pos(LOGF_CRIT, "another thread working while init???");
+				g2_con_free(tmp);
 			}
 		}
+		else
+		{
+			logg_errno(LOGF_CRIT, "free_cons memory");
+			if(FC_TRESHOLD < i)
+				break;
 
-		if(pthread_mutex_unlock(&free_cons_mutex))
-			diedie("unlocking free_cons mutex");
+			for(; i > 0; --i)
+			{
+				tmp = NULL;
+				g2_con_free(atomic_pxa(tmp, &free_cons[i]));
+			}
+			exit(EXIT_FAILURE);
+		}
 	}
-	else
-		diedie("first locking free_cons");
 }
 
 inline g2_connection_t *g2_con_alloc(size_t num)
@@ -346,103 +336,47 @@ inline void g2_con_free(g2_connection_t *to_free)
 
 inline g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
 {
+	int failcount = 0;
 	g2_connection_t *ret_val = NULL;
-	// Getting the first Connections to work with
-	if(!pthread_mutex_lock(&free_cons_mutex))
+
+	logg_develd("called from %s:%s()@%u\n", from_file, from_func, from_line);
+
+	do
 	{
-		if(FC_TRESHOLD >= free_cons->limit)
+		size_t i = 0;
+		do
 		{
-			size_t i;
-			for(i = free_cons->limit; i < free_cons->capacity; i++, free_cons->limit++)
+			if(atomic_pread(&free_cons[i]))
 			{
-				if(!(free_cons->data[i] = g2_con_alloc(1)))
-				{
-					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "free_cons memory");
-					break;
-				}
+				if((ret_val = atomic_pxa(ret_val, &free_cons[i])))
+					return ret_val;
 			}
-		}
+		} while(++i < anum(free_cons));
+	} while(++failcount < 2);
 
-		if(free_cons->limit)
-		{
-			free_cons->limit--;
-			ret_val = free_cons->data[free_cons->limit];
-			free_cons->data[free_cons->limit] = NULL;
-		}
-
-		if(pthread_mutex_unlock(&free_cons_mutex))
-		{
-// TODO: shouldn't we stop everything?
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-			if(ret_val)
-			{
-				g2_con_free(ret_val);
-				ret_val = NULL;
-			}
-		}
-	}
-	else
-	{
-		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
-		if(!(ret_val = g2_con_alloc(1)))
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "no new free_con");
-	}
-
-	return(ret_val);
+	return g2_con_alloc(1);
 }
 
-inline bool _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
+inline void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
 {
-	if(!pthread_mutex_lock(&free_cons_mutex))
+	int failcount = 0;
+
+	logg_develd("called from %s:%s()@%u\n", from_file, from_func, from_line);
+
+	do
 	{
-		if(free_cons->limit == free_cons->capacity)
+		size_t i = 0;
+		do
 		{
-			if(FC_END_CAPACITY <= free_cons->limit)
+			if(!atomic_pread(&free_cons[i]))
 			{
-				g2_con_free(to_return);
-
-				if(pthread_mutex_unlock(&free_cons_mutex))
-				{
-					logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-					return false;
-				}
-				return true;
+				if(!(to_return = atomic_pxa(to_return, &free_cons[i])))
+					return;
 			}
-			else
-			{
-				struct g2_con_info *tmp_pointer = realloc(free_cons, sizeof(struct g2_con_info) + ((free_cons->capacity + FC_CAPACITY_INCREMENT) * sizeof(g2_connection_t *)));
-				if(!tmp_pointer)
-				{				
-					logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "reallocating free_cons");
-					g2_con_free(to_return);
-					if(pthread_mutex_unlock(&free_cons_mutex))
-					{
-						logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-						return false;
-					}
-					return true;
-				}
-				free_cons = tmp_pointer;
-				free_cons->capacity += FC_CAPACITY_INCREMENT;
-			}
-		}
-					
-		free_cons->data[free_cons->limit] = to_return;
-		free_cons->limit++;
+		} while(++i < anum(free_cons));
+	} while(++failcount < 2);
 
-		if(pthread_mutex_unlock(&free_cons_mutex))
-		{
-			logg_more(LOGF_ERR, from_file, from_func, from_line, 1, "unlocking free_cons mutex");
-			return false;
-		}
-	}
-	else
-	{
-		logg_more(LOGF_WARN, from_file, from_func, from_line, 1, "locking free_cons mutex");
-		g2_con_free(to_return);
-	}
-
-	return true;
+	hzp_deferfree(&to_return->hzp, to_return, (void (*)(void *))g2_con_free);
 }
 
 	/* actionstring-functions */

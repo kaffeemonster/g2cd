@@ -233,13 +233,10 @@ inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
 }
 
 inline bool recycle_con(
-	struct epoll_event *poll_me,
 	g2_connection_t **w_entry,
 	struct g2_con_info *work_cons,
 	int epoll_fd,
-	int abort_fd,
-	int keep_it,
-	void (*clean_up)(struct epoll_event *, struct g2_con_info *, int, int)
+	int keep_it
 	)
 {
 	struct epoll_event tmp_eevent;
@@ -274,11 +271,7 @@ inline bool recycle_con(
 
 		// return datastructure to FreeCons
 		g2_con_clear(tmp_con);
-		if(!g2_con_ret_free(tmp_con))
-		{
-			clean_up(poll_me, work_cons, epoll_fd, abort_fd);
-			pthread_exit(NULL);
-		}
+		g2_con_ret_free(tmp_con);
 	}
 
 	logg_develd("%s\n", (keep_it) ? "connection removed" : "connection recyled");

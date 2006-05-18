@@ -40,13 +40,10 @@ _G2CONHELPER_EXTRN(inline bool do_read(struct epoll_event *));
 _G2CONHELPER_EXTRN(inline bool do_write(struct epoll_event *, int));
 _G2CONHELPER_EXTRN(inline bool
 recycle_con(
-	struct epoll_event *,
 	g2_connection_t **,
 	struct g2_con_info *,
 	int,
-	int,
-	int,
-	void (*)(struct epoll_event *, struct g2_con_info *, int, int)
+	int
 ));
 
 #endif /* _G2CONHELPER_H */

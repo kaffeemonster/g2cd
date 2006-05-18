@@ -49,10 +49,10 @@
 #define OUT   0
 #define IN    1
 
-#define FC_END_CAPACITY		2048
-#define FC_START_CAPACITY	128
-#define FC_CAPACITY_INCREMENT	32
-#define FC_TRESHOLD		16
+#define FC_CAP_END	2048 /* not used ATM*/
+#define FC_CAP_START	16
+#define FC_CAP_INC	32 /* not used ATM */
+#define FC_TRESHOLD	4
 
 #define PD_START_CAPACITY 128
 #define PD_CAPACITY_INCREMENT 32
