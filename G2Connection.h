@@ -2,7 +2,7 @@
  * G2Connection.h
  * home of g2_connection_t and header-file for G2Connection.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004,2005,2006 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,6 +34,7 @@
 #include <zlib.h>
 // Own
 #include "G2Packet.h"
+#include "G2QHT.h"
 #include "version.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
@@ -63,21 +64,6 @@ enum g2_connection_encodings
 {
 	ENC_NONE,
 	ENC_DEFLATE,
-};
-
-#define MAX_BYTES_QHT (512 * 1024)
-struct qhtable
-{
-	size_t	entries;
-	size_t	bits;
-	size_t	data_length;
-	size_t	fragments_length;
-	size_t	last_frag_no;
-	size_t	last_frag_count;
-	bool		frag_compressed;
-	bool		compressed;
-	uint8_t	*fragments;
-	uint8_t	data[DYN_ARRAY_LEN];
 };
 
 typedef struct g2_connection

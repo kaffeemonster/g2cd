@@ -316,6 +316,7 @@ HEADS = \
 	G2ConHelper.h \
 	G2Packet.h \
 	G2PacketSerializer.h \
+	G2QHT.h \
 	builtin_defaults.h \
 	timeout.h
 #	whith gmake all could be so simple $(wildcard *.h)
@@ -634,14 +635,14 @@ G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h builtin_defaults
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/atomic.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/my_epoll.h
 G2UDP.o: G2UDP.h
-G2Connection.o: G2Connection.h
+G2Connection.o: G2Connection.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h lib/my_epoll.h lib/atomic.h G2Connection.h
 G2Packet.o: G2Packet.h G2Connection.h
 G2PacketSerializer.o: G2Packet.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h lib/atomic.h
-G2Connection.h: G2Packet.h lib/atomic.h lib/hzp.h version.h
+G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
 G2Packet.h: lib/sec_buffer.h
 
