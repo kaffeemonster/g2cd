@@ -247,14 +247,7 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 			work_entry->send_u->limit = work_entry->send_u->capacity = sizeof(work_entry->send_u->data);
 		}
 
-		if(work_entry->qht)
-		{
-			size_t tmp_length = work_entry->qht->data_length;
-			if(work_entry->qht->fragments)
-				free(work_entry->qht->fragments);
-			memset(work_entry->qht, 0, sizeof(*(work_entry->qht)) + tmp_length);
-			work_entry->qht->data_length = tmp_length;
-		}
+		g2_qht_clean(work_entry->qht);
 
 		work_entry->akt_packet = &(work_entry->packet_1);
 		work_entry->build_packet = &(work_entry->packet_2);
@@ -318,12 +311,7 @@ inline void g2_con_free(g2_connection_t *to_free)
 	if(to_free->send_u)
 		free(to_free->send_u);
 
-	if(to_free->qht)
-	{
-		if(to_free->qht->fragments)
-				free(to_free->qht->fragments);
-		free(to_free->qht);
-	}
+	g2_qht_free(to_free->qht);
 
 /*	if(to_free->last_packet)
 		g2_packet_free(to_free->last_packet);*/

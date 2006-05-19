@@ -332,6 +332,7 @@ MSRCS = \
 	G2ConHelper.c \
 	G2Packet.c \
 	G2PacketSerializer.c \
+	G2QHT.c \
 	timeout.c
 SRCS = \
 	$(MSRCS) \
@@ -368,6 +369,7 @@ OBJS = \
 	G2ConHelper.o \
 	G2Packet.o \
 	G2PacketSerializer.o \
+	G2QHT.o \
 	data.o \
 	timeout.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
@@ -386,6 +388,7 @@ RTL_DUMPS = \
 	G2ConHelper.rtl \
 	G2Packet.rtl \
 	G2PacketSerializer.rtl \
+	G2QHT.rtl \
 	timeout.rtl
 # Insert all rule high enoug, so it gets the default rule
 #	std. all-taget
@@ -635,10 +638,11 @@ G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h builtin_defaults
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/atomic.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/my_epoll.h
 G2UDP.o: G2UDP.h
-G2Connection.o: G2Connection.h lib/atomic.h lib/hzp.h
+G2Connection.o: G2Connection.h G2QHT.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h lib/my_epoll.h lib/atomic.h G2Connection.h
-G2Packet.o: G2Packet.h G2Connection.h
+G2Packet.o: G2Packet.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2Packet.h
+G2QHT.o: G2QHT.h lib/my_bitops.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h lib/atomic.h

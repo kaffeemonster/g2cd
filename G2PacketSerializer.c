@@ -188,14 +188,14 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
 	return ret_val;
 }
 
-#if 0 
+
 inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int level)
 {
 	size_t i;
 	long remaining_length = 0;
 	int func_ret_val;
 	bool ret_val = true;
-
+#if 0
 	target->more_bytes_needed = false;
 	
 	while(!target->more_bytes_needed)
@@ -446,10 +446,10 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 //	if(buffer_remaining(*source))
 //	buffer_compact(*source);
 //	else buffer_clear(*source);
-
+#endif
 	return ret_val;
 }
-#endif
+
 
 /*
  * First break out (decode) of a G2Packet from a byte stream

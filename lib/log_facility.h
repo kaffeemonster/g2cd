@@ -37,16 +37,16 @@
 # define logg_devel(x) logg_more(LOGF_DEVEL, __FILE__, __func__, __LINE__, 0, x)
 # define logg_develd(x,...) logg_more(LOGF_DEVEL, __FILE__, __func__, __LINE__, 0, x, __VA_ARGS__)
 #else
-# define logg_devel(x) do { } while(0);
-# define logg_develd(x, ...) do { } while(0);
+# define logg_devel(x) do { } while(0)
+# define logg_develd(x, ...) do { } while(0)
 #endif
 
 #ifdef DEBUG_DEVEL_OLD
 # define logg_devel_old(x) logg_more(LOGF_DEVEL_OLD, __FILE__, __func__, __LINE__, 0, x)
 # define logg_develd_old(x,...) logg_more(LOGF_DEVEL_OLD, __FILE__, __func__, __LINE__, 0, x, __VA_ARGS__)
 #else
-# define logg_devel_old(x) do { } while(0);
-# define logg_develd_old(x, ...) do { } while(0);
+# define logg_devel_old(x) do { } while(0)
+# define logg_develd_old(x, ...) do { } while(0)
 #endif
 
 #define logg_pos(x, y) logg_more(x, __FILE__, __func__, __LINE__, 0, y)

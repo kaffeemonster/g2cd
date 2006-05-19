@@ -31,9 +31,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <alloca.h>
 #include <time.h>
-#include <zlib.h>
 #include <dlfcn.h>
 // other
 #include "other.h"
@@ -41,10 +39,10 @@
 #define _G2PACKET_C
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
+#include "G2QHT.h"
 #include "G2MainServer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
-#include "lib/my_bitops.h"
 
 // Internal Prototypes
 static bool empty_action(g2_connection_t *, g2_packet_t *, struct norm_buff *);
@@ -63,12 +61,23 @@ static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *);
 
 /*
+ * seventh type-char-layer
+ */
+// CRAWLA - anwser? not my buisines
+static const g2_p_type_t packet_dict_CRAWLA0 = { NULL, {.action = &empty_action}, '\0', true};
+// CRAWLR
+static const g2_p_type_t packet_dict_CRAWLR0 = { NULL, {.action = NULL}, '\0', true};
+
+/*
  * sixth type-char-layer
  */
 // UPROD
 static const g2_p_type_t packet_dict_UPROD0 = { NULL, {.action = &handle_UPROD}, '\0', true };
 // UPROC
 static const g2_p_type_t packet_dict_UPROC0 = { NULL, {.action = &handle_UPROC}, '\0', true };
+// CRAWLx
+static const g2_p_type_t packet_dict_CRAWLA = { NULL, {.found = &packet_dict_CRAWLA0}, 'A', false};
+static const g2_p_type_t packet_dict_CRAWLR = { &packet_dict_CRAWLA, {.found = &packet_dict_CRAWLR0}, 'R', false};
 // G2CDC
 static const g2_p_type_t packet_dict_G2CDC0 = { NULL, {.action = &handle_G2CDC}, '\0', true };
 
@@ -78,6 +87,8 @@ static const g2_p_type_t packet_dict_G2CDC0 = { NULL, {.action = &handle_G2CDC},
 // UPROx
 static const g2_p_type_t packet_dict_UPROD = { NULL, {.found = &packet_dict_UPROD0}, 'D', false };
 static const g2_p_type_t packet_dict_UPROC = { &packet_dict_UPROD, {.found = &packet_dict_UPROC0}, 'C', false };
+//CRAWx
+static const g2_p_type_t packet_dict_CRAWL = { NULL, {.found = &packet_dict_CRAWLR}, 'L', false};
 // G2CDx
 static const g2_p_type_t packet_dict_G2CDC = { NULL, {.found = &packet_dict_G2CDC0}, 'C', false };
 
@@ -96,6 +107,8 @@ static const g2_p_type_t packet_dict_QKR0 = { NULL, {.action = NULL}, '\0', true
 static const g2_p_type_t packet_dict_QKA0 = { NULL, {.action = NULL}, '\0', true };
 // UPRx
 static const g2_p_type_t packet_dict_UPRO = { NULL, {.found = &packet_dict_UPROC}, 'O', false };
+// CRAx
+static const g2_p_type_t packet_dict_CRAW = { NULL, {.found = &packet_dict_CRAWL}, 'W', false };
 // G2Cx
 static const g2_p_type_t packet_dict_G2CD = { NULL, {.found = &packet_dict_G2CDC}, 'D', false };
 
@@ -119,6 +132,8 @@ static const g2_p_type_t packet_dict_QKA = { NULL, {.found = &packet_dict_QKA0},
 static const g2_p_type_t packet_dict_QKR = { &packet_dict_QKA, {.found = &packet_dict_QKR0}, 'R', false };
 // UPx
 static const g2_p_type_t packet_dict_UPR = { NULL, {.found = &packet_dict_UPRO}, 'R', false };
+// CRx
+static const g2_p_type_t packet_dict_CRA = { NULL, {.found = &packet_dict_CRAW}, 'A', false };
 // G2x
 static const g2_p_type_t packet_dict_G2C = { NULL, {.found = &packet_dict_G2CD}, 'C', false };
 
@@ -138,12 +153,15 @@ static const g2_p_type_t packet_dict_QK = { &packet_dict_QH, {.found = &packet_d
 static const g2_p_type_t packet_dict_Q2 = { &packet_dict_QK, {.found = &packet_dict_Q20}, '2', false };
 // Ux
 static const g2_p_type_t packet_dict_UP = { NULL, {.found = &packet_dict_UPR}, 'P', false };
+// Cx
+static const g2_p_type_t packet_dict_CR = { NULL, {.found = &packet_dict_CRA}, 'R', false};
 // Gx
 static const g2_p_type_t packet_dict_G2 = { NULL, {.found = &packet_dict_G2C}, '2', false };
 
 // first type-char-layer
 static const g2_p_type_t packet_dict_G = { NULL, {.found = &packet_dict_G2}, 'G', false };
-static const g2_p_type_t packet_dict_U = { &packet_dict_G, {.found = &packet_dict_UP}, 'U', false };
+static const g2_p_type_t packet_dict_C = { &packet_dict_G, {.found = &packet_dict_CR}, 'C', false };
+static const g2_p_type_t packet_dict_U = { &packet_dict_C, {.found = &packet_dict_UP}, 'U', false };
 static const g2_p_type_t packet_dict_Q = { &packet_dict_U, {.found = &packet_dict_Q2}, 'Q', false };
 static const g2_p_type_t packet_dict_P = { &packet_dict_Q, {.found = &packet_dict_PI}, 'P', false };
 static const g2_p_type_t packet_dict_L = { &packet_dict_P, {.found = &packet_dict_LN}, 'L', false };
@@ -206,6 +224,55 @@ static const g2_p_type_t KHL_packet_dict_CH = { NULL, {.found = &KHL_packet_dict
 static const g2_p_type_t KHL_packet_dict_T = { NULL, {.found = &KHL_packet_dict_TS}, 'T', false };
 static const g2_p_type_t KHL_packet_dict_N = { &KHL_packet_dict_T, {.found = &KHL_packet_dict_NH}, 'N', false };
 static const g2_p_type_t KHL_packet_dict = { &KHL_packet_dict_N, {.found = &KHL_packet_dict_CH}, 'C', false }; // KHL_packet_dict_C
+
+
+// CRAWLR-childs
+// seventh
+// /CRAWLR/RLEAF
+static const g2_p_type_t CRAWLR_packet_dict_RLEAF0 = { NULL, {.action = NULL}, '\0', true };
+// /CRAWLR/RNAME
+static const g2_p_type_t CRAWLR_packet_dict_RNAME0 = { NULL, {.action = NULL}, '\0', true };
+
+// sixth
+// /CRAWLR/RLEAx
+static const g2_p_type_t CRAWLR_packet_dict_RLEAF = { NULL, {.found = &CRAWLR_packet_dict_RLEAF0}, 'F', false };
+// /CRAWLR/RNAMx
+static const g2_p_type_t CRAWLR_packet_dict_RNAME = { NULL, {.found = &CRAWLR_packet_dict_RNAME0}, 'E', false };
+// /CRAWLR/RGPS
+static const g2_p_type_t CRAWLR_packet_dict_RGPS0 = { NULL, {.action = NULL}, '\0', true };
+// /CRAWLR/REXT
+static const g2_p_type_t CRAWLR_packet_dict_REXT0 = { NULL, {.action = NULL}, '\0', true };
+
+// fourth
+// /CRAWLR/RLEx
+static const g2_p_type_t CRAWLR_packet_dict_RLEA = { NULL, {.found = &CRAWLR_packet_dict_RLEAF}, 'A', false };
+// /CRAWLR/RNAx
+static const g2_p_type_t CRAWLR_packet_dict_RNAM = { NULL, {.found = &CRAWLR_packet_dict_RNAME}, 'M', false };
+// /CRAWLR/RGPx
+static const g2_p_type_t CRAWLR_packet_dict_RGPS = { NULL, {.found = &CRAWLR_packet_dict_RGPS0}, 'S', false };
+// /CRAWLR/REXx
+static const g2_p_type_t CRAWLR_packet_dict_REXT = { NULL, {.found = &CRAWLR_packet_dict_REXT0}, 'T', false };
+
+// third
+// /CRAWLR/RLx
+static const g2_p_type_t CRAWLR_packet_dict_RLE = { NULL, {.found = &CRAWLR_packet_dict_RLEA}, 'E', false };
+// /CRAWLR/RNx
+static const g2_p_type_t CRAWLR_packet_dict_RNA = { NULL, {.found = &CRAWLR_packet_dict_RNAM}, 'A', false };
+// /CRAWLR/RGx
+static const g2_p_type_t CRAWLR_packet_dict_RGP = { NULL, {.found = &CRAWLR_packet_dict_RGPS}, 'P', false };
+// /CRAWLR/REx
+static const g2_p_type_t CRAWLR_packet_dict_REX = { NULL, {.found = &CRAWLR_packet_dict_REXT}, 'X', false };
+
+// second
+// /CRAWLR/Rx
+static const g2_p_type_t CRAWLR_packet_dict_RL = { NULL, {.found = &CRAWLR_packet_dict_RLE}, 'L', false };
+static const g2_p_type_t CRAWLR_packet_dict_RN = { &CRAWLR_packet_dict_RL, {.found = &CRAWLR_packet_dict_RNA}, 'N', false };
+static const g2_p_type_t CRAWLR_packet_dict_RG = { &CRAWLR_packet_dict_RN, {.found = &CRAWLR_packet_dict_RGP}, 'G', false };
+static const g2_p_type_t CRAWLR_packet_dict_RE = { &CRAWLR_packet_dict_RG, {.found = &CRAWLR_packet_dict_REX}, 'E', false };
+
+// first
+static const g2_p_type_t CRAWLR_packet_dict = { NULL, {.found = &CRAWLR_packet_dict_RE}, 'R', false };
+
 
 // prebuild packets
 static const char packet_po[]		= { 0x08, 'P', 'O', };
@@ -304,7 +371,8 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 	g2_packet_t *packs;
 	size_t num;
 	bool ret_val = false;
-	
+
+	logg_develd("num: %lu\tchild: %p\n", source->num_child, source->children);
 
 	for(num = source->num_child, packs = source->children; num; num--, packs++)
 	{
@@ -313,7 +381,6 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 //		logg_packet_old("/LNI/%s -> Unknown, undecoded: %s\n", packs->type, to_match);
 	}
 
-				
 	logg_packet_old("/LNI/%s -> data_length: %u data: \"%*s\"\n", packs->type, packs->data_length, packs->data_length, packs->data);
 	return ret_val;
 }
@@ -402,17 +469,24 @@ static bool handle_PI(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packe
 }
 
 // struct norm_buff *target GCC_ATTR_UNUSED
-static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source, struct qhtable *ttable)
+static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source)
 {
-	size_t patch_length;
-	uint8_t *tmp_ptr;
+	struct qht_fragment frag;
+	int ret_val;
 	const char *patch_txt;
 
-	if(!ttable)
+	if(!connec->qht)
 	{
 		logg_packet(STDLF, "/QHT-patch", "initial patch without initial reset");
 		connec->flags.dismissed = true;
 		return false;
+	}
+
+	if(5 > buffer_remaining(source->data_trunk))
+	{
+		logg_packet(STDLF, "/QHT-patch", "to short");
+		connec->flags.dismissed = true;
+		goto qht_patch_end;
 	}
 
 	if(1 != *(buffer_start(source->data_trunk)+3))
@@ -422,139 +496,43 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		goto qht_patch_end;
 	}
 
-	if(1 != *(buffer_start(source->data_trunk)+2) && 0 != *(buffer_start(source->data_trunk)+2))
-	{
-		logg_packet(STDLF, "/QHT-patch", "unknown compression");
-		connec->flags.dismissed = true;
-		goto qht_patch_end;
-	}
+	frag.nr         = ((unsigned)*buffer_start(source->data_trunk)) & 0x00FF;
+	frag.count      = ((unsigned)*(buffer_start(source->data_trunk)+1)) & 0x00FF;
+	frag.compressed = ((unsigned)*(buffer_start(source->data_trunk)+2)) & 0x00FF;
+	frag.data       = (uint8_t *)buffer_start(source->data_trunk)+4;
+	frag.length     = buffer_remaining(source->data_trunk) - 4;
 
-	if(ttable->fragments)
-	{
-		if(((unsigned)*(buffer_start(source->data_trunk)+1) & 0xFFu) != ttable->last_frag_count)
-		{
-			logg_packet(STDLF, "/QHT-patch", "fragment-count changed!");
-			connec->flags.dismissed = true;
-			goto qht_patch_end;
-		}
-
-		if((*(buffer_start(source->data_trunk)+2) && !ttable->frag_compressed) || (!*(buffer_start(source->data_trunk)+2) && ttable->frag_compressed))
-		{
-			logg_packet(STDLF, "/QHT-patch", "compression changed!");
-			connec->flags.dismissed = true;
-			goto qht_patch_end;
-		}
-
-		if(((unsigned)*buffer_start(source->data_trunk) & 0xFFu) != (ttable->last_frag_no + 1))
-		{
-			logg_packet(STDLF, "/QHT-patch", "fragment missed");
-			connec->flags.dismissed = true;
-			goto qht_patch_end;
-		}
-	}
-	else if(1 == *buffer_start(source->data_trunk) && !connec->flags.dismissed)
-	{
-		ttable->last_frag_count = *(buffer_start(source->data_trunk)+1) & 0xFFu; 
-		ttable->frag_compressed = *(buffer_start(source->data_trunk)+2);
-	}
+	if(!connec->flags.dismissed)
+		ret_val = g2_qht_add_frag(connec->qht, &frag);
 	else
 	{
-		logg_packet(STDLF, "/QHT-patch", (!connec->flags.dismissed) ? "not starting at fragment 1" : "connection dismissed");
-		connec->flags.dismissed = true;
-		goto qht_patch_end;
+		logg_packet(STDLF, "/QHT-patch", "connection dissmissed");
+		ret_val = -1;
 	}
 
-	patch_length = buffer_remaining(source->data_trunk) - 4;
-
-	{
-		size_t legal_length = ttable->data_length;
-
-// TODO: If the patch is compressed, we are just guessing a max length
-		if(ttable->frag_compressed)
-			legal_length = ttable->data_length / 2;
-
-		if((ttable->fragments_length + patch_length) > legal_length)
-		{
-			logg_packet(STDLF, "/QHT-patch", "patch to big");
-			connec->flags.dismissed = true;
-			goto qht_patch_end;
-		}
-	}
-
-	ttable->last_frag_no = *buffer_start(source->data_trunk) & 0xFFu;
-	
-	tmp_ptr = realloc(ttable->fragments, ttable->fragments_length + patch_length);
-	if(!tmp_ptr)
-	{
-		logg_errno(LOGF_DEBUG, "reallocating qht-fragments");
-		connec->flags.dismissed = true;
-		goto qht_patch_end;
-	}
-	ttable->fragments = tmp_ptr;
-
-	memcpy(ttable->fragments + ttable->fragments_length, buffer_start(source->data_trunk)+4, patch_length);
-	ttable->fragments_length += patch_length;
-
-	if(ttable->last_frag_no != ttable->last_frag_count)
+	if(0 == ret_val) /* patch io, but need more*/
 	{
 		logg_packet(STDLF, "/QHT-patch", "patch recieved");
-		return false;
+		return false;	
 	}
-
-	// apply Patch
-	if(ttable->frag_compressed)
+	else if(0 > ret_val) /* patch nio */
 	{
-		z_stream patch_decoder;
-
-		memset(&patch_decoder, 0, sizeof(patch_decoder));
-// TODO: do something about this alloca, our BSD friends have little default task stacks (64k),
-// allocating 128k will crash, so either:
-// - raise the task stack size before creating the tasks
-// - use a static buffer with a mutex
-// - dynamically allocate it (from a buffer-cache?)
-		tmp_ptr = alloca(ttable->data_length);
-
-		patch_decoder.next_in = ttable->fragments;
-		patch_decoder.avail_in = ttable->fragments_length;
-		patch_decoder.next_out = tmp_ptr;
-		patch_decoder.avail_out = ttable->data_length;
-
-		if(Z_OK != inflateInit(&patch_decoder) || Z_STREAM_END != inflate(&patch_decoder, Z_SYNC_FLUSH))
-		{
-			logg_packet(STDLF, "/QHT-patch", "failure in compressed fragments");
-			goto qht_patch_end;
-		}
-
-		patch_txt = "compressed patch applied";
+		connec->flags.dismissed = true;
+		goto qht_patch_end;
 	}
-	else
-	{
-		tmp_ptr = ttable->fragments;
-		patch_txt = "patch applied";
-	}
-
-	memxor(ttable->data, tmp_ptr, ttable->data_length);
-
-	logg_packet(STDLF, "/QHT-patch", patch_txt);
-	
+	/*patch io and complete*/
+	patch_txt = g2_qht_patch(&connec->qht, &connec->qht->fragments);
+	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
-	if(ttable->fragments)
-		free(ttable->fragments);
-
-	ttable->fragments = NULL;
-	ttable->fragments_length = 0;
-	ttable->last_frag_no = 0;
-	ttable->last_frag_count = 0;
-	ttable->frag_compressed = false;
+	g2_qht_frag_clean(&connec->qht->fragments);
 // TODO: Global QHT-needs-update flag (wich would need per connection locking)
 	return false;
 }
 
 // struct norm_buff *target GCC_ATTR_UNUSED
-static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source, struct qhtable *ttable)
+static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source)
 {
 	uint32_t qht_ent;
-	size_t w_size;
 
 	if(5 != buffer_remaining(source->data_trunk))
 	{
@@ -581,69 +559,15 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 			((((uint32_t)*(buffer_start(source->data_trunk)+2)) & 0xFFu) << 8) |
 			((uint32_t)*(buffer_start(source->data_trunk)+3) & 0xFFu);
 
-	w_size = (size_t)(qht_ent / BITS_PER_CHAR);
-	w_size += (qht_ent % BITS_PER_CHAR) ? 1u : 0u;
-	if(!qht_ent || w_size > MAX_BYTES_QHT)
-	{
-		logg_packet(STDLF, "/QHT-reset", "illegal number of elements");
+	if(g2_qht_reset(&connec->qht, qht_ent))
 		connec->flags.dismissed = true;
-		return false;
-	}
 
-	if(ttable)
-	{
-		if(ttable->data_length < w_size)
-		{
-			ttable = realloc(ttable, sizeof(*ttable) + w_size);
-			if(!ttable)
-			{
-				logg_errno(LOGF_DEBUG, "reallocating qh-table");
-				goto after_realloc_error;
-			}
-			connec->qht = ttable;
-			ttable->data_length = w_size;
-		}
-	}
-	else
-	{
-		ttable = malloc(sizeof(*ttable) + w_size);
-		if(!ttable)
-		{
-			logg_errno(LOGF_DEBUG, "allocating qh-table");
-			return false;
-		}
-		connec->qht = ttable;
-		ttable->compressed = false;
-		ttable->fragments = NULL;
-		ttable->data_length = w_size;
-	}
-
-	ttable->entries = qht_ent;
-	/* qht_ent is zero-checked, we need the power, not the index, so -1 */
-	ttable->bits = flsst(qht_ent) - 1;
-
-after_realloc_error:
-	ttable = connec->qht;
-	if(ttable->fragments)
-	{
-		free(ttable->fragments);
-		ttable->fragments = NULL;
-	}
-	ttable->fragments_length = 0;
-	ttable->last_frag_no = 0;
-	ttable->last_frag_count = 0;
-	ttable->frag_compressed = false;
-
-	memset(ttable->data, -1, ttable->data_length);
-// TODO: Global QHT-needs-update flag (wich would need per connection locking)
 	logg_packet(STDSF, "/QHT-reset");
-
 	return false;
 }
 
 static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
-	struct qhtable *ttable = connec->qht;
 	char tmp;
 
 	if(!buffer_remaining(source->data_trunk))
@@ -656,9 +580,9 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UN
 	source->data_trunk.pos++;
 	
 	if(1 == tmp)
-		return handle_QHT_patch(connec, source, ttable);
+		return handle_QHT_patch(connec, source);
 	else if(0 == tmp)
-		return handle_QHT_reset(connec, source, ttable);
+		return handle_QHT_reset(connec, source);
 	else
 		logg_packet(STDLF, "/QHT", "with unknown command");
 	

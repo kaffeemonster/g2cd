@@ -33,18 +33,30 @@
 #include "version.h"
 // #include "lib/hzp.h"
 
+enum g2_qht_comp
+{
+	COMP_NONE = 0,
+	COMP_DEFLATE = 1
+};
+
+struct qht_fragment
+{
+	size_t	length;
+	size_t	nr;
+	size_t	count;
+	enum g2_qht_comp	compressed;
+	uint8_t	*data;
+};
+
 #define MAX_BYTES_QHT (512 * 1024)
 struct qhtable
 {
 	size_t	entries;
 	size_t	bits;
 	size_t	data_length;
-	size_t	fragments_length;
-	size_t	last_frag_no;
-	size_t	last_frag_count;
-	bool		frag_compressed;
-	bool		compressed;
-	uint8_t	*fragments;
+	enum g2_qht_comp	compressed;
+	struct qht_fragment	fragments;
+/* ----- Everthing above this gets simply wiped ------ */
 	uint8_t	data[DYN_ARRAY_LEN];
 };
 
@@ -55,6 +67,13 @@ struct qhtable
 #define _G2QHT_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #define _G2QHT_EXTRNVAR(x)
 #endif // _G2QHT_C
+
+_G2QHT_EXTRN(inline void g2_qht_clean(struct qhtable *));
+_G2QHT_EXTRN(inline void g2_qht_free(struct qhtable *));
+_G2QHT_EXTRN(inline void g2_qht_frag_clean(struct qht_fragment *));
+_G2QHT_EXTRN(inline const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
+_G2QHT_EXTRN(inline int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
+_G2QHT_EXTRN(inline bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
 
 #endif // _G2QHT_H
 //EOF
