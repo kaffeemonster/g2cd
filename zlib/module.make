@@ -75,11 +75,9 @@ ZSRCS_X86_2 = $(MPZ)/contrib/inflate86/inffast.S
 allz:
 	$(MAKE) -C .. $(ZLIB)
 
-#$(LIBCOMMON): $(LIBOBJS)
-#	$(AR) $(ARFLAGS) $@ $%
 $(ZLIB): $(ZLIB)($(ZOBJS))
 	$(RANLIB) $@
-$(ZLIB)($(ZOBJS)):
+$(ZLIB)($(ZOBJS)): arflock
 
 # Dependencies
 $(MPZ)/adler32.o:

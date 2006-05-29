@@ -43,9 +43,9 @@ CC_VER_INFO = --version
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
-AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ar
+AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
 ARFLAGS = cru
-RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ranlib
+RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ ranlib
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
@@ -354,6 +354,7 @@ MSRCS = \
 SRCS = \
 	$(MSRCS) \
 	ccdrv.c \
+	arflock.c \
 	calltree.c
 #	and again: with gmake ... $(wildcard *.c)
 #
@@ -519,7 +520,7 @@ strip: .$(MAIN).dbg
 eclean: libclean zlibclean
 	-$(RM) $(OBJS) $(RTL_DUMPS) ccdrv.o
 clean: eclean
-	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv calltree callgraph.dot .final .withzlib .finalwithzlib .finalwithzlib686
+	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
 	-$(RM) version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 
@@ -590,7 +591,7 @@ love:
 	@$(PORT_PR) "Don't know how to make love\n"
 
 ccdrv: ccdrv.c Makefile
-	@$(PORT_PR) "\tCC[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
+	@$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
 		$(PORT_PR) "\n *****************************************************\n" ; \
 		$(PORT_PR) " * compiling cc-driver failed, using fallback script *\n" ; \
 		$(PORT_PR) " *****************************************************\n\n" ; \
@@ -600,6 +601,21 @@ ccdrv: ccdrv.c Makefile
 		$(PORT_PR) "CC=\$${1}\n" >> $@; \
 		$(PORT_PR) "shift\n" >> $@; \
 		$(PORT_PR) "\$${CC} \$${@}\n" >> $@; \
+		chmod a+x $@ )
+
+arflock: arflock.c ccdrv Makefile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) arflock.c -o $@ || ( \
+		$(PORT_PR) "\n *****************************************************\n" ; \
+		$(PORT_PR) " * compiling ar-proxy failed,  using fallback script *\n" ; \
+		$(PORT_PR) " *         !!! parralel builds may fail !!!          *\n" ; \
+		$(PORT_PR) " *****************************************************\n\n" ; \
+		$(PORT_PR) "#! /bin/sh\n" > $@ ; \
+		$(PORT_PR) "shift 2\n" >> $@ ; \
+		$(PORT_PR) "echo \$${@}\n" >> $@ ; \
+		$(PORT_PR) "AR=\$${1}\n" >> $@; \
+		$(PORT_PR) "shift\n" >> $@; \
+		$(PORT_PR) "echo `which flock`" >> $@; \
+		$(PORT_PR) "\$${AR} \$${@}\n" >> $@; \
 		chmod a+x $@ )
 
 .INTERMEDIATE: data.o

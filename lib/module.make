@@ -111,13 +111,9 @@ alll:
 	$(MAKE) -C .. $(LIBCOMMON)
 
 # not parralel compatible
-#$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
-#	$(RANLIB) $@
-#$(LIBCOMMON)($(LIBOBJS)):
-
-$(LIBCOMMON): $(LIBOBJS)
-	$(AR) $(ARFLAGS) $@ $^
+$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 	$(RANLIB) $@
+$(LIBCOMMON)($(LIBOBJS)): arflock
 
 # Dependencies
 $(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/strnlen.o: $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
