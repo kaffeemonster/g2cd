@@ -5,6 +5,7 @@
 *.rtl
 g2cd
 ccdrv
+arflock
 calltree
 guid.txt
 version.h
