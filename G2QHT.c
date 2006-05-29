@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <alloca.h>
+#include <pthread.h>
 #include <zlib.h>
 // other
 #include "other.h"
@@ -41,9 +42,264 @@
 #include "G2QHT.h"
 // #include "G2MainServer.h"
 #include "lib/log_facility.h"
+#include "lib/sec_buffer.h"
 #include "lib/my_bitops.h"
+#include "lib/my_bitopsm.h"
+#include "other.h"
+
+struct zpad_heap
+{
+	struct zpad_heap *next;
+	/* 
+	 * length should be aligned to sizeof(void *)
+	 * so at least the LSB cann be used as a flag
+	 */
+	size_t length;
+	char data[DYN_ARRAY_LEN];
+};
+
+struct zpad
+{
+	z_stream z;
+	struct zpad_heap *pad_free;  // pointer in the pad to free space
+	unsigned char pad[1<<14];    // other allok space, 16k
+	unsigned char window[1<<15]; // 15 Bit window size, should result in 32k byte
+};
+
+struct scratch
+{
+	size_t length;
+	unsigned char data[DYN_ARRAY_LEN];
+};
+
+/* Vars */
+static pthread_key_t key2qht_zpad;
+static pthread_key_t key2qht_scratch1;
 
 /* Internal Prototypes */
+	/* do not remove this proto, our it won't work... */
+static void qht_init(void) GCC_ATTR_CONSTRUCT;
+static void qht_end(void *);
+static void *qht_zpad_alloc(void *, unsigned int, unsigned int);
+static void qht_zpad_free(void *, void *);
+static inline void qht_zpad_merge(struct zpad_heap *);
+static inline struct zpad *qht_get_zpad(void);
+
+/* tls thingies */
+static void qht_init(void)
+{
+	if(pthread_key_create(&key2qht_zpad, qht_end))
+		diedie("couldn't create TLS key for qht");
+
+	if(pthread_key_create(&key2qht_scratch1, qht_end))
+		diedie("couldn't create TLS key for qht");
+}
+
+static void qht_end(void *to_free)
+{
+	if(!to_free)
+		return;
+
+	free(to_free);
+}
+
+/* zpad helper */
+/*
+ * Poor mans allocator for zlib
+ *
+ * normaly zlib makes two allocs, one seams to be the internal
+ * state (+9k on 32bit *cough*) and the other is the window, norm
+ * 32k for 15 bit.
+ *
+ * So this is a very stupid alloactor to serve these two allocs.
+ * But, not to be too dependent on these internals (future zlib
+ * versions) it is at least so intelligent it may also handle 3
+ * allocs, and frees, maybe ;)
+ *
+ * !! THE heap for this zpad instance is NOT locked !!
+ */
+static void *qht_zpad_alloc(void *opaque, unsigned int num, unsigned int size)
+{
+	struct zpad *z_pad = opaque;
+	size_t bsize;
+
+	if(!z_pad)
+		goto err_record;
+
+	/* mildly sanetiy check */
+	if( num > sizeof(z_pad->pad) + sizeof(z_pad->window) || 
+		size > sizeof(z_pad->pad) + sizeof(z_pad->window))
+		goto err_record;
+	bsize = num * size;
+
+	/* bsize should afterwards have the LSB cleared */
+	bsize = ALIGN_SIZE(bsize, sizeof(void *));
+
+	if(bsize + sizeof(struct zpad_heap) > sizeof(z_pad->pad) + sizeof(z_pad->window))
+		goto err_record;
+
+	/* start lock */
+	{
+		struct zpad_heap *zheap = z_pad->pad_free, *tmp_zheap;
+		size_t org_len = zheap->length & ~1; /* mask out the free flag */
+		/* 
+		 * normaly we simply allocate at the end, and 'nuff said, but
+		 * to be complete...
+		 */
+		if(!(zheap->length & 1) || bsize + sizeof(*zheap) > org_len)
+		{
+			tmp_zheap = (struct zpad_heap *) z_pad->pad;
+			/* walk the heap list */
+			do
+			{
+				size_t tmp_len;
+retry:
+				tmp_len = tmp_zheap->length & ~1;
+				/* if free and big enough */
+				if(tmp_zheap->length & 1)
+				{
+					if(bsize + sizeof(*zheap) <= tmp_len)
+					{
+						org_len = tmp_len;
+						zheap = tmp_zheap;
+						goto insert_in_heap;
+					}
+					else if(tmp_zheap->next && (tmp_zheap->next->length & 1))
+					{
+						qht_zpad_merge(tmp_zheap);
+						goto retry;
+					}
+				}
+			} while((tmp_zheap = tmp_zheap->next));
+			goto err_record;
+		}
+insert_in_heap:
+		zheap->length     = bsize;
+		/* Mind the parentheses... */
+		tmp_zheap         = (struct zpad_heap*)(zheap->data + bsize);
+		if((unsigned char *)tmp_zheap < z_pad->pad)
+			die("zpad heap probably corrupted, underflow!\n");
+		if((unsigned char *)tmp_zheap > (z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)))
+		{
+			logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %u + %u - %u = %p\n",
+				(void *)tmp_zheap, z_pad->pad, sizeof(z_pad->pad), sizeof(z_pad->window), sizeof(*zheap),
+				(void *)(z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)));
+			exit(EXIT_FAILURE);
+		}
+		tmp_zheap->length = (org_len - bsize - sizeof(*zheap)) | 1;
+		tmp_zheap->next   = zheap->next;
+		zheap->next       = tmp_zheap;
+		z_pad->pad_free   = tmp_zheap;
+	/* end lock */
+		logg_develd("zpad alloc: n: %u\ts: %u\tb: %lu\tp: 0x%p\tzh: 0x%p\tzhn: 0x%p\n",
+			num, size, (unsigned long) bsize, (void *) z_pad->pad, (void *) zheap, (void *) tmp_zheap);
+		return zheap->data;
+	}
+err_record:
+	logg_develd("zpad alloc failed!! 0x%p\tn: %u\ts: %u\n", opaque, num, size);
+	return NULL;
+}
+
+static void qht_zpad_free(void *opaque, void *addr)
+{
+	struct zpad_heap *zheap;
+
+	if(!addr || !opaque)
+		return;
+
+	/* 
+	 * watch the parentheses (/me cuddles his new vim 7), or you
+	 * have wrong pointer-arith, and a SIGSEV on 3rd. alloc...
+	 */
+	zheap = (struct zpad_heap *) ((char *)addr - offsetof(struct zpad_heap, data));
+	zheap->length |= 1; // mark free
+
+	logg_develd("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, (void *)zheap);
+
+	qht_zpad_merge(zheap);
+}
+
+static inline void qht_zpad_merge(struct zpad_heap *zheap)
+{
+	while(zheap->next)
+	{
+		if(zheap->next->length & 1) // if next block is free
+		{
+			zheap->length += (zheap->next->length & ~1) + sizeof(struct zpad_heap);
+			zheap->next = zheap->next->next;
+		}
+		else
+			zheap = zheap->next;
+	}
+}
+
+static inline struct zpad *qht_get_zpad(void)
+{
+	struct zpad *z_pad = pthread_getspecific(key2qht_zpad);
+
+	if(z_pad)
+		return z_pad;
+
+	z_pad = malloc(sizeof(*z_pad));
+	if(!z_pad)
+	{
+		logg_errno(LOGF_DEVEL, "no z_pad");
+		return NULL;
+	}
+
+	if(pthread_setspecific(key2qht_zpad, z_pad))
+	{
+		logg_errno(LOGF_CRIT, "qht-zpad key not initilised?");
+		free(z_pad);
+		return NULL;
+	}
+	memset(&z_pad->z, 0, sizeof(z_pad->z));
+	z_pad->pad_free         = (struct zpad_heap *)z_pad->pad;
+	z_pad->pad_free->next   = NULL;
+	z_pad->pad_free->length = (sizeof(z_pad->pad) + sizeof(z_pad->window)) | 1; /* set the free bit */
+	z_pad->z.zalloc         = qht_zpad_alloc;
+	z_pad->z.zfree          = qht_zpad_free;
+	z_pad->z.opaque         = z_pad;
+
+	return z_pad;
+}
+
+/**/
+static inline unsigned char *qht_get_scratch1(size_t length)
+{
+	struct scratch *scratch = pthread_getspecific(key2qht_scratch1);
+
+	if(scratch)
+	{
+		if(scratch->length >= length)
+			return scratch->data;
+		else
+		{
+			free(scratch);
+			scratch = NULL;
+			if(pthread_setspecific(key2qht_scratch1, NULL))
+				diedie("could not remove qht scratch!");
+		}
+	}
+
+	scratch = malloc(sizeof(*scratch) + length);
+
+	if(!scratch)
+	{
+		logg_errno(LOGF_DEVEL, "no qht scratchram");
+		return NULL;
+	}
+	scratch->length = length;
+
+	if(pthread_setspecific(key2qht_scratch1, scratch))
+	{
+		logg_errno(LOGF_CRIT, "qht scratch key not initilised?");
+		free(scratch);
+		return NULL;
+	}
+
+	return scratch->data;
+}
 
 /* helper-funktions */
 inline void g2_qht_clean(struct qhtable *to_clean)
@@ -85,11 +341,11 @@ inline void g2_qht_frag_clean(struct qht_fragment *to_clean)
 	memset(to_clean, 0, sizeof(*to_clean));
 }
 
+/* funcs */
 inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 {
 	struct qhtable *tmp_table;
-	uint8_t *tmp_ptr;
-	const char *ret_val;
+	const char *ret_val = NULL;
 
 	if(!ttable)
 		return NULL;
@@ -105,50 +361,44 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 	case COMP_DEFLATE:
 		{
 			int ret_int;
-			z_stream patch_decoder;
-			/* fix allocations... */	
-			memset(&patch_decoder, 0, sizeof(patch_decoder));
-// TODO: do something about this alloca, our BSD friends have little default task stacks (64k),
-// allocating 128k will crash, so either:
-// - raise the task stack size before creating the tasks
-// - use a static buffer with a mutex
-// - dynamically allocate it (from a buffer-cache?)
-			tmp_ptr = alloca(tmp_table->data_length);
+			unsigned char *tmp_ptr = qht_get_scratch1(tmp_table->data_length);
+			struct zpad *zpad = qht_get_zpad();
 
-			patch_decoder.next_in = frag->data;
-			patch_decoder.avail_in = frag->length;
-			patch_decoder.next_out = tmp_ptr;
-			patch_decoder.avail_out = tmp_table->data_length;
-
-			if(Z_OK != inflateInit(&patch_decoder))
+			if(!(tmp_ptr && zpad))
 			{
-				logg_devel("failure initiliasing compressed patch\n");
-				*ttable = tmp_table;
-				return NULL;
-			} 
-			if(Z_STREAM_END != (ret_int = inflate(&patch_decoder, Z_SYNC_FLUSH)))
-			{
-				logg_develd("failure decompressing patch: %i\n", ret_int);
-				*ttable = tmp_table;
-				return NULL;
+				logg_devel("patch mem failed\n");
+				break;
 			}
-// TODO: fix memleak (inflateEnd)
+
+			/* fix allocations... done, TLS rocks ;) */	
+			zpad->z.next_in = frag->data;
+			zpad->z.avail_in = frag->length;
+			zpad->z.next_out = tmp_ptr;
+			zpad->z.avail_out = tmp_table->data_length;
+
+			if(Z_OK != inflateInit(&zpad->z))
+				logg_devel("failure initiliasing compressed patch\n");
+			else if(Z_STREAM_END != (ret_int = inflate(&zpad->z, Z_SYNC_FLUSH)))
+				logg_develd("failure decompressing patch: %i\n", ret_int);
+			else
+			{
+				/* apply it */
+				memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
+				ret_val = "compressed patch applied";
+			}
+
+			inflateEnd(&zpad->z);
 		}
-		ret_val = "compressed patch applied";
 		break;
 	case COMP_NONE:
-		tmp_ptr = frag->data;
+		memxor(tmp_table->data, frag->data, tmp_table->data_length);
 		ret_val = "patch applied";
 		break;
 	default:
 		logg_develd("funky compression: %i\n", frag->compressed);
-		*ttable = tmp_table;
-		return NULL;
 	}
 
-	memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
 	*ttable = tmp_table;
-
 	return ret_val;
 }
 

@@ -107,7 +107,7 @@ alignment_16:
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
-			: "=&c" (d0), "+&g" (src_char), "+&g" (dst_char)
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/32)
 			: "cc", "xmm0", "xmm1", "memory"
 		);
@@ -144,7 +144,7 @@ alignment_8:
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
-			: "=&c" (d0), "+&g" (src_char), "+&g" (dst_char)
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/32)
 			: "cc", "mm0", "mm1", "mm2", "mm3", "memory"
 		);

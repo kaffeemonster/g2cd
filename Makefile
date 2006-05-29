@@ -96,7 +96,8 @@ CFLAGS += $(WARN_FLAGS)
 #
 # !! mashine-dependent !! non-x86 please see here
 #
-ARCH = athlon-xp
+ARCH = athlon64
+#ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
 #ARCH = G4
@@ -134,21 +135,35 @@ OPT_FLAGS = -O3
 OPT_FLAGS += -ffast-math
 #	needed on x86 (and other) even when O3 is and -g is not
 #	specified for max perf.
-OPT_FLAGS += -fomit-frame-pointers
+#OPT_FLAGS += -fomit-frame-pointers
+# did they strip the 's' in 4.x??? And now they error out its incompatible with -pg
+#OPT_FLAGS += -fomit-frame-pointer
 #	gcc >= 3.x and supported for target (-march ?)
 OPT_FLAGS += -fprefetch-loop-arrays
 OPT_FLAGS += -funroll-loops
 #	gcc >= 3.4? we want this and not the above
 #OPT_FLAGS += -fold-unroll-loops
-#	gcc >= 3.x together with unroll-loops usefull
-OPT_FLAGS += -fmove-all-movables
+#	gcc >= 3.x && < 4.x together with unroll-loops usefull
+#OPT_FLAGS += -fmove-all-movables
 #	gcc >= 3.4
 OPT_FLAGS += -funit-at-a-time
 OPT_FLAGS += -fweb
 #	gcc >= 3.? *warning* experimental options
 OPT_FLAGS += -ftracer
-OPT_FLAGS += -fnew-ra
+# gcc < 4.x only, they dumped it...
+#OPT_FLAGS += -fnew-ra
 OPT_FLAGS += -funswitch-loops
+# gcc > 4.x
+OPT_FLAGS += -funsafe-loop-optimizations
+OPT_FLAGS += -ftree-loop-linear
+OPT_FLAGS += -ftree-loop-im
+OPT_FLAGS += -ftree-loop-ivcanon
+OPT_FLAGS += -fivopts
+# hmmm, breaks in memxor...
+#OPT_FLAGS += -ftree-vectorize
+OPT_FLAGS += -freorder-blocks-and-partition
+OPT_FLAGS += -fmove-loop-invariants
+OPT_FLAGS += -fbranch-target-load-optimize
 #	gcc >= 3.5 or 3.4 with orig. path applied, and backtraces
 #	don't look nice anymore
 #OPT_FLAGS += -fvisibility=hidden
@@ -197,8 +212,8 @@ LDFLAGS += -Wl,--enable-new-dtags
 LDFLAGS += -Wl,--as-needed
 #LDFLAGS += -Wl,-M
 # maybe get patched into binutils
-#LDFLAGS += -Wl,-hashvals
-#LDFLAGS += -Wl,-zdynsort
+LDFLAGS += -Wl,-hashvals
+LDFLAGS += -Wl,-zdynsort
 #	Some linker can also strip the bin. with this flag 
 #LDFLAGS += -s
 #	switch between profile-generation and final build
@@ -209,8 +224,10 @@ LDFLAGS += -pthread
 #LDFLAGS += -D_REENTRANT
 # on solaris we can do a little in respect to symbols
 #LDFLAGS += -Wl,-M,.mapfile
-# maybe one day also on linux
+# solaris Linker magic
 #LDFLAGS += -Wl,-B,direct
+# gnarf, on Linux only external Patch, and other syntax...
+LDFLAGS += -Wl,-Bdirect
 # get some more symbols in the executable, so backktraces
 # look better
 LDFLAGS += -rdynamic

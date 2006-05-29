@@ -41,6 +41,9 @@
 	/* align pointer x on a power of n */
 # define ALIGN(x, n) \
 	((intptr_t)((x)+(n) - 1) & ~((intptr_t)(n) - 1))
+	/* roud up an int to match alignment */
+#define ALIGN_SIZE(x, n) \
+	(((x) + (n) - 1) & ~((n) - 1))
 	/* some magic to build a constant for 32 & 64 bit, without
 	 * the need for LL suffix
 	 */

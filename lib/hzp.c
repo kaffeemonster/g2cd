@@ -128,9 +128,9 @@ static inline struct hzp *hzp_alloc_intern(void)
  */
 inline void hzp_ref(enum hzps key, void *new_ref)
 {
-	struct hzp *t_hzp;
+	struct hzp *t_hzp = pthread_getspecific(key2hzp);
 
-	if(!(t_hzp = pthread_getspecific(key2hzp)))
+	if(!t_hzp)
 	{
 		if(!(t_hzp = hzp_alloc_intern()))
 		{
