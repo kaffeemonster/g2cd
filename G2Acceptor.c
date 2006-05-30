@@ -56,14 +56,15 @@
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
 
+#undef EVENT_SPACE
 #define EVENT_SPACE 8
 
 //internal prototypes
 static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, int *);
-static inline bool init_con(int *, struct sockaddr_in *);
+static inline bool init_con_a(int *, struct sockaddr_in *);
 static inline bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
-static inline g2_connection_t **handle_socket_io(struct epoll_event *, int epoll_fd);
+static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static inline bool initiate_g2(g2_connection_t *);
 // do not inline, we take a pointer of it, and when its called, performance doesn't matter
 static void clean_up_a(struct epoll_event *, struct g2_con_info *, int, int);
@@ -93,7 +94,7 @@ void *G2Accept(void *param)
 	logg(LOGF_DEBUG, "Accept:\t\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
 	// Setting up the accepting Socket
-	if(!init_con(&accept_so, &our_addr))
+	if(!init_con_a(&accept_so, &our_addr))
 	{
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
 			diedie("initiating stop"); // hate doing this, but now it's to late
@@ -203,7 +204,7 @@ void *G2Accept(void *param)
 						{
 							// Some FD's ready to be filled?
 							// Some data ready to be read in?
-							g2_connection_t **tmp_con_holder = handle_socket_io(e_wptr, epoll_fd);
+							g2_connection_t **tmp_con_holder = handle_socket_io_a(e_wptr, epoll_fd);
 							if(tmp_con_holder)
 							{
 								if((*tmp_con_holder)->flags.dismissed)
@@ -290,7 +291,7 @@ void *G2Accept(void *param)
 	return NULL; // to avoid warning about reaching end of non-void funktion
 }
 
-static inline bool init_con(int *accept_so, struct sockaddr_in *our_addr)
+static inline bool init_con_a(int *accept_so, struct sockaddr_in *our_addr)
 {
 	int yes = 1; // for setsocketopt() SO_REUSEADDR, below
 
@@ -504,7 +505,7 @@ static inline bool handle_accept_abnorm(struct epoll_event *accept_ptr, int epol
 	return ret_val;
 }
 
-static inline g2_connection_t **handle_socket_io(struct epoll_event *p_entry, int epoll_fd)
+static inline g2_connection_t **handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd)
 {
 	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
 
@@ -1426,7 +1427,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 	return ret_val;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2Acceptor.c,v 1.19 2005/08/21 22:59:12 redbully Exp redbully $";
+static char const rcsid_a[] GCC_ATTR_USED_VAR = "$Id: G2Acceptor.c,v 1.19 2005/08/21 22:59:12 redbully Exp redbully $";
 
 /*			to_con.tmp_packet = new G2Packet();
 			to_con.packete = new ArrayList();

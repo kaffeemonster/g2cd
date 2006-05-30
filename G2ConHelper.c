@@ -279,5 +279,5 @@ inline bool recycle_con(
 	return true;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2ConHelper.c,v 1.12 2005/07/29 09:24:04 redbully Exp redbully $";
+static char const rcsid_ch[] GCC_ATTR_USED_VAR = "$Id: G2ConHelper.c,v 1.12 2005/07/29 09:24:04 redbully Exp redbully $";
 // EOF

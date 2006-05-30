@@ -48,7 +48,7 @@
 	/* You better not kill this proto, our it wount work ;) */
 static void g2_con_init(void) GCC_ATTR_CONSTRUCT;
 	/* internal action-prototypes */
-static bool empty_action(g2_connection_t *, size_t);
+static bool empty_action_c(g2_connection_t *, size_t);
 static bool accept_what(g2_connection_t *, size_t);
 static bool remote_ip_what(g2_connection_t *, size_t);
 static bool a_encoding_what(g2_connection_t *, size_t);
@@ -82,10 +82,10 @@ static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY),
 static const action_string h_as07 = {&ulpeer_what,		str_size(UPEER_KEY),			UPEER_KEY};
 static const action_string h_as08 = {NULL,				str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
 static const action_string h_as09 = {NULL,				str_size(X_TRY_UPEER_KEY),	X_TRY_UPEER_KEY};
-static const action_string h_as10 = {&empty_action,	str_size(GGEP_KEY),			GGEP_KEY};
-static const action_string h_as11 = {&empty_action,	str_size(PONG_C_KEY),		PONG_C_KEY};
-static const action_string h_as12 = {&empty_action,	str_size(QUERY_ROUTE_KEY),	QUERY_ROUTE_KEY};
-static const action_string h_as13 = {&empty_action,	str_size(VEND_MSG_KEY),		VEND_MSG_KEY};
+static const action_string h_as10 = {&empty_action_c,	str_size(GGEP_KEY),			GGEP_KEY};
+static const action_string h_as11 = {&empty_action_c,	str_size(PONG_C_KEY),		PONG_C_KEY};
+static const action_string h_as12 = {&empty_action_c,	str_size(QUERY_ROUTE_KEY),	QUERY_ROUTE_KEY};
+static const action_string h_as13 = {&empty_action_c,	str_size(VEND_MSG_KEY),		VEND_MSG_KEY};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") = 
 {
@@ -554,10 +554,10 @@ static bool listen_what(g2_connection_t * to_con, size_t distance)
 	return false;
 }
 
-bool empty_action(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, to_con), GCC_ATTR_UNUSED_PARAM(size_t, distance))
+static bool empty_action_c(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, to_con), GCC_ATTR_UNUSED_PARAM(size_t, distance))
 {
 	return false;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2Connection.c,v 1.14 2004/12/18 18:06:13 redbully Exp redbully $";
+static char const rcsid_c[] GCC_ATTR_USED_VAR = "$Id: G2Connection.c,v 1.14 2004/12/18 18:06:13 redbully Exp redbully $";
 //EOF

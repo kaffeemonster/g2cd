@@ -72,9 +72,11 @@ _G2PACK_EXTRN(inline void g2_packet_clean(g2_packet_t *to_clean));
 #endif //_G2PACKET_H
 
 #ifdef _NEED_G2_P_TYPE
-#undef _NEED_G2_P_TYPE
-#include "lib/sec_buffer.h"
-#include "G2Connection.h"
+# undef _NEED_G2_P_TYPE
+# ifndef _HAVE_G2_P_TYPE
+#  define _HAVE_G2_P_TYPE
+#  include "lib/sec_buffer.h"
+#  include "G2Connection.h"
 
 struct g2_p_type;
 
@@ -94,6 +96,7 @@ typedef struct g2_p_type
 
 _G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict;)
 _G2PACK_EXTRN(inline bool g2_packet_decide(g2_connection_t *, struct norm_buff *, const g2_p_type_t *));
+# endif // _HAVE_G2_P_TYPE
 #endif // _NEED_G2_P_TYPE
 
 #endif //! defined _G2PACKET_H || defined _NEED_G2_P_TYPE

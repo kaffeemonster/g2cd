@@ -89,7 +89,7 @@ static const char profile_file_name[] = DEFAULT_FILE_PROFILE;
 static const char user_name[] = DEFAULT_USER;
 
 // Internal prototypes
-static inline void clean_up(void);
+static inline void clean_up_m(void);
 static inline void parse_cmdl_args(int, char **);
 static inline void fork_to_background(void);
 static inline void handle_config(void);
@@ -167,7 +167,7 @@ int main(int argc, char **args)
 	if(pthread_create(&main_threads[THREAD_ACCEPTOR], NULL, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2Accept");
-		clean_up();
+		clean_up_m();
 		return EXIT_FAILURE;
 	}
 
@@ -295,7 +295,7 @@ int main(int argc, char **args)
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_UDP], NULL);
 
-	clean_up();
+	clean_up_m();
 	return EXIT_SUCCESS;
 }
 
@@ -846,7 +846,7 @@ static inline void setup_resources(void)
 	if(0 > pipe(accept_2_handler))
 	{
 		logg_errno(LOGF_CRIT, "opening acceptor-handler pipe");
-		clean_up();
+		clean_up_m();
 		exit(EXIT_FAILURE);
 	}
 
@@ -980,7 +980,7 @@ read_uprofile_end:
 	return;
 }
 
-static inline void clean_up(void)
+static inline void clean_up_m(void)
 {
 	/* Try to clean up as much as possible.
 	 * Normally, if a process dies/terminates, the OS should
@@ -1031,5 +1031,5 @@ static inline void clean_up(void)
 /*@unused@*/
 static char const ownid[] GCC_ATTR_USED_VAR = "$Own: " DIST " built on " __DATE__ " " __TIME__ " at \"" SYSTEM_INFO "\" with \"" COMPILER_INFO "\" $";
 /*@unused@*/
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2MainServer.c,v 1.25 2005/11/05 18:02:45 redbully Exp redbully $";
+static char const rcsid_m[] GCC_ATTR_USED_VAR = "$Id: G2MainServer.c,v 1.25 2005/11/05 18:02:45 redbully Exp redbully $";
 //EOF

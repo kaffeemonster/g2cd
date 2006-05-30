@@ -53,5 +53,5 @@ void *timeout_timer_task(GCC_ATTR_UNUSED_PARAM(void *, param))
 	return(NULL);
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: timeout.c,v 1.14 2005/11/05 09:57:22 redbully Exp redbully $";
+static char const rcsid_t[] GCC_ATTR_USED_VAR = "$Id: timeout.c,v 1.14 2005/11/05 09:57:22 redbully Exp redbully $";
 // EOF

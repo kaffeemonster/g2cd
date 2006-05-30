@@ -546,5 +546,5 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	return false;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_q[] GCC_ATTR_USED_VAR = "$Id:$";
 // EOF

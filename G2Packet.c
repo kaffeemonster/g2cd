@@ -45,7 +45,7 @@
 #include "lib/log_facility.h"
 
 // Internal Prototypes
-static bool empty_action(g2_connection_t *, g2_packet_t *, struct norm_buff *);
+static bool empty_action_p(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_KHL(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_KHL_TS(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_LNI(g2_connection_t *, g2_packet_t *, struct norm_buff *);
@@ -64,7 +64,7 @@ static inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, 
  * seventh type-char-layer
  */
 // CRAWLA - anwser? not my buisines
-static const g2_p_type_t packet_dict_CRAWLA0 = { NULL, {.action = &empty_action}, '\0', true};
+static const g2_p_type_t packet_dict_CRAWLA0 = { NULL, {.action = &empty_action_p}, '\0', true};
 // CRAWLR
 static const g2_p_type_t packet_dict_CRAWLR0 = { NULL, {.action = NULL}, '\0', true};
 
@@ -170,15 +170,15 @@ const g2_p_type_t g2_packet_dict = { &packet_dict_L, {.found = &packet_dict_KH},
 // LNI-childs
 // third
 // /LNI/HS
-static const g2_p_type_t LNI_packet_dict_HS0 = { NULL, {.action = &empty_action}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_HS0 = { NULL, {.action = &empty_action_p}, '\0', true };
 // /LNI/GU
 static const g2_p_type_t LNI_packet_dict_GU0 = { NULL, {.action = &handle_LNI_GU}, '\0', true };
 // /LNI/LS
-static const g2_p_type_t LNI_packet_dict_LS0 = { NULL, {.action = &empty_action}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_LS0 = { NULL, {.action = &empty_action_p}, '\0', true };
 // /LNI/NA
 static const g2_p_type_t LNI_packet_dict_NA0 = { NULL, {.action = &handle_LNI_NA}, '\0', true };
 // /LNI/QK
-static const g2_p_type_t LNI_packet_dict_QK0 = { NULL, {.action = &empty_action}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_QK0 = { NULL, {.action = &empty_action_p}, '\0', true };
 
 // second
 // /LNI/Hx
@@ -284,7 +284,7 @@ static const char packet_uproc[]	= { 0x20, 'U', 'P', 'R', 'O', 'C' };
 #define STDLF	"%s -> /%s\n"
 
 // funktions
-static bool empty_action(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
+static bool empty_action_p(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
 	return false;
 }
@@ -707,7 +707,7 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 				done = true;
 				if(work_type->work.action)
 				{
-					if(empty_action == work_type->work.action)
+					if(empty_action_p == work_type->work.action)
 						logg_packet("*/%s\tC: %s -> ignored\n", packs->type, packs->is_compound ? "true" : "false");
 					else
 						logg_packet("*/%s\tC: %s\n", packs->type, packs->is_compound ? "true" : "false");
@@ -738,5 +738,5 @@ inline bool g2_packet_decide(g2_connection_t *connec, struct norm_buff *target, 
 	return g2_packet_decide_spec(connec, target, work_type, connec->akt_packet);
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2Packet.c,v 1.12 2004/12/18 18:06:13 redbully Exp redbully $";
+static char const rcsid_p[] GCC_ATTR_USED_VAR = "$Id: G2Packet.c,v 1.12 2004/12/18 18:06:13 redbully Exp redbully $";
 // EOF

@@ -57,12 +57,13 @@
 #include "lib/log_facility.h"
 #include "lib/my_epoll.h"
 
+#undef EVENT_SPACE
 #define EVENT_SPACE 16
 
 //internal prototypes
 static inline bool init_memory_h(struct epoll_event **, struct g2_con_info **, int *);
 static inline bool handle_from_accept(struct g2_con_info **, int, int);
-static inline g2_connection_t **handle_socket_io(struct epoll_event *, int epoll_fd);
+static inline g2_connection_t **handle_socket_io_h(struct epoll_event *, int epoll_fd);
 // do not inline, we take a pointer of it, and when its called, performance doesn't matter
 static void clean_up_h(struct epoll_event *, struct g2_con_info *, int, int);
 
@@ -160,7 +161,7 @@ void *G2Handler(void *param)
 						{
 							// Some FD's ready to be filled?
 							// Some data ready to be read in?
-							g2_connection_t **tmp_con_holder = handle_socket_io(e_wptr, epoll_fd);
+							g2_connection_t **tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd);
 							if(NULL != tmp_con_holder)
 							{
 								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
@@ -304,7 +305,7 @@ clean_up:
 	return false;
 }
 
-static inline g2_connection_t **handle_socket_io(struct epoll_event *p_entry, int epoll_fd)
+static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd)
 {
 	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
 
@@ -475,5 +476,5 @@ static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_con
 	server.status.all_abord[THREAD_HANDLER] = false;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2Handler.c,v 1.21 2005/07/29 09:24:04 redbully Exp redbully $";
+static char const rcsid_h[] GCC_ATTR_USED_VAR = "$Id: G2Handler.c,v 1.21 2005/07/29 09:24:04 redbully Exp redbully $";
 //EOF

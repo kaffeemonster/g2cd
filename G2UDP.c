@@ -56,8 +56,8 @@
 
 //internal prototypes
 //static inline bool init_memory();
-static inline bool init_con(int *, struct sockaddr_in *);
-static inline void clean_up(int, int, int);
+static inline bool init_con_u(int *, struct sockaddr_in *);
+static inline void clean_up_u(int, int, int);
 
 #define G2UDP_FD_SUM 2
 
@@ -82,7 +82,7 @@ void *G2UDP(void *param)
 	logg(LOGF_INFO, "UDP:\t\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
 	// Setting up the UDP Socket
-	if(!init_con(&udp_so, &our_addr))
+	if(!init_con_u(&udp_so, &our_addr))
 	{
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
 			diedie("initiating stop"); // hate doing this, but now it's to late
@@ -97,7 +97,7 @@ void *G2UDP(void *param)
 		if(0 > (out_file = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
 		{
 			logg_errno(LOGF_ERR, "opening UDP-file");
-			clean_up(udp_so, out_file, sock2main);
+			clean_up_u(udp_so, out_file, sock2main);
 			pthread_exit(NULL);
 		}
 	}
@@ -347,13 +347,13 @@ void *G2UDP(void *param)
 		}
 	}
 
-	clean_up(udp_so, out_file, sock2main);
+	clean_up_u(udp_so, out_file, sock2main);
 	pthread_exit(NULL);
 	// to avoid warning about reaching end of non-void function
 	return NULL;
 }
 
-static inline bool init_con(int *udp_so, struct sockaddr_in *our_addr)
+static inline bool init_con_u(int *udp_so, struct sockaddr_in *our_addr)
 {
 	int yes = 1; // for setsockopt() SO_REUSEADDR, below
 
@@ -401,7 +401,7 @@ static inline bool init_con(int *udp_so, struct sockaddr_in *our_addr)
 	return true;
 }
 
-static inline void clean_up(int udp_so, int out_file, int who_to_say)
+static inline void clean_up_u(int udp_so, int out_file, int who_to_say)
 {
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); // hate doing this, but now it's to late
@@ -413,5 +413,5 @@ static inline void clean_up(int udp_so, int out_file, int who_to_say)
 	server.status.all_abord[THREAD_UDP] = false;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: G2UDP.c,v 1.16 2005/11/05 10:03:50 redbully Exp redbully $";
+static char const rcsid_u[] GCC_ATTR_USED_VAR = "$Id: G2UDP.c,v 1.16 2005/11/05 10:03:50 redbully Exp redbully $";
 //EOF

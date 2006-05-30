@@ -719,5 +719,5 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 
 */
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Idi$";
+static char const rcsid_ps[] GCC_ATTR_USED_VAR = "$Idi$";
 //EOF
