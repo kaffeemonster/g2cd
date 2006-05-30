@@ -195,9 +195,9 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 	long remaining_length = 0;
 	int func_ret_val;
 	bool ret_val = true;
-#if 0
+
 	target->more_bytes_needed = false;
-	
+#if 0	
 	while(!target->more_bytes_needed)
 	{
 		switch(target->packet_decode)
@@ -438,7 +438,7 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 			return false;
 		}
 	}
-
+#endif
 	if(target->more_bytes_needed)
 		return false;
 	
@@ -446,7 +446,6 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 //	if(buffer_remaining(*source))
 //	buffer_compact(*source);
 //	else buffer_clear(*source);
-#endif
 	return ret_val;
 }
 

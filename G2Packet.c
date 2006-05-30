@@ -372,7 +372,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 	size_t num;
 	bool ret_val = false;
 
-	logg_develd("num: %lu\tchild: %p\n", source->num_child, source->children);
+	logg_develd("num: %lu\tchild: %p\n", (unsigned long) source->num_child, (void *) source->children);
 
 	for(num = source->num_child, packs = source->children; num; num--, packs++)
 	{

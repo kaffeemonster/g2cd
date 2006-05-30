@@ -89,8 +89,8 @@ typedef union xxxxxx4
 } atomicptra_t;
 
 /* atomicptra_t and atomicptr_t should be abi compatible */
-#define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
-#define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
+#define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)((void *)(ptr))))
+#define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)((void *)(ptr))))
 /* same for atomicptr_t and atomicst_t */
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
 
