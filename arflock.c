@@ -45,7 +45,7 @@
 static void sig_alarm(int);
 static int gime_lock(int);
 static int collect_child(pid_t);
-static void invokation(char *);
+static int invokation(char *);
 
 static volatile int timeout;
 static char pid_buf[100];
@@ -57,10 +57,7 @@ int main(int argc, char **argv)
 	pid_t c_pid = -1;
 
 	if(3 > argc)
-	{
-		invokation(argv[0]);
-		exit(EXIT_FAILURE);
-	}
+		exit(invokation(argv[0]));
 
 	/* first lock the gate, may be the archive isn't created yet */
 	if(-1 == (fd_gate = open(".arflockgate", O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)))
@@ -189,7 +186,7 @@ static int collect_child(pid_t c_pid)
 	do {
 		status = 0;
 		ret_val = waitpid(c_pid, &status, 0);
-	} while((0 > ret_val && EINTR == errno) || (0 <= ret_val && !WIFEXITED(status)));
+	} while((0 > ret_val && EINTR == errno) || (0 <= ret_val && !WIFEXITED(status) && !WIFSIGNALED(status)));
 
 	if (WIFEXITED(status))
 		return WEXITSTATUS(status);
@@ -197,9 +194,10 @@ static int collect_child(pid_t c_pid)
 		return EXIT_FAILURE;
 }
 
-static void invokation(char *prg_name)
+static int invokation(char *prg_name)
 {
 	fprintf(stderr, "%s file ar-line\n", prg_name);
 	fputs("\tfile\t- the .a to save\n", stderr);
 	fputs("\tar-line\t- the complete ar comandline\n", stderr);
+	return EXIT_FAILURE;
 }

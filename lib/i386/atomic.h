@@ -83,6 +83,7 @@ static inline void atomic_inc(atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		LOCK "incl %0"
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		: "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)));
 }
@@ -91,6 +92,7 @@ static inline void atomic_dec(atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		LOCK "decl %0"
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		: "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)));
 }

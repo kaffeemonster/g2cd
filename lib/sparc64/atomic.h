@@ -41,8 +41,9 @@
 static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
-		"swap\t\t%1, %0"
+		"swap\t\t%2, %0"
 		: "=&r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "m" (atomic_pread(ptr)),
 		  "0" (val));
@@ -54,6 +55,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 	__asm__ __volatile__(
 		"swapx\t\t%2, %0"
 		: "=&r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "m" (atomic_pread(ptr)),
 		  "0" (val));
@@ -79,6 +81,7 @@ static inline int atomic_x_64(int val, atomic_t *ptr)
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
 		: "=&r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		  "0" (val));
@@ -90,6 +93,7 @@ static inline int atomic_x_32(int val, atomic_t *ptr)
 	__asm__ __volatile__(
 		"swapx\t\t%2, %0"
 		: "=&r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		  "0" (val));
@@ -125,6 +129,7 @@ static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 		"cas %3, %2, %0\n\t"
 		MEMBAR_2
 		: "=&r" (nval),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "r" (oval),
 		  "m" (atomic_read(ptr)),
@@ -139,6 +144,7 @@ static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 		"casx %3, %2, %0\n\t"
 		MEMBAR_2
 		: "=&r" (nval),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "r" (oval),
 		  "m" (atomic_read(ptr)),
@@ -166,6 +172,7 @@ static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, at
 		"cas %3, %2, %0\n\t"
 		MEMBAR_2
 		: "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "r" (oval),
 		  "m" (atomic_pread(ptr)),
@@ -182,6 +189,7 @@ static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, at
 		"casx %3, %2, %0\n\t"
 		MEMBAR_2
 		: "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "r" (oval),
 		  "m" (atomic_pread(ptr)),

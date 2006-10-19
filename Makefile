@@ -456,6 +456,9 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 
 %.rtl: %.c
 	@$(RM) $@ && $(COMPILE.c) -dr $< -o `basename $@ .rtl`.o && (mv -f `basename $@ .rtl`.c.*.rtl $@ || touch $@)
+
+%.h.gch: %.h
+	@$(COMPILE.c) $< -o $@
 #
 # add impliciet rules for dependencies (not used until now, managed from hand)
 #
@@ -518,9 +521,9 @@ strip: .$(MAIN).dbg
 
 #	std-cleaning target
 eclean: libclean zlibclean
-	-$(RM) $(OBJS) $(RTL_DUMPS) ccdrv.o
+	-$(RM) $(OBJS) $(RTL_DUMPS) sbox.bin sbox.bin.tmp ccdrv.o arflock.o bin2o.o
 clean: eclean
-	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
+	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
 	-$(RM) version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 
@@ -618,12 +621,12 @@ arflock: arflock.c ccdrv Makefile
 		$(PORT_PR) "\$${AR} \$${@}\n" >> $@; \
 		chmod a+x $@ )
 
-.INTERMEDIATE: data.o
-data.o: $(TARED_FILES)
-	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -9 | \
-	od -v -A n -t x1 | tr -s '\n\t ' ':::' | \
-	awk 'BEGIN { RS = ":"; ORS = " "; print "static const char s_base_data[]= {\n"} /[0-9a-fA-F][0-9a-fA-F]/{print "0x" $$1 ","; if ( NR % 14  == 13) printf "\n"; } END { ORS = "\n"; print "\n};\n\nconst struct s_data {\n\tconst unsigned long len;\n\tconst char *data;\n} s_data = {sizeof(s_base_data), &s_base_data[0]};"}' | \
-	$(CC) -x c - -c -o $@ || touch $@
+bin2o: bin2o.c ccdrv Makefile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC)  $(HOSTCFLAGS) bin2o.c -o $@
+
+.INTERMEDIATE: sbox.bin
+sbox.bin: $(TARED_FILES)
+	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -9 > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
 
 calltree: calltree.c Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@ $(LDFLAGS)
@@ -665,6 +668,8 @@ version.h: Makefile
 	$(PORT_PR)	"//EOF\n" >> $@
 #	$(PORT_PR)	"$(TOEOL)\b\b\b[OK]\n"
 
+data.o: sbox.bin bin2o
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h builtin_defaults.h version.h lib/hzp.h lib/atomic.h

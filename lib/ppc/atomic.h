@@ -87,6 +87,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 		"bne-\t1b"
 		SYNC
 		: "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "m" (atomic_pread(ptr)),
 		  "r" (val)
@@ -108,6 +109,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 		"bne-\t1b"
 		SYNC
 		: "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		  "r" (val)
@@ -132,6 +134,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 		SYNC
 		"\n2:"
 		: "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_pread(ptr))
 		: "m" (atomic_pread(ptr)),
 		  "r" (oval),
@@ -153,6 +156,7 @@ static inline void atomic_inc(atomic_t *ptr)
 		"stwcx.\t%3,%2 \n\t"
 		"bne-\t1b"
 		: "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		: "cc",
@@ -170,6 +174,7 @@ static inline void atomic_dec(atomic_t *ptr)
 		"stwcx.\t%3,%2\n\t"
 		"bne-\t1b"
 		: "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
 		  "=m" (atomic_read(ptr))
 		: "m" (atomic_read(ptr)),
 		: "cc",
