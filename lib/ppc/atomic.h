@@ -30,7 +30,7 @@
 #ifndef LIB_IMPL_ATOMIC_H
 # define LIB_IMPL_ATOMIC_H
 
-#include "log_facility.h"
+#include "../log_facility.h"
 
 # define atomic_read(x)	((x)->d)
 # define atomic_set(x, y) (((x)->d) = (y))
@@ -59,6 +59,8 @@
 # endif
 
 /* 
+ * Read further down...
+ *
  * my gcc 3.4.5 ppc-crosscompiler generates a nice RT,RA,RB sequence in
  * the inline asm for the memref constraints (mostly %2) on the
  * lwarx/stwcx.
@@ -73,7 +75,18 @@
  *
  * Problem is, does this always work "The Right Way"[TM]?
  */
-// TODO: check that gcc always generates correct 2nd/3rd lwarx/stwcx operand
+
+/*
+ * Ex-TODO: check that gcc always generates correct 2nd/3rd lwarx/stwcx operand
+ *
+ * OK, forget about it, gcc-4.1.1 generates nice _wrong_ sequence.
+ * Seems not to work always.
+ * Very nice is the fact, that the GCC manual misses some register contraints
+ * for Power/ppc/rs6000, like a,Z,Y etc.
+ * And the best fact: gcc has no constraint for what I need: a memop which is
+ * allways indexed (even if the index is 0) (something like Z)
+ * rs6000.h even mentiones the address mode (sum of two regs), but, no contrain
+ */
 
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
@@ -81,18 +94,18 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%2\n\t"
+		"lwarx\t%0,0,%2\n\t"
 		PPC405_ERR77(%2)
-		"stwcx.\t%3,%2\n\t"
+		"stwcx.\t%3,0,%2\n\t"
 		"bne-\t1b"
 		SYNC
-		: "=&r" (tmp),
+		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "m" (atomic_pread(ptr)),
-		  "r" (val)
-		: "cc",
-		  "memory");
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "b" (&atomic_pread(ptr)),
+		  /* %3 */ "r" (val),
+		  /* %4 */ "m" (atomic_pread(ptr))
+		: "cc");
 
 	return tmp;
 }
@@ -103,18 +116,18 @@ static inline int atomic_x(int val, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%2\n\t"
+		"lwarx\t%0,0,%2\n\t"
 		PPC405_ERR77(%2)
-		"stwcx.\t%3,%2\n\t"
+		"stwcx.\t%3,0,%2\n\t"
 		"bne-\t1b"
 		SYNC
-		: "=&r" (tmp),
+		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)),
-		  "r" (val)
-		: "cc",
-		  "memory");
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "b" (&atomic_read(ptr)),
+		  /* %3 */ "r" (val),
+		  /* %4 */ "m" (atomic_read(ptr))
+		: "cc");
 
 	return tmp;
 }
@@ -125,22 +138,22 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 
 	__asm__ __volatile__ (
 		"1:\n\t"
-		"lwarx\t%0,%2 \n\t"
+		"lwarx\t%0,0,%2 \n\t"
 		"cmpw\t0,%0,%3 \n\t"
 		"bne\t2f\n\t"
 		PPC405_ERR77(%2)
-		"stwcx.\t%4,%2 \n\t"
+		"stwcx.\t%4,0,%2 \n\t"
 		"bne-\t1b"
 		SYNC
 		"\n2:"
-		: "=&r" (prev),
+		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "m" (atomic_pread(ptr)),
-		  "r" (oval),
-		  "r" (nval),
-		: "cc",
-		  "memory");
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "b" (&atomic_pread(ptr)),
+		  /* %3 */ "r" (oval),
+		  /* %4 */ "r" (nval),
+		  /* %5 */ "m" (atomic_pread(ptr))
+		: "cc");
 
 	return prev;
 }
@@ -150,17 +163,17 @@ static inline void atomic_inc(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%2\n\t"
+		"lwarx\t%0,0,%2\n\t"
 		"addic\t%0,%0,1\n\t"
 		PPC405_ERR77(%2)
-		"stwcx.\t%3,%2 \n\t"
+		"stwcx.\t%0,0,%2 \n\t"
 		"bne-\t1b"
-		: "=&r" (tmp),
+		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)),
-		: "cc",
-		  "memory");
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "b" (atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr))
+		: "cc");
 }
 
 static inline void atomic_dec(atomic_t *ptr)
@@ -168,17 +181,17 @@ static inline void atomic_dec(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%2\n\t"
+		"lwarx\t%0,0,%2\n\t"
 		"addic\t%0,%0,-1\n\t"
 		PPC405_ERR77(%2)
-		"stwcx.\t%3,%2\n\t"
+		"stwcx.\t%0,0,%2\n\t"
 		"bne-\t1b"
-		: "=&r" (tmp),
+		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)),
-		: "cc",
-		  "memory");
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "b" (&atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr))
+		: "cc");
 }
 
 #endif /* LIB_IMPL_ATOMIC_H */

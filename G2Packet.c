@@ -295,7 +295,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct norm
 	size_t num;
 	bool ret_val = false;
 
-	logg_develd("num: %u\tptr: 0x%p\n", source->num_child, (void *) source->children);
+	logg_develd("num: %u\tptr: %p\n", source->num_child, (void *) source->children);
 	
 	for(num = source->num_child, packs = source->children; num; num--, packs++)
 	{
@@ -402,27 +402,21 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 	if(6 == buffer_remaining(source->data_trunk))
 	{
 		uint16_t	tmp_port;
-		uint32_t tmp_addr =
-			((((uint32_t)*buffer_start(source->data_trunk)) & 0xFFu) << 24) |
-			((((uint32_t)*(buffer_start(source->data_trunk)+1)) & 0xFFu) << 16) |
-			((((uint32_t)*(buffer_start(source->data_trunk)+2)) & 0xFFu) << 8) |
-			(((uint32_t)*(buffer_start(source->data_trunk)+3)) & 0xFFu);
-		
-		connec->sent_addr.sin_addr.s_addr = htonl(tmp_addr);
+		/* 
+		 * the addr comes in network byteorder over the wire, when we only load and store it,
+		 * result should be in network byteorder again.
+		 */
+		get_unaligned(connec->sent_addr.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
 
-		if(!source->big_endian)
-			tmp_port =
-			(((uint16_t)*(buffer_start(source->data_trunk)+4)) & 0xFFu) | ((((uint16_t)*(buffer_start(source->data_trunk)+5)) & 0xFFu) << 8) ;
-		else
-			tmp_port =
-			((((uint16_t)*(buffer_start(source->data_trunk)+4)) & 0xFFu) << 8) | (((uint16_t)*(buffer_start(source->data_trunk)+5)) & 0xFFu) ;
+		/* load port and fix it for those, who sent it wrong way round */
+		get_unaligned_endian(tmp_port, (uint16_t *) (buffer_start(source->data_trunk)+4), source->big_endian);
+		connec->sent_addr.sin_port = tmp_port;
 
-		connec->sent_addr.sin_port = htons(tmp_port);
-
-		logg_packet(STDSF, "/LNI/NA");
+//		logg_packet(STDSF, "/LNI/NA");
 
 		{
-			logg_packet_old("/LNI/NA:\t%s:%hu\n", inet_ntop(connec->af_type, &connec->sent_addr.sin_addr, char addr_buf[INET6_ADDRSTRLEN], sizeof(addr_buf)), ntohs(connec->sent_addr.sin_port));
+			char addr_buf[INET6_ADDRSTRLEN];
+			logg_packet("/LNI/NA:\t%s:%hu\n", inet_ntop(connec->af_type, &connec->sent_addr.sin_addr, addr_buf, sizeof(addr_buf)), ntohs(connec->sent_addr.sin_port));
 		}
 	}
 	else if(18 == buffer_remaining(source->data_trunk))
@@ -548,17 +542,8 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 		return false;
 	}
 
-	if(!source->big_endian)
-		qht_ent =	((uint32_t)*buffer_start(source->data_trunk) & 0xFFu) |
-		((((uint32_t)*(buffer_start(source->data_trunk)+1)) & 0xFFu) << 8) |
-		((((uint32_t)*(buffer_start(source->data_trunk)+2))  & 0xFFu) << 16) |
-		((((uint32_t)*(buffer_start(source->data_trunk)+3))  & 0xFFu) << 24);
-	else
-		qht_ent =	((((uint32_t)*buffer_start(source->data_trunk)) & 0xFFu) << 24) |
-			((((uint32_t)*(buffer_start(source->data_trunk)+1)) & 0xFFu) << 16) |
-			((((uint32_t)*(buffer_start(source->data_trunk)+2)) & 0xFFu) << 8) |
-			((uint32_t)*(buffer_start(source->data_trunk)+3) & 0xFFu);
-
+	get_unaligned_endian(qht_ent, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
+	
 	if(g2_qht_reset(&connec->qht, qht_ent))
 		connec->flags.dismissed = true;
 

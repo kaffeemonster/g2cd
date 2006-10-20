@@ -46,22 +46,24 @@
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
-		"xchgl\t%0, %1"
-		: "=r" (val)
-		: "m"	(atomic_pread(ptr)),
-		  "0" (val)
-		: "memory");
+		"xchgl\t%0, %2"
+		: /* %0 */ "=r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "m"	(atomic_pread(ptr)),
+		  /* %3 */ "0" (val));
 	return val;
 }
 
 static inline int atomic_x(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		"xchgl\t%0, %1"
-		: "=r" (val)
-		: "m"	(atomic_read(ptr)),
-		  "0" (val)
-		: "memory");
+		"xchgl\t%0, %2"
+		: /* %0 */ "=r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "m"	(atomic_read(ptr)),
+		  /* %3 */ "0" (val));
 	return val;
 }
 
@@ -69,13 +71,14 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 {
 	void *prev;
 	__asm__ __volatile__(
-			LOCK "cmpxchgl %1,%2"
-			: "=a"(prev)
-			: "r"(nval),
-			  "m"(atomic_pread(ptr)),
-			  "0"(oval)
-			: "cc",
-			  "memory");
+		LOCK "cmpxchgl %2,%3"
+		: /* %0 */ "=a"(prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "r"(nval),
+		  /* %3 */ "m"(atomic_pread(ptr)),
+		  /* %4 */ "0"(oval)
+		: "cc");
 	return prev;
 }
 
@@ -84,8 +87,8 @@ static inline void atomic_inc(atomic_t *ptr)
 	__asm__ __volatile__(
 		LOCK "incl %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		: "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)));
+		: /* %0 */ "=m" (atomic_read(ptr))
+		: /* %1 */ "m" (atomic_read(ptr)));
 }
 
 static inline void atomic_dec(atomic_t *ptr)
@@ -93,8 +96,8 @@ static inline void atomic_dec(atomic_t *ptr)
 	__asm__ __volatile__(
 		LOCK "decl %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		: "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)));
+		: /* %0 */ "=m" (atomic_read(ptr))
+		: /* %1 */ "m" (atomic_read(ptr)));
 }
 
 #endif /* LIB_IMPL_ATOMIC_H */

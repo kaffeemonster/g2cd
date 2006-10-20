@@ -42,11 +42,11 @@ static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
-		: "=&r" (val),
+		: /* %0 */ "=&r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "m" (atomic_pread(ptr)),
-		  "0" (val));
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "m" (atomic_pread(ptr)),
+		  /* %3 */ "0" (val));
 	return val;
 }
 
@@ -54,11 +54,11 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"swapx\t\t%2, %0"
-		: "=&r" (val),
+		: /* %0 */ "=&r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "m" (atomic_pread(ptr)),
-		  "0" (val));
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "m" (atomic_pread(ptr)),
+		  /* %3 */ "0" (val));
 	return val;
 }
 
@@ -76,27 +76,27 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 }
 
 // TODO: hmmm, really no swapx and swap deprecatet on sparc v9?
-static inline int atomic_x_64(int val, atomic_t *ptr)
-{
-	__asm__ __volatile__(
-		"swap\t\t%2, %0"
-		: "=&r" (val),
-		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)),
-		  "0" (val));
-	return val;
-}
-
 static inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		"swapx\t\t%2, %0"
-		: "=&r" (val),
+		"swap\t\t%2, %0"
+		: /* %0 */ "=&r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "m" (atomic_read(ptr)),
-		  "0" (val));
+		  /* %1 */  "=m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
+		  /* %3 */ "0" (val));
+	return val;
+}
+
+static inline int atomic_x_64(int val, atomic_t *ptr)
+{
+	__asm__ __volatile__(
+		"swapx\t\t%2, %0"
+		: /* %0 */ "=&r" (val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
+		  /* %3 */ "0" (val));
 	return val;
 }
 
@@ -128,12 +128,12 @@ static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 		MEMBAR_1
 		"cas %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (nval),
+		: /* %0 */ "=&r" (nval),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "r" (oval),
-		  "m" (atomic_read(ptr)),
-		  "0" (nval));
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "r" (oval),
+		  /* %3 */ "m" (atomic_read(ptr)),
+		  /* %4 */ "0" (nval));
 	return nval;
 }
 
@@ -143,12 +143,12 @@ static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 		MEMBAR_1
 		"casx %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (nval),
+		: /* %0 */  "=&r" (nval),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_read(ptr))
-		: "r" (oval),
-		  "m" (atomic_read(ptr)),
-		  "0" (nval));
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "r" (oval),
+		  /* %3 */ "m" (atomic_read(ptr)),
+		  /* %4 */ "0" (nval));
 	return nval;
 }
 
@@ -171,12 +171,12 @@ static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, at
 		MEMBAR_1
 		"cas %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (prev),
+		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "r" (oval),
-		  "m" (atomic_pread(ptr)),
-		  "0" (nval));
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "r" (oval),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (nval));
 	return prev;
 }
 
@@ -188,12 +188,12 @@ static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, at
 		MEMBAR_1
 		"casx %3, %2, %0\n\t"
 		MEMBAR_2
-		: "=&r" (prev),
+		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  "=m" (atomic_pread(ptr))
-		: "r" (oval),
-		  "m" (atomic_pread(ptr)),
-		  "0" (nval));
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "r" (oval),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (nval));
 	return prev;
 }
 

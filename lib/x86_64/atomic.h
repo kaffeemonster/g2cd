@@ -1,6 +1,6 @@
 /*
  * atomic.h
- * atomic primitves for sparc
+ * atomic primitves for x86_64
  *
  * Thanks Linux Kernel
  * 
@@ -37,34 +37,67 @@
 # define atomic_sread(x)	((x)->next)
 # define atomic_sset(x, y) ((x)->next = (y))
 
-/* could make problems on _real_ old Fujitsu build sparcs */
-# define atomic_px atomic_px
+# ifdef HAVE_SMP
+#  define LOCK "lock; "
+# else
+#  define LOCK
+# endif
+
 static inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
-		"swap\t\t%2, %0"
-		: /* %0 */ "=&r" (val),
-		  /* %1 */ "=m" (atomic_pread(ptr))
+		"xchgq\t%0, %2"
+		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		: /* %2 */ "m" (atomic_pread(ptr)),
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "m"	(atomic_pread(ptr)),
 		  /* %3 */ "0" (val));
 	return val;
 }
 
-# define atomic_p atomic_p
-static inline int atomic_p(int val, atomic_t *ptr)
+static inline int atomic_x(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		"swap\t\t%2, %0"
-		: /* %0 */ "=&r" (val),
-		  /* %1 */ "=m" (atomic_read(ptr))
+		"xchgl\t%0, %2"
+		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		: /* %2 */ "m" (atomic_read(ptr)),
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "m"	(atomic_read(ptr)),
 		  /* %3 */ "0" (val));
 	return val;
 }
 
-# undef LIB_IMPL_ATOMIC_H
-# include "../generic/atomic.h"
+static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+{
+	void *prev;
+	__asm__ __volatile__(
+		LOCK "cmpxchgq %2,%3"
+		: /* %0 */ "=a"(prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "r"(nval),
+		  /* %3 */ "m"(atomic_pread(ptr)),
+		  /* %4 */ "0"(oval)
+		: "cc");
+	return prev;
+}
+
+static inline void atomic_inc(atomic_t *ptr)
+{
+	__asm__ __volatile__(
+		LOCK "incl %0"
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		: /* %0 */ "=m" (atomic_read(ptr))
+		: /* %1 */ "m" (atomic_read(ptr)));
+}
+
+static inline void atomic_dec(atomic_t *ptr)
+{
+	__asm__ __volatile__(
+		LOCK "decl %0"
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		: /* %0 */ "=m" (atomic_read(ptr))
+		: /* %1 */ "m" (atomic_read(ptr)));
+}
 
 #endif /* LIB_IMPL_ATOMIC_H */

@@ -206,9 +206,6 @@ typedef void (*sighandler_t)(int);
 # include <inttypes.h>
 #endif /* HAVE_STDINT_H */
 
-#include <stddef.h>
-#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
-
 /* most things won't work if BITS_PER_CHAR = 8 isn't true, but you never know */
 #ifdef __CHAR_BIT__
 # if __CHAR_BIT__ > 0
@@ -221,6 +218,88 @@ typedef void (*sighandler_t)(int);
 # include <limits.h>
 # define BITS_PER_CHAR CHAR_BIT
 #endif /* __CHAR_BIT__ */
+
+#include <stddef.h>
+#define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+
+/* unaligned access */
+#ifdef __GNUC__
+# include <endian.h>
+/* let the compiler handle unaligned access */
+# define get_unaligned(dest, ptr) \
+do { \
+	struct { \
+		__typeof__(*(ptr)) __v GCC_ATTR_PACKED; \
+	} *__p = (void *)(ptr); \
+	(dest) = __p->__v; \
+} while(0)
+
+# if (__BYTE_ORDER == __LITTLE_ENDIAN)
+#  define get_unaligned_endian(dest, ptr, big_end) \
+do { \
+	if(!big_end) \
+		get_unaligned((dest), (ptr)); \
+	else { \
+		switch(sizeof(*(ptr)) * BITS_PER_CHAR) { \
+		case 32: \
+			(dest) = (((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF) << 24) | \
+				(((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF) << 16) | \
+				(((__typeof__(*(ptr)))(*(((char *)(ptr))+2))&0xFF) << 8) | \
+				((__typeof__(*(ptr)))(*(((char *)(ptr))+3))&0xFF); \
+			break; \
+		case 16: \
+			(dest) = (((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF) << 8) | \
+				((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF); \
+				break; \
+		default: \
+			{ \
+				unsigned i = 0, mask = (sizeof(*(ptr)) * BITS_PER_CHAR) - 8; \
+				for((dest) = 0; i < sizeof(*(ptr)); i++, mask -= 8) \
+					(dest) |= ((__typeof__(*(ptr)))(((char *)(ptr))[i]&0xFF)) << mask; \
+			} \
+		} \
+	} \
+} while(0)
+# elif (__BYTE_ORDER == __BIG_ENDIAN)
+#  define get_unaligned_endian(dest, ptr, big_end) \
+do { \
+	if(big_end) \
+		get_unaligned((dest), (ptr)); \
+	else { \
+		switch(sizeof(*(ptr)) * BITS_PER_CHAR) { \
+		case 32: \
+			(dest) = (((__typeof__(*(ptr)))(*(((char *)(ptr))+4))&0xFF) << 24) | \
+				(((__typeof__(*(ptr)))(*(((char *)(ptr))+3))&0xFF) << 16) | \
+				(((__typeof__(*(ptr)))(*(((char *)(ptr))+2))&0xFF) << 8) | \
+				((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF); \
+			break; \
+		case 16: \
+			(dest) = (((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF) << 8) | \
+				((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF); \
+			break; \
+		default: \
+			{ \
+				unsigned i = 0; \
+				for((dest) = 0; i < sizeof(*(ptr)); i++) \
+					(dest) |= ((__typeof__(*(ptr)))(((char *)(ptr))[i]&0xFF)) << (i * 8); \
+			} \
+		} \
+	} \
+} while(0)
+# else
+#  error "You're kidding, you don't own a PDP11?"
+# endif 
+
+# define put_unaligned(val, ptr) \
+do { \
+	struct { \
+		__typeof__(*(ptr)) __v GCC_ATTR_PACKED; \
+	}  *__p = (void *)(ptr); \
+	__p->__v = (val); \
+} while(0)
+#else
+# error "No unaligned access macros for your machine/compiler written yet"
+#endif /**/
 
 #endif /* _OTHER_H */
 /* EOF */
