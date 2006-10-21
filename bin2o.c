@@ -424,7 +424,7 @@ static void trav_dir(const char *dir_name, int level)
 	DIR *pdir = opendir(dir_name);
 	struct dirent *entry;
 	size_t d_len = strlen(dir_name);
-	int i;
+//	int i;
 
 //	for(i = 0; i < level; i++)
 //		printf("\t");

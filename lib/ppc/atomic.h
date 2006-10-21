@@ -30,8 +30,6 @@
 #ifndef LIB_IMPL_ATOMIC_H
 # define LIB_IMPL_ATOMIC_H
 
-#include "../log_facility.h"
-
 # define atomic_read(x)	((x)->d)
 # define atomic_set(x, y) (((x)->d) = (y))
 # define atomic_pread(x)	((x)->d)
