@@ -31,21 +31,27 @@
 #ifndef _SERIALIZER_STATES_DEFINED
 #define _SERIALIZER_STATES_DEFINED
 
+#define G2_PACKET_DECODER_STATES \
+	ENUM_CMD( CHECK_CONTROLL_BYTE ), \
+	ENUM_CMD( READ_LENGTH ), \
+	ENUM_CMD( READ_TYPE ), \
+	ENUM_CMD( DECIDE_DECODE ), \
+	ENUM_CMD( START_EXTRACT_PACKET_FROM_STREAM ), \
+	ENUM_CMD( EXTRACT_PACKET_FROM_STREAM ), \
+	ENUM_CMD( PACKET_EXTRACTION_COMPLETE ), \
+	ENUM_CMD( GET_PACKET_DATA ), \
+	ENUM_CMD( EXTRACT_PACKET_DATA ), \
+	ENUM_CMD( FINISH_PACKET_DATA ), \
+	ENUM_CMD( GET_CHILD_PACKETS ), \
+	ENUM_CMD( DECODE_FINISHED ), \
+	ENUM_CMD( MAX_DECODER_STATE) /* keep this entry the last */
+
+#define ENUM_CMD(x) x
 enum g2_packet_decoder_states
 {
-	CHECK_CONTROLL_BYTE,
-	READ_LENGTH,
-	READ_TYPE,
-	DECIDE_DECODE,
-	START_EXTRACT_PACKET_FROM_STREAM,
-	EXTRACT_PACKET_FROM_STREAM,
-	PACKET_EXTRACTION_COMPLETE,
-	GET_PACKET_DATA,//	= 20;
-	EXTRACT_PACKET_DATA,
-	FINISH_PACKET_DATA,
-	GET_CHILD_PACKETS,//	= 50;
-	DECODE_FINISHED,//	= 100;
+	G2_PACKET_DECODER_STATES
 };
+#undef ENUM_CMD
 
 enum g2_packet_encoder_states
 {
@@ -67,6 +73,7 @@ enum g2_packet_encoder_states
 #include "G2Packet.h"
 
 _G2PACKSER_EXTRN(inline bool g2_packet_decode(struct pointer_buff *, g2_packet_t *, int));
+_G2PACKSER_EXTRN(inline bool g2_packet_decode_from_packet(g2_packet_t *, g2_packet_t *, int));
 _G2PACKSER_EXTRN(inline bool g2_packet_extract_from_stream(struct norm_buff *, g2_packet_t *, size_t));
 #else
 #undef _G2PACKETSERIALIZER_H

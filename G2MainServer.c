@@ -222,7 +222,7 @@ int main(int argc, char **args)
 	/* main server wait loop */
 	while(server_running)
 	{
-		int num_poll = poll(sock_poll, THREAD_SUM, 11000);
+		int num_poll = poll(sock_poll, THREAD_SUM, 110000);
 		switch(num_poll)
 		{
 		// Normally: see what has happened

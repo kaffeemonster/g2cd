@@ -39,6 +39,7 @@
 #define _G2PACKET_C
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
+#include "G2PacketSerializer.h"
 #include "G2QHT.h"
 #include "G2MainServer.h"
 #include "lib/sec_buffer.h"
@@ -178,7 +179,7 @@ static const g2_p_type_t LNI_packet_dict_LS0 = { NULL, {.action = &empty_action_
 // /LNI/NA
 static const g2_p_type_t LNI_packet_dict_NA0 = { NULL, {.action = &handle_LNI_NA}, '\0', true };
 // /LNI/QK
-static const g2_p_type_t LNI_packet_dict_QK0 = { NULL, {.action = &empty_action_p}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_QK0 = { NULL, {.action = NULL}, '\0', true };
 
 // second
 // /LNI/Hx
@@ -291,21 +292,26 @@ static bool empty_action_p(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC
 
 static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct norm_buff *target)
 {
-	g2_packet_t *packs;
-	size_t num;
-	bool ret_val = false;
+	bool ret_val = false, keep_decoding;
 
-	logg_develd("num: %u\tptr: %p\n", source->num_child, (void *) source->children);
-	
-	for(num = source->num_child, packs = source->children; num; num--, packs++)
+	do
 	{
-		ret_val |= g2_packet_decide_spec(connec, target, &KHL_packet_dict, packs);
+		g2_packet_t child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+		if(!keep_decoding)
+		{
+			logg_packet(STDLF, "KHL", "broken child");
+			connec->flags.dismissed = true;
+			break;
+		}
+		if(child_p.packet_decode == DECODE_FINISHED)
+			ret_val |= g2_packet_decide_spec(connec, target, &KHL_packet_dict, &child_p);
+//		source->num_child++; // put within if
+	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
-		//logg_packet_old("/KHL/%s -> No action\n", packs->type);
-		//logg_packet_old("/KHL/%s -> Unknown, undecoded: %s\n", packs->type, to_match);
-	}
-
-	return false;
+	return ret_val;
 }
 
 static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
@@ -368,20 +374,25 @@ static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 
 static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm_buff *target)
 {
-	g2_packet_t *packs;
-	size_t num;
-	bool ret_val = false;
+	bool ret_val = false, keep_decoding;
 
-	logg_develd("num: %lu\tchild: %p\n", (unsigned long) source->num_child, (void *) source->children);
-
-	for(num = source->num_child, packs = source->children; num; num--, packs++)
+	do
 	{
-		ret_val |= g2_packet_decide_spec(connec, target, &LNI_packet_dict, packs);
-//		logg_packet_old("/LNI/%s -> No action\n", packs->type);
-//		logg_packet_old("/LNI/%s -> Unknown, undecoded: %s\n", packs->type, to_match);
-	}
+		g2_packet_t child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+		if(!keep_decoding)
+		{
+			logg_packet(STDLF, "LNI", "broken child");
+			connec->flags.dismissed = true;
+			break;
+		}
+		if(child_p.packet_decode == DECODE_FINISHED)
+			ret_val |= g2_packet_decide_spec(connec, target, &LNI_packet_dict, &child_p);
+//		source->num_child++; // put within if
+	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
-	logg_packet_old("/LNI/%s -> data_length: %u data: \"%*s\"\n", packs->type, packs->data_length, packs->data_length, packs->data);
 	return ret_val;
 }
 
@@ -436,7 +447,7 @@ static bool handle_LNI_V(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_
 	memcpy(connec->vendor_code, buffer_start(source->data_trunk), min_length);
 	connec->vendor_code[min_length] = '\0';
 
-	logg_packet(STDSF, "/LNI/V");
+	logg_packet(STDLF, "/LNI/V", connec->vendor_code);
 	
 	return false;
 }
@@ -450,7 +461,7 @@ static bool handle_PI(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packe
 		{
 			memcpy(buffer_start(*target), packet_po, sizeof(packet_po));
 			target->pos += sizeof(packet_po);
-			logg_packet(STDSF, "\t/PI");
+			logg_packet_old(STDSF, "\t/PI");
 		}
 		else
 			logg_packet(STDLF, "\t/PI", "sendbuffer full");
@@ -578,7 +589,7 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 {
 	// /UPROC-packet, user-profile-request, if we want to and have an
 	// answer, do it.
-	logg_packet(STDSF, "/UPROC");
+	logg_packet_old(STDSF, "/UPROC");
 	if(server.settings.want_2_send_profile && packet_uprod)
 	{
 		if(packet_uprod_length <= buffer_remaining(*target))
@@ -699,7 +710,7 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 					ret_val |= work_type->work.action(connec, packs, target);
 				}
 				else
-					logg_packet("/%s\tC: %s -> No action\n", packs->type, packs->is_compound ? "true" : "false");
+					logg_packet("*/%s\tC: %s -> No action\n", packs->type, packs->is_compound ? "true" : "false");
 
 				break;
 			}
@@ -713,7 +724,7 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 	} while(work_type);
 
 	if(!done)
-		logg_packet("/%s\tC: %s -> Unknown, undecoded: %s\n", packs->type, packs->is_compound ? "true" : "false", to_match);
+		logg_packet("*/%s\tC: %s -> Unknown, undecoded: %s\n", packs->type, packs->is_compound ? "true" : "false", to_match);
 
 	return ret_val;
 }

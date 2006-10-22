@@ -286,7 +286,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		*c_ptr = '_';
 	while((c_ptr = strchr(buf->name, '-')))
 		*c_ptr = '_';
-	if(!strcmp("sbox", buf->name))
+	if(opt_pack && !strcmp("sbox", buf->name))
 	{
 		puts("setze opt_pack null");
 		opt_pack = NULL;

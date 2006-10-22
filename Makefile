@@ -678,8 +678,8 @@ G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSeriali
 G2UDP.o: G2UDP.h
 G2Connection.o: G2Connection.h G2QHT.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h lib/my_epoll.h lib/atomic.h G2Connection.h
-G2Packet.o: G2Packet.h G2Connection.h G2QHT.h
-G2PacketSerializer.o: G2Packet.h
+G2Packet.o: G2Packet.h G2PacketSerializer.h G2Connection.h G2QHT.h
+G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h
 timeout.o: timeout.h
 #	header-deps
