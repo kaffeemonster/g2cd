@@ -208,5 +208,5 @@ inline int logg_more(
 	return ret_val;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: log_facility.c,v 1.7 2005/11/05 11:02:32 redbully Exp redbully $";
+static char const rcsid_lf[] GCC_ATTR_USED_VAR = "$Id: log_facility.c,v 1.7 2005/11/05 11:02:32 redbully Exp redbully $";
 //EOF

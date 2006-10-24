@@ -100,4 +100,4 @@ void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *x)
 	return (void *) ret_val;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_a[] GCC_ATTR_USED_VAR = "$Id:$";

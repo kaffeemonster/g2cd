@@ -99,6 +99,8 @@ typedef union xxxxxx4
 #   include "i386/atomic.h"
 #  elif defined(__x86_64__)
 #   include "x86_64/atomic.h"
+#  elif defined(__IA64__)
+#   include "ia64/atomic.h"
 #  elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
 /* 
  * gcc sometimes sets __sparcv8 even if you say "gimme v9" to not confuse

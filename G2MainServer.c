@@ -319,7 +319,7 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 	static volatile sig_atomic_t critical = 0;
 	static char path[4096];
 	const char *osl = NULL, *isl = NULL;
-	static char *wptr = NULL; 
+	char *wptr = NULL; 
 	struct ucontext *uc = vuc;
 # ifdef __GLIBC__
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
@@ -370,7 +370,7 @@ So no BT, maybe a core.\n"
 		case SEGV_ACCERR:
 			isl = "invalid permissions for mapped object"; break;
 		default:
-			isl = "Unknown SIKSEGV problem"; break;
+			isl = "Unknown SIGSEGV problem"; break;
 		}
 		break;
 	case SIGILL:

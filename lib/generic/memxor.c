@@ -78,4 +78,4 @@ handle_remaining:
 	return dst;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mx[] GCC_ATTR_USED_VAR = "$Id:$";

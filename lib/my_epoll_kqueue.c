@@ -56,4 +56,4 @@ int my_epoll_close(int epfd)
 	return -1;
 }
 
-static char const rcsidi[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mei[] GCC_ATTR_USED_VAR = "$Id: $";

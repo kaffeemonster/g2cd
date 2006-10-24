@@ -76,4 +76,4 @@ inline size_t strnlen(const char *s, size_t maxlen)
 	return p - s;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";

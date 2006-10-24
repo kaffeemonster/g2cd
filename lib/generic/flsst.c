@@ -97,4 +97,4 @@ inline size_t flsst(size_t find)
 	return found;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";

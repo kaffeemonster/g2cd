@@ -27,12 +27,16 @@
 inline size_t popcountst(size_t n)
 {
 	size_t tmp;
-#  if _GNUC_PREREQ(3,4)
-	tmp = __builtin_popcntl(n);
+#  ifdef __INTEL_COMPILER
+	tmp = _m64_popcnt(n);
 #  else
+#   if _GNUC_PREREQ(3,4)
+	tmp = __builtin_popcntl(n);
+#   else
 	__asm__ ("popcnt\t%0=%1\n" : "=r" (tmp) : "r" (n));
-#  endif /* _GNUC_PREREQ(3,4) */
+#   endif /* _GNUC_PREREQ(3,4) */
+#  endif /* __INTEL_COMPILER */
 	return tmp;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_pc[] GCC_ATTR_USED_VAR = "$Id:$";

@@ -28,4 +28,3 @@
 
 #include "../ppc/memxor.c"
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";

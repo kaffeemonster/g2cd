@@ -316,4 +316,4 @@ static void hzp_free(void *dt_hzp)
 	}
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_hzp[] GCC_ATTR_USED_VAR = "$Id: $";

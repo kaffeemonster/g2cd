@@ -58,5 +58,5 @@
 #  include "my_epoll_kqueue.c"
 # endif
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id: my_epoll.c,v 1.14 2005/11/05 10:38:33 redbully Exp redbully $";
+static char const rcsid_me[] GCC_ATTR_USED_VAR = "$Id: my_epoll.c,v 1.14 2005/11/05 10:38:33 redbully Exp redbully $";
 #endif /* _NEED_EPOLL_COMPAT */

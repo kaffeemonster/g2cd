@@ -37,4 +37,4 @@ inline size_t popcountst(size_t n)
 	return n;
 }
 
-static char const rcsid[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_pc[] GCC_ATTR_USED_VAR = "$Id:$";
