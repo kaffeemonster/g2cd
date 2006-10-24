@@ -48,6 +48,8 @@ ATOMSRC = \
 	$(MPL)/generic/atomic.c \
 	$(MPL)/i386/atomic.h \
 	$(MPL)/x86_64/atomic.h \
+	$(MPL)/ia64/atomic.h \
+	$(MPL)/ppc/atomic.h \
 	$(MPL)/sparc/atomic.h \
 	$(MPL)/sparc64/atomic.h
 
