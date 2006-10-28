@@ -227,7 +227,7 @@ LDFLAGS += -pthread
 # solaris Linker magic
 #LDFLAGS += -Wl,-B,direct
 # gnarf, on Linux only external Patch, and other syntax...
-LDFLAGS += -Wl,-Bdirect
+#LDFLAGS += -Wl,-Bdirect
 # get some more symbols in the executable, so backktraces
 # look better
 LDFLAGS += -rdynamic
