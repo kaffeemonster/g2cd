@@ -62,7 +62,7 @@
 
 enum loglevel
 {
-	LOGF_SILENT=-1,// turn of logging
+	LOGF_SILENT=-1,// turn off logging
 	LOGF_EMERG,    // system is unusable
 	LOGF_ALERT,    // action must be taken immediately
 	LOGF_CRIT,     // critical conditions

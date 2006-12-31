@@ -113,6 +113,8 @@ static int realloc_fddata(int new_max)
  */
 	/* you better not delete this proto, or it won't work */
 static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
+static void my_epoll_deinit(void) GCC_ATTR_DESTRUCT;
+
 static void my_epoll_init(void)
 {
 	int tmp_fd;
@@ -128,6 +130,14 @@ static void my_epoll_init(void)
 	for(tmp_fd = 0; tmp_fd <= EPOLL_QUEUES * 20; tmp_fd++)
 		fds->data[tmp_fd].u64 = EPDATA_POISON;	
 	fds->max_fd = EPOLL_QUEUES * 20;
+}
+
+static void my_epoll_deinit(void)
+{
+	fds->max_fd = 0;
+	free(fds);
+	fds = NULL;
+//	pthread_mutex_destroy(&my_epoll_mutex);
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)

@@ -33,17 +33,17 @@
 	/* we always need sizeof(size_t) */
 # define SOST	(sizeof(size_t))
 	/* bytes of size_t - 1 */
-# define SOSTM1	(SOST - 1)
+# define SOSTM1	(SOST - 1L)
 	/* bits in a size_t */
 # define SIZE_T_BITS	(SOST * CHAR_BIT)
 	/* is pointer x aligned on a power of n */
-# define IS_ALIGN(x, n)	(!(((intptr_t)(x)) & ((n) - 1)))
+# define IS_ALIGN(x, n)	(!(((intptr_t)(x)) & ((n) - 1L)))
 	/* align pointer x on a power of n */
 # define ALIGN(x, n) \
-	((intptr_t)((x)+(n) - 1) & ~((intptr_t)(n) - 1))
+	((intptr_t)((x)+(n) - 1L) & ~((intptr_t)(n) - 1L))
 	/* roud up an int to match alignment */
 #define ALIGN_SIZE(x, n) \
-	(((x) + (n) - 1) & ~((n) - 1))
+	(((x) + (n) - 1L) & ~((n) - 1L))
 	/* some magic to build a constant for 32 & 64 bit, without
 	 * the need for LL suffix
 	 */

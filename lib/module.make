@@ -124,7 +124,7 @@ $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
-$(MPL)/log_facility.o: $(MPL)/log_facility.h G2MainServer.h
+$(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h G2MainServer.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c

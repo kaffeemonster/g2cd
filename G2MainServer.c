@@ -162,16 +162,16 @@ int main(int argc, char **args)
 
 	// allocate needed working resources
 	setup_resources();
-	
+
 	//fire up threads
-	if(pthread_create(&main_threads[THREAD_ACCEPTOR], NULL, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN]))
+	if(pthread_create(&main_threads[THREAD_ACCEPTOR], &server.settings.t_def_attr, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2Accept");
 		clean_up_m();
 		return EXIT_FAILURE;
 	}
 
-	if(pthread_create(&main_threads[THREAD_HANDLER], NULL, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
+	if(pthread_create(&main_threads[THREAD_HANDLER], &server.settings.t_def_attr, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2Handler");
 		// Critical Moment: we could not run further for normal
@@ -179,7 +179,7 @@ int main(int argc, char **args)
 		return EXIT_FAILURE;
 	}
 
-	if(pthread_create(&main_threads[THREAD_UDP], NULL, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN]))
+	if(pthread_create(&main_threads[THREAD_UDP], &server.settings.t_def_attr, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2UDP");
 		server_running = false;
@@ -822,6 +822,24 @@ static inline void setup_resources(void)
 	else
 		logg_errno(LOGF_WARN, "geting FD-limit");
 
+	if(pthread_attr_init(&server.settings.t_def_attr)) {
+		logg_errno(LOGF_CRIT, "initialising pthread_attr");
+		exit(EXIT_FAILURE);
+	}
+
+	if(!pthread_attr_getstacksize(&server.settings.t_def_attr, &i))
+	{
+		/*
+		 * set thread stacksize to 64k
+		 * Yes, this is constraining, but the default on some BSD.
+		 * And by the way looks nicer (have your little proc take 27MB looks
+		 * scary, even if its 3 * 8 MB Thread stack, mostly unused (not backed
+		 * by real memory) only 12kb used)
+		 */
+		if(i > (64 * 1024))
+			pthread_attr_setstacksize(&server.settings.t_def_attr, 64 * 1024);
+	}
+
 	// IPC
 	// open Sockets for IPC
 	for(i = 0; i < THREAD_SUM; i++)
@@ -992,6 +1010,8 @@ static inline void clean_up_m(void)
 	 * etc.), but...
 	 */
 	size_t i;
+
+	pthread_attr_destroy(&server.settings.t_def_attr);
 
 	for(i = 0; i < THREAD_SUM; i++)
 	{

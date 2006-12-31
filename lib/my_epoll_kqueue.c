@@ -30,10 +30,16 @@
 
 	/* you better not delete this proto, or it won't work */
 static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
+static void my_epoll_deinit(void) GCC_ATTR_DESTRUCT;
+
 static void my_epoll_init(void)
 {
 // num = EPOLL_QUEUES
 	die("Your kidding? No epoll emulation, no go");
+}
+
+static void my_epoll_deinit(void)
+{
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)

@@ -78,6 +78,7 @@ _G2MAIN_EXTRNVAR( struct
 {
 		struct
 		{
+			pthread_attr_t t_def_attr;
 			struct
 			{
 				enum loglevel act_loglevel;

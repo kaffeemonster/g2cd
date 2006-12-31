@@ -120,6 +120,12 @@
 # define GCC_ATTR_CONSTRUCT
 #endif
 
+#if _GNUC_PREREQ (2,7)
+# define GCC_ATTR_DESTRUCT GCC_ATTRIB(__destructor__)
+#else
+# define GCC_ATTR_DESTRUCT
+#endif
+
 
 #ifndef HAVE_INET6_ADDRSTRLEN
 /*

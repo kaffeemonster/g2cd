@@ -47,6 +47,7 @@
 /* Protos */
 	/* You better not kill this proto, our it wount work ;) */
 static void g2_con_init(void) GCC_ATTR_CONSTRUCT;
+static void g2_con_deinit(void) GCC_ATTR_DESTRUCT;
 	/* internal action-prototypes */
 static bool empty_action_c(g2_connection_t *, size_t);
 static bool accept_what(g2_connection_t *, size_t);
@@ -139,6 +140,11 @@ static void g2_con_init(void)
 			exit(EXIT_FAILURE);
 		}
 	}
+}
+
+static void g2_con_deinit(void)
+{
+// TODO: free connections up again, remainder, want to see them in valgrind
 }
 
 inline g2_connection_t *g2_con_alloc(size_t num)

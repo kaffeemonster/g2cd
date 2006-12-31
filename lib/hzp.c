@@ -55,19 +55,33 @@ static atomic_t nr_free;
 /* Protos */
 	/* You better not kill this proto, our it wount work ;) */
 static void hzp_init(void) GCC_ATTR_CONSTRUCT;
+static void hzp_deinit(void) GCC_ATTR_DESTRUCT;
 static void hzp_free(void *dt_hzp);
 static inline struct hzp *hzp_alloc_intern(void);
 
 /*
  * hzp_init - init hzp
- * Get a TSD key and register our free callback for it.
+ * Get a TLS key and register our free callback for it.
  *
- * returns : 0 succes, < 0 failure
+ * returns: nothing
+ * exit() on failure
  */
 static void hzp_init(void) 
 {
 	if(pthread_key_create(&key2hzp, hzp_free))
 		diedie("couldn't create TLS key for hzp");
+}
+
+/*
+ * hzp_deinit - deinit hzp
+ * Delete TLS key and clean up.
+ *
+ * returns: nothing
+ */
+static void hzp_deinit(void)
+{
+	pthread_key_delete(key2hzp);
+// TODO: free thread data
 }
 
 /*

@@ -49,6 +49,8 @@ static int count;
 
 	/* you better not delete this proto, or it won't work */
 static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
+static void my_epoll_deinit(void) GCC_ATTR_DESTRUCT;
+
 static void my_epoll_init(void)
 {
 	// generate a lock for shared free_cons
@@ -64,6 +66,16 @@ static void my_epoll_init(void)
 		diedie("allocating my_epoll memory");
 	
 	count = EPOLL_QUEUES;
+}
+
+static void my_epoll_deinit(void)
+{
+	count = 0;
+	free(ei_control);
+	ei_control = NULL;
+	free(pi_control);
+	pi_control = NULL;
+//	pthread_mutex_destroy(&my_epoll_mutex);
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)

@@ -78,7 +78,7 @@ static pthread_key_t key2qht_scratch1;
 /* Internal Prototypes */
 	/* do not remove this proto, our it won't work... */
 static void qht_init(void) GCC_ATTR_CONSTRUCT;
-static void qht_end(void *);
+static void qht_deinit(void) GCC_ATTR_DESTRUCT;
 static void *qht_zpad_alloc(void *, unsigned int, unsigned int);
 static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
@@ -87,19 +87,17 @@ static inline struct zpad *qht_get_zpad(void);
 /* tls thingies */
 static void qht_init(void)
 {
-	if(pthread_key_create(&key2qht_zpad, qht_end))
+	if(pthread_key_create(&key2qht_zpad, free))
 		diedie("couldn't create TLS key for qht");
 
-	if(pthread_key_create(&key2qht_scratch1, qht_end))
+	if(pthread_key_create(&key2qht_scratch1, free))
 		diedie("couldn't create TLS key for qht");
 }
 
-static void qht_end(void *to_free)
+static void qht_deinit(void)
 {
-	if(!to_free)
-		return;
-
-	free(to_free);
+	pthread_key_delete(key2qht_zpad);
+	pthread_key_delete(key2qht_scratch1);
 }
 
 /* zpad helper */
@@ -300,8 +298,7 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 	return scratch->data;
 }
 
-/* helper-funktions */
-inline void g2_qht_clean(struct qhtable *to_clean)
+static inline void _g2_qht_clean(struct qhtable *to_clean, bool reset_needed)
 {
 	size_t tmp_dlen;
 
@@ -314,8 +311,17 @@ inline void g2_qht_clean(struct qhtable *to_clean)
 		free(to_clean->fragments.data);
 
 	memset(to_clean, 0, offsetof(struct qhtable, data));
-	memset(to_clean->data, -1, tmp_dlen);
+	if(reset_needed)
+		to_clean->flags.reset_needed = true;
+	else
+		memset(to_clean->data, ~0, tmp_dlen);
 	to_clean->data_length = tmp_dlen;
+}
+
+/* helper-funktions */
+inline void g2_qht_clean(struct qhtable *to_clean)
+{
+	_g2_qht_clean(to_clean, true);
 }
 
 inline void g2_qht_free(struct qhtable *to_free)
@@ -354,6 +360,12 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 	*ttable = NULL;
 
 	logg_develd_old("qlen: %lu\tflen: %lu\n", tmp_table->data_length, frag->length);
+
+	if(tmp_table->flags.reset_needed)
+	{
+		logg_develd("reset_needed qht-table passed: %p", (void *) tmp_table);
+		memset(tmp_table->data, ~0, tmp_table->data_length);
+	}
 
 	switch(frag->compressed)
 	{
@@ -536,7 +548,7 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 		tmp_table->data_length = w_size;
 	}
 
-	g2_qht_clean(tmp_table);
+	_g2_qht_clean(tmp_table, false);
 	tmp_table->entries = qht_ent;
 	tmp_table->bits = bits;
 	/* bring back the table */

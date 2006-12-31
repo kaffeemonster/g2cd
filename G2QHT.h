@@ -56,6 +56,10 @@ struct qhtable
 	size_t	data_length;
 	enum g2_qht_comp	compressed;
 	struct qht_fragment	fragments;
+	struct qht_flags
+	{
+		bool reset_needed;
+	} flags;
 /* ----- Everthing above this gets simply wiped ------ */
 	uint8_t	data[DYN_ARRAY_LEN];
 };
