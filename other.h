@@ -114,6 +114,12 @@
 # define GCC_ATTR_PACKED
 #endif
 
+#if _GNUC_PREREQ (2,3)
+# define GCC_ATTR_ALIGNED(x) GCC_ATTRIB(aligned(x))
+#else
+# define GCC_ATTR_ALIGNED(x)
+#endif
+
 #if _GNUC_PREREQ (2,7)
 # define GCC_ATTR_CONSTRUCT GCC_ATTRIB(__constructor__)
 #else

@@ -73,6 +73,12 @@ MEMXORSRC = \
 	$(MPL)/x86_64/memxor.c \
 	$(MPL)/ppc/memxor.c \
 	$(MPL)/ppc64/memxor.c
+MEMNEGSRC = \
+	$(MPL)/generic/memneg.c \
+	$(MPL)/i386/memneg.c \
+	$(MPL)/x86_64/memneg.c \
+	$(MPL)/ppc/memneg.c \
+	$(MPL)/ppc64/memneg.c
 
 LIBASRCS = \
 	$(LIBSRCS) \
@@ -80,13 +86,15 @@ LIBASRCS = \
 	$(ATOMSRC) \
 	$(FLSSTSRC) \
 	$(POPCOUNSTSRC) \
-	$(MEMXORSRC)
+	$(MEMXORSRC) \
+	$(MEMNEGSRC)
 
 # base src files
 LIBSRCS = \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/memxor.c \
+	$(MPL)/memneg.c \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
 	$(MPL)/strnlen.c \
@@ -98,6 +106,7 @@ LIBOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/memxor.o \
+	$(MPL)/memneg.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
 	$(MPL)/hzp.o \
@@ -123,6 +132,7 @@ $(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/strnlen.o: $(MPL)/my_b
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
+$(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h G2MainServer.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h

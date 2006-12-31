@@ -1,8 +1,8 @@
 /*
- * memxor.c
- * xor two memory region efficient, x86_64 implementation
+ * memneg.c
+ * neg a memory region efficient, x86_64 implementation
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,13 +24,23 @@
  * $Id:$
  */
 
-void *memxor(void *dst, const void *src, size_t len)
+void *memneg(void *dst, const void *src, size_t len)
 {
-	char *dst_char = dst;
-	const char *src_char = src;
+#ifdef __SSE__
+	static const uint32_t all_ones[4] GCC_ATTR_ALIGNED(16) = {~0, ~0, ~0, ~0};
+#endif
+	char *dst_char;
+	const char *src_char;
 
-	if(!dst || !src)
+	if(!dst)
 		return dst;
+
+	if(!src)
+		src = (const void *)dst;
+
+	dst_char = dst;
+	src_char = src;
+
 	
 	if(SYSTEM_MIN_BYTES_WORK > len)
 		goto no_alignment_wanted;
@@ -46,7 +56,7 @@ void *memxor(void *dst, const void *src, size_t len)
 		{
 			size_t bla = tmp_dst - dst_char;
 			for(; bla && len; bla--, len--)
-				*dst_char++ ^= *src_char++;
+				*dst_char++ = ~(*src_char++);
 			goto alignment_16;
 		}
 #endif
@@ -57,7 +67,7 @@ void *memxor(void *dst, const void *src, size_t len)
 		{
 			size_t bla = tmp_dst - dst_char;
 			for(; bla && len; bla--, len--)
-				*dst_char++ ^= *src_char++;
+				*dst_char++ = ~(*src_char++);
 			goto alignment_size_t;
 		}
 	}
@@ -89,21 +99,23 @@ alignment_16:
 		register intptr_t d0;
 
 		__asm__ __volatile__(
+			SSE_MOVE(%4, %%xmm2)
+			SSE_MOVE(%4, %%xmm3)
 			".p2align 4\n"
 			"1:\n\t"
-			SSE_MOVE((%2), %%xmm0)
-			SSE_MOVE(16(%2), %%xmm1)
-			"xorps	(%1), %%xmm0\n\t"
-			"xorps	16(%1), %%xmm1\n\t"
+			SSE_MOVE((%1), %%xmm0)
+			SSE_MOVE(16(%1), %%xmm1)
 			"add	$32, %1\n\t"
+			"xorps	%%xmm2, %%xmm0\n\t"
+			"xorps	%%xmm3, %%xmm1\n\t"
 			SSE_STORE(%%xmm0, (%2))
 			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
 			: "=&c" (d0), "+&g" (src_char), "+&g" (dst_char)
-			: "0" (len/32)
-			: "cc", "xmm0", "xmm1", "memory"
+			: "0" (len/32), "m" (*all_ones)
+			: "cc", "xmm0", "xmm1", "xmm2", "xmm3", "memory"
 		);
 		len %= 32;
 		goto handle_remaining;
@@ -125,13 +137,12 @@ alignment_size_t:
 			".p2align 4\n"
 			"1:\n\t"
 			"lodsq\n\t"
-			"xorq	(%3), %%rax\n\t"
-			"addq	$8, %3\n\t"
+			"notq	%%rax\n\t"
 			"stosq\n\t"
 			"decq	%0\n\t"
 			"jnz	1b\n"
-			: "=&c" (d0), "=&S" (d1), "+&D" (dst_char), "+&b" (src_char)
-			: "0" (len / SOST), "1" (dst_char)
+			: "=&c" (d0), "=&S" (d1), "+&D" (dst_char)
+			: "0" (len / SOST), "1" (src_char)
 			: "cc", "rax", "memory"
 		);
 		len %= SOST;
@@ -143,9 +154,9 @@ no_alignment_possible:
 handle_remaining:
 	/* xor whats left to do from alignment and other datatype */
 	while(len--)
-		*dst_char++ ^= *src_char++;
+		*dst_char++ = ~(*src_char++);
 
 	return old_dst;
 }
 
-static char const rcsid_mx[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mn[] GCC_ATTR_USED_VAR = "$Id:$";

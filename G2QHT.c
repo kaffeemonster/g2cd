@@ -361,11 +361,8 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 
 	logg_develd_old("qlen: %lu\tflen: %lu\n", tmp_table->data_length, frag->length);
 
-	if(tmp_table->flags.reset_needed)
-	{
-		logg_develd("reset_needed qht-table passed: %p", (void *) tmp_table);
-		memset(tmp_table->data, ~0, tmp_table->data_length);
-	}
+/*	if(tmp_table->flags.reset_needed)
+		logg_develd("reset_needed qht-table passed: %p\n", (void *) tmp_table);*/
 
 	switch(frag->compressed)
 	{
@@ -394,7 +391,10 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 			else
 			{
 				/* apply it */
-				memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
+				if(tmp_table->flags.reset_needed)
+					memneg(tmp_table->data, tmp_ptr, tmp_table->data_length);
+				else
+					memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
 				ret_val = "compressed patch applied";
 			}
 
@@ -402,7 +402,10 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 		}
 		break;
 	case COMP_NONE:
-		memxor(tmp_table->data, frag->data, tmp_table->data_length);
+		if(tmp_table->flags.reset_needed)
+			memneg(tmp_table->data, frag->data, tmp_table->data_length);
+		else
+			memxor(tmp_table->data, frag->data, tmp_table->data_length);
 		ret_val = "patch applied";
 		break;
 	default:
@@ -548,7 +551,7 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 		tmp_table->data_length = w_size;
 	}
 
-	_g2_qht_clean(tmp_table, false);
+	_g2_qht_clean(tmp_table, true);
 	tmp_table->entries = qht_ent;
 	tmp_table->bits = bits;
 	/* bring back the table */

@@ -1,8 +1,8 @@
 /*
- * memxor.c
- * xor two memory region efficient, i386 implementation
+ * memneg.c
+ * neg a memory region efficient, i386 implementation
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,14 +24,23 @@
  * $Id:$
  */
 
-void *memxor(void *dst, const void *src, size_t len)
+void *memneg(void *dst, const void *src, size_t len)
 {
-	char *dst_char = dst;
-	const char *src_char = src;
+#if defined(__MMX__) || defined (__SSE__)
+	static const uint32_t all_ones[4] GCC_ATTR_ALIGNED(16) = {~0, ~0, ~0, ~0};
+#endif
+	char *dst_char;
+	const char *src_char;
 
-	if(!dst || !src)
+	if(!dst)
 		return dst;
+
+	if(!src)
+		src = (const void *) dst;
 	
+	dst_char = dst;
+	src_char = src;
+
 	if(SYSTEM_MIN_BYTES_WORK > len)
 		goto no_alignment_wanted;
 	
@@ -46,7 +55,7 @@ void *memxor(void *dst, const void *src, size_t len)
 		{
 			size_t bla = tmp_dst - dst_char;
 			for(; bla && len; bla--, len--)
-				*dst_char++ ^= *src_char++;
+				*dst_char++ = ~(*src_char++);
 			goto alignment_16;
 		}
 #endif
@@ -58,7 +67,7 @@ void *memxor(void *dst, const void *src, size_t len)
 		{
 			size_t bla = tmp_dst - dst_char;
 			for(; bla && len; bla--, len--)
-				*dst_char++ ^= *src_char++;
+				*dst_char++ = ~(*src_char++);
 			goto alignment_8;
 		}
 #endif
@@ -69,7 +78,7 @@ void *memxor(void *dst, const void *src, size_t len)
 		{
 			size_t bla = tmp_dst - dst_char;
 			for(; bla && len; bla--, len--)
-				*dst_char++ ^= *src_char++;
+				*dst_char++ = ~(*src_char++);
 			goto alignment_size_t;
 		}
 	}
@@ -80,7 +89,7 @@ void *memxor(void *dst, const void *src, size_t len)
 /* Special implementations below here */
 
 	/* 
-	 * xor it with a hopefully bigger and
+	 * neg it with a hopefully bigger and
 	 * maschine-native datatype
 	 */
 #ifdef __SSE__
@@ -92,9 +101,9 @@ void *memxor(void *dst, const void *src, size_t len)
 #  define SSE_STORE(x, y) "movaps	" #x ", " #y "\n\t" /* movntps */
 # endif
 	/*
-	 * xoring 16 byte at once is quite attracktive,
+	 * neging 16 byte at once is quite attracktive,
 	 * if its fast...
-	 *  __builtin_ia32_xorps
+	 *  __builtin_ia32_negps
 	 */
 alignment_16:
 	if(len/32)
@@ -102,21 +111,23 @@ alignment_16:
 		register intptr_t d0;
 
 		__asm__ __volatile__(
+			SSE_MOVE(%4, %%xmm2)
+			SSE_MOVE(%4, %%xmm3)
 			".p2align 4\n"
 			"1:\n\t"
-			SSE_MOVE((%2), %%xmm0)
-			SSE_MOVE(16(%2), %%xmm1)
-			"xorps	(%1), %%xmm0\n\t"
-			"xorps	16(%1), %%xmm1\n\t"
+			SSE_MOVE((%1), %%xmm0)
+			SSE_MOVE(16(%1), %%xmm1)
 			"add	$32, %1\n\t"
+			"xorps	%%xmm2, %%xmm0\n\t"
+			"xorps	%%xmm3, %%xmm1\n\t"
 			SSE_STORE(%%xmm0, (%2))
 			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32)
-			: "cc", "xmm0", "xmm1", "memory"
+			: "0" (len/32), "m" (*all_ones)
+			: "cc", "xmm0", "xmm1", "xmm2", "xmm3", "memory"
 		);
 		len %= 32;
 		goto handle_remaining;
@@ -124,8 +135,8 @@ alignment_16:
 #endif
 #ifdef __MMX__
 	/*
-	 * xoring 8 byte on a 32Bit maschine is also atractive
-	 * __builtin_ia32_pxor
+	 * neging 8 byte on a 32Bit maschine is also atractive
+	 * __builtin_ia32_pneg
 	 */
 alignment_8:
 	if(len/32)
@@ -133,27 +144,31 @@ alignment_8:
 		register intptr_t d0;
 
 		__asm__ __volatile__ (
+			"movq %4, %%mm4\n\t"
+			"movq %4, %%mm5\n\t"
+			"movq %4, %%mm6\n\t"
+			"movq %4, %%mm7\n\t"
 			".p2align 4\n"
 			"1:\n\t"
-			"movq	(%2), %%mm0\n\t"
-			"movq	8(%2), %%mm1\n\t"
-			"movq	16(%2), %%mm2\n\t"
-			"movq	24(%2), %%mm3\n\t"
-			"pxor	(%1), %%mm0\n\t"
-			"pxor	8(%1), %%mm1\n\t"
-			"pxor	16(%1), %%mm2\n\t"
-			"pxor	24(%1), %%mm3\n\t"
+			"movq	(%1), %%mm0\n\t"
+			"movq	8(%1), %%mm1\n\t"
+			"movq	16(%1), %%mm2\n\t"
+			"movq	24(%1), %%mm3\n\t"
 			"add	$32, %1\n\t"
-			"movq	%%mm0, (%2)\n\t"
+			"pxor	%%mm4, %%mm0\n\t"
+			"pxor	%%mm5, %%mm1\n\t"
+			"pxor	%%mm6, %%mm2\n\t"
+			"pxor	%%mm7, %%mm3\n\t"
+			"movq	%%mm0, (%2)\n\t" /* movntq */
 			"movq	%%mm1, 8(%2)\n\t"
 			"movq	%%mm2, 16(%2)\n\t"
-			"movq	%%mm3, 24(%2)\n\t"  /* movntq */
+			"movq	%%mm3, 24(%2)\n\t"
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32)
-			: "cc", "mm0", "mm1", "mm2", "mm3", "memory"
+			: "0" (len/32), "m" (*all_ones)
+			: "cc", "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7", "memory"
 		);
 		len %= 32;
 		goto handle_remaining;
@@ -178,13 +193,12 @@ alignment_size_t:
 			".p2align 4\n"
 			"1:\n\t"
 			"lodsl\n\t"
-			"xorl	(%3), %%eax\n\t"
-			"addl	$4, %3\n\t"
+			"notl %%eax\n\t"
 			"stosl\n\t"
 			"decl	%0\n\t"
 			"jnz	1b\n"
-			: "=&c" (d0), "=&S" (d1), "+&D" (dst_char), "+&b" (src_char)
-			: "0" (len/SOST), "1" (dst_char)
+			: "=&c" (d0), "=&S" (d1), "+&D" (dst_char)
+			: "0" (len/SOST), "1" (src_char)
 			: "cc", "eax", "memory"
 		);
 		len %= SOST;
@@ -194,11 +208,11 @@ alignment_size_t:
 no_alignment_wanted:
 no_alignment_possible:
 handle_remaining:
-	/* xor whats left to do from alignment and other datatype */
+	/* neg whats left to do from alignment and other datatype */
 	while(len--)
-		*dst_char++ ^= *src_char++;
+		*dst_char++ = ~(*src_char++);
 
 	return dst;
 }
 
-static char const rcsid_mx[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mn[] GCC_ATTR_USED_VAR = "$Id:$";
