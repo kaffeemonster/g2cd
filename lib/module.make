@@ -73,6 +73,12 @@ MEMXORSRC = \
 	$(MPL)/x86_64/memxor.c \
 	$(MPL)/ppc/memxor.c \
 	$(MPL)/ppc64/memxor.c
+MEMANDSRC = \
+	$(MPL)/generic/memand.c \
+	$(MPL)/i386/memand.c \
+	$(MPL)/x86_64/memand.c \
+	$(MPL)/ppc/memand.c \
+	$(MPL)/ppc64/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
 	$(MPL)/i386/memneg.c \
@@ -87,6 +93,7 @@ LIBASRCS = \
 	$(FLSSTSRC) \
 	$(POPCOUNSTSRC) \
 	$(MEMXORSRC) \
+	$(MEMANDSRC) \
 	$(MEMNEGSRC)
 
 # base src files
@@ -94,6 +101,7 @@ LIBSRCS = \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/memxor.c \
+	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
@@ -106,6 +114,7 @@ LIBOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/memxor.o \
+	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
@@ -128,10 +137,11 @@ $(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 $(LIBCOMMON)($(LIBOBJS)): arflock
 
 # Dependencies
-$(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/strnlen.o: $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
+$(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/memand.o $(MPL)/memneg.o $(MPL)/strnlen.o: $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
+$(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h G2MainServer.h
