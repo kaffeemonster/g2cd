@@ -61,7 +61,7 @@ struct qhtable
 		bool reset_needed;
 	} flags;
 /* ----- Everthing above this gets simply wiped ------ */
-	uint8_t	data[DYN_ARRAY_LEN];
+	uint8_t	data[DYN_ARRAY_LEN] GCC_ATTR_ALIGNED(16);
 };
 
 #ifndef _G2QHT_C

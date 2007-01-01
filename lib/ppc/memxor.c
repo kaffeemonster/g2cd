@@ -64,6 +64,23 @@ void *memxor(void *dst, const void *src, size_t len)
 				*dst_char++ ^= *src_char++;
 			goto alignment_size_t;
 		}
+		
+		/*
+		 * Achiving an alignment of 8 is sometimes hard.
+		 * since this is also the 64 bit impl., make a 4 byte
+		 * fallback, if the Compiler is smart enough, he will
+		 * kick it out if SOST == 4
+		 */
+		tmp_dst = (char *)ALIGN(dst_char, 4);
+		tmp_src = (const char *)ALIGN(src_char, 4);
+
+		if((tmp_dst - dst_char) == (tmp_src - src_char))
+		{
+			size_t bla = tmp_dst - dst_char;
+			for(; bla && len; bla--, len--)
+				*dst_char++ ^= *src_char++;
+			goto alignment_4;
+		}
 	}
 
 	/* fall throuh if alignment fails */
@@ -146,6 +163,22 @@ alignment_size_t:
 
 		dst_char = (char *) dst_sizet;
 		src_char = (const char *) src_sizet;
+		goto handle_remaining;
+	}
+
+alignment_4:
+	if(len/4)
+	{
+		register uint32_t *dst_u32 = (uint32_t *)dst_char;
+		register const uint32_t *src_u32 = (const uint32_t *)src_char;
+		register size_t small_len = len / 4;
+		len %= 4;
+
+		while(small_len--)
+			*dst_u32++ ^= *src_u32++;
+
+		dst_char = (char *) dst_u32;
+		src_char = (const char *) src_u32;
 		goto handle_remaining;
 	}
 

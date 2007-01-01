@@ -106,15 +106,15 @@ typedef struct g2_connection
 	char						uagent[40+1];
 	char						vendor_code[4+1];
 	uint8_t					guid[16];
+	z_stream					z_decoder;
+	z_stream					z_encoder;
 /* ----- Everthing above this gets simply wiped ------ */
 	struct norm_buff		recv;
 	struct norm_buff		send;
-	z_stream					z_decoder;
-	z_stream					z_encoder;
 	struct norm_buff		*recv_u;
 	struct norm_buff		*send_u;
 	struct qhtable			*qht;
-
+// TODO: WTF these arrays where supossed to? zlib buffer?
 	char						tmp1[32000], tmp2[32000];
 	
 	// Packets

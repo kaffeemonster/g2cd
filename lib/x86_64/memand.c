@@ -62,6 +62,21 @@ void *memand(void *dst, const void *src, size_t len)
 				*dst_char++ &= *src_char++;
 			goto alignment_size_t;
 		}
+		
+		/* 
+		 * getting an alignment of 8 is sometimes hard to achive
+		 * so better have a 4 byte fallback
+		 */
+		tmp_dst = (char *)ALIGN(dst_char, 4);
+		tmp_src = (const char *)ALIGN(src_char, 4);
+
+		if((tmp_dst - dst_char) == (tmp_src - src_char))
+		{
+			size_t bla = tmp_dst - dst_char;
+			for(; bla && len; bla--, len--)
+				*dst_char++ &= *src_char++;
+			goto alignment_4;
+		}
 	}
 
 	/* fall throuh if alignment fails */
@@ -135,6 +150,27 @@ alignment_size_t:
 			: "cc", "rax", "memory"
 		);
 		len %= SOST;
+		goto handle_remaining;
+	}
+alignment_4:
+	if(len/4)
+	{
+		register intptr_t d0, d1;
+			__asm__ __volatile__(
+			"cld\n\t"
+			".p2align 4\n"
+			"1:\n\t"
+			"lodsl\n\t"
+			"andl	(%3), %%eax\n\t"
+			"addq	$8, %3\n\t"
+			"stosl\n\t"
+			"decq	%0\n\t"
+			"jnz	1b\n"
+			: "=&c" (d0), "=&S" (d1), "+&D" (dst_char), "+&b" (src_char)
+			: "0" (len / SOST), "1" (dst_char)
+			: "cc", "eax", "memory"
+		);
+		len %= 4;
 		goto handle_remaining;
 	}
 

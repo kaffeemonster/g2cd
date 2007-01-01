@@ -25,6 +25,7 @@
  */
 
 #include "x86.h"
+#include "../log_facility.h"
 
 void *memneg(void *dst, const void *src, size_t len)
 {
@@ -45,7 +46,9 @@ void *memneg(void *dst, const void *src, size_t len)
 
 	if(SYSTEM_MIN_BYTES_WORK > len)
 		goto no_alignment_wanted;
-	
+
+	logg_develd_old("src: %p, %u\tdst: %p, %u\n", src_char, src_char, dst_char, dst_char);
+
 	{
 		char *tmp_dst;
 		const char *tmp_src;

@@ -206,28 +206,7 @@ static void my_zfree(void *opaque, void *to_free)
 
 inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 {
-
-	memset(work_entry, 0, offsetof(g2_connection_t, recv));
-	memset(work_entry->tmp1, 0, sizeof(work_entry->tmp1));
-	memset(work_entry->tmp2, 0, sizeof(work_entry->tmp2));
-	work_entry->sin_size = sizeof (work_entry->remote_host);
-	work_entry->af_type = AF_INET;
-	work_entry->com_socket = -1;
-
-	// Internal States
-	work_entry->sent_addr.sin_family = AF_INET;
-/*	work_entry->connect_state = UNCONNECTED;
-	work_entry->encoding_in = ENC_NONE;
-	work_entry->encoding_out = ENC_NONE;
-	work_entry->time_diff = 0.0;*/
-
-	// Buffer
-	work_entry->recv.pos = 0;
-	work_entry->recv.capacity = sizeof(work_entry->recv.data);
-	work_entry->recv.limit = work_entry->recv.capacity;
-	work_entry->send.pos = 0;
-	work_entry->send.capacity = sizeof(work_entry->send.data);
-	work_entry->send.limit = work_entry->send.capacity;
+	// if theres zlib stuff, free it
 	if(!new)
 	{
 		if(Z_OK != inflateEnd(&work_entry->z_decoder))
@@ -240,58 +219,74 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 			if(work_entry->z_encoder.msg)
 				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder.msg);
 		}
+	}
+	/*
+	 * wipe everything which is small, has many fields, of which only
+	 * some need to be initialised
+	 */
+	memset(work_entry, 0, offsetof(g2_connection_t, recv));
+#if 0
+// TODO: OUCH! these memset are expensive, and for what did i add these fields?
+	memset(work_entry->tmp1, 0, sizeof(work_entry->tmp1));
+	memset(work_entry->tmp2, 0, sizeof(work_entry->tmp2));
+#endif
+
+	/*
+	 * reinitialise stuff
+	 */
+	//networking
+	work_entry->sin_size = sizeof (work_entry->remote_host);
+	work_entry->af_type = AF_INET;
+	work_entry->com_socket = -1;
+
+	// Internal States
+	work_entry->sent_addr.sin_family = AF_INET;
+#if 0
+	// they are zero by coincidence, but lets shove some cycles
+	work_entry->connect_state = UNCONNECTED;
+	work_entry->encoding_in = ENC_NONE;
+	work_entry->encoding_out = ENC_NONE;
+	work_entry->time_diff = 0.0;
+#endif
+
+	// Buffer
+	work_entry->recv.pos = 0;
+	work_entry->recv.capacity = sizeof(work_entry->recv.data);
+	work_entry->recv.limit = work_entry->recv.capacity;
+	work_entry->send.pos = 0;
+	work_entry->send.capacity = sizeof(work_entry->send.data);
+	work_entry->send.limit = work_entry->send.capacity;
+	// zlib
+	work_entry->z_decoder.zalloc = work_entry->z_encoder.zalloc = my_zmalloc;
+	work_entry->z_decoder.zfree = work_entry->z_encoder.zfree =  my_zfree;
+	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
+	if(!new)
+	{
 		if(work_entry->recv_u)
 		{
-//			memset(work_entry->recv_u, 0, sizeof(*(work_entry->recv_u)));
 			work_entry->recv_u->pos = 0;
 			work_entry->recv_u->limit = work_entry->recv_u->capacity = sizeof(work_entry->recv_u->data);
 		}
 		if(work_entry->send_u)
 		{
-//			memset(work_entry->send_u, 0, sizeof(*(work_entry->send_u)));
 			work_entry->send_u->pos = 0;
 			work_entry->send_u->limit = work_entry->send_u->capacity = sizeof(work_entry->send_u->data);
 		}
 
 		g2_qht_clean(work_entry->qht);
-
-		work_entry->akt_packet = &(work_entry->packet_1);
-		work_entry->build_packet = &(work_entry->packet_2);
-/*		if(work_entry->akt_packet)
-		{
-			g2_packet_free(work_entry->akt_packet);
-			work_entry->akt_packet = NULL;
-		}
-		if(work_entry->build_packet)
-		{
-			g2_packet_free(work_entry->build_packet);
-			work_entry->build_packet = NULL;
-		}
-		if(work_entry->last_packet)
-		{
-			g2_packet_free(work_entry->last_packet);
-			work_entry->last_packet = NULL;
-		}*/
 	}
 	else
 	{
 		work_entry->recv_u = NULL;
 		work_entry->send_u = NULL;
 		work_entry->qht = NULL;
-		work_entry->akt_packet = &(work_entry->packet_1);
-		work_entry->build_packet = &(work_entry->packet_2);
-//		work_entry->last_packet = &(work_entry->packet_1);
 	}
+	work_entry->akt_packet = &(work_entry->packet_1);
+	work_entry->build_packet = &(work_entry->packet_2);
+// work_entry->last_packet = &(work_entry->packet_1);
 
 	g2_packet_clean(work_entry->build_packet);
 	g2_packet_clean(work_entry->akt_packet);
-	
-	memset(&work_entry->z_decoder, 0, sizeof(work_entry->z_decoder));
-	memset(&work_entry->z_encoder, 0, sizeof(work_entry->z_encoder));
-	
-	work_entry->z_decoder.zalloc = work_entry->z_encoder.zalloc = my_zmalloc;
-	work_entry->z_decoder.zfree = work_entry->z_encoder.zfree =  my_zfree;
-	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
 }
 
 inline void g2_con_free(g2_connection_t *to_free)

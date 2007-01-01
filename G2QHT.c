@@ -60,9 +60,9 @@ struct zpad_heap
 struct zpad
 {
 	z_stream z;
-	struct zpad_heap *pad_free;  // pointer in the pad to free space
-	unsigned char pad[1<<14];    // other allok space, 16k
-	unsigned char window[1<<15]; // 15 Bit window size, should result in 32k byte
+	struct zpad_heap *pad_free;                   // pointer in the pad to free space
+	unsigned char pad[1<<14] GCC_ATTR_ALIGNED(8); // other allok space, 16k
+	unsigned char window[1<<15];                  // 15 Bit window size, should result in 32k byte
 };
 
 struct scratch
@@ -266,10 +266,22 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 {
 	struct scratch *scratch = pthread_getspecific(key2qht_scratch1);
 
+	/*
+	 * ompf, very unpleasant...
+	 * we want the ->data aligned to 16. Since it is a char gcc
+	 * alinges it to 1 so effectivly 4/8 with the length in front.
+	 * We could tell gcc to align data to 16, but then we get a
+	 * nice interference with malloc. It alignes this to 4 ;(
+	 * (and i don't understand why... only because it is a huge
+	 * alloc? and if i want to put doubles in it?)
+	 * And since every malloc could align it to another boundery
+	 * we fix it up once and by hand...
+	 */
+	length += 16;
 	if(scratch)
 	{
 		if(scratch->length >= length)
-			return scratch->data;
+			return (unsigned char *)ALIGN(scratch->data, 16);
 		else
 		{
 			free(scratch);
@@ -280,6 +292,8 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 	}
 
 	scratch = malloc(sizeof(*scratch) + length);
+
+	logg_develd_old("scratch: %p, %lu\n", (void *)scratch, (unsigned long)scratch);
 
 	if(!scratch)
 	{
@@ -295,7 +309,7 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 		return NULL;
 	}
 
-	return scratch->data;
+	return (unsigned char *)ALIGN(scratch->data, 16);
 }
 
 static inline void _g2_qht_clean(struct qhtable *to_clean, bool reset_needed)
