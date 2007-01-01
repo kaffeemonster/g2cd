@@ -2,7 +2,7 @@
  * memxor.c
  * xor two memory region efficient, x86_64 implementation
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,6 +23,8 @@
  *
  * $Id:$
  */
+
+#include "../i386/x86.h"
 
 void *memxor(void *dst, const void *src, size_t len)
 {
@@ -71,13 +73,6 @@ void *memxor(void *dst, const void *src, size_t len)
 	 * maschine-native datatype
 	 */
 #ifdef __SSE__
-# ifdef __SSE2__
-#  define SSE_MOVE(x, y) "movdqa	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y) "movdqa	" #x ", " #y "\n\t" /* movntdq */
-# else
-#  define SSE_MOVE(x, y) "movaps	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y) "movaps	" #x ", " #y "\n\t" /* movntps */
-# endif
 	/*
 	 * xoring 16 byte at once is quite attracktive,
 	 * if its fast...
@@ -89,18 +84,23 @@ alignment_16:
 		register intptr_t d0;
 
 		__asm__ __volatile__(
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCH(  (%1))
 			".p2align 4\n"
 			"1:\n\t"
-			SSE_MOVE((%2), %%xmm0)
-			SSE_MOVE(16(%2), %%xmm1)
-			"xorps	(%1), %%xmm0\n\t"
-			"xorps	16(%1), %%xmm1\n\t"
+			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(32(%1))
+			SSE_MOVE(   (%2), %%xmm0)
+			SSE_MOVE( 16(%2), %%xmm1)
+			SSE_XOR(    (%1), %%xmm0)
+			SSE_XOR(  16(%1), %%xmm1)
 			"add	$32, %1\n\t"
 			SSE_STORE(%%xmm0, (%2))
 			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
-			"jnz	1b\n"
+			"jnz	1b\n\t"
+			SSE_FENCE
 			: "=&c" (d0), "+&g" (src_char), "+&g" (dst_char)
 			: "0" (len/32)
 			: "cc", "xmm0", "xmm1", "memory"

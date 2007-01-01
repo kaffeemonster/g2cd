@@ -33,7 +33,8 @@ LIBHEADS = \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
 	$(MPL)/hzp.h \
-	$(MPL)/atomic.h
+	$(MPL)/atomic.h \
+	$(MPL)/i386/x86.h
 
 # epoll emuls
 EPOLLSRS = \
@@ -152,6 +153,7 @@ $(MPL)/my_bitops.h: other.h
 $(MPL)/my_bitopsm.h: other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: other.h config.h
+$(MPL)/i386/memxor.c $(MPL)/x86_64/memxor.c $(MPL)/i386/memand.c $(MPL)/x86_64/memand.c $(MPL)/i386/memneg.c $(MPL)/x86_64/memneg.c: $(MPL)/i386/x86.h
 
 # give all files the std deps, so get rebuilt if something changes
 $(LIBOBJS): $(LIB_STD_DEPS)

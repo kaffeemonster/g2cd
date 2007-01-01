@@ -24,6 +24,8 @@
  * $Id:$
  */
 
+#include "../i386/x86.h"
+
 void *memneg(void *dst, const void *src, size_t len)
 {
 #ifdef __SSE__
@@ -77,21 +79,15 @@ void *memneg(void *dst, const void *src, size_t len)
 /* Special implementations below here */
 
 	/* 
-	 * xor it with a hopefully bigger and
+	 * neg it with a hopefully bigger and
 	 * maschine-native datatype
 	 */
 #ifdef __SSE__
-# ifdef __SSE2__
-#  define SSE_MOVE(x, y) "movdqa	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y) "movdqa	" #x ", " #y "\n\t" /* movntdq */
-# else
-#  define SSE_MOVE(x, y) "movaps	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y) "movaps	" #x ", " #y "\n\t" /* movntps */
-# endif
 	/*
-	 * xoring 16 byte at once is quite attracktive,
+	 * neging 16 byte at once is quite attracktive,
 	 * if its fast...
-	 *  __builtin_ia32_xorps
+	 * there is no mmx/sse not, make it with xor
+	 * __builtin_ia32_xorps
 	 */
 alignment_16:
 	if(len/32)
@@ -99,20 +95,25 @@ alignment_16:
 		register intptr_t d0;
 
 		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCH(  (%2))
 			SSE_MOVE(%4, %%xmm2)
 			SSE_MOVE(%4, %%xmm3)
 			".p2align 4\n"
 			"1:\n\t"
-			SSE_MOVE((%1), %%xmm0)
-			SSE_MOVE(16(%1), %%xmm1)
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(32(%2))
+			SSE_MOVE(   (%1), %%xmm0)
+			SSE_MOVE( 16(%1), %%xmm1)
 			"add	$32, %1\n\t"
-			"xorps	%%xmm2, %%xmm0\n\t"
-			"xorps	%%xmm3, %%xmm1\n\t"
-			SSE_STORE(%%xmm0, (%2))
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_XOR(  %%xmm3, %%xmm1)
+			SSE_STORE(%%xmm0,   (%2))
 			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
-			"jnz	1b\n"
+			"jnz	1b\n\t"
+			SSE_FENCE
 			: "=&c" (d0), "+&g" (src_char), "+&g" (dst_char)
 			: "0" (len/32), "m" (*all_ones)
 			: "cc", "xmm0", "xmm1", "xmm2", "xmm3", "memory"
@@ -152,7 +153,7 @@ alignment_size_t:
 no_alignment_wanted:
 no_alignment_possible:
 handle_remaining:
-	/* xor whats left to do from alignment and other datatype */
+	/* neg whats left to do from alignment and other datatype */
 	while(len--)
 		*dst_char++ = ~(*src_char++);
 
