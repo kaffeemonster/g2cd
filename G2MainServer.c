@@ -542,9 +542,29 @@ So no BT, maybe a core.\n"
 # endif
 	}
 # define DEATHSTR_5 \
-"--------------- end of backtrace ---------------\n\
-\nNow the same SIG again, so you can get a CORE-file:\n"
+"--------------- end of backtrace ---------------\n" \
+"+++++++++++++++ start of mappings ++++++++++++++\n"
 	write(stderrfd, DEATHSTR_5, str_size(DEATHSTR_5));
+	if(!access("/proc/self/maps", R_OK))
+	{
+		int mfd = open("/proc/self/maps", O_RDONLY);
+		if(-1 != mfd)
+		{
+			ssize_t rret;
+			do
+			{
+				rret = read(mfd, path, sizeof(path));
+	
+				if(rret > 0)
+					write(stderrfd, path, rret);
+			} while(rret > 0);
+			close(mfd);
+		}
+	}
+# define DEATHSTR_6 \
+"++++++++++++++++ end of mappings ++++++++++++++\n\n" \
+"Now the same SIG again, so you can get a CORE-file:\n"
+	write(stderrfd, DEATHSTR_6, str_size(DEATHSTR_6));
 
 out:
 	/* do not reregister, we want to crash again after
