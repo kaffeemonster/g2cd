@@ -61,6 +61,9 @@
 # ifndef atomic_dec
 #  define atomic_dec(x)	gen_atomic_dec((x))
 # endif
+# ifndef atomic_dec_test
+#  define atomic_dec_test(x) gen_atomic_dec_test((x))
+# endif
 # ifndef atomic_x
 #  define atomic_x(x, y)	gen_atomic_x((x), (y))
 # endif
@@ -73,6 +76,7 @@
 
 extern void gen_atomic_inc(atomic_t *);
 extern void gen_atomic_dec(atomic_t *);
+extern int  gen_atomic_dec_test(atomic_t *);
 extern int  gen_atomic_x(int, atomic_t *);
 extern void *gen_atomic_px(void *, atomicptr_t *);
 extern void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *);

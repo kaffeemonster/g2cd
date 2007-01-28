@@ -229,5 +229,6 @@ static inline int atomic_sub_return(int val, atomic_t *ptr)
 
 # define atomic_inc(x) ((void) atomic_add_return(1, (x)))
 # define atomic_dec(x) ((void) atomic_sub_return(1, (x)))
+# define atomic_dec_test(x) (atommic_sub_return(1, (x)) == 0)
 
 #endif /* LIB_IMPL_ATOMIC_H */

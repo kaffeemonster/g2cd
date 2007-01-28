@@ -50,7 +50,7 @@ static void gen_atomic_init(void)
 		if(shortlock_t_init(gen_atomic_lock + i))
 			diedie("initialising generic atomic locks");
 	}
-	while(i);
+	while(i--);
 }
 
 // TODO: catch errors?
@@ -66,6 +66,15 @@ void gen_atomic_dec(atomic_t *x)
 	shortlock_t_lock(ATOMIC_HASH(x));
 	x->d--;
 	shortlock_t_unlock(ATOMIC_HASH(x));
+}
+
+int gen_atomic_dec_test(atomic_t *x)
+{
+	int retval;
+	shortlock_t_lock(ATOMIC_HASH(x));
+	retval = --(x->d) == 0;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+	return retval;
 }
 
 int gen_atomic_x(int nval, atomic_t *oval)

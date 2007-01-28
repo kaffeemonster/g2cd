@@ -530,7 +530,6 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_clean(&connec->qht->fragments);
-// TODO: Global QHT-needs-update flag (wich would need per connection locking)
 	return false;
 }
 

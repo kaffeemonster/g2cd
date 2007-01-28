@@ -29,9 +29,11 @@
 // Includes if included
 #include <stdbool.h>
 #include <sys/types.h>
+#include <time.h>
 // Own
 #include "version.h"
-// #include "lib/hzp.h"
+#include "lib/hzp.h"
+#include "lib/atomic.h"
 
 enum g2_qht_comp
 {
@@ -51,9 +53,13 @@ struct qht_fragment
 #define MAX_BYTES_QHT (512 * 1024)
 struct qhtable
 {
+	struct hzp_free hzp;
+	atomic_t refcnt;
+	size_t	data_length;
+/* ----- Everything below this gets simply wiped ----- */
 	size_t	entries;
 	size_t	bits;
-	size_t	data_length;
+	time_t	time_stamp;
 	enum g2_qht_comp	compressed;
 	struct qht_fragment	fragments;
 	struct qht_flags
@@ -73,7 +79,7 @@ struct qhtable
 #endif // _G2QHT_C
 
 _G2QHT_EXTRN(inline void g2_qht_clean(struct qhtable *));
-_G2QHT_EXTRN(inline void g2_qht_free(struct qhtable *));
+_G2QHT_EXTRN(inline void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(inline void g2_qht_frag_clean(struct qht_fragment *));
 _G2QHT_EXTRN(inline const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
 _G2QHT_EXTRN(inline int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));

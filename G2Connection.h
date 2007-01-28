@@ -114,6 +114,7 @@ typedef struct g2_connection
 	struct norm_buff		*recv_u;
 	struct norm_buff		*send_u;
 	struct qhtable			*qht;
+	struct qhtable			*sent_qht;
 // TODO: WTF these arrays where supossed to? zlib buffer?
 	char						tmp1[32000], tmp2[32000];
 	

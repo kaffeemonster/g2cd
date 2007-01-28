@@ -32,6 +32,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #include <pthread.h>
 #include <zlib.h>
 // other
@@ -44,6 +45,8 @@
 #include "lib/sec_buffer.h"
 #include "lib/my_bitops.h"
 #include "lib/my_bitopsm.h"
+#include "lib/hzp.h"
+#include "lib/atomic.h"
 #include "other.h"
 
 struct zpad_heap
@@ -314,22 +317,17 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 
 static inline void _g2_qht_clean(struct qhtable *to_clean, bool reset_needed)
 {
-	size_t tmp_dlen;
-
 	if(!to_clean)
 		return;
-
-	tmp_dlen = to_clean->data_length;
 
 	if(to_clean->fragments.data)
 		free(to_clean->fragments.data);
 
-	memset(to_clean, 0, offsetof(struct qhtable, data));
+	memset(&to_clean->entries, 0, offsetof(struct qhtable, data) - offsetof(struct qhtable, entries));
 	if(reset_needed)
 		to_clean->flags.reset_needed = true;
 	else
-		memset(to_clean->data, ~0, tmp_dlen);
-	to_clean->data_length = tmp_dlen;
+		memset(to_clean->data, ~0, to_clean->data_length);
 }
 
 /* helper-funktions */
@@ -338,15 +336,31 @@ inline void g2_qht_clean(struct qhtable *to_clean)
 	_g2_qht_clean(to_clean, true);
 }
 
-inline void g2_qht_free(struct qhtable *to_free)
+static void g2_qht_free_hzp(void *qtable)
+{
+	struct qhtable *to_free;
+
+	if(!qtable)
+		return;
+	to_free = qtable;
+	if(atomic_read(&to_free->refcnt) > 0) {
+		logg_develd("qht refcnt race %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
+		return;
+	}
+	if(to_free->fragments.data)
+		free(to_free->fragments.data);
+	free(to_free);
+}
+
+inline void g2_qht_put(struct qhtable *to_free)
 {
 	if(!to_free)
 		return;
 
-	if(to_free->fragments.data)
-		free(to_free->fragments.data);
-
-	free(to_free);
+	if(atomic_dec_test(&to_free->refcnt))
+		hzp_deferfree(&to_free->hzp, to_free, g2_qht_free_hzp);
+	else if(atomic_read(&to_free->refcnt) < 0)
+		logg_develd("qht refcnt below zero! %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
 }
 
 inline void g2_qht_frag_clean(struct qht_fragment *to_clean)
@@ -425,6 +439,8 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 	default:
 		logg_develd("funky compression: %i\n", frag->compressed);
 	}
+
+	tmp_table->time_stamp = time(NULL);
 
 	*ttable = tmp_table;
 	return ret_val;
@@ -561,6 +577,7 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 			logg_errno(LOGF_DEBUG, "allocating qh-table");
 			return true;
 		}
+		atomic_set(&tmp_table->refcnt, 1);
 		tmp_table->fragments.data = NULL;
 		tmp_table->data_length = w_size;
 	}
@@ -568,6 +585,7 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	_g2_qht_clean(tmp_table, true);
 	tmp_table->entries = qht_ent;
 	tmp_table->bits = bits;
+	tmp_table->time_stamp = time(NULL);
 	/* bring back the table */
 	*ttable = tmp_table;
 // TODO: Global QHT-needs-update flag (wich would need per connection locking)

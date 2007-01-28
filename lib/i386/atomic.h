@@ -88,7 +88,8 @@ static inline void atomic_inc(atomic_t *ptr)
 		LOCK "incl %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
-		: /* %1 */ "m" (atomic_read(ptr)));
+		: /* %1 */ "m" (atomic_read(ptr))
+		: "cc");
 }
 
 static inline void atomic_dec(atomic_t *ptr)
@@ -97,7 +98,21 @@ static inline void atomic_dec(atomic_t *ptr)
 		LOCK "decl %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
-		: /* %1 */ "m" (atomic_read(ptr)));
+		: /* %1 */ "m" (atomic_read(ptr))
+		: "cc");
 }
 
+static inline int atomic_dec_test(atomic_t *ptr)
+{
+	unsigned char c;
+	__asm__ __volatile__(
+		LOCK "decl %0\n\t"
+		"setz	%1"
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		: /* %0 */ "=m" (atomic_read(ptr)),
+		  /* %1 */ "=qm" (c)
+		: /* %2 */ "m" (atomic_read(ptr))
+		: "cc");
+	return c != 0;
+}
 #endif /* LIB_IMPL_ATOMIC_H */

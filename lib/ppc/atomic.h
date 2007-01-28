@@ -192,4 +192,26 @@ static inline void atomic_dec(atomic_t *ptr)
 		: "cc");
 }
 
+static inline int atomic_dec_return(atomic_t *ptr)
+{
+	int tmp;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"lwarx\t%0,0,%2\n\t"
+		"addic\t%0,%0,-1\n\t"
+		PPC405_ERR77(%2)
+		"stwcx.\t%0,0,%2\n\t"
+		"bne-\t1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "b" (&atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr))
+		: "cc");
+	return tmp;
+}
+
+#define atomic_dec_test(x) (atomic_dec_return((x)) == 0)
+
 #endif /* LIB_IMPL_ATOMIC_H */

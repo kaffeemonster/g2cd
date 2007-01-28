@@ -274,6 +274,7 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 		}
 
 		g2_qht_clean(work_entry->qht);
+		g2_qht_put(work_entry->sent_qht);
 	}
 	else
 	{
@@ -281,6 +282,7 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 		work_entry->send_u = NULL;
 		work_entry->qht = NULL;
 	}
+	work_entry->sent_qht = NULL;
 	work_entry->akt_packet = &(work_entry->packet_1);
 	work_entry->build_packet = &(work_entry->packet_2);
 // work_entry->last_packet = &(work_entry->packet_1);
@@ -312,7 +314,8 @@ inline void g2_con_free(g2_connection_t *to_free)
 	if(to_free->send_u)
 		free(to_free->send_u);
 
-	g2_qht_free(to_free->qht);
+	g2_qht_put(to_free->qht);
+	g2_qht_put(to_free->sent_qht);
 
 /*	if(to_free->last_packet)
 		g2_packet_free(to_free->last_packet);*/
