@@ -61,221 +61,258 @@ static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 
 static inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *);
 
+#define PT_ENT(m, n)	{.match = (m), .last = false, .term = false, .found = {.next = (n)}}
+#define PT_ACT(a)	{.match = '\0', .last = true, .term = false, .found = {.action = (a)}}
+#define PT_TERM	{.match = 0, .last = 0, .term = true, .found = {.next = NULL}}
+
 /*
  * seventh type-char-layer
  */
 // CRAWLA - anwser? not my buisines
-static const g2_p_type_t packet_dict_CRAWLA0 = { NULL, {.action = &empty_action_p}, '\0', true};
+static const g2_p_type_t packet_dict_CRAWLA0[] = { PT_ACT(empty_action_p), PT_TERM };
 // CRAWLR
-static const g2_p_type_t packet_dict_CRAWLR0 = { NULL, {.action = NULL}, '\0', true};
+static const g2_p_type_t packet_dict_CRAWLR0[] = { PT_ACT(NULL), PT_TERM };
 
 /*
  * sixth type-char-layer
  */
 // UPROD
-static const g2_p_type_t packet_dict_UPROD0 = { NULL, {.action = &handle_UPROD}, '\0', true };
+static const g2_p_type_t packet_dict_UPROD0[] = { PT_ACT(handle_UPROD), PT_TERM };
 // UPROC
-static const g2_p_type_t packet_dict_UPROC0 = { NULL, {.action = &handle_UPROC}, '\0', true };
+static const g2_p_type_t packet_dict_UPROC0[] = { PT_ACT(handle_UPROC), PT_TERM };
 // CRAWLx
-static const g2_p_type_t packet_dict_CRAWLA = { NULL, {.found = &packet_dict_CRAWLA0}, 'A', false};
-static const g2_p_type_t packet_dict_CRAWLR = { &packet_dict_CRAWLA, {.found = &packet_dict_CRAWLR0}, 'R', false};
+static const g2_p_type_t packet_dict_CRAWLx[] = {
+	PT_ENT('A', packet_dict_CRAWLA0),
+	PT_ENT('R', packet_dict_CRAWLR0),
+	PT_TERM};
 // G2CDC
-static const g2_p_type_t packet_dict_G2CDC0 = { NULL, {.action = &handle_G2CDC}, '\0', true };
+static const g2_p_type_t packet_dict_G2CDC0[] = { PT_ACT(handle_G2CDC), PT_TERM };
 
 /*
  * fith type-char-layer
  */
 // UPROx
-static const g2_p_type_t packet_dict_UPROD = { NULL, {.found = &packet_dict_UPROD0}, 'D', false };
-static const g2_p_type_t packet_dict_UPROC = { &packet_dict_UPROD, {.found = &packet_dict_UPROC0}, 'C', false };
+static const g2_p_type_t packet_dict_UPROx[] = {
+	PT_ENT('D', packet_dict_UPROD0),
+	PT_ENT('C', packet_dict_UPROC0),
+	PT_TERM};
 //CRAWx
-static const g2_p_type_t packet_dict_CRAWL = { NULL, {.found = &packet_dict_CRAWLR}, 'L', false};
+static const g2_p_type_t packet_dict_CRAWL[] = { PT_ENT('L', packet_dict_CRAWLx), PT_TERM };
 // G2CDx
-static const g2_p_type_t packet_dict_G2CDC = { NULL, {.found = &packet_dict_G2CDC0}, 'C', false };
+static const g2_p_type_t packet_dict_G2CDC[] = { PT_ENT('C', packet_dict_G2CDC0), PT_TERM };
 
 /*
  * fourth type-char-layer
  */
 // KHL
-static const g2_p_type_t packet_dict_KHL0 = { NULL, {.action = &handle_KHL}, '\0', true };
+static const g2_p_type_t packet_dict_KHL0[] = { PT_ACT(handle_KHL), PT_TERM };
 // LNI
-static const g2_p_type_t packet_dict_LNI0 = { NULL, {.action = &handle_LNI}, '\0', true };
+static const g2_p_type_t packet_dict_LNI0[] = { PT_ACT(handle_LNI), PT_TERM };
 // QHT
-static const g2_p_type_t packet_dict_QHT0 = { NULL, {.action = &handle_QHT}, '\0', true };
+static const g2_p_type_t packet_dict_QHT0[] = { PT_ACT(handle_QHT), PT_TERM };
 // QKR
-static const g2_p_type_t packet_dict_QKR0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t packet_dict_QKR0[] = { PT_ACT(NULL), PT_TERM };
 // QKA
-static const g2_p_type_t packet_dict_QKA0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t packet_dict_QKA0[] = { PT_ACT(NULL), PT_TERM };
 // UPRx
-static const g2_p_type_t packet_dict_UPRO = { NULL, {.found = &packet_dict_UPROC}, 'O', false };
+static const g2_p_type_t packet_dict_UPRO[] = { PT_ENT('O', packet_dict_UPROx), PT_TERM };
 // CRAx
-static const g2_p_type_t packet_dict_CRAW = { NULL, {.found = &packet_dict_CRAWL}, 'W', false };
+static const g2_p_type_t packet_dict_CRAW[] = { PT_ENT('W', packet_dict_CRAWL), PT_TERM };
 // G2Cx
-static const g2_p_type_t packet_dict_G2CD = { NULL, {.found = &packet_dict_G2CDC}, 'D', false };
+static const g2_p_type_t packet_dict_G2CD[] = { PT_ENT('D', packet_dict_G2CDC), PT_TERM };
 
 /*
  * third type-char-layer
  */
 // KHx
-static const g2_p_type_t packet_dict_KHL = { NULL, {.found = &packet_dict_KHL0}, 'L', false };
+static const g2_p_type_t packet_dict_KHL[] = { PT_ENT('L', packet_dict_KHL0), PT_TERM };
 // LNx
-static const g2_p_type_t packet_dict_LNI = { NULL, {.found = &packet_dict_LNI0}, 'I', false };
+static const g2_p_type_t packet_dict_LNI[] = { PT_ENT('I', packet_dict_LNI0), PT_TERM };
 // PI
-static const g2_p_type_t packet_dict_PI0 = { NULL, {.action = &handle_PI}, '\0', true };
+static const g2_p_type_t packet_dict_PI0[] = { PT_ACT(handle_PI), PT_TERM };
 // PO
-static const g2_p_type_t packet_dict_PO0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t packet_dict_PO0[] = { PT_ACT(NULL), PT_TERM };
 // Q2
-static const g2_p_type_t packet_dict_Q20 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t packet_dict_Q20[] = { PT_ACT(NULL), PT_TERM };
 // QHx
-static const g2_p_type_t packet_dict_QHT = { NULL, {.found = &packet_dict_QHT0}, 'T', false };
+static const g2_p_type_t packet_dict_QHT[] = { PT_ENT('T', packet_dict_QHT0), PT_TERM };
 // QKx
-static const g2_p_type_t packet_dict_QKA = { NULL, {.found = &packet_dict_QKA0}, 'A', false };
-static const g2_p_type_t packet_dict_QKR = { &packet_dict_QKA, {.found = &packet_dict_QKR0}, 'R', false };
+static const g2_p_type_t packet_dict_QKx[] = {
+	PT_ENT('A', packet_dict_QKA0),
+	PT_ENT('R', packet_dict_QKR0),
+	PT_TERM};
 // UPx
-static const g2_p_type_t packet_dict_UPR = { NULL, {.found = &packet_dict_UPRO}, 'R', false };
+static const g2_p_type_t packet_dict_UPR[] = { PT_ENT('R', packet_dict_UPRO), PT_TERM };
 // CRx
-static const g2_p_type_t packet_dict_CRA = { NULL, {.found = &packet_dict_CRAW}, 'A', false };
+static const g2_p_type_t packet_dict_CRA[] = { PT_ENT('A', packet_dict_CRAW), PT_TERM };
 // G2x
-static const g2_p_type_t packet_dict_G2C = { NULL, {.found = &packet_dict_G2CD}, 'C', false };
+static const g2_p_type_t packet_dict_G2C[] = { PT_ENT('C', packet_dict_G2CD), PT_TERM };
 
 /* 
  * second type-char-layer
  */
 // Kx
-static const g2_p_type_t packet_dict_KH = { NULL, {.found = &packet_dict_KHL}, 'H', false };
+static const g2_p_type_t packet_dict_KH[] = { PT_ENT('H', packet_dict_KHL), PT_TERM };
 // Lx
-static const g2_p_type_t packet_dict_LN = { NULL, {.found = &packet_dict_LNI}, 'N', false };
+static const g2_p_type_t packet_dict_LN[] = { PT_ENT('N', packet_dict_LNI), PT_TERM };
 // Px
-static const g2_p_type_t packet_dict_PO = { NULL, {.found = &packet_dict_PO0}, 'O', false };
-static const g2_p_type_t packet_dict_PI = { &packet_dict_PO, {.found = &packet_dict_PI0}, 'I', false };
+static const g2_p_type_t packet_dict_Px[] = {
+		PT_ENT('I', packet_dict_PI0),
+		PT_ENT('O', packet_dict_PO0),
+		PT_TERM};
 // Qx
-static const g2_p_type_t packet_dict_QH = { NULL, {.found = &packet_dict_QHT}, 'H', false };
-static const g2_p_type_t packet_dict_QK = { &packet_dict_QH, {.found = &packet_dict_QKR}, 'K', false };
-static const g2_p_type_t packet_dict_Q2 = { &packet_dict_QK, {.found = &packet_dict_Q20}, '2', false };
+static const g2_p_type_t packet_dict_Qx[] = {
+		PT_ENT('H', packet_dict_QHT),
+		PT_ENT('K', packet_dict_QKx),
+		PT_ENT('2', packet_dict_Q20),
+		PT_TERM};
 // Ux
-static const g2_p_type_t packet_dict_UP = { NULL, {.found = &packet_dict_UPR}, 'P', false };
+static const g2_p_type_t packet_dict_UP[] = { PT_ENT('P', packet_dict_UPR), PT_TERM };
 // Cx
-static const g2_p_type_t packet_dict_CR = { NULL, {.found = &packet_dict_CRA}, 'R', false};
+static const g2_p_type_t packet_dict_CR[] = { PT_ENT('R', packet_dict_CRA), PT_TERM };
 // Gx
-static const g2_p_type_t packet_dict_G2 = { NULL, {.found = &packet_dict_G2C}, '2', false };
+static const g2_p_type_t packet_dict_G2[] = { PT_ENT('2', packet_dict_G2C), PT_TERM };
 
-// first type-char-layer
-static const g2_p_type_t packet_dict_G = { NULL, {.found = &packet_dict_G2}, 'G', false };
-static const g2_p_type_t packet_dict_C = { &packet_dict_G, {.found = &packet_dict_CR}, 'C', false };
-static const g2_p_type_t packet_dict_U = { &packet_dict_C, {.found = &packet_dict_UP}, 'U', false };
-static const g2_p_type_t packet_dict_Q = { &packet_dict_U, {.found = &packet_dict_Q2}, 'Q', false };
-static const g2_p_type_t packet_dict_P = { &packet_dict_Q, {.found = &packet_dict_PI}, 'P', false };
-static const g2_p_type_t packet_dict_L = { &packet_dict_P, {.found = &packet_dict_LN}, 'L', false };
-const g2_p_type_t g2_packet_dict = { &packet_dict_L, {.found = &packet_dict_KH}, 'K', false }; //packet_dict_K
+/*
+ * first type-char-layer
+ */
+const g2_p_type_t g2_packet_dict[] = {
+		PT_ENT('K', packet_dict_KH),
+		PT_ENT('L', packet_dict_LN),
+		PT_ENT('P', packet_dict_Px),
+		PT_ENT('Q', packet_dict_Qx),
+		PT_ENT('U', packet_dict_UP),
+		PT_ENT('C', packet_dict_CR),
+		PT_ENT('G', packet_dict_G2),
+		PT_TERM
+};
 
-// LNI-childs
+/*
+ * LNI-childs
+ */
 // third
 // /LNI/HS
-static const g2_p_type_t LNI_packet_dict_HS0 = { NULL, {.action = &empty_action_p}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_HS0[] = { PT_ACT(empty_action_p), PT_TERM };
 // /LNI/GU
-static const g2_p_type_t LNI_packet_dict_GU0 = { NULL, {.action = &handle_LNI_GU}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_GU0[] = { PT_ACT(handle_LNI_GU), PT_TERM };
 // /LNI/LS
-static const g2_p_type_t LNI_packet_dict_LS0 = { NULL, {.action = &empty_action_p}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_LS0[] = { PT_ACT(empty_action_p), PT_TERM };
 // /LNI/NA
-static const g2_p_type_t LNI_packet_dict_NA0 = { NULL, {.action = &handle_LNI_NA}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_NA0[] = { PT_ACT(handle_LNI_NA), PT_TERM };
 // /LNI/QK
-static const g2_p_type_t LNI_packet_dict_QK0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_QK0[] = { PT_ACT(NULL), PT_TERM };
 
 // second
 // /LNI/Hx
-static const g2_p_type_t LNI_packet_dict_HS = { NULL, {.found = &LNI_packet_dict_HS0}, 'S', false };
+static const g2_p_type_t LNI_packet_dict_HS[] = { PT_ENT('S', LNI_packet_dict_HS0), PT_TERM };
 // /LNI/Gx
-static const g2_p_type_t LNI_packet_dict_GU = { NULL, {.found = &LNI_packet_dict_GU0}, 'U', false };
+static const g2_p_type_t LNI_packet_dict_GU[] = { PT_ENT('U', LNI_packet_dict_GU0), PT_TERM };
 // /LNI/Lx
-static const g2_p_type_t LNI_packet_dict_LS = { NULL, {.found = &LNI_packet_dict_LS0}, 'S', false };
+static const g2_p_type_t LNI_packet_dict_LS[] = { PT_ENT('S', LNI_packet_dict_LS0), PT_TERM };
 // /LNI/Nx
-static const g2_p_type_t LNI_packet_dict_NA = { NULL, {.found = &LNI_packet_dict_NA0}, 'A', false };
+static const g2_p_type_t LNI_packet_dict_NA[] = { PT_ENT('A', LNI_packet_dict_NA0), PT_TERM };
 // /LNI/Qx
-static const g2_p_type_t LNI_packet_dict_QK = { NULL, {.found = &LNI_packet_dict_QK0}, 'K', false };
+static const g2_p_type_t LNI_packet_dict_QK[] = { PT_ENT('K', LNI_packet_dict_QK0), PT_TERM };
 // /LNI/V
-static const g2_p_type_t LNI_packet_dict_V0 = { NULL, {.action = &handle_LNI_V}, '\0', true };
+static const g2_p_type_t LNI_packet_dict_V0[] = { PT_ACT(handle_LNI_V), PT_TERM };
 
 // first
-static const g2_p_type_t LNI_packet_dict_V = { NULL, {.found = &LNI_packet_dict_V0}, 'V', false };
-static const g2_p_type_t LNI_packet_dict_Q = { &LNI_packet_dict_V, {.found = &LNI_packet_dict_QK}, 'Q', false };
-static const g2_p_type_t LNI_packet_dict_N = { &LNI_packet_dict_Q, {.found = &LNI_packet_dict_NA}, 'N', false };
-static const g2_p_type_t LNI_packet_dict_L = { &LNI_packet_dict_N, {.found = &LNI_packet_dict_LS}, 'L', false };
-static const g2_p_type_t LNI_packet_dict_H = { &LNI_packet_dict_L, {.found = &LNI_packet_dict_HS}, 'H', false };
-static const g2_p_type_t LNI_packet_dict = { &LNI_packet_dict_H, {.found = &LNI_packet_dict_GU}, 'G', false }; // LNI_packet_dict_G
+static const g2_p_type_t LNI_packet_dict[] = {
+	PT_ENT('G', LNI_packet_dict_GU),
+	PT_ENT('H', LNI_packet_dict_HS),
+	PT_ENT('L', LNI_packet_dict_LS),
+	PT_ENT('N', LNI_packet_dict_NA),
+	PT_ENT('Q', LNI_packet_dict_QK),
+	PT_ENT('V', LNI_packet_dict_V0),
+	PT_TERM
+};
 
 
-// KHL-childs
+/*
+ * KHL-childs
+ */
 // third
 // /KHL/TS
-static const g2_p_type_t KHL_packet_dict_TS0 = { NULL, {.action = &handle_KHL_TS}, '\0', true };
+static const g2_p_type_t KHL_packet_dict_TS0[] = { PT_ACT(handle_KHL_TS), PT_TERM };
 // /KHL/NH
-static const g2_p_type_t KHL_packet_dict_NH0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t KHL_packet_dict_NH0[] = { PT_ACT(NULL), PT_TERM };
 // /KHL/CH
-static const g2_p_type_t KHL_packet_dict_CH0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t KHL_packet_dict_CH0[] = { PT_ACT(NULL), PT_TERM };
 
 // second
 // /KHL/Tx
-static const g2_p_type_t KHL_packet_dict_TS = { NULL, {.found = &KHL_packet_dict_TS0}, 'S', false };
+static const g2_p_type_t KHL_packet_dict_TS[] = { PT_ENT('S', KHL_packet_dict_TS0), PT_TERM };
 // /KHL/Nx
-static const g2_p_type_t KHL_packet_dict_NH = { NULL, {.found = &KHL_packet_dict_NH0}, 'H', false };
+static const g2_p_type_t KHL_packet_dict_NH[] = { PT_ENT('H', KHL_packet_dict_NH0), PT_TERM };
 // /KHL/Cx
-static const g2_p_type_t KHL_packet_dict_CH = { NULL, {.found = &KHL_packet_dict_CH0}, 'H', false };
+static const g2_p_type_t KHL_packet_dict_CH[] = { PT_ENT('H', KHL_packet_dict_CH0), PT_TERM };
 
 // first
-static const g2_p_type_t KHL_packet_dict_T = { NULL, {.found = &KHL_packet_dict_TS}, 'T', false };
-static const g2_p_type_t KHL_packet_dict_N = { &KHL_packet_dict_T, {.found = &KHL_packet_dict_NH}, 'N', false };
-static const g2_p_type_t KHL_packet_dict = { &KHL_packet_dict_N, {.found = &KHL_packet_dict_CH}, 'C', false }; // KHL_packet_dict_C
+static const g2_p_type_t KHL_packet_dict[] = { 
+	PT_ENT('C', KHL_packet_dict_CH),
+	PT_ENT('N', KHL_packet_dict_NH),
+	PT_ENT('T', KHL_packet_dict_TS),
+	PT_TERM
+};
 
 
-// CRAWLR-childs
+/*
+ * CRAWLR-childs
+ */
 // seventh
 // /CRAWLR/RLEAF
-static const g2_p_type_t CRAWLR_packet_dict_RLEAF0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t CRAWLR_packet_dict_RLEAF0[] = { PT_ACT(NULL), PT_TERM };
 // /CRAWLR/RNAME
-static const g2_p_type_t CRAWLR_packet_dict_RNAME0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t CRAWLR_packet_dict_RNAME0[] = { PT_ACT(NULL), PT_TERM };
 
 // sixth
 // /CRAWLR/RLEAx
-static const g2_p_type_t CRAWLR_packet_dict_RLEAF = { NULL, {.found = &CRAWLR_packet_dict_RLEAF0}, 'F', false };
+static const g2_p_type_t CRAWLR_packet_dict_RLEAF[] = { PT_ENT('F', CRAWLR_packet_dict_RLEAF0), PT_TERM };
 // /CRAWLR/RNAMx
-static const g2_p_type_t CRAWLR_packet_dict_RNAME = { NULL, {.found = &CRAWLR_packet_dict_RNAME0}, 'E', false };
+static const g2_p_type_t CRAWLR_packet_dict_RNAME[] = { PT_ENT('E', CRAWLR_packet_dict_RNAME0), PT_TERM };
 // /CRAWLR/RGPS
-static const g2_p_type_t CRAWLR_packet_dict_RGPS0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t CRAWLR_packet_dict_RGPS0[] = { PT_ACT(NULL), PT_TERM };
 // /CRAWLR/REXT
-static const g2_p_type_t CRAWLR_packet_dict_REXT0 = { NULL, {.action = NULL}, '\0', true };
+static const g2_p_type_t CRAWLR_packet_dict_REXT0[] = { PT_ACT(NULL), PT_TERM };
 
 // fourth
 // /CRAWLR/RLEx
-static const g2_p_type_t CRAWLR_packet_dict_RLEA = { NULL, {.found = &CRAWLR_packet_dict_RLEAF}, 'A', false };
+static const g2_p_type_t CRAWLR_packet_dict_RLEA[] = { PT_ENT('A', CRAWLR_packet_dict_RLEAF), PT_TERM };
 // /CRAWLR/RNAx
-static const g2_p_type_t CRAWLR_packet_dict_RNAM = { NULL, {.found = &CRAWLR_packet_dict_RNAME}, 'M', false };
+static const g2_p_type_t CRAWLR_packet_dict_RNAM[] = { PT_ENT('M', CRAWLR_packet_dict_RNAME), PT_TERM };
 // /CRAWLR/RGPx
-static const g2_p_type_t CRAWLR_packet_dict_RGPS = { NULL, {.found = &CRAWLR_packet_dict_RGPS0}, 'S', false };
+static const g2_p_type_t CRAWLR_packet_dict_RGPS[] = { PT_ENT('S', CRAWLR_packet_dict_RGPS0), PT_TERM };
 // /CRAWLR/REXx
-static const g2_p_type_t CRAWLR_packet_dict_REXT = { NULL, {.found = &CRAWLR_packet_dict_REXT0}, 'T', false };
+static const g2_p_type_t CRAWLR_packet_dict_REXT[] = { PT_ENT('T', CRAWLR_packet_dict_REXT0), PT_TERM };
 
 // third
 // /CRAWLR/RLx
-static const g2_p_type_t CRAWLR_packet_dict_RLE = { NULL, {.found = &CRAWLR_packet_dict_RLEA}, 'E', false };
+static const g2_p_type_t CRAWLR_packet_dict_RLE[] = { PT_ENT('E', CRAWLR_packet_dict_RLEA), PT_TERM };
 // /CRAWLR/RNx
-static const g2_p_type_t CRAWLR_packet_dict_RNA = { NULL, {.found = &CRAWLR_packet_dict_RNAM}, 'A', false };
+static const g2_p_type_t CRAWLR_packet_dict_RNA[] = { PT_ENT('A', CRAWLR_packet_dict_RNAM), PT_TERM };
 // /CRAWLR/RGx
-static const g2_p_type_t CRAWLR_packet_dict_RGP = { NULL, {.found = &CRAWLR_packet_dict_RGPS}, 'P', false };
+static const g2_p_type_t CRAWLR_packet_dict_RGP[] = { PT_ENT('P', CRAWLR_packet_dict_RGPS), PT_TERM };
 // /CRAWLR/REx
-static const g2_p_type_t CRAWLR_packet_dict_REX = { NULL, {.found = &CRAWLR_packet_dict_REXT}, 'X', false };
+static const g2_p_type_t CRAWLR_packet_dict_REX[] = { PT_ENT('X', CRAWLR_packet_dict_REXT), PT_TERM };
 
 // second
 // /CRAWLR/Rx
-static const g2_p_type_t CRAWLR_packet_dict_RL = { NULL, {.found = &CRAWLR_packet_dict_RLE}, 'L', false };
-static const g2_p_type_t CRAWLR_packet_dict_RN = { &CRAWLR_packet_dict_RL, {.found = &CRAWLR_packet_dict_RNA}, 'N', false };
-static const g2_p_type_t CRAWLR_packet_dict_RG = { &CRAWLR_packet_dict_RN, {.found = &CRAWLR_packet_dict_RGP}, 'G', false };
-static const g2_p_type_t CRAWLR_packet_dict_RE = { &CRAWLR_packet_dict_RG, {.found = &CRAWLR_packet_dict_REX}, 'E', false };
+static const g2_p_type_t CRAWLR_packet_dict_Rx[] = {
+	PT_ENT('E', CRAWLR_packet_dict_REX),
+	PT_ENT('G', CRAWLR_packet_dict_RGP),
+	PT_ENT('N', CRAWLR_packet_dict_RNA),
+	PT_ENT('L', CRAWLR_packet_dict_RLE),
+	PT_TERM
+};
 
 // first
-static const g2_p_type_t CRAWLR_packet_dict = { NULL, {.found = &CRAWLR_packet_dict_RE}, 'R', false };
+static const g2_p_type_t CRAWLR_packet_dict[] = { PT_ENT('R', CRAWLR_packet_dict_Rx), PT_TERM };
 
 
-// prebuild packets
+
+/*
+ * prebuild packets
+ */
 static const char packet_po[]		= { 0x08, 'P', 'O', };
 static const char packet_uproc[]	= { 0x20, 'U', 'P', 'R', 'O', 'C' };
 
@@ -307,7 +344,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct norm
 			break;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
-			ret_val |= g2_packet_decide_spec(connec, target, &KHL_packet_dict, &child_p);
+			ret_val |= g2_packet_decide_spec(connec, target, KHL_packet_dict, &child_p);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
@@ -389,7 +426,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 			break;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
-			ret_val |= g2_packet_decide_spec(connec, target, &LNI_packet_dict, &child_p);
+			ret_val |= g2_packet_decide_spec(connec, target, LNI_packet_dict, &child_p);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
@@ -700,13 +737,13 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 			if(work_type->last)
 			{
 				done = true;
-				if(work_type->work.action)
+				if(work_type->found.action)
 				{
-					if(empty_action_p == work_type->work.action)
+					if(empty_action_p == work_type->found.action)
 						logg_packet("*/%s\tC: %s -> ignored\n", packs->type, packs->is_compound ? "true" : "false");
 					else
 						logg_packet("*/%s\tC: %s\n", packs->type, packs->is_compound ? "true" : "false");
-					ret_val |= work_type->work.action(connec, packs, target);
+					ret_val |= work_type->found.action(connec, packs, target);
 				}
 				else
 					logg_packet("*/%s\tC: %s -> No action\n", packs->type, packs->is_compound ? "true" : "false");
@@ -714,13 +751,13 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 				break;
 			}
 			else
-				work_type = work_type->work.found;
+				work_type = work_type->found.next;
 
 			to_match++;
 		}
 		else
-			work_type = work_type->next;
-	} while(work_type);
+			work_type++;
+	} while(!work_type->term);
 
 	if(!done)
 		logg_packet("*/%s\tC: %s -> Unknown, undecoded: %s\n", packs->type, packs->is_compound ? "true" : "false", to_match);

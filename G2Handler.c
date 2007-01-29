@@ -427,7 +427,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 					else
 						d_source = &(*w_entry)->send;
 
-					if(g2_packet_decide(*w_entry, d_source, &g2_packet_dict))
+					if(g2_packet_decide(*w_entry, d_source, g2_packet_dict))
 					{
 						struct epoll_event tmp_eevent;
 

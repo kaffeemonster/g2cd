@@ -83,18 +83,18 @@ struct g2_p_type;
 union p_type_action
 {
 	bool (*action) (g2_connection_t *, g2_packet_t *, struct norm_buff *);
-	const struct g2_p_type *found;
+	const struct g2_p_type *next;
 };
 
 typedef struct g2_p_type
 {
-	const struct g2_p_type	*next;
-	const union p_type_action	work;
-	const char	match;
-	const bool	last;
+	const char match;
+	const bool last;
+	const bool term;
+	const union p_type_action found;
 } g2_p_type_t;
 
-_G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict;)
+_G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict[];)
 _G2PACK_EXTRN(inline bool g2_packet_decide(g2_connection_t *, struct norm_buff *, const g2_p_type_t *));
 # endif // _HAVE_G2_P_TYPE
 #endif // _NEED_G2_P_TYPE

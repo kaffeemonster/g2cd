@@ -77,6 +77,7 @@ struct scratch
 /* Vars */
 static pthread_key_t key2qht_zpad;
 static pthread_key_t key2qht_scratch1;
+static struct qhtable *global_qht;
 
 /* Internal Prototypes */
 	/* do not remove this proto, our it won't work... */
@@ -86,6 +87,7 @@ static void *qht_zpad_alloc(void *, unsigned int, unsigned int);
 static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
 static inline struct zpad *qht_get_zpad(void);
+static void g2_qht_free_hzp(void *);
 
 /* tls thingies */
 static void qht_init(void)
@@ -95,12 +97,20 @@ static void qht_init(void)
 
 	if(pthread_key_create(&key2qht_scratch1, free))
 		diedie("couldn't create TLS key for qht");
+	if(g2_qht_reset(&global_qht, 1<<20))
+		diedie("couldn't create global QHT");
+	/* the only qht where lazy init harms (at least ATM) */
+	memset(global_qht->data, ~0, global_qht->data_length);
+	global_qht->flags.reset_needed = false;
 }
 
 static void qht_deinit(void)
 {
 	pthread_key_delete(key2qht_zpad);
 	pthread_key_delete(key2qht_scratch1);
+	/* we are exiting... */
+	atomic_set(&global_qht->refcnt, 0);
+	g2_qht_free_hzp(global_qht);
 }
 
 /* zpad helper */
@@ -191,7 +201,7 @@ insert_in_heap:
 		zheap->next       = tmp_zheap;
 		z_pad->pad_free   = tmp_zheap;
 	/* end lock */
-		logg_develd("zpad alloc: n: %u\ts: %u\tb: %lu\tp: 0x%p\tzh: 0x%p\tzhn: 0x%p\n",
+		logg_develd_old("zpad alloc: n: %u\ts: %u\tb: %lu\tp: 0x%p\tzh: 0x%p\tzhn: 0x%p\n",
 			num, size, (unsigned long) bsize, (void *) z_pad->pad, (void *) zheap, (void *) tmp_zheap);
 		return zheap->data;
 	}
@@ -214,7 +224,7 @@ static void qht_zpad_free(void *opaque, void *addr)
 	zheap = (struct zpad_heap *) ((char *)addr - offsetof(struct zpad_heap, data));
 	zheap->length |= 1; // mark free
 
-	logg_develd("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, (void *)zheap);
+	logg_develd_old("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, (void *)zheap);
 
 	qht_zpad_merge(zheap);
 }
@@ -374,6 +384,13 @@ inline void g2_qht_frag_clean(struct qht_fragment *to_clean)
 	memset(to_clean, 0, sizeof(*to_clean));
 }
 
+static inline void g2_qht_global_patch(void *pbuf, size_t plength)
+{
+// TODO: This needs full locking mumbo jumbo
+	memxor(global_qht->data, pbuf, global_qht->data_length > plength ? plength : global_qht->data_length);
+	global_qht->time_stamp = time(NULL);
+}
+
 /* funcs */
 inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 {
@@ -386,6 +403,9 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 	/* remove qht from source while we work on it */
 	tmp_table = *ttable;
 	*ttable = NULL;
+
+	if(atomic_read(&tmp_table->refcnt) > 1)
+		logg_develd("WARNING: patch called on table with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
 
 	logg_develd_old("qlen: %lu\tflen: %lu\n", tmp_table->data_length, frag->length);
 
@@ -423,6 +443,7 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 					memneg(tmp_table->data, tmp_ptr, tmp_table->data_length);
 				else
 					memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
+				g2_qht_global_patch(tmp_ptr, tmp_table->data_length);
 				ret_val = "compressed patch applied";
 			}
 
@@ -434,6 +455,7 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 			memneg(tmp_table->data, frag->data, tmp_table->data_length);
 		else
 			memxor(tmp_table->data, frag->data, tmp_table->data_length);
+		g2_qht_global_patch(frag->data, frag->length);
 		ret_val = "patch applied";
 		break;
 	default:
@@ -555,7 +577,10 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	{
 		if(tmp_table->data_length < w_size)
 		{
-			struct qhtable *tmp_table2 = realloc(tmp_table, sizeof(*tmp_table) + w_size);
+			struct qhtable *tmp_table2;
+			if(atomic_read(&tmp_table->refcnt) > 1)
+				logg_develd("WARNING: reset on qht with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
+			tmp_table2 = realloc(tmp_table, sizeof(*tmp_table) + w_size);
 			if(tmp_table2)
 			{
 				tmp_table = tmp_table2;
