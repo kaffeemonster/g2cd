@@ -102,21 +102,27 @@ struct pointer_buff
 	(x).limit - (x).pos)
 #endif
 
-#define buffer_clear(x)		\
-	(x).pos = 0;		\
-	(x).limit = (x).capacity
+#define buffer_clear(x) \
+	do { \
+		(x).pos = 0; \
+		(x).limit = (x).capacity; \
+	} while(0)
 
-#define buffer_flip(x)		\
-	(x).limit = (x).pos;	\
-	(x).pos = 0
+#define buffer_flip(x) \
+	do { \
+		(x).limit = (x).pos; \
+		(x).pos = 0; \
+	} while(0)
 
-#define buffer_compact(x)	\
-	if(buffer_remaining(x))	\
-		if((x).pos) memmove((x).data, \
-			buffer_start(x), \
-			buffer_remaining(x)); \
-	(x).pos = buffer_remaining(x); \
-	(x).limit = (x).capacity
+#define buffer_compact(x) \
+	do { \
+		if(buffer_remaining(x)) \
+			if((x).pos) memmove((x).data, \
+				buffer_start(x), \
+				buffer_remaining(x)); \
+		(x).pos = buffer_remaining(x); \
+		(x).limit = (x).capacity \
+	} while(0)
 
 #endif // _SECBUFFER_H
 //EOF

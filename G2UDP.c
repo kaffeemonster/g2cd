@@ -64,7 +64,7 @@ static inline void clean_up_u(int, int);
 #define G2UDP_FD_SUM 2
 
 //data-structures
-static int out_file = -1;
+static int out_file;
 static struct pollfd poll_me[G2UDP_FD_SUM];
 static struct worker_sync {
 	pthread_mutex_t lock;
@@ -466,9 +466,9 @@ static inline void clean_up_u(int udp_so, int who_to_say)
 		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
-	if(0 < udp_so)
+	if(0 <= udp_so)
 		close(udp_so);
-	if(0 < out_file)
+	if(0 <= out_file)
 		close(out_file);
 
 	server.status.all_abord[THREAD_UDP] = false;

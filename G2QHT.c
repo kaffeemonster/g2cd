@@ -34,6 +34,11 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+// debug file
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <zlib.h>
 // other
 #include "other.h"
@@ -88,10 +93,18 @@ static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
 static inline struct zpad *qht_get_zpad(void);
 static void g2_qht_free_hzp(void *);
+#ifdef QHT_DUMP
+static void qht_dump_init(void);
+static void qht_dump_deinit(void);
+#else
+#define qht_dump_init()
+#define qht_dump_deinit()
+#endif
 
 /* tls thingies */
 static void qht_init(void)
 {
+	qht_dump_init();
 	if(pthread_key_create(&key2qht_zpad, free))
 		diedie("couldn't create TLS key for qht");
 
@@ -106,6 +119,7 @@ static void qht_init(void)
 
 static void qht_deinit(void)
 {
+	qht_dump_deinit();
 	pthread_key_delete(key2qht_zpad);
 	pthread_key_delete(key2qht_scratch1);
 	/* we are exiting... */
@@ -411,7 +425,7 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 
 /*	if(tmp_table->flags.reset_needed)
 		logg_develd("reset_needed qht-table passed: %p\n", (void *) tmp_table);*/
-
+ 
 	switch(frag->compressed)
 	{
 	case COMP_DEFLATE:
@@ -616,6 +630,28 @@ inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 // TODO: Global QHT-needs-update flag (wich would need per connection locking)
 	return false;
 }
+
+#ifdef QHT_DUMP
+static int qht_tdump_fd, qht_pdump_fd;
+static void qht_dump_init(void)
+{
+	char tmp_nam[sizeof("./G2QHTtdump.bin") + 12];
+	snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTtdump%lu.bin", (unsigned long)getpid());
+	if(0 > (qht_tdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
+		logg_errno(LOGF_ERR, "opening QHT-table-file");
+	snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTpdump%lu.bin", (unsigned long)getpid());
+	if(0 > (qht_pdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
+		logg_errno(LOGF_ERR, "opening QHT-patch-file");
+}
+
+static void qht_dump_deinit(void)
+{
+	if(0 <= qht_tdump_fd)
+		close(qht_tdump_fd);
+	if(0 <= qht_pdump_fd)
+		close(qht_pdump_fd);
+}
+#endif
 
 static char const rcsid_q[] GCC_ATTR_USED_VAR = "$Id:$";
 // EOF
