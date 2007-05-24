@@ -532,6 +532,10 @@ inline int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 		if(tablef->compressed)
 			legal_length /= 2;
 
+	/*
+	 * ATM check is sane, we are checking the real sizes of the
+	 * really recieved data, not user supplied data...
+	 */
 		if((tablef->length + frag->length) > legal_length)
 		{
 			logg_devel("patch to big\n");

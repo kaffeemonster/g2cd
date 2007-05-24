@@ -121,7 +121,7 @@ struct pointer_buff
 				buffer_start(x), \
 				buffer_remaining(x)); \
 		(x).pos = buffer_remaining(x); \
-		(x).limit = (x).capacity \
+		(x).limit = (x).capacity; \
 	} while(0)
 
 #endif // _SECBUFFER_H
