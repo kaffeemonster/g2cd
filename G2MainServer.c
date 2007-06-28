@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -312,6 +312,37 @@ static void sig_stop_func(int signr)
 }
 
 #ifdef WANT_BACKTRACES
+static char *my_crashdump(char *buf, unsigned char *addr, int lines)
+{
+/*	unsigned char *org_addr = addr;*/
+	int i;
+
+	addr -= lines * 8;
+	for(i = lines; i; i--, addr += 16)
+	{
+		int j;
+
+		buf += sprintf(buf, "%p:  ", addr);
+		for(j = 0; j < 2; j++)
+		{
+			int k = 0;
+			for(; k < 8; k++)
+				buf += sprintf(buf, "%02X ", (unsigned int)addr[k] & 0xFF);
+			*buf++ = ' ';
+		}
+		*buf++ = '\t';
+		for(j = 0; j < 2; j++)
+		{
+			int k = 0;
+			for(; k < 8; k++)
+				*buf++ = isprint(addr[k]) ? addr[k] : (isspace(addr[k]) ? ' ' : '.');
+			*buf++ = ' ';
+		}
+		*buf++ = '\n';
+	}
+	return buf;
+}
+
 static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 {
 	static pthread_mutex_t bt_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -336,7 +367,14 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
  -x /dev/stdin "
 # endif
 	
-# define DEATHSTR_1 "We crashed hard!!! Please fasten your seat belts...\n\
+# define DEATHSTR_1 \
+"                                                            <~     ° *  * |X|\n\
+                                                                 °    \\*|*|X|\n\
+=======================================================================*@@|X|\n\
+                                                              |ouch|° /*|*|X|\n\
+                                                              °      *  * |X|\n\
+We crashed hard!!! Please fasten your seat belts...\n\
+We will now try scary things to aid debuging the situation.\n\
 (you may see unrelated program output spilling out of buffers)\n"
 	write(stderrfd, DEATHSTR_1, str_size(DEATHSTR_1));
 	/* lock out the other threads, if another one apaers, simply deadlock */
@@ -349,8 +387,8 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 	{
 		if(pthread_mutex_lock(&bt_mutex))
 		{
-# define DEATHSTR_2 "Another thread crashed and something went wrong.\
-So no BT, maybe a core.\n"
+# define DEATHSTR_2 "\"I'm scared Dave. Will i dream?\"\n\
+Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 			write(stderrfd, DEATHSTR_2, str_size(DEATHSTR_2));
 			goto out;
 		}
@@ -369,6 +407,8 @@ So no BT, maybe a core.\n"
 			isl = "address not mapped to object"; break;
 		case SEGV_ACCERR:
 			isl = "invalid permissions for mapped object"; break;
+		case 128: /* Linux only? x86 only? */
+			isl = "(unshure) priveleged instruction, probaly a SIGILL";
 		default:
 			isl = "Unknown SIGSEGV problem"; break;
 		}
@@ -479,9 +519,24 @@ So no BT, maybe a core.\n"
 			(unsigned long) uc->uc_stack.ss_size,
 			uc->uc_stack.ss_flags);
 	write(stderrfd, path, ret_val);
+	wptr = path;
+	if(SIGSEGV != signr && uc->uc_stack.ss_sp)
+	{
+		/* blaerch, catch a sigsegv in our own signalhandler, memref can be bogus */
+		if(!sigsetjmp(catch_sigsegv, 0))
+		{
+			wptr = path;
+			critical = 1;
+			wptr = my_crashdump(wptr, (unsigned char *)uc->uc_stack.ss_sp, 8);
+		}
+		critical = 0; 
+	}
+	*wptr++= '\n'; *wptr++ = '\0';
+	ret_val = wptr - path;
+	write(stderrfd, path, ret_val);
 	
 	/* whats at the memref */
-	ret_val = sprintf(path, "Memory ref:\t0x%016lX", (unsigned long)si->si_addr);
+	ret_val = sprintf(path, "Memory ref:\t0x%016lX\n", (unsigned long)si->si_addr);
 	write(stderrfd, path, ret_val);
 	wptr = path;
 	if(SIGSEGV != signr && si->si_addr)
@@ -490,23 +545,16 @@ So no BT, maybe a core.\n"
 		if(!sigsetjmp(catch_sigsegv, 0))
 		{
 			wptr = path;
-			critical = 1; 
-			for(i = 0; i < 64; i++)
-				wptr += sprintf(wptr, "%c%02X", (i % 16) ? ' ' : '\n', (unsigned int)((char *)si->si_addr)[i] & 0xFF);
-			*wptr++ = '\n';
-			*wptr++ = '"';
-			for(i = 0; i < 64; i++)
-			{
-				unsigned char c = ((unsigned char *)si->si_addr)[i];
-				*wptr++ = isprint(c) ? c : (isspace(c) ? ' ' : '.');
-			}
-			*wptr++= '"'; 
+			critical = 1;
+			wptr = my_crashdump(wptr, (unsigned char *)si->si_addr, 8);
 		}
-		critical = 0; 
+		critical = 0;
 	}
 	*wptr++= '\n'; *wptr++ = '\0';
 	ret_val = wptr - path;
 	write(stderrfd, path, ret_val);
+
+	fflush(NULL);
 
 	/* Now get the real bt */
 # define DEATHSTR_3 "\ntrying to get backtrace...\n\
