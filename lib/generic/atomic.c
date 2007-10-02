@@ -9,9 +9,8 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2
- * of the License, or any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -109,4 +108,4 @@ void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *x)
 	return (void *) ret_val;
 }
 
-static char const rcsid_a[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_ag[] GCC_ATTR_USED_VAR = "$Id:$";

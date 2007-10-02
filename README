@@ -1,22 +1,22 @@
 	G2CD - Gnutella 2 Server Daemon
 
-	Copyright (c) 2004, Jan Seiffert  ->  redbully@cc.fh-luh.de
+	Copyright (c) 2004-2007 Jan Seiffert  ->  redbully@cc.fh-luh.de
 	
 	This file is part of g2cd.
 
 	g2cd is free software; you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; either version 2 of the License, or
-	any later version.
+	it under the terms of the GNU General Public License version
+	2 as published by the Free Software Foundation.
 
-	g2cd is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	g2cd is distributed in the hope that it will be useful, but
+	WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
 	along with g2cd; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+	Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+	MA  02111-1307 USA
 	
 0. Introduction
 ---------------
@@ -51,7 +51,7 @@
 
 	What you need:
 	* A typical UNIX® system (as in IEEE Std 1003.1 (POSIX), ISO/IEC 9945)
-	* A C99 capable C-Compiler (GCC recommended)
+	* GCC as your compiler (A C99 capable C-Compiler should do, but...)
 	* A make-program (GNU-make recommended)
 	* Your systems header files (libc etc.)
 	* The zlib (library and header-files)

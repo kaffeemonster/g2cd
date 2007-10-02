@@ -2,14 +2,13 @@
  * log_facility.c
  * logging logic/magic/functions
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2
- * of the License, or any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -200,8 +199,8 @@ static int logg_internal(
 	struct big_buff *logg_buff;
 	int ret_val, old_errno, retry_cnt;
 
-	if(level > server.settings.logging.act_loglevel)
-		return 0;
+//	if(level > server.settings.logging.act_loglevel)
+//		return 0;
 
 	old_errno  = errno;
 
@@ -358,10 +357,13 @@ no_errno:
 	return ret_val;
 }
 
-inline int logg(const enum loglevel level, const char *fmt, ...)
+int logg_ent(const enum loglevel level, const char *fmt, ...)
 {
 	va_list args;
-	int ret_val = 0;
+	int ret_val;
+
+	if(level > get_act_loglevel())
+		return 0;
 
 	va_start(args, fmt);
 	ret_val = logg_internal(level, NULL, NULL, 0, false, fmt, args);
@@ -369,7 +371,7 @@ inline int logg(const enum loglevel level, const char *fmt, ...)
 	return ret_val;
 }
 
-inline int logg_more(
+int logg_more_ent(
 		const enum loglevel level,
 		const char *file,
 		const char *func,
@@ -382,11 +384,15 @@ inline int logg_more(
 	va_list args;
 	int ret_val;
 
+	if(level > get_act_loglevel())
+		return 0;
+
 	va_start(args, fmt);
 	ret_val = logg_internal(level, file, func, line, log_errno, fmt, args);
 	va_end(args);
 	return ret_val;
 }
+
 
 static char const rcsid_lf[] GCC_ATTR_USED_VAR = "$Id: log_facility.c,v 1.7 2005/11/05 11:02:32 redbully Exp redbully $";
 //EOF

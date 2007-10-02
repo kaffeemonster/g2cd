@@ -7,18 +7,18 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
- * g2cd is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * g2cd is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License
- * along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public
+ * License along with g2cd; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA  02111-1307  USA
  *
  * $Id: G2Connection.h,v 1.11 2005/07/29 09:12:00 redbully Exp redbully $
  */
@@ -32,13 +32,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <zlib.h>
-// Own
-#include "G2Packet.h"
-#include "G2QHT.h"
-#include "version.h"
-#include "lib/sec_buffer.h"
-#include "lib/log_facility.h"
-#include "lib/hzp.h"
 
 enum g2_connection_states
 {
@@ -65,6 +58,14 @@ enum g2_connection_encodings
 	ENC_NONE,
 	ENC_DEFLATE,
 };
+
+// Own
+#include "G2Packet.h"
+#include "G2QHT.h"
+#include "version.h"
+#include "lib/sec_buffer.h"
+#include "lib/log_facility.h"
+#include "lib/hzp.h"
 
 typedef struct g2_connection
 {

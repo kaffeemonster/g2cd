@@ -7,18 +7,18 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
- * g2cd is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * g2cd is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License
- * along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public
+ * License along with g2cd; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA  02111-1307  USA
  *
  * $Id: G2MainServer.h,v 1.16 2005/09/05 10:18:46 redbully Exp redbully $
  */
@@ -34,12 +34,14 @@
 #include <sys/poll.h>
 #include <netinet/in.h>
 #include <errno.h>
+
+static inline int get_act_loglevel(void);
 // Own
 #include "other.h"
 #include "G2Connection.h"
 #include "G2Packet.h"
-#include "lib/log_facility.h"
 #include "lib/atomic.h"
+#include "lib/log_facility.h"
 
 #define THREAD_SUM		3
 #define THREAD_ACCEPTOR		0
@@ -74,7 +76,7 @@ struct poll_info
 #define _G2MAIN_EXTRNVAR(x) x GCC_ATTR_VIS("hidden")
 #endif // _G2MAINSERVER_C
 
-_G2MAIN_EXTRNVAR( struct
+_G2MAIN_EXTRNVAR(struct
 {
 		struct
 		{
@@ -105,6 +107,11 @@ _G2MAIN_EXTRNVAR( struct
 
 _G2MAIN_EXTRNVAR(size_t packet_uprod_length);
 _G2MAIN_EXTRNVAR(char *packet_uprod);
+
+static inline int get_act_loglevel(void)
+{
+	return server.settings.logging.act_loglevel;
+}
 
 /*static inline void wrap_perror(const char *which_file, const char *which_func, const unsigned int where, const char *when)
 {

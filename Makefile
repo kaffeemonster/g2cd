@@ -9,9 +9,8 @@
 # This file is part of g2cd.
 #
 # g2cd is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2
-# of the License, or any later version.
+# it under the terms of the GNU General Public License version
+# 2 as published by the Free Software Foundation.
 # 
 # g2cd is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -58,12 +57,13 @@ HOSTCFLAGS = -O -Wall
 #
 # the C-Standart the compiler should work with
 #
-#	thats what i want
-CFLAGS += -std=c99
 #	don't know how it is right, but cygwin excludes some
 #	essential function if __STRICT_ANSI is defined
-#CFLAGS += -std=gnu99
-CFLAGS += -pedantic
+CFLAGS += -std=gnu99
+#	thats what i want
+#CFLAGS += -std=c99
+#	brings us not very far, C99 var macro handling is insane
+#CFLAGS += -pedantic
 #	gcc == 2.95.3
 #	wuerg-Around just functions due to Gnu extension to the
 #	C-Language
@@ -211,9 +211,11 @@ LDFLAGS += -Wl,--sort-common
 LDFLAGS += -Wl,--enable-new-dtags
 LDFLAGS += -Wl,--as-needed
 #LDFLAGS += -Wl,-M
-# maybe get patched into binutils
-LDFLAGS += -Wl,-hashvals
-LDFLAGS += -Wl,-zdynsort
+# maybe get patched into binutils, nope
+#LDFLAGS += -Wl,-hashvals
+#LDFLAGS += -Wl,-zdynsort
+# We now have this...
+LDFLAGS += -Wl,--hash-style=both
 #	Some linker can also strip the bin. with this flag 
 #LDFLAGS += -s
 #	switch between profile-generation and final build

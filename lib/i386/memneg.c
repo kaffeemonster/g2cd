@@ -7,9 +7,8 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2
- * of the License, or any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,7 +24,6 @@
  */
 
 #include "x86.h"
-#include "../log_facility.h"
 
 void *memneg(void *dst, const void *src, size_t len)
 {
@@ -46,8 +44,6 @@ void *memneg(void *dst, const void *src, size_t len)
 
 	if(SYSTEM_MIN_BYTES_WORK > len)
 		goto no_alignment_wanted;
-
-	logg_develd_old("src: %p, %u\tdst: %p, %u\n", src_char, src_char, dst_char, dst_char);
 
 	{
 		char *tmp_dst;

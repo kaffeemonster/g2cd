@@ -7,9 +7,8 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2
- * of the License, or any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,12 +23,14 @@
  * $Id: $
  */
 
+#include "../my_bitopsm.h"
+
 inline size_t flsst(size_t find)
 {
 	size_t found;
 /* ppc does not know fls but clz */
 	__asm__("cntlzw\t%0, %1\n" : "=r" (found) : "r" (find));
-	return 32 - found;
+	return SIZE_T_BITS - found;
 }
 
 static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";

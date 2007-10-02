@@ -2,14 +2,13 @@
  * log_facility.h
  * header-file for log_facility.c, the logging logic/magic
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2
- * of the License, or any later version.
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
  * 
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,8 +25,6 @@
 
 #ifndef _LOG_FACILITY_H
 #define _LOG_FACILITY_H
-
-#include "../other.h"
 
 #define str_size(x)	(sizeof(x) - 1)
 #define str_it2(x)	#x
@@ -75,13 +72,21 @@ enum loglevel
 	LOGF_DEVEL_OLD // dump everything a dev once wanted to see
 };
 
+#include "../G2MainServer.h"
+#include "../other.h"
+
 #ifndef _LOG_FACILITY_C
 #define _LOGF_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #else
 #define _LOGF_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #endif // _LOG_FACILITY_C
 
-_LOGF_EXTRN(inline int logg(const enum loglevel, const char *, ...) GCC_ATTR_PRINTF(2,3) );
-_LOGF_EXTRN(inline int logg_more(const enum loglevel, const char *, const char *, const unsigned int, int, const char *, ...) GCC_ATTR_PRINTF(6,7));
+_LOGF_EXTRN(int logg_ent(const enum loglevel level, const char *fmt, ...)) GCC_ATTR_PRINTF(2,3);
+_LOGF_EXTRN(int logg_more_ent(const enum loglevel, const char *, const char *, const unsigned int, int, const char *, ...)) GCC_ATTR_PRINTF(6,7);
+
+#define logg(l,f, ...) \
+	((l <= get_act_loglevel()) ? logg_ent(l, f, ## __VA_ARGS__) : 0)
+#define logg_more(le, fi, fu, li, e, fmt, ...) \
+	((le <= get_act_loglevel()) ? logg_more_ent(le, fi, fu, li, e, fmt, ## __VA_ARGS__) : 0)
 
 #endif //_LOG_FACILITY_H
