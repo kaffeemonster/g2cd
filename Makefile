@@ -309,7 +309,7 @@ DATEFLAGS = -u +%Y%m%d-%H%M
 #	Name of Program
 MAIN = g2cd
 #	Version-ding-dong
-VERSION = 0.0.00.08
+VERSION = 0.0.00.09
 DISTNAME = $(MAIN)-$(VERSION)
 LONGNAME = Go2CHub $(VERSION) programming Experiment
 

@@ -39,13 +39,15 @@
 #ifdef I_LIKE_ASM
 # ifdef __i386__
 #  include "i386/flsst.c"
-# elif __x86_64__
+# elif defined(__x86_64__)
 #  include "x86_64/flsst.c"
-# elif __powerpc__
+# elif defined(__mips)
+#  include "mips/flsst.c"
+# elif defined(__powerpc__)
 #  include "ppc/flsst.c"
-# elif __powerpc64__
+# elif defined(__powerpc64__)
 #  include "ppc64/flsst.c"
-# elif __alpha__
+# elif defined(__alpha__)
 #  include "alpha/flsst.c"
 # else
 #  include "generic/flsst.c"

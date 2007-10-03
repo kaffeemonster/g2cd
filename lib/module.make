@@ -12,6 +12,7 @@ TARED_DIRS += \
 	$(MPL)/generic \
 	$(MPL)/i386 \
 	$(MPL)/x86_64 \
+	$(MPL)/mips \
 	$(MPL)/ppc \
 	$(MPL)/ppc64 \
 	$(MPL)/sparc \
@@ -49,6 +50,7 @@ ATOMSRC = \
 	$(MPL)/generic/atomic.c \
 	$(MPL)/i386/atomic.h \
 	$(MPL)/x86_64/atomic.h \
+	$(MPL)/mips/atomic.h \
 	$(MPL)/ia64/atomic.h \
 	$(MPL)/ppc/atomic.h \
 	$(MPL)/sparc/atomic.h \
@@ -59,6 +61,7 @@ FLSSTSRC = \
 	$(MPL)/generic/flsst.c \
 	$(MPL)/i386/flsst.c \
 	$(MPL)/x86_64/flsst.c \
+	$(MPL)/mips/flsst.c \
 	$(MPL)/ppc/flsst.c \
 	$(MPL)/ppc64/flsst.c \
 	$(MPL)/alpha/flsst.c
