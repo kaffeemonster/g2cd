@@ -390,7 +390,7 @@ static inline void atomic_sub(int i, atomic_t *ptr)
 		  /* %3 */ "IJr" (i));
 }
 
-static inline int atomic_dec_return(int i, atomic_t *ptr)
+static inline int atomic_dec_return(atomic_t *ptr)
 {
 	int tmp, dummy;
 
@@ -411,6 +411,6 @@ static inline int atomic_dec_return(int i, atomic_t *ptr)
 	return tmp;
 }
 
-# define atomic_dec_test(x) (atommic_dec_return(1, (x)) == 0)
+# define atomic_dec_test(x) (atommic_dec_return((x)) == 0)
 
 #endif /* LIB_IMPL_ATOMIC_H */

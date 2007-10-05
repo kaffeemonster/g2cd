@@ -112,6 +112,8 @@ typedef union xxxxxx4
 #   include "mips/atomic.h"
 #  elif defined(__powerpc__)
 #   include "ppc/atomic.h"
+#  elif defined(__alpha__)
+#   include "alpha/atomic.h"
 #  else
 #   include "generic/atomic.h"
 #  endif
