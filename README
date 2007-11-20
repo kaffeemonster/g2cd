@@ -52,7 +52,10 @@
 	What you need:
 	* A typical UNIX® system (as in IEEE Std 1003.1 (POSIX), ISO/IEC 9945)
 	* GCC as your compiler (A C99 capable C-Compiler should do, but...)
-	* A make-program (GNU-make recommended)
+	* gmake (GNU-make)
+		[note: it also works with a prehistoric solaris make without any
+		       fancy extensions, but seems to not work with a FreeBSD make,
+				 doesn't like my suffix rules]
 	* Your systems header files (libc etc.)
 	* The zlib (library and header-files)
 

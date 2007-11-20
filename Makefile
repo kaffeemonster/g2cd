@@ -454,14 +454,24 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #
 # since SUN-make doens't set -o
 #
-%.o: %.c
+.SUFFIXES: .c .o .rtl .gch .h
+.c.o:
 	@$(COMPILE.c) $< -o $@
 
-%.rtl: %.c
+.c.rtl:
 	@$(RM) $@ && $(COMPILE.c) -dr $< -o `basename $@ .rtl`.o && (mv -f `basename $@ .rtl`.c.*.rtl $@ || touch $@)
 
-%.h.gch: %.h
+.h.gch.h:
 	@$(COMPILE.c) $< -o $@
+
+#%.o: %.c
+#	@$(COMPILE.c) $< -o $@
+#
+#%.rtl: %.c
+#	@$(RM) $@ && $(COMPILE.c) -dr $< -o `basename $@ .rtl`.o && (mv -f `basename $@ .rtl`.c.*.rtl $@ || touch $@)
+#
+#%.h.gch: %.h
+#	@$(COMPILE.c) $< -o $@
 #
 # add impliciet rules for dependencies (not used until now, managed from hand)
 #

@@ -49,6 +49,8 @@
 
 /* do we have stdint.h */
 #define HAVE_STDINT_H
+/* do we have alloca.h */
+#define HAVE_ALLOCA_H
 
 /* are we on a GNU/nonGNU-sys */
 #define HAVE_STRNLEN

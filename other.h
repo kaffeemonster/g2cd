@@ -209,7 +209,11 @@ static __inline__ int inet_pton(int af, const char *src, void *dest)
 #endif /* HAVE_SMP */
 
 #ifndef HAVE_SIGHANDLER_T
+# ifdef __FreeBSD__
+#  define sighandler_t sig_t
+# else
 typedef void (*sighandler_t)(int);
+# endif
 #endif
 
 #ifdef HAVE_STDINT_H
@@ -236,7 +240,11 @@ typedef void (*sighandler_t)(int);
 
 /* unaligned access */
 #ifdef __GNUC__
-# include <endian.h>
+# ifdef __linux__
+#  include <endian.h>
+# else
+#  include <sys/endian.h>
+# endif
 /* let the compiler handle unaligned access */
 # define get_unaligned(dest, ptr) \
 do { \

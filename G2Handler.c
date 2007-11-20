@@ -34,7 +34,9 @@
 #include <unistd.h>
 //#include <ctype.h>
 #include <zlib.h>
-#include <alloca.h>
+#ifdef HAVE_ALLOCA_H
+# include <alloca.h>
+#endif
 // System net-includes
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -26,12 +26,14 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <alloca.h>
 
 #include "log_facility.h"
 #include "atomic.h"
 #include "hzp.h"
 #include "../other.h"
+#ifdef HAVE_ALLOCA_H
+# include <alloca.h>
+#endif
 
 struct hzp
 {

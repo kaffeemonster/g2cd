@@ -31,10 +31,12 @@
 #include <time.h>
 #include <errno.h>
 #include <pthread.h>
-#include <alloca.h>
 #include <syslog.h>
 // other
 #include "../other.h"
+#ifdef HAVE_ALLOCA_H
+# include <alloca.h>
+#endif
 // Own includes
 #include "../G2MainServer.h"
 #include "log_facility.h"
@@ -67,6 +69,9 @@ static inline int do_logging(const enum loglevel, const char *, ...);
 
 static void logg_init(void)
 {
+	/* set a default log level till config comes up */
+	server.settings.logging.act_loglevel = LOGF_ERR;
+
 	if(pthread_key_create(&key2logg, free))
 		diedie("couln't create TLS key for logging");
 
@@ -102,6 +107,11 @@ static struct big_buff *logg_get_buf(void)
 		return ret_buf;
 
 	ret_buf = malloc(sizeof(*ret_buf) + (NORM_BUFF_CAPACITY / 4));
+
+	/* Gnarf, when we we are called from another constuctor, log_level is still 0 */
+	/* !!! but we won't get here, loglevel is now tested at the call site... !!! */
+	if(!logg_tls_ready)
+		server.settings.logging.act_loglevel = LOGF_ERR;
 
 	if(!ret_buf)
 	{
