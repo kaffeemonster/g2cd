@@ -95,7 +95,7 @@ static inline void handle_config(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
 static inline void read_uprofile(void);
-static void sig_stop_func(int signr);
+static void sig_stop_func(int signr, siginfo_t *, void *);
 #ifdef WANT_BACKTRACES
 static void sig_segv_print(int signr, siginfo_t *, void *);
 #endif
@@ -200,19 +200,27 @@ int main(int argc, char **args)
 
 	// set signalhandler
 	{
+		struct sigaction old_sas, new_sas;
+		memset(&new_sas, 0, sizeof(new_sas));
+		memset(&old_sas, 0, sizeof(old_sas));
+		new_sas.sa_handler = SIG_IGN;
 		// See what the Signal-status is, at the moment
-		sighandler_t old_sig_handler = signal(SIGINT, SIG_IGN);
-		if(SIG_ERR != old_sig_handler)
+		if(!sigaction(SIGINT, &new_sas, &old_sas))
 		{
 			// if we are already ignoring this signal
 			// (backgrounded?), don't register it
-			if(SIG_IGN != old_sig_handler)
+			if(SIG_IGN != old_sas.sa_handler)
 			{
-				if(SIG_ERR == signal(SIGINT, sig_stop_func))
+				memset(&new_sas, 0, sizeof(new_sas));
+				new_sas.sa_sigaction = sig_stop_func;
+				sigemptyset(&new_sas.sa_mask);
+				new_sas.sa_flags = SA_SIGINFO;
+				if(sigaction(SIGINT, &new_sas, NULL))
 					logg_pos(LOGF_CRIT, "Error registering signal handler\n"), server_running = false;
 			}
 			else
 				logg_pos(LOGF_NOTICE, "Not registering Shutdown-handler\n");
+			
 		}
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
@@ -300,14 +308,14 @@ int main(int argc, char **args)
 	return EXIT_SUCCESS;
 }
 
-static void sig_stop_func(int signr)
+static void sig_stop_func(int signr, GCC_ATTR_UNUSED_PARAM(siginfo_t, *si), GCC_ATTR_UNUSED_PARAM(void, *vuc))
 {
 	// if reregistering the Signal-hanlder fails,
-	if(SIG_ERR == signal(SIGINT, sig_stop_func))
+/*	if(SIG_ERR == signal(SIGINT, sig_stop_func))
 		exit(EXIT_FAILURE);
 	// droping it all to the Ground, since we have to be
 	// carefull while in a signal-handler
-
+*/
 	if(SIGINT == signr || SIGHUP == signr)
 		server_running = false;
 }
