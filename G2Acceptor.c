@@ -268,8 +268,8 @@ void *G2Accept(void *param)
 			break;
 		// Nothing happened (or just the Timeout)
 		case 0:
-		//	putchar('.');
-		//	fflush(stdout);
+		/*	putchar('.');
+			fflush(stdout); */
 			break;
 		// Something bad happened
 		case -1:

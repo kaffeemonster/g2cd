@@ -52,8 +52,6 @@
 /* I don't like Solaris, but i like extra Performance */
 #  include "my_epoll_devpoll.c"
 # elif defined HAVE_KQUEUE
-/* OK, lets use the BSD-way of doing things */
-// TODO: write this stuff?
 #  include "my_epoll_kqueue.c"
 # endif
 

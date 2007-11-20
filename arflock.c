@@ -52,7 +52,7 @@ static char pid_buf[100];
 
 int main(int argc, char **argv)
 {
-	int fd, fd_gate, fd_locked = false, fd_gate_locked = false;
+	int fd = -1, fd_gate, fd_locked = false, fd_gate_locked = false;
 	int exit_val = EXIT_SUCCESS, ret_val;
 	pid_t c_pid = -1;
 
@@ -85,7 +85,8 @@ int main(int argc, char **argv)
 	fd_gate_locked = true;
 
 	/* open the lib */
-	if(-1 != (fd = open(argv[1], O_WRONLY)))
+	fd = open(argv[1], O_WRONLY);
+	if(fd != -1)
 	{
 		/* lock the lib */
 		timeout = DEFAULT_TIMEOUT;
