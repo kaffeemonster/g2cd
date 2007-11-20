@@ -40,22 +40,22 @@
 #define NEED_EPOLL_COMPAT
 /* if we need epoll compat-layer, wich? Only use _ONE_! */
 //#define HAVE_POLL
-#define HAVE_KEPOLL	/* Linux with old userland and 2.6 Kernel */
+//#define HAVE_KEPOLL	/* Linux with old userland and 2.6 Kernel */
 //#define HAVE_DEVPOLL	/* Solaris, TODO */
-//#define HAVE_KQUEUE	/* BSD, TODO */
+#define HAVE_KQUEUE	/* BSD, TODO */
 
 /* do we have sighandler_t */
-#define HAVE_SIGHANDLER_T
+//#define HAVE_SIGHANDLER_T
 
 /* do we have stdint.h */
 #define HAVE_STDINT_H
 /* do we have alloca.h */
-#define HAVE_ALLOCA_H
+//#define HAVE_ALLOCA_H
 
 /* are we on a GNU/nonGNU-sys */
-#define HAVE_STRNLEN
+//#define HAVE_STRNLEN
 /* only select one or none of the following */
-#define HAVE_GNU_STRERROR_R
+//#define HAVE_GNU_STRERROR_R
 /* Old Solaris does not have strerror_r, instaed strerror
  * is thread save
  */
@@ -72,7 +72,7 @@
 #define I_LIKE_ASM
 
 /* this is callong for trouble, but helpfull */
-#define WANT_BACKTRACES
+//#define WANT_BACKTRACES
 
 /* how many bytes must be avail to switch away
  * from byte wise working

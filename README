@@ -54,8 +54,9 @@
 	* GCC as your compiler (A C99 capable C-Compiler should do, but...)
 	* gmake (GNU-make)
 		[note: it also works with a prehistoric solaris make without any
-		       fancy extensions, but seems to not work with a FreeBSD make,
-				 doesn't like my suffix rules]
+		       fancy extensions, I'm pretty sure it should work with a 
+		       posix compliant make, but it does not work with the FreeBSD
+		       make wich sets $@ wrong for libraries...]
 	* Your systems header files (libc etc.)
 	* The zlib (library and header-files)
 
@@ -170,8 +171,8 @@
 	So, lets get started:
 	 First of all some words about my develop-environment. No fancy IDE, just
 	(G)Vim, a shell and a Browser to view man-pages/search the web.
-	 I really *please* you to use *real* Tabs. No soft-tabs, no other fancy
-	technique (they all fail), only real plain Tabs. With this everyone could
+	 I really *please* you to use *real* tabs. No soft-tabs, no other fancy
+	technique (they all fail), only real plain tabs. With this everyone could
 	adjust his favorite indentation-width, thats my believe. I use 3 as
 	indentation-width.
 	 And with this you got my position in the great flame-wars, you will find
@@ -208,7 +209,7 @@
 	   folding ;)
 	b) I like lower-case letters (do you want to do keyboard-gymnastics with
 	   shift?) filenames are a exception (you write them only sometimes, with
-	   tab complition), constants are all-upper-case.
+	   tab complietion), constants are all-upper-case.
 	c) I like under-scores
 	d) I like something *between* u**x-shortness (su, ls, cd) and talking
 	   names (this_is_the_most_freaqently_used_variable). Hmmm, hard to

@@ -96,7 +96,9 @@ static inline void change_the_user(void);
 static inline void setup_resources(void);
 static inline void read_uprofile(void);
 static void sig_stop_func(int signr);
+#ifdef WANT_BACKTRACES
 static void sig_segv_print(int signr, siginfo_t *, void *);
+#endif
 
 int main(int argc, char **args)
 {

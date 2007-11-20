@@ -400,7 +400,7 @@ static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 					shift -= 8;
 			}
 		}
-		logg_packet("/KHL/TS -> %lu\t%lu\n", foreign_time, local_time);
+		logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
 	}
 	else
 		logg_packet(STDLF, "/KHL/TS", "TS not 4 or 8 byte");

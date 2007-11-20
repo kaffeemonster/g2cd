@@ -119,6 +119,9 @@ static void qht_init(void)
 
 static void qht_deinit(void)
 {
+	/* if we died in an constructor, me might not be fully set up */
+	if(!global_qht)
+		return;
 	qht_dump_deinit();
 	pthread_key_delete(key2qht_zpad);
 	pthread_key_delete(key2qht_scratch1);

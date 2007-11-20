@@ -50,6 +50,7 @@ CTAGS = ctags
 CSCOPE = cscope
 OBJCOPY = objcopy
 STRIP = strip
+RM = rm -f
 
 # split up host and target
 HOSTCFLAGS = -O -Wall
@@ -154,15 +155,15 @@ OPT_FLAGS += -ftracer
 #OPT_FLAGS += -fnew-ra
 OPT_FLAGS += -funswitch-loops
 # gcc > 4.x
-OPT_FLAGS += -funsafe-loop-optimizations
-OPT_FLAGS += -ftree-loop-linear
-OPT_FLAGS += -ftree-loop-im
-OPT_FLAGS += -ftree-loop-ivcanon
-OPT_FLAGS += -fivopts
+#OPT_FLAGS += -funsafe-loop-optimizations
+#OPT_FLAGS += -ftree-loop-linear
+#OPT_FLAGS += -ftree-loop-im
+#OPT_FLAGS += -ftree-loop-ivcanon
+#OPT_FLAGS += -fivopts
 # hmmm, breaks in memxor...
 #OPT_FLAGS += -ftree-vectorize
 OPT_FLAGS += -freorder-blocks-and-partition
-OPT_FLAGS += -fmove-loop-invariants
+#OPT_FLAGS += -fmove-loop-invariants
 OPT_FLAGS += -fbranch-target-load-optimize
 #	gcc >= 3.5 or 3.4 with orig. path applied, and backtraces
 #	don't look nice anymore
@@ -186,7 +187,7 @@ CFLAGS += $(OPT_FLAGS) #-fprofile-use
 #
 # Libraries from the System (which will never be modules)
 #	Solaris...
-LDLIBS_BASE = -ldl #-lm
+LDLIBS_BASE = #-ldl #-lm
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
 # either you set this and the appropreate flags below, or you
@@ -205,7 +206,7 @@ LDLIBS = $(LDLIBS_BASE) -lz
 #	Linking-Flags
 #
 #	Hopefully the linker knows somehting about this
-LDFLAGS = -g -pg
+LDFLAGS = -g #-pg
 LDFLAGS += -Wl,-O1
 LDFLAGS += -Wl,--sort-common
 LDFLAGS += -Wl,--enable-new-dtags
@@ -215,7 +216,7 @@ LDFLAGS += -Wl,--as-needed
 #LDFLAGS += -Wl,-hashvals
 #LDFLAGS += -Wl,-zdynsort
 # We now have this...
-LDFLAGS += -Wl,--hash-style=both
+#LDFLAGS += -Wl,--hash-style=both
 #	Some linker can also strip the bin. with this flag 
 #LDFLAGS += -s
 #	switch between profile-generation and final build
@@ -454,7 +455,7 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #
 # since SUN-make doens't set -o
 #
-.SUFFIXES: .c .o .rtl .gch .h
+.SUFFIXES: .c .o .a .rtl .gch .h
 .c.o:
 	@$(COMPILE.c) $< -o $@
 
@@ -463,6 +464,9 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 
 .h.gch.h:
 	@$(COMPILE.c) $< -o $@
+
+.o.a:
+	@$(AR) $(ARFLAGS) $@ $*.o
 
 #%.o: %.c
 #	@$(COMPILE.c) $< -o $@

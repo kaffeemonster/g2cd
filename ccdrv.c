@@ -240,8 +240,8 @@ static int handle_output(int *fds, int c_pid, int *c_exit_status)
 			if(OK == setupterm(NULL, STDOUT_FILENO, &errnum))
 			{
 				char *tmp_str = NULL;
-				my_cols = columns;
-				my_tabs = init_tabs;
+				my_cols = columns < 0 ? 80 : columns;
+				my_tabs = init_tabs < 0 ? 8 : init_tabs;
 				my_reset = exit_attribute_mode;
 
 				tmp_str = tparm(set_a_foreground, 1);
@@ -266,8 +266,13 @@ static int handle_output(int *fds, int c_pid, int *c_exit_status)
 						my_yellow = strcpy(tmp_str2, tmp_str);
 				}
 			}
+			else
+			{
+				printf("setupterm failed\n");
+			}
 		}
 
+//		printf("oa: %s\tc: %d\tt: %d\n", onatty ? "true":"false", my_cols, my_tabs);
 		/* finally print the comment over the complete column */
 		printf(onatty ? "\r\t%-*s[..]" : "\t%-*s", my_cols - my_tabs - 5, comment);
 

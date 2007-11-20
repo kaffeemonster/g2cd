@@ -24,8 +24,9 @@
  */
 
 // TODO: write this stuff?
-
-#error "oh-oh"
+#include <sys/types.h>
+#include <sys/event.h>
+#include <sys/time.h>
 
 	/* you better not delete this proto, or it won't work */
 static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
@@ -34,7 +35,7 @@ static void my_epoll_deinit(void) GCC_ATTR_DESTRUCT;
 static void my_epoll_init(void)
 {
 // num = EPOLL_QUEUES
-	die("Your kidding? No epoll emulation, no go");
+	die("Your kidding? No epoll emulation, no go!\n");
 }
 
 static void my_epoll_deinit(void)
