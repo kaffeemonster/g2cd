@@ -33,6 +33,7 @@ LIBHEADS = \
 	$(MPL)/my_epoll.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
+	$(MPL)/recv_buff.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
 	$(MPL)/i386/x86.h
@@ -111,6 +112,7 @@ LIBSRCS = \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
 	$(MPL)/strnlen.c \
+	$(MPL)/recv_buff.c \
 	$(MPL)/hzp.c \
 	$(MPL)/atomic.c
 
@@ -123,6 +125,7 @@ LIBOBJS = \
 	$(MPL)/memneg.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
+	$(MPL)/recv_buff.o \
 	$(MPL)/hzp.o \
 	$(MPL)/atomic.o
 
