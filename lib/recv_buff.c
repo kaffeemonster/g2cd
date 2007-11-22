@@ -30,10 +30,18 @@
 #include "recv_buff.h"
 #include "../other.h"
 
+
+struct local_buffer_org
+{
+	int pos;
+	struct norm_buff *buffs[3 * EVENT_SPACE];
+};
+
 /* Protos */
 	/* You better not kill this proto, or it wount work ;) */
 static void recv_buff_init(void) GCC_ATTR_CONSTRUCT;
 static void recv_buff_deinit(void) GCC_ATTR_DESTRUCT;
+static void recv_buff_free_lorg(void *);
 static inline struct norm_buff *recv_buff_alloc_system(void);
 static inline void recv_buff_free_system(struct norm_buff *);
 
@@ -52,7 +60,7 @@ static void recv_buff_init(void)
 {
 	size_t i;
 
-	if(pthread_key_create(&key2lrecv, NULL))
+	if(pthread_key_create(&key2lrecv, recv_buff_free_lorg))
 		diedie("couldn't create TLS key for recv_buff\n");
 
 	for(i = 0; i < anum(free_buffs); i++)
@@ -84,12 +92,96 @@ static void recv_buff_init(void)
 
 static void recv_buff_deinit(void)
 {
+	int failcount = 0;
 	pthread_key_delete(key2lrecv);
-// TODO: free buffer up again, remainder, want to see them in valgrind
+
+#ifndef DEBUG_DEVEL_OLD
+	do
+	{
+		size_t i = 0;
+		do
+		{
+			if(atomic_pread(&free_buffs[i]))
+			{
+				struct norm_buff *ret = NULL;
+				if((ret = atomic_pxa(ret, &free_buffs[i])))
+					recv_buff_free_system(ret);
+			}
+		} while(++i < anum(free_buffs));
+	} while(++failcount < 3);
+#endif
+}
+
+static void recv_buff_free_lorg(void *vorg)
+{
+	struct local_buffer_org *org;
+	int i;
+
+	if(!vorg)
+		return;
+#ifndef DEBUG_DEVEL_OLD
+	org = vorg;
+	for(i = org->pos; i < (int)anum(org->buffs);)
+	{
+		struct norm_buff *tmp = org->buffs[i];
+		org->buffs[i++] = NULL;
+		recv_buff_free_system(tmp);
+	}
+#endif
+	free(org);
+}
+
+static inline struct local_buffer_org *recv_buff_init_lorg(void)
+{
+	struct local_buffer_org *org = calloc(1, sizeof(*org));
+	int i;
+
+	if(!org)
+		return NULL;
+	
+	org->pos = anum(org->buffs);
+	if(pthread_setspecific(key2lrecv, org))
+	{
+		logg_errno(LOGF_CRIT, "local recv_buff key not initialized?");
+		free(org);
+		return NULL;
+	}
+
+	for(i = org->pos; i > (int)((anum(org->buffs) / 3) + 2);)
+	{
+		org->buffs[--i] = recv_buff_alloc_system();
+		if(!org->buffs[i])
+		{
+			i++;
+			break;
+		}
+	}
+	org->pos = i;
+	return org;
 }
 
 void recv_buff_local_refill(void)
 {
+	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
+	int i;
+
+	if(!org)
+	{
+		org = recv_buff_init_lorg();
+		if(!org)
+			return;
+	}
+
+	for(i = org->pos; i > (int)((anum(org->buffs) / 3) + 2);)
+	{
+		org->buffs[--i] = recv_buff_alloc();
+		if(!org->buffs[i])
+		{
+			i++;
+			break;
+		}
+	}
+	org->pos = i;
 }
 
 /*
@@ -98,19 +190,26 @@ void recv_buff_local_refill(void)
  */
 struct norm_buff *recv_buff_local_get(void)
 {
-	struct norm_buff *ret = pthread_getspecific(key2lrecv);
+	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
+	struct norm_buff *ret_val;
 
-	if(ret)
-		return ret;
-
-	ret = recv_buff_alloc();
-	if(!ret)
+	if(!org)
 	{
-		logg_errno(LOGF_DEVEL, "no local recv_buff");
-		return NULL;
+		org = recv_buff_init_lorg();
+		if(!org)
+			return recv_buff_alloc();
 	}
+
+	if(org->pos < (int)anum(org->buffs))
+	{
+		ret_val = org->buffs[org->pos];
+		org->buffs[org->pos++] = NULL;
+		logg_develd_old("allocating recv_buff local pos: %d\n", org->pos);
+	}
+	else
+		ret_val = recv_buff_alloc();
 	
-	return ret;
+	return ret_val;
 }
 
 /*
@@ -118,18 +217,32 @@ struct norm_buff *recv_buff_local_get(void)
  */
 void recv_buff_local_ret(struct norm_buff *buf)
 {
-	if(pthread_setspecific(key2lrecv, buf))
+	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
+
+	if(!org)
 	{
-		logg_errno(LOGF_CRIT, "local recv_buff key not initised?");
-		recv_buff_free(buf);
+		org = recv_buff_init_lorg();
+		if(!org)
+		{
+			recv_buff_free(buf);
+			return;
+		}
 	}
+
+	if(org->pos > 0)
+	{
+		org->buffs[--org->pos] = buf;
+		logg_develd_old("freeing recv_buff local pos: %d\n", org->pos);
+	}
+	else
+		recv_buff_free(buf);
 }
 
 
 static inline struct norm_buff *recv_buff_alloc_system(void)
 {
 	struct norm_buff *ret = malloc(sizeof(*ret));
-	logg_devel("allocating recv_buffer from sys\n");
+	logg_devel_old("allocating recv_buffer from sys\n");
 	if(ret)
 	{
 		ret->capacity = sizeof(ret->data);
@@ -140,17 +253,50 @@ static inline struct norm_buff *recv_buff_alloc_system(void)
 
 struct norm_buff *recv_buff_alloc(void)
 {
+	int failcount = 0;
+	struct norm_buff *ret_val = NULL;
+
+	do
+	{
+		size_t i = 0;
+		do
+		{
+			if(atomic_pread(&free_buffs[i]))
+			{
+				if((ret_val = atomic_pxa(ret_val, &free_buffs[i])))
+					return ret_val;
+			}
+		} while(++i < anum(free_buffs));
+	} while(++failcount < 1);
+	
 	return recv_buff_alloc_system();
 }
 
 static inline void recv_buff_free_system(struct norm_buff *tf)
 {
+	logg_devel_old("freeing recv_buff to sys\n");
 	free(tf);
 }
 
 void recv_buff_free(struct norm_buff *ret)
 {
+	int failcount = 0;
+
 	if(!ret)
 		return;
+
+	do
+	{
+		size_t i = 0;
+		do
+		{
+			if(!atomic_pread(&free_buffs[i]))
+			{
+				if(!(ret = atomic_pxa(ret, &free_buffs[i])))
+					return;
+			}
+		} while(++i < anum(free_buffs));
+	} while(++failcount < 1);
+
 	recv_buff_free_system(ret);
 }

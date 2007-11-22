@@ -259,8 +259,8 @@ static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_inf
 	}
 	(*work_cons)->capacity = WC_START_CAPACITY;
 
-	*lrecv_buff = recv_buff_alloc();
-	*lsend_buff = recv_buff_alloc();
+	*lrecv_buff = recv_buff_local_get();
+	*lsend_buff = recv_buff_local_get();
 	if(!(*lrecv_buff && *lsend_buff))
 	{
 		logg_errno(LOGF_ERR, "allocating local buffer");
@@ -509,8 +509,8 @@ static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_con
 	
 	free(work_cons);
 
-	recv_buff_free(lrecv_buff);
-	recv_buff_free(lsend_buff);
+	recv_buff_local_ret(lrecv_buff);
+	recv_buff_local_ret(lsend_buff);
 
 	// If this happens, its maybe Dangerous, or trivial, so what to do?
 	if(0 > my_epoll_close(epoll_fd))

@@ -318,7 +318,7 @@ inline bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff *
 		if(!*our_buff)
 		{
 			logg_devel_old("allocating\n");
-			*our_buff = recv_buff_alloc();
+			*our_buff = recv_buff_local_get();
 			if(!*our_buff)
 			{
 				logg_pos(LOGF_WARN, "allocating recv buff failed\n");
@@ -349,7 +349,7 @@ inline void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **
 		if(buffer_cempty(**con_buff))
 		{
 			logg_devel_old("foreign buffer empty\n");
-			recv_buff_free(*con_buff);
+			recv_buff_local_ret(*con_buff);
 			*con_buff = NULL;
 		}
 	}
