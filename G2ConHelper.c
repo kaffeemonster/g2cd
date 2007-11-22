@@ -48,6 +48,7 @@
 #include "G2Connection.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
 
@@ -93,20 +94,35 @@ inline bool do_read(struct epoll_event *p_entry)
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	ssize_t result = 0;
 	bool ret_val = true;
+#ifdef DEBUG_LEVEL
+	if(!w_entry->recv)
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+			"no recv buffer!",
+			inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
+			//inet_ntoa(w_entry->remote_host.sin_addr),
+			ntohs(w_entry->remote_host.sin_port),
+			w_entry->com_socket);
+		w_entry->flags.dismissed = true;
+		return false;
+	}
+#endif
+
 	do
 	{
 		errno = 0;
-		result = recv(w_entry->com_socket, buffer_start(w_entry->recv), buffer_remaining(w_entry->recv), 0);
+		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv), buffer_remaining(*w_entry->recv), 0);
 	} while(-1 == result && EINTR == errno);
 	//(w_entry->recv.data + w_entry->recv.pos),
 
 	switch(result)
 	{
 	default:
-		w_entry->recv.pos += result;
+		w_entry->recv->pos += result;
 		break;
 	case  0:
-		if(buffer_remaining(w_entry->recv))
+		if(buffer_remaining(*w_entry->recv))
 		{
 			if(EAGAIN != errno)
 			{
@@ -133,7 +149,7 @@ inline bool do_read(struct epoll_event *p_entry)
 		}
 		break;
 	}
-	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, w_entry->recv.pos, w_entry->recv.limit);
+	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, w_entry->recv->pos, w_entry->recv->limit);
 	
 	return ret_val;
 }
@@ -143,19 +159,34 @@ inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	bool ret_val = true;
 	ssize_t result = 0;
-	buffer_flip(w_entry->send);
+#ifdef DEBUG_LEVEL
+	if(!w_entry->send)
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+			"no send buffer!",
+			inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
+			//inet_ntoa(w_entry->remote_host.sin_addr),
+			ntohs(w_entry->remote_host.sin_port),
+			w_entry->com_socket);
+		w_entry->flags.dismmised = true;
+		ret_val = false;
+	}
+#endif
+
+	buffer_flip(*w_entry->send);
 	do
 	{
 		errno = 0;
-		result = send(w_entry->com_socket, w_entry->send.data, w_entry->send.limit, 0);
+		result = send(w_entry->com_socket, w_entry->send->data, w_entry->send->limit, 0);
 	} while(-1 == result && EINTR == errno);
 
 	switch(result)
 	{
 	default:
-		w_entry->send.pos += result;
+		w_entry->send->pos += result;
 		//p_entry->events |= POLLIN;
-		if(!buffer_remaining(w_entry->send))
+		if(!buffer_remaining(*w_entry->send))
 		{
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry))
@@ -178,7 +209,7 @@ inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		}
 		break;
 	case  0:
-		if(buffer_remaining(w_entry->send))
+		if(buffer_remaining(*w_entry->send))
 		{
 			if(EAGAIN != errno)
 			{
@@ -226,9 +257,9 @@ inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		}
 		break; 
 	}
-	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_cons[j]->recv.pos, work_cons[j]->recv.limit);
-	buffer_compact(w_entry->send);
-	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_cons[j]->recv.pos, work_cons[j]->recv.limit);
+	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_entry->send->pos, work_entry->send->limit);
+	buffer_compact(*w_entry->send);
+	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_entry->send->pos, work_entry->send->limit);
 	return ret_val;
 }
 
@@ -277,6 +308,51 @@ inline bool recycle_con(
 	logg_develd("%s\n", (keep_it) ? "connection removed" : "connection recyled");
 
 	return true;
+}
+
+inline bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff)
+{
+	if(!*con_buff)
+	{
+		logg_devel_old("no buffer\n");
+		if(!*our_buff)
+		{
+			logg_devel_old("allocating\n");
+			*our_buff = recv_buff_alloc();
+			if(!*our_buff)
+			{
+				logg_pos(LOGF_WARN, "allocating recv buff failed\n");
+				return false;
+			}
+		}
+		*con_buff = *our_buff;
+	}
+	return true;
+}
+
+inline void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff)
+{
+	if(*con_buff == *our_buff)
+	{
+		logg_devel_old("local buffer\n");
+		if(buffer_cempty(**con_buff)) /* buffer is empty */
+		{
+			logg_devel_old("empty\n");
+			*con_buff = NULL;
+			buffer_clear(**our_buff);
+		}
+		else
+			*our_buff = NULL;
+	}
+	else
+	{
+		if(buffer_cempty(**con_buff))
+		{
+			logg_devel_old("foreign buffer empty\n");
+			recv_buff_free(*con_buff);
+			*con_buff = NULL;
+		}
+	}
 }
 
 static char const rcsid_ch[] GCC_ATTR_USED_VAR = "$Id: G2ConHelper.c,v 1.12 2005/07/29 09:24:04 redbully Exp redbully $";

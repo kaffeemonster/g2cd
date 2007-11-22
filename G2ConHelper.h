@@ -46,5 +46,8 @@ recycle_con(
 	int
 ));
 
+_G2CONHELPER_EXTRN(inline bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff));
+_G2CONHELPER_EXTRN(inline void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff));
+
 #endif /* _G2CONHELPER_H */
 // EOF

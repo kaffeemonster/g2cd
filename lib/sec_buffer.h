@@ -123,5 +123,11 @@ struct pointer_buff
 		(x).limit = (x).capacity; \
 	} while(0)
 
+/*
+ * only valid after a compact
+ */
+#define buffer_cempty(x) \
+	!(x).pos
+
 #endif // _SECBUFFER_H
 //EOF

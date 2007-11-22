@@ -30,28 +30,66 @@
 #include "recv_buff.h"
 #include "../other.h"
 
-static pthread_key_t key2lrecv;
-
 /* Protos */
 	/* You better not kill this proto, or it wount work ;) */
 static void recv_buff_init(void) GCC_ATTR_CONSTRUCT;
 static void recv_buff_deinit(void) GCC_ATTR_DESTRUCT;
+static inline struct norm_buff *recv_buff_alloc_system(void);
+static inline void recv_buff_free_system(struct norm_buff *);
 
+/* Vars */
+	/* buffer buffer */
+static atomicptra_t free_buffs[FB_CAP_START];
+static pthread_key_t key2lrecv;
 /*
  * recv_buff_init - init the recv_buff allocator
  * Get TLS key
+ * fill buffer buffer
  *
  * exit() on failure
  */
 static void recv_buff_init(void)
 {
+	size_t i;
+
 	if(pthread_key_create(&key2lrecv, NULL))
-		diedie("couldn't create TLS key for recv_buff");
+		diedie("couldn't create TLS key for recv_buff\n");
+
+	for(i = 0; i < anum(free_buffs); i++)
+	{
+		struct norm_buff *tmp = recv_buff_alloc_system();
+		if(tmp)
+		{
+			if((tmp = atomic_pxa(tmp, &free_buffs[i])))
+			{
+				logg_pos(LOGF_CRIT, "another thread working while init???");
+				recv_buff_free_system(tmp);
+			}
+		}
+		else
+		{
+			logg_errno(LOGF_CRIT, "free_buffs memory");
+			if(FB_TRESHOLD < i)
+				break;
+
+			for(; i > 0; --i)
+			{
+				tmp = NULL;
+				recv_buff_free_system(atomic_pxa(tmp, &free_buffs[i]));
+			}
+			exit(EXIT_FAILURE);
+		}
+	}
 }
 
 static void recv_buff_deinit(void)
 {
 	pthread_key_delete(key2lrecv);
+// TODO: free buffer up again, remainder, want to see them in valgrind
+}
+
+void recv_buff_local_refill(void)
+{
 }
 
 /*
@@ -88,11 +126,10 @@ void recv_buff_local_ret(struct norm_buff *buf)
 }
 
 
-
-struct norm_buff *recv_buff_alloc(void)
+static inline struct norm_buff *recv_buff_alloc_system(void)
 {
 	struct norm_buff *ret = malloc(sizeof(*ret));
-	logg_devel("allocating recv_buffer");
+	logg_devel("allocating recv_buffer from sys\n");
 	if(ret)
 	{
 		ret->capacity = sizeof(ret->data);
@@ -101,7 +138,19 @@ struct norm_buff *recv_buff_alloc(void)
 	return ret;
 }
 
+struct norm_buff *recv_buff_alloc(void)
+{
+	return recv_buff_alloc_system();
+}
+
+static inline void recv_buff_free_system(struct norm_buff *tf)
+{
+	free(tf);
+}
+
 void recv_buff_free(struct norm_buff *ret)
 {
-	free(ret);
+	if(!ret)
+		return;
+	recv_buff_free_system(ret);
 }

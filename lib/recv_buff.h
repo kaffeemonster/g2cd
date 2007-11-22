@@ -31,6 +31,7 @@
 
 # define LIB_RECV_BUFF_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
+LIB_RECV_BUFF_EXTRN(void recv_buff_local_refill(void));
 LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_local_get(void));
 LIB_RECV_BUFF_EXTRN(void recv_buff_local_ret(struct norm_buff *));
 LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_alloc(void));

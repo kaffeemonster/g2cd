@@ -57,22 +57,21 @@
 #include "G2PacketSerializer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 
-#undef EVENT_SPACE
-#define EVENT_SPACE 16
-
 //internal prototypes
-static inline bool init_memory_h(struct epoll_event **, struct g2_con_info **, int *);
+static inline bool init_memory_h(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool handle_from_accept(struct g2_con_info **, int, int);
-static inline g2_connection_t **handle_socket_io_h(struct epoll_event *, int epoll_fd);
+static inline g2_connection_t **handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
 // do not inline, we take a pointer of it, and when its called, performance doesn't matter
-static void clean_up_h(struct epoll_event *, struct g2_con_info *, int, int);
+static void clean_up_h(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Handler(void *param)
 {
 	//data-structures
 	struct g2_con_info *work_cons = NULL;
+	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
 	//sock-things
 	int from_accept = -1;
@@ -90,7 +89,7 @@ void *G2Handler(void *param)
 	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
 	// getting memory for our FD's and everything else
-	if(!init_memory_h(&eevents, &work_cons, &epoll_fd))
+	if(!init_memory_h(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))
 	{ 
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
 			diedie("initiating stop"); // hate doing this, but now it's to late
@@ -103,7 +102,7 @@ void *G2Handler(void *param)
 	if(sizeof(from_accept) != recv(sock2main, &from_accept, sizeof(from_accept), 0))
 	{
 		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		clean_up_h(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	logg(LOGF_DEBUG, "Handler:\tfrom_accept -> %i\n", from_accept);
@@ -115,14 +114,14 @@ void *G2Handler(void *param)
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, from_accept, eevents))
 	{
 		logg_errno(LOGF_ERR, "adding acceptor-pipe to epoll");
-		clean_up_h(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	eevents->data.ptr = (void *)0;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents))
 	{
 		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
-		clean_up_h(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 
@@ -130,6 +129,7 @@ void *G2Handler(void *param)
 	server.status.all_abord[THREAD_HANDLER] = true;
 	while(keep_going)
 	{
+		recv_buff_local_refill();
 		// Let's do it
 		num_poll = my_epoll_wait(epoll_fd, eevents, EVENT_SPACE, 8000);
 		e_wptr = eevents;
@@ -151,7 +151,7 @@ void *G2Handler(void *param)
 						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT)))
 						{
 							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
-							if(NULL != tmp_con_holder)
+							if(tmp_con_holder)
 								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							else
 							{
@@ -163,9 +163,19 @@ void *G2Handler(void *param)
 						{
 							// Some FD's ready to be filled?
 							// Some data ready to be read in?
-							g2_connection_t **tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd);
-							if(NULL != tmp_con_holder)
+							g2_connection_t **tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd, &lrecv_buff, &lsend_buff);
+							if(tmp_con_holder)
 							{
+								if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff)
+								{
+									(*tmp_con_holder)->recv = NULL;
+									buffer_clear(*lrecv_buff);
+								}
+								if(lsend_buff && (*tmp_con_holder)->send == lsend_buff)
+								{
+									(*tmp_con_holder)->send = NULL;
+									buffer_clear(*lsend_buff);
+								}
 								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
 							}
 						}
@@ -174,9 +184,7 @@ void *G2Handler(void *param)
 					else
 					{
 						if(e_wptr->events & (uint32_t) EPOLLIN)
-						{
 							handle_from_accept(&work_cons, from_accept, epoll_fd);
-						}
 						// if there is no read-interrest, we're blown up
 						else
 						{
@@ -227,12 +235,13 @@ void *G2Handler(void *param)
 		}
 	}
 
-	clean_up_h(eevents, work_cons, epoll_fd, sock2main);
+	clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 	pthread_exit(NULL);
 	return NULL; // to avoid warning about reaching end of non-void funktion
 }
 
-static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_info **work_cons, int *epoll_fd)
+static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_info **work_cons,
+		struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff, int *epoll_fd)
 {
 	*poll_me = calloc(EVENT_SPACE, sizeof(**poll_me));
 	if(NULL == *poll_me)
@@ -250,6 +259,16 @@ static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_inf
 	}
 	(*work_cons)->capacity = WC_START_CAPACITY;
 
+	*lrecv_buff = recv_buff_alloc();
+	*lsend_buff = recv_buff_alloc();
+	if(!(*lrecv_buff && *lsend_buff))
+	{
+		logg_errno(LOGF_ERR, "allocating local buffer");
+		free(*poll_me);
+		free(*work_cons);
+		return false;
+	}
+
 	*epoll_fd = my_epoll_create(PD_START_CAPACITY);
 	if(0 > *epoll_fd)
 	{
@@ -262,7 +281,7 @@ static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_inf
 
 static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_acceptor, int epoll_fd)
 {
-	struct epoll_event tmp_eevent;
+	struct epoll_event tmp_eevent = {0,{0}};
 	g2_connection_t *recvd_con = NULL;
 	ssize_t ret_val;
 
@@ -307,16 +326,30 @@ clean_up:
 	return false;
 }
 
-static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd)
+static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
 {
 	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
 
+	/* get buffer */
+	if(!manage_buffer_before(&(*w_entry)->recv, lrecv_buff))
+	{
+		(*w_entry)->flags.dismissed = true;
+		return w_entry;
+	}
+	if(!manage_buffer_before(&(*w_entry)->send, lsend_buff))
+	{
+		(*w_entry)->flags.dismissed = true;
+		return w_entry;
+	}
+
+	/* write */
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
 		if(!do_write(p_entry, epoll_fd))
 			return w_entry;
 	}
 
+	/* read */
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
 		bool	retry;
@@ -334,21 +367,21 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			{
 				logg_devel_old("--------- compressed\n");
 				d_source = (*w_entry)->recv_u;
-				buffer_flip((*w_entry)->recv);
-				if(buffer_remaining((*w_entry)->recv))
+				buffer_flip(*(*w_entry)->recv);
+				if(buffer_remaining(*(*w_entry)->recv))
 				{
-					(*w_entry)->z_decoder.next_in = (Bytef *)buffer_start((*w_entry)->recv);
-					(*w_entry)->z_decoder.avail_in = buffer_remaining((*w_entry)->recv);
+					(*w_entry)->z_decoder.next_in = (Bytef *)buffer_start(*(*w_entry)->recv);
+					(*w_entry)->z_decoder.avail_in = buffer_remaining(*(*w_entry)->recv);
 					(*w_entry)->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
 					(*w_entry)->z_decoder.avail_out = buffer_remaining(*d_source);
 
-					logg_develd_old("++++ bytes: %u\n", buffer_remaining((*w_entry)->recv));
+					logg_develd_old("++++ bytes: %u\n", buffer_remaining(*(*w_entry)->recv));
 					logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 
 					switch(inflate(&(*w_entry)->z_decoder, Z_SYNC_FLUSH))
 					{
 					case Z_OK:
-						(*w_entry)->recv.pos += (buffer_remaining((*w_entry)->recv) - (*w_entry)->z_decoder.avail_in);
+						(*w_entry)->recv->pos += (buffer_remaining(*(*w_entry)->recv) - (*w_entry)->z_decoder.avail_in);
 						d_source->pos += (buffer_remaining(*d_source) - (*w_entry)->z_decoder.avail_out);
 						break;
 					case Z_STREAM_END:
@@ -374,11 +407,11 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 						return w_entry;
 					}
 				}
-				buffer_compact((*w_entry)->recv);
+				buffer_compact(*(*w_entry)->recv);
 			}
 			//if(ENC_NONE == (*w_entry)->encoding_in)
 			else
-				d_source = &(*w_entry)->recv;
+				d_source = (*w_entry)->recv;
 
 			
 /*			if(!(*w_entry)->build_packet)
@@ -392,7 +425,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				(*w_entry)->build_packet->packet_decode = CHECK_CONTROLL_BYTE;
 			}*/
 
-			logg_develd_old("++++ space: %u\n", buffer_remaining((*w_entry)->recv));
+			logg_develd_old("++++ space: %u\n", buffer_remaining(*(*w_entry)->recv));
 			logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 			buffer_flip(*d_source);
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
@@ -427,11 +460,11 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 					if(ENC_DEFLATE == (*w_entry)->encoding_out)
 						d_source = (*w_entry)->send_u;
 					else
-						d_source = &(*w_entry)->send;
+						d_source = (*w_entry)->send;
 
 					if(g2_packet_decide(*w_entry, d_source, g2_packet_dict))
 					{
-						struct epoll_event tmp_eevent;
+						struct epoll_event tmp_eevent = {0,{0}};
 
 						(*w_entry)->poll_interrests |= (uint32_t)EPOLLOUT;
 						tmp_eevent.events = (*w_entry)->poll_interrests;
@@ -450,10 +483,15 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			}
 		} while(retry);
 	}
+
+	manage_buffer_after(&(*w_entry)->recv, lrecv_buff);
+	manage_buffer_after(&(*w_entry)->send, lsend_buff);
+
 	return NULL;
 }
 
-static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_cons, int epoll_fd, int who_to_say)
+static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_cons,
+		struct norm_buff *lrecv_buff, struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
 {
 	size_t i;
 
@@ -470,6 +508,9 @@ static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_con
 	}
 	
 	free(work_cons);
+
+	recv_buff_free(lrecv_buff);
+	recv_buff_free(lsend_buff);
 
 	// If this happens, its maybe Dangerous, or trivial, so what to do?
 	if(0 > my_epoll_close(epoll_fd))

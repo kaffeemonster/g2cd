@@ -53,6 +53,7 @@
 #include "G2ConHelper.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
 
@@ -60,20 +61,21 @@
 #define EVENT_SPACE 8
 
 //internal prototypes
-static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, int *);
+static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool init_con_a(int *, struct sockaddr_in *);
 static inline bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static inline bool initiate_g2(g2_connection_t *);
 // do not inline, we take a pointer of it, and when its called, performance doesn't matter
-static void clean_up_a(struct epoll_event *, struct g2_con_info *, int, int);
+static void clean_up_a(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Accept(void *param)
 {
 	//data-structures
 	struct g2_con_info *work_cons = NULL;
 	g2_connection_t *work_entry = NULL;
+	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
 	//sock-things
 	int accept_so = -1;
@@ -103,7 +105,7 @@ void *G2Accept(void *param)
 		pthread_exit(NULL);
 	}
 	// getting memory for our FD's and everything else
-	if(!init_memory_a(&eevents, &work_cons, &epoll_fd))
+	if(!init_memory_a(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))
 	{
 		close(accept_so);
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
@@ -117,7 +119,7 @@ void *G2Accept(void *param)
 	if(sizeof(to_handler) != recv(sock2main, &to_handler, sizeof(to_handler), 0))
 	{
 		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		clean_up_a(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so);
 		pthread_exit(NULL);
 	}
@@ -131,7 +133,7 @@ void *G2Accept(void *param)
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_so, eevents))
 	{
 		logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
-		clean_up_a(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so);
 		pthread_exit(NULL);
 	}
@@ -140,7 +142,7 @@ void *G2Accept(void *param)
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents))
 	{
 		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
-		clean_up_a(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so);
 		pthread_exit(NULL);
 	}
@@ -148,10 +150,11 @@ void *G2Accept(void *param)
 	// Getting the first Connections to work with
 	if(!(work_entry = g2_con_get_free()))
 	{
-		clean_up_a(eevents, work_cons, epoll_fd, sock2main);
+		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so);
 		pthread_exit(NULL);
 	}
+	
 
 	// we are up and running
 	server.status.all_abord[THREAD_ACCEPTOR] = true;
@@ -168,6 +171,7 @@ void *G2Accept(void *param)
 			g2_con_clear(work_entry);
 			refresh_needed = false;
 		}
+		recv_buff_local_refill();
 
 		// Let's do it
 		num_poll = my_epoll_wait(epoll_fd, eevents, EVENT_SPACE, 10000);
@@ -204,14 +208,22 @@ void *G2Accept(void *param)
 						{
 							// Some FD's ready to be filled?
 							// Some data ready to be read in?
-							g2_connection_t **tmp_con_holder = handle_socket_io_a(e_wptr, epoll_fd);
+							g2_connection_t **tmp_con_holder;
+							g2_connection_t **tmp_con_b = e_wptr->data.ptr;
+							if(!manage_buffer_before(&(*tmp_con_b)->recv, &lrecv_buff))
+								goto killit;
+							if(!manage_buffer_before(&(*tmp_con_b)->send, &lsend_buff))
+								goto killit;
+
+							tmp_con_holder = handle_socket_io_a(e_wptr, epoll_fd);
 							if(tmp_con_holder)
 							{
-								if((*tmp_con_holder)->flags.dismissed)
-									recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
-								else if(G2CONNECTED == (*tmp_con_holder)->connect_state)
+								if(!(*tmp_con_holder)->flags.dismissed &&
+								   G2CONNECTED == (*tmp_con_holder)->connect_state)
 								{
 									g2_connection_t *tmp_con = *tmp_con_holder;
+									manage_buffer_after(&tmp_con->recv, &lrecv_buff);
+									manage_buffer_after(&tmp_con->send, &lsend_buff);
 									recycle_con(tmp_con_holder, work_cons, epoll_fd, true);
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
@@ -222,7 +234,25 @@ void *G2Accept(void *param)
 									}
 								}	
 								else
+								{
+killit:
+									if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff)
+									{
+										(*tmp_con_holder)->recv = NULL;
+										buffer_clear(*lrecv_buff);
+									}
+									if(lsend_buff && (*tmp_con_holder)->send == lsend_buff)
+									{
+										(*tmp_con_holder)->send = NULL;
+										buffer_clear(*lsend_buff);
+									}
 									recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
+								}
+							}
+							else
+							{
+								manage_buffer_after(&(*tmp_con_b)->recv, &lrecv_buff);
+								manage_buffer_after(&(*tmp_con_b)->send, &lsend_buff);
 							}
 						}
 					}
@@ -285,11 +315,12 @@ void *G2Accept(void *param)
 	}
 
 	g2_con_free(work_entry);
-	clean_up_a(eevents, work_cons, epoll_fd, sock2main);
+	clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 	close(accept_so);
 	pthread_exit(NULL);
 	return NULL; // to avoid warning about reaching end of non-void funktion
 }
+
 
 static inline bool init_con_a(int *accept_so, struct sockaddr_in *our_addr)
 {
@@ -343,7 +374,8 @@ static inline bool init_con_a(int *accept_so, struct sockaddr_in *our_addr)
 	return true;
 }
 
-static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_info **work_cons, int *epoll_fd)
+static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_info **work_cons,
+		struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff, int *epoll_fd)
 {
 	*poll_me = calloc(EVENT_SPACE, sizeof(**poll_me));
 	if(!*poll_me)
@@ -360,6 +392,16 @@ static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_inf
 		return false;
 	}
 	(*work_cons)->capacity = WC_START_CAPACITY;
+
+	*lrecv_buff = recv_buff_alloc();
+	*lsend_buff = recv_buff_alloc();
+	if(!(*lrecv_buff && *lsend_buff))
+	{
+		logg_errno(LOGF_ERR, "local buffer");
+		free(*poll_me);
+		free(*work_cons);
+		return false;
+	}
 
 	*epoll_fd = my_epoll_create(PD_START_CAPACITY);
 	if(0 > *epoll_fd)
@@ -455,9 +497,17 @@ static inline bool handle_accept_in(
 	*work_entry = g2_con_get_free();
 	if(!*work_entry)
 	{
-		clean_up_a(poll_me, work_cons, epoll_fd, abort_fd);
+		clean_up_a(poll_me, work_cons, NULL, NULL, epoll_fd, abort_fd);
 		pthread_exit(NULL);
 	}
+
+/*	(*work_entry)->send = recv_buff_alloc();
+	(*work_entry)->recv = recv_buff_alloc();
+	if(!((*work_entry)->send && (*work_entry)->recv))
+	{
+		clean_up_a(poll_me, work_cons, epoll_fd, abort_fd);
+		pthread_exit(NULL);
+	}*/
 
 	return true;
 
@@ -550,7 +600,8 @@ static inline g2_connection_t **handle_socket_io_a(struct epoll_event *p_entry, 
 	return NULL;
 }
 
-static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_cons, int epoll_fd, int who_to_say)
+static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_cons,
+		struct norm_buff *lrecv_buff, struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
 {
 	size_t i;
 
@@ -568,11 +619,53 @@ static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_con
 	
 	free(work_cons);
 
+	recv_buff_free(lrecv_buff);
+	recv_buff_free(lsend_buff);
+
 	// If this happens, its maybe Dangerous, or trivial, so what to do?
 	if(0 > my_epoll_close(epoll_fd))
 		logg_errno(LOGF_ERR, "closing epoll-fd");
 	
 	server.status.all_abord[THREAD_ACCEPTOR] = false;
+}
+
+
+/*
+ * Helper for initiate_g2
+ */
+#define my_mempcpy(x, y)	(memcpy((x), (y), str_size(y)))
+
+static inline bool abort_g2_500(g2_connection_t *to_con)
+{
+	if(str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n") < buffer_remaining(*to_con->send))
+	{
+		my_mempcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
+		to_con->send->pos += str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
+	}
+	to_con->flags.dismissed = true;
+	return true;
+}
+
+static inline bool abort_g2_501(g2_connection_t *to_con)
+{
+	if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(*to_con->send))
+	{
+		my_mempcpy(buffer_start(*to_con->send), STATUS_501 "\r\n\r\n");
+		to_con->send->pos += str_size(STATUS_501 "\r\n\r\n");
+	}
+	to_con->flags.dismissed = true;
+	return true;
+}
+
+static inline bool abort_g2_400(g2_connection_t *to_con)
+{
+	if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(*to_con->send))
+	{
+		my_mempcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
+		to_con->send->pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
+	}
+	to_con->flags.dismissed = true;
+	return true;
 }
 
 /*
@@ -592,7 +685,6 @@ static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_con
  * moment, there is a good chance for major changes, thats why all this
  * is in such a shape, but at least, it works.
  */
-#define my_mempcpy(x, y)	(memcpy((x), (y), str_size(y)))
 static inline bool initiate_g2(g2_connection_t *to_con)
 {
 	size_t found = 0;
@@ -606,8 +698,8 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 	bool more_bytes_needed = false;
 	bool field_found = false;
 
-	buffer_flip(to_con->recv);
-	//printf("Ackt. Inhalt:\n%.*s", buffer_remaining(to_con->recv), buffer_start(to_con->recv));
+	buffer_flip(*to_con->recv);
+	logg_develd_old("Act. content:\n\"%.*s\"", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
 
 	// compute all data available
 	while(!more_bytes_needed)
@@ -616,143 +708,107 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 		{
 	// at this point we need at least the first line
 		case UNCONNECTED:
-			if((str_size(GNUTELLA_CONNECT_STRING) + 2) > buffer_remaining(to_con->recv))
+			if((str_size(GNUTELLA_CONNECT_STRING) + 2) > buffer_remaining(*to_con->recv))
 			{
 				more_bytes_needed = true;
 				break;
 			}
 			// let's see if we got the right string
-			if(!strncmp(buffer_start(to_con->recv), GNUTELLA_CONNECT_STRING, str_size(GNUTELLA_CONNECT_STRING)))
-				to_con->recv.pos += str_size(GNUTELLA_CONNECT_STRING);
+			if(!strncmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING, str_size(GNUTELLA_CONNECT_STRING)))
+				to_con->recv->pos += str_size(GNUTELLA_CONNECT_STRING);
 			else
-			{
-				// could we place it all in our sendbuffer?
-				if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), STATUS_501 "\r\n\r\n");
-					to_con->send.pos += str_size(STATUS_501 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_501(to_con);
 
 			// CR?
-			if('\r' == *buffer_start(to_con->recv))
-				to_con->recv.pos++;
+			if('\r' == *buffer_start(*to_con->recv))
+				to_con->recv->pos++;
 			else
-			{
-				// could we place it all in our sendbuffer?
-				if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), STATUS_501 "\r\n\r\n");
-					to_con->send.pos += str_size(STATUS_501 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_501(to_con);
 
 			// LF?
-			if('\n' == *buffer_start(to_con->recv))
+			if('\n' == *buffer_start(*to_con->recv))
 			{
-				to_con->recv.pos++;
+				to_con->recv->pos++;
 				to_con->connect_state++;
 			}
 			else
-			{
-				// could we place it all in our sendbuffer?
-				if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), STATUS_501 "\r\n\r\n");
-					to_con->send.pos += str_size(STATUS_501 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_501(to_con);
 // TODO: Use more std.-func.(strcspn, strchr, strstr), but problem: we are not working with propper strings, foreign input!
 	// wait till we got the whole header
 		case HAS_CONNECT_STRING:
-			if(!buffer_remaining(to_con->recv))
+			if(!buffer_remaining(*to_con->recv))
 			{
 				more_bytes_needed = true;
 				break;
 			}
-			old_pos = to_con->recv.pos;
+			old_pos = to_con->recv->pos;
 			while(true)
 			{
 				// CR 0x0D  LF 0x0A
 // TODO: Check for a proper CR LF CR LF Sequence
-				found = ('\r' != *(buffer_start(to_con->recv)) && '\n'!= *(buffer_start(to_con->recv))) ? 0: found + 1;
-				to_con->recv.pos++;
+				found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
+				to_con->recv->pos++;
 				// there was CRLF 2 times
 				if(4 == found)
 				{
-					to_con->recv.limit = to_con->recv.pos;
-					to_con->recv.pos = old_pos;
+					to_con->recv->limit = to_con->recv->pos;
+					to_con->recv->pos = old_pos;
 					logg_devel("\t------------------ Initiator\n");
-					//logg_develd("\"%.*s\"\n", buffer_remaining(to_con->recv), buffer_start(to_con->recv));
-					//to_con.connect_header1 = linesplit.split(std_utf8.decode(recv_buffer).toString());//tmp_header);
+					logg_develd_old("\"%.*s\"\n", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
 					to_con->connect_state++;
 					break;					
 				}
-				else if(!buffer_remaining(to_con->recv)) // End of Buffer?
+				else if(!buffer_remaining(*to_con->recv)) // End of Buffer?
 				{
 					// Header not to long (someone DoS us?)
-					if(MAX_HEADER_LENGTH > (to_con->recv.limit - old_pos))
+					if(MAX_HEADER_LENGTH > (to_con->recv->limit - old_pos))
 					{
 						// we need more bytes
-						to_con->recv.pos = old_pos;
+						to_con->recv->pos = old_pos;
 						more_bytes_needed = true;
 						break;
 					}
 					else //  or go home
-					{
-						if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-						{
-							my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-							to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-						}
-						to_con->flags.dismissed = true;
-						return true;
-					}
+						return abort_g2_400(to_con);
 				}
 			}
 			break;
 	// Now the header is complete, we can search it
 		case SEARCH_CAPS:
-			old_pos = to_con->recv.pos;
-			while(buffer_remaining(to_con->recv))
+			old_pos = to_con->recv->pos;
+			while(buffer_remaining(*to_con->recv))
 			{
 				switch(search_state)
 				{
 			//search for fieldseparator ':'
 				case 0:
-					if(':' == *buffer_start(to_con->recv))
+					if(':' == *buffer_start(*to_con->recv))
 					{
 						size_t k;
 						size_t real_distance = 0;
 
 						// back to start of field
-						distance = to_con->recv.pos - old_pos;
-						to_con->recv.pos = old_pos;
+						distance = to_con->recv->pos - old_pos;
+						to_con->recv->pos = old_pos;
 						
 // TODO: use isalnum & isgraph?? They are locale-dependent. hopefully none sends multibyte & non-ascii field-names.
 						// filter bogus beginning (skip leading space)
-						while(distance && !isalnum((int)(*buffer_start(to_con->recv))))
+						while(distance && !isalnum((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 						}
 						
 						// lets see what we can filter to find the "real" end
 						// of the field (skip trailing space)
-						old_pos = to_con->recv.pos;
-						while(distance && isgraph((int)(*buffer_start(to_con->recv))))
+						old_pos = to_con->recv->pos;
+						while(distance && isgraph((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 							real_distance++;
 						}
-						to_con->recv.pos = old_pos;
+						to_con->recv->pos = old_pos;
 
 						// even if we may have filtered all, we are continueing,
 						// we could only sync again at a "\r\n" (the field-data may contain ':').
@@ -763,7 +819,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 							if(real_distance != KNOWN_HEADER_FIELDS[k]->length)
 								continue;
 						
-							if(!strncasecmp(buffer_start(to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
+							if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
 							{
 								field_num = k;
 								field_found = true;
@@ -775,7 +831,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 						{
 							logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
 								(int) real_distance,
-								buffer_start(to_con->recv));
+								buffer_start(*to_con->recv));
 						}
 						else
 						{
@@ -783,71 +839,64 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 							{
 								logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
 									(int) real_distance,
-									buffer_start(to_con->recv));
+									buffer_start(*to_con->recv));
 							}
 							else
 							{
 								logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
-									real_distance,
-									buffer_start(to_con->recv));
+									(int) real_distance,
+									buffer_start(*to_con->recv));
 							}
 						}
 
 						// since we may have shortened the string due to filtering,
 						// we have to use all lengths, to get behind the ':'
-						to_con->recv.pos += real_distance + distance + 1;
-						old_pos = to_con->recv.pos;
+						to_con->recv->pos += real_distance + distance + 1;
+						old_pos = to_con->recv->pos;
 						search_state++;
 					}
 					break;
 			//find end of line
 				case 1:
-					if('\r' == *buffer_start(to_con->recv))
-					{
+					if('\r' == *buffer_start(*to_con->recv))
 						search_state++;
-					}
 					break;
 				case 2:
-					if('\n' == *buffer_start(to_con->recv))
+					if('\n' == *buffer_start(*to_con->recv))
 					{
 						// Field-data complete
 						// back to start of field-data
-						distance = to_con->recv.pos - old_pos - 1;
-						to_con->recv.pos = old_pos;
+						distance = to_con->recv->pos - old_pos - 1;
+						to_con->recv->pos = old_pos;
 
 						// remove leading white-spaces in field-data
-						while(distance && isspace((int)(*buffer_start(to_con->recv))))
+						while(distance && isspace((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 						}
 
 						// now call the associated action for this field
 						if(distance && field_found && NULL != KNOWN_HEADER_FIELDS[field_num]->action)
-						{
 							KNOWN_HEADER_FIELDS[field_num]->action(to_con, distance);
-						}
 						else
 						{
-							if(distance)
-							{
-								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(to_con->recv));
-							}
-							else
-							{
+							if(distance) {
+								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(*to_con->recv));
+							} else {
 								logg_devel("Field with no data recieved!\n");
 							}
 						}
 						search_state = 0;
-						to_con->recv.pos += distance + 2;
-						old_pos = to_con->recv.pos;
+						to_con->recv->pos += distance + 2;
+						old_pos = to_con->recv->pos;
 						field_found = false;
 					}
 					else
 						search_state--;
 					break;
 				}
-				to_con->recv.pos++;
+				to_con->recv->pos++;
 			}
 
 			to_con->connect_state++;
@@ -860,41 +909,17 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 				if(to_con->flags.accept_g2)
 					to_con->connect_state++;
 				else
-				{
-					if(str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n") < buffer_remaining(to_con->send))
-					{
-						my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
-						to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
-					}
-					to_con->flags.dismissed = true;
-					return true;
-
-				}
+					return abort_g2_501(to_con);
 			}
 			else
-			{
-				if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_400(to_con);
 	// and the remote_ip field?
 		case CHECK_ADDR:
 			// do we have one and there was a valid address inside?
-			if(to_con->flags.addr_ok) to_con->connect_state++;
+			if(to_con->flags.addr_ok)
+				to_con->connect_state++;
 			else
-			{
-				if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_400(to_con);
 	// what's the accepted encoding?
 		case CHECK_ENC_OUT:
 			// if nothing was send, default to no encoding (Shareaza tries to
@@ -909,18 +934,9 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 // TODO: deflateInit if the other side and we want to deflate
 				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u))
 				{
-					to_con->send_u = calloc(1, sizeof(*to_con->send_u));
+					to_con->send_u = recv_buff_alloc();
 					if(!to_con->send_u)
-					{
-						if(str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n") < buffer_remaining(to_con->send))
-						{
-							my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-							to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-						}
-						to_con->flags.dismissed = true;
-						return true;
-					}
-					to_con->send_u->limit = to_con->send_u->capacity = sizeof(to_con->send_u->data);
+						return abort_g2_500(to_con);
 					logg_devel("Allocated send_u\n");
 				}
 			}
@@ -930,34 +946,20 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 	// how about the user-agent
 		case CHECK_UAGENT:
 			// even if it's empty, the field should be send
-			if(to_con->flags.uagent_ok) to_con->connect_state++;
+			if(to_con->flags.uagent_ok)
+				to_con->connect_state++;
 			else
-			{
-				if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_400(to_con);
 	// last 'must-have' field: X-UltraPeer
 		case CHECK_UPEER:
-			if(to_con->flags.upeer_ok) to_con->connect_state++;
+			if(to_con->flags.upeer_ok)
+				to_con->connect_state++;
 			else
-			{
-				if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_400(to_con);
 		case BUILD_ANSWER:
 			// it should be our first comunication, and if someone set capacity right
 			// everything will be fine
-			buffer_clear(to_con->send);
+			buffer_clear(*to_con->send);
 		/* we could calculate the needed size but the header should be small enough
 			size_t needed_s = GNUTELLA_STRING + STATUS_200 + 3;
 			needed_s += UAGENT_KEY + OUR_UA + 4;
@@ -985,10 +987,10 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			// copy start of header
 // TODO: finer granularity of stepping for smaller sendbuffer?
 			// could we place it all in our sendbuffer?
-			if(str_size(HED_2_PART_1) < buffer_remaining(to_con->send))
+			if(str_size(HED_2_PART_1) < buffer_remaining(*to_con->send))
 			{
-				my_mempcpy(buffer_start(to_con->send), HED_2_PART_1);
-				to_con->send.pos += str_size(HED_2_PART_1);
+				my_mempcpy(buffer_start(*to_con->send), HED_2_PART_1);
+				to_con->send->pos += str_size(HED_2_PART_1);
 			}
 			else
 			{
@@ -999,24 +1001,24 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 // TODO: what's our global address?
 			/*if(NULL == inet_ntop((*w_entry)->af_type,
 				&(*w_entry)->remote_host.sin_addr,
-				buffer_start(to_con->send),
-				buffer_remaining(to_con->send)))
+				buffer_start(*to_con->send),
+				buffer_remaining(*to_con->send)))
 			{
 				logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
 				to_con->dismissed = true;
 				return(false);
 			}
-			to_con->send.pos += strnlen(buffer_start(to_con->send), buffer_remaining(to_con->send));
+			to_con->send->pos += strnlen(buffer_start(*to_con->send), buffer_remaining(*to_con->send));
 			*/
 
 			pr_ch = (size_t)
-			snprintf(buffer_start(to_con->send), buffer_remaining(to_con->send),
+			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 				"192.168.0.2:%hu\r\n"
 				REMOTE_ADR_KEY ": ",
 				ntohs(server.settings.portnr_2_bind)
 			);
-			if(pr_ch < buffer_remaining(to_con->send))
-				to_con->send.pos += pr_ch;
+			if(pr_ch < buffer_remaining(*to_con->send))
+				to_con->send->pos += pr_ch;
 			else
 			{
 				to_con->flags.dismissed = true;
@@ -1025,19 +1027,19 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 
 			if(NULL == inet_ntop(to_con->af_type,
 				&to_con->remote_host.sin_addr,
-				buffer_start(to_con->send),
-				buffer_remaining(to_con->send)))
+				buffer_start(*to_con->send),
+				buffer_remaining(*to_con->send)))
 			{
 				logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
 				to_con->flags.dismissed = true;
 				return false;
 			}
-			to_con->send.pos += strnlen(buffer_start(to_con->send), buffer_remaining(to_con->send));
+			to_con->send->pos += strnlen(buffer_start(*to_con->send), buffer_remaining(*to_con->send));
 
-			if(str_size(HED_2_PART_3) < buffer_remaining(to_con->send))
+			if(str_size(HED_2_PART_3) < buffer_remaining(*to_con->send))
 			{
-				my_mempcpy(buffer_start(to_con->send), HED_2_PART_3);
-				to_con->send.pos += str_size(HED_2_PART_3);
+				my_mempcpy(buffer_start(*to_con->send), HED_2_PART_3);
+				to_con->send->pos += str_size(HED_2_PART_3);
 			}
 			else
 			{
@@ -1049,12 +1051,12 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			if(ENC_NONE != to_con->encoding_out)
 			{
 				pr_ch = (size_t)
-				snprintf(buffer_start(to_con->send), buffer_remaining(to_con->send),
+				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 					CONTENT_ENC_KEY ": %s\r\n",
 					KNOWN_ENCODINGS[to_con->encoding_out]->txt
 				);
-				if(pr_ch < buffer_remaining(to_con->send))
-					to_con->send.pos += pr_ch;
+				if(pr_ch < buffer_remaining(*to_con->send))
+					to_con->send->pos += pr_ch;
 				else
 				{
 					to_con->flags.dismissed = true;
@@ -1064,12 +1066,12 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			if(ENC_NONE != to_con->encoding_in)
 			{
 				pr_ch = (size_t)
-				snprintf(buffer_start(to_con->send), buffer_remaining(to_con->send),
+				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 					ACCEPT_ENC_KEY ": %s\r\n",
 					KNOWN_ENCODINGS[to_con->encoding_in]->txt
 				);
-				if(pr_ch < buffer_remaining(to_con->send))
-					to_con->send.pos += pr_ch;
+				if(pr_ch < buffer_remaining(*to_con->send))
+					to_con->send->pos += pr_ch;
 				else
 				{
 					to_con->flags.dismissed = true;
@@ -1079,14 +1081,14 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 
 			// and the rest of the header
 			pr_ch = (size_t)
-			snprintf(buffer_start(to_con->send), buffer_remaining(to_con->send),
+			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 				UPEER_KEY ": %s\r\n"
 				UPEER_NEEDED_KEY ": %s\r\n\r\n",
 				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
 				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE
 			);
-			if(pr_ch < buffer_remaining(to_con->send))
-				to_con->send.pos += pr_ch;
+			if(pr_ch < buffer_remaining(*to_con->send))
+				to_con->send->pos += pr_ch;
 			else
 			{
 				to_con->flags.dismissed = true;
@@ -1094,27 +1096,27 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			}	
 
 			logg_devel("\t------------------ Response\n");
-			//buffer_flip(to_con->send);
+			//buffer_flip(*to_con->send);
 			//logg_develd("\"%.*s\"\nlength: %i\n",
-			//	buffer_remaining(to_con->send),
-			//	buffer_start(to_con->send),
-			//	buffer_remaining(to_con->send));
-			//buffer_compact(to_con->send);
+			//	buffer_remaining(*to_con->send),
+			//	buffer_start(*to_con->send),
+			//	buffer_remaining(*to_con->send));
+			//buffer_compact(*to_con->send);
 			to_con->connect_state++;
 			ret_val = true;
 			more_bytes_needed = true;
 			break;
 	// Waiting for an answer
 		case HEADER_2:
-			if(str_size(GNUTELLA_STRING " 200") > buffer_remaining(to_con->recv))
+			if(str_size(GNUTELLA_STRING " 200") > buffer_remaining(*to_con->recv))
 			{
 				more_bytes_needed = true;
 				break;
 			}
 
 			// did the other like it
-			if(!strncmp(buffer_start(to_con->recv), GNUTELLA_STRING " 200", str_size(GNUTELLA_STRING " 200")))
-				to_con->recv.pos += str_size(GNUTELLA_STRING " 200");
+			if(!strncmp(buffer_start(*to_con->recv), GNUTELLA_STRING " 200", str_size(GNUTELLA_STRING " 200")))
+				to_con->recv->pos += str_size(GNUTELLA_STRING " 200");
 			else
 			{
 				// if not: no deal
@@ -1125,102 +1127,93 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			to_con->connect_state++;
 	//wait till we have the hole 2.nd header
 		case ANSWER_200:
-			if(!buffer_remaining(to_con->recv))
+			if(!buffer_remaining(*to_con->recv))
 			{
 				more_bytes_needed = true;
 				break;
 			}
-			old_pos = to_con->recv.pos;
+			old_pos = to_con->recv->pos;
 			while(true)
 			{
 				// CR 0x0D  LF 0x0A
 // TODO: Check for a proper CR LF CR LF Sequence
-				found = ('\r' != *(buffer_start(to_con->recv)) && '\n'!= *(buffer_start(to_con->recv))) ? 0: found + 1;
-				to_con->recv.pos++;
+				found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
+				to_con->recv->pos++;
 				// there was CRLF 2 times
 				if(4 == found)
 				{
-					old_limit = to_con->recv.limit;
-					to_con->recv.limit = to_con->recv.pos;
-					to_con->recv.pos = old_pos;
+					old_limit = to_con->recv->limit;
+					to_con->recv->limit = to_con->recv->pos;
+					to_con->recv->pos = old_pos;
 					logg_devel("\t------------------ Initiator\n");
-					//logg_develd("\"%.*s\"\n", buffer_remaining(to_con->recv), buffer_start(to_con->recv));
-					//to_con.connect_header1 = linesplit.split(std_utf8.decode(recv_buffer).toString());//tmp_header);
+					logg_develd_old("\"%.*s\"\n", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
 					to_con->connect_state++;
 					break;
 				}
-				else if(!buffer_remaining(to_con->recv)) // End of Buffer?
+				else if(!buffer_remaining(*to_con->recv)) // End of Buffer?
 				{
 					// Header not to long (someone DoS us?)
-					if(MAX_HEADER_LENGTH > (to_con->recv.limit - old_pos))
+					if(MAX_HEADER_LENGTH > (to_con->recv->limit - old_pos))
 					{
 						// we need more bytes
-						to_con->recv.pos = old_pos;
+						to_con->recv->pos = old_pos;
 						more_bytes_needed = true;
 						break;
 					}
 					else //  or go home
-					{
-						if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-						{
-							my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-							to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-						}
-						to_con->flags.dismissed = true;
-						return true;
-					}
+						return abort_g2_400(to_con);
 				}
 			}
 			break;
 	// again fidel around with the list
 		case SEARCH_CAPS_2:
-			old_pos = to_con->recv.pos;
+			old_pos = to_con->recv->pos;
 			found = 0;
 			to_con->flags.second_header = true;
-			while(buffer_remaining(to_con->recv))
+			while(buffer_remaining(*to_con->recv))
 			{
 				switch(search_state)
 				{
 			//search first CRLF (maybe someone sends something like 'Welcome' behind the 200) and skip it
 				case 0:
-					found = ('\r' != *(buffer_start(to_con->recv)) && '\n'!= *(buffer_start(to_con->recv))) ? 0: found + 1;
+					found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
 					// there was a CRLF
 					if(2 == found)
 						search_state++;
 					break;
 				case 1:
-					old_pos = to_con->recv.pos;
+					old_pos = to_con->recv->pos;
 					search_state++;
 			//search for fieldseparator ':'
 				case 2:
-					if(':' == *buffer_start(to_con->recv))
+					if(':' == *buffer_start(*to_con->recv))
 					{
 						size_t k;
 						size_t real_distance = 0;
 
 						// back to start of field
-						distance = to_con->recv.pos - old_pos;
-						to_con->recv.pos = old_pos;
+						distance = to_con->recv->pos - old_pos;
+						to_con->recv->pos = old_pos;
 						
 // TODO: use isalnum & isgraph?? They are locale-dependent.
 // 	hopefully none sends multibyte & non-ascii field-names.
 						// filter bogus beginning (skip leading space)
-						while(distance && !isalnum((int)(*buffer_start(to_con->recv))))
+						while(distance && !isalnum((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 						}
 						
 						// lets see what we can filter to find the "real" end
 						// of the field (skip trailing space)
-						old_pos = to_con->recv.pos;
-						while(distance && isgraph((int)(*buffer_start(to_con->recv))))
+						old_pos = to_con->recv->pos;
+						while(distance && isgraph((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 							real_distance++;
 						}
-						to_con->recv.pos = old_pos;
+						to_con->recv->pos = old_pos;
 
 						// even if we may have filtered all, we are continueing,
 						// we could only sync again at a "\r\n" (the field-data may contain ':').
@@ -1231,7 +1224,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 							if(real_distance != KNOWN_HEADER_FIELDS[k]->length)
 								continue;
 						
-							if(!strncasecmp(buffer_start(to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
+							if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
 							{
 								field_num = k;
 								field_found = true;
@@ -1243,7 +1236,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 						{
 							logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
 								(int) real_distance,
-								buffer_start(to_con->recv));
+								buffer_start(*to_con->recv));
 						}
 						else
 						{
@@ -1251,73 +1244,66 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 							{
 								logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
 									(int) real_distance,
-									buffer_start(to_con->recv));
+									buffer_start(*to_con->recv));
 							}
 							else
 							{
 								logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
-									real_distance,
-									buffer_start(to_con->recv));
+									(int) real_distance,
+									buffer_start(*to_con->recv));
 							}
 						}
 
 						// since we may have shortened the string due to filtering,
 						// we have to use all lengths, to get behind the ':'
-						to_con->recv.pos += real_distance + distance + 1;
-						old_pos = to_con->recv.pos;
+						to_con->recv->pos += real_distance + distance + 1;
+						old_pos = to_con->recv->pos;
 						search_state++;
 					}
 					break;
 			//find end of line
 				case 3:
-					if('\r' == *buffer_start(to_con->recv))
-					{
+					if('\r' == *buffer_start(*to_con->recv))
 						search_state++;
-					}
 					break;
 				case 4:
-					if('\n' == *buffer_start(to_con->recv))
+					if('\n' == *buffer_start(*to_con->recv))
 					{
 						// Field-data complete
 						// back to start of field-data
-						distance = to_con->recv.pos - old_pos - 1;
-						to_con->recv.pos = old_pos;
+						distance = to_con->recv->pos - old_pos - 1;
+						to_con->recv->pos = old_pos;
 
 						// remove leading white-spaces in field-data
-						while(distance && isspace((int)(*buffer_start(to_con->recv))))
+						while(distance && isspace((int)(*buffer_start(*to_con->recv))))
 						{
-							to_con->recv.pos++;
+							to_con->recv->pos++;
 							distance--;
 						}
 
 						// now call the associated action for this field
-						if(distance && field_found && NULL != KNOWN_HEADER_FIELDS[field_num]->action)
-						{
 // TODO: Better save information gained in first header from being
 // overwritten in second (Bad guys are always doing bad things)
+						if(distance && field_found && NULL != KNOWN_HEADER_FIELDS[field_num]->action)
 							KNOWN_HEADER_FIELDS[field_num]->action(to_con, distance);
-						}
 						else
 						{
-							if(distance)
-							{
-								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(to_con->recv));
-							}
-							else
-							{
+							if(distance) {
+								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(*to_con->recv));
+							} else {
 								logg_devel("Field with no data recieved!\n");
 							}
 						}
 						search_state = 2;
-						to_con->recv.pos += distance + 2;
-						old_pos = to_con->recv.pos;
+						to_con->recv->pos += distance + 2;
+						old_pos = to_con->recv->pos;
 						field_found = false;
 					}
 					else
 						search_state--;
 					break;
 				}
-				to_con->recv.pos++;
+				to_con->recv->pos++;
 			}
 
 			to_con->connect_state++;
@@ -1330,63 +1316,27 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 				if(to_con->flags.content_g2)
 					to_con->connect_state++;
 				else
-				{
-					if(str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n") < buffer_remaining(to_con->send))
-					{
-						my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
-						to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
-					}
-					to_con->flags.dismissed = true;
-					return true;
-
-				}
+					return abort_g2_501(to_con);
 			}
 			else
-			{
-				if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-				{
-					my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-				}
-				to_con->flags.dismissed = true;
-				return true;
-			}
+				return abort_g2_400(to_con);
 	// what does the other likes to send as encoding
 		case CHECK_ENC_IN:
 			// if nothing was send, default to no encoding (Shareaza tries to
 			// save space in the header, so no failure if absent)
 			if(!to_con->flags.enc_in_ok)
-			{
 				to_con->encoding_in = ENC_NONE;
-			}
 			else
 			{
 				// abort, if we are could not agree about it
 				if(to_con->encoding_in != server.settings.default_in_encoding)
-				{
-					if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(to_con->send))
-					{
-						my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-						to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
-					}
-					to_con->flags.dismissed = true;
-					return true;
-				}
+					return abort_g2_400(to_con);
 
 				if((ENC_NONE != to_con->encoding_in) && (!to_con->recv_u))
 				{
-					to_con->recv_u = calloc(1, sizeof(*to_con->recv_u));
+					to_con->recv_u = recv_buff_alloc();
 					if(!to_con->recv_u)
-					{
-						if(str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n") < buffer_remaining(to_con->send))
-						{
-							my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-							to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-						}
-						to_con->flags.dismissed = true;
-						return true;
-					}
-					to_con->recv_u->limit = to_con->recv_u->capacity = sizeof(to_con->recv_u->data);
+						return abort_g2_501(to_con);
 				}
 
 				if(ENC_DEFLATE == to_con->encoding_in)
@@ -1395,13 +1345,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 					{
 						if(to_con->z_decoder.msg)
 							logg_posd(LOGF_DEBUG, "%s\n", to_con->z_decoder.msg);
-						if(str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n") < buffer_remaining(to_con->send))
-						{
-							my_mempcpy(buffer_start(to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-							to_con->send.pos += str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
-						}
-						to_con->flags.dismissed = true;
-						return true;
+						return abort_g2_500(to_con);
 					}
 				}
 			}
@@ -1410,7 +1354,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 		case FINISH_CONNECTION:
 			// reclaim data delivered directly behind the header if there is some
 			// trust me, this is needed
-			to_con->recv.limit = old_limit;
+			to_con->recv->limit = old_limit;
 			to_con->connect_state = G2CONNECTED;
 			logg_devel("Connect succesfull\n");
 			more_bytes_needed = true;
@@ -1421,9 +1365,9 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 		}
 	}
 
-	buffer_compact(to_con->recv);
+	buffer_compact(*to_con->recv);
 
-	//printf("%p pos: %u lim: %u ol: %u\n", (void*)buffer_start(to_con->recv), to_con->recv.pos, to_con->recv.limit, old_limit);
+	logg_develd_old("%p pos: %u lim: %u ol: %u\n", (void*)buffer_start(*to_con->recv), to_con->recv->pos, to_con->recv->limit, old_limit);
 	return ret_val;
 }
 

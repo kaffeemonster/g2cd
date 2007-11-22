@@ -237,6 +237,7 @@ typedef void (*sighandler_t)(int);
 
 #include <stddef.h>
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
+#define anum(x) (sizeof((x))/sizeof(*(x)))
 
 /* unaligned access */
 #ifdef __GNUC__

@@ -372,10 +372,10 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
  "/usr/proc/bin/pstack "
 # else
 #  define DEBUG_CMD \
- "echo 'info threads\nthread apply all bt\ndetach\nquit\n' | gdb -batch\
- -x /dev/stdin "
+ "echo 'info threads\nthread apply all bt full\ninfo frame\ndetach\nquit\n' |\
+ gdb -batch -x /dev/stdin "
 # endif
-	
+
 # define DEATHSTR_1 \
 "                                                            <~     ° *  * |X|\n\
                                                                  °    \\*|*|X|\n\
@@ -587,6 +587,8 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		}
 		*wptr = '\0';
 	}
+
+	write(stderrfd, path, strlen(path));
 
 	if(-1 == ret_val || system(path))
 	{

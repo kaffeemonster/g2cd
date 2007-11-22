@@ -172,7 +172,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -ftime-report
 #	switch between profile-generation and final build
 #OPT_FLAGS += -fprofile-generate
-CFLAGS += $(OPT_FLAGS) #-fprofile-use
+#CFLAGS += $(OPT_FLAGS) #-fprofile-use
 #	while debugging
 #CFLAGS += -O1
 #OPT_FLAGS += -ftest-coverage # needed?
@@ -187,7 +187,7 @@ CFLAGS += $(OPT_FLAGS) #-fprofile-use
 #
 # Libraries from the System (which will never be modules)
 #	Solaris...
-LDLIBS_BASE = #-ldl #-lm
+LDLIBS_BASE = -ldl #-lm
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
 # either you set this and the appropreate flags below, or you
@@ -206,7 +206,7 @@ LDLIBS = $(LDLIBS_BASE) -lz
 #	Linking-Flags
 #
 #	Hopefully the linker knows somehting about this
-LDFLAGS = -g #-pg
+LDFLAGS = -g -pg
 LDFLAGS += -Wl,-O1
 LDFLAGS += -Wl,--sort-common
 LDFLAGS += -Wl,--enable-new-dtags
@@ -690,10 +690,10 @@ data.o: sbox.bin bin2o
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h builtin_defaults.h version.h lib/hzp.h lib/atomic.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/atomic.h
-G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/my_epoll.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/recv_buff.h lib/atomic.h
+G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/my_epoll.h lib/recv_buff.h
 G2UDP.o: G2UDP.h
-G2Connection.o: G2Connection.h G2QHT.h lib/atomic.h lib/hzp.h
+G2Connection.o: G2Connection.h G2QHT.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h lib/my_epoll.h lib/atomic.h G2Connection.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
@@ -702,7 +702,7 @@ timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h lib/atomic.h
 G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h version.h
-G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
+G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/recv_buff.h lib/my_epoll.h
 G2Packet.h: lib/sec_buffer.h
 
 #

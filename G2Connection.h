@@ -110,8 +110,8 @@ typedef struct g2_connection
 	z_stream					z_decoder;
 	z_stream					z_encoder;
 /* ----- Everthing above this gets simply wiped ------ */
-	struct norm_buff		recv;
-	struct norm_buff		send;
+	struct norm_buff		*recv;
+	struct norm_buff		*send;
 	struct norm_buff		*recv_u;
 	struct norm_buff		*send_u;
 	struct qhtable			*qht;

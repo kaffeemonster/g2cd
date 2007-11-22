@@ -39,6 +39,7 @@
 #define _G2CONNECTION_C
 #include "G2Connection.h"
 #include "lib/log_facility.h"
+#include "lib/recv_buff.h"
 #include "lib/atomic.h"
 #include "lib/hzp.h"
 
@@ -61,7 +62,6 @@ static bool listen_what(g2_connection_t *, size_t);
 
 /* Vars */
 	/* con buffer */
-#define anum(x) (sizeof((x))/sizeof(*(x)))
 static atomicptra_t free_cons[FC_CAP_START];
 	/* encoding */
 static const action_string enc_as00	= {NULL,		str_size(ENC_NONE_S),		ENC_NONE_S};
@@ -122,7 +122,7 @@ static void g2_con_init(void)
 		{
 			if((tmp = atomic_pxa(tmp, &free_cons[i])))
 			{
-				logg_pos(LOGF_CRIT, "another thread working while init???");
+				logg_pos(LOGF_CRIT, "another thread working while init???\n");
 				g2_con_free(tmp);
 			}
 		}
@@ -250,38 +250,38 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 #endif
 
 	// Buffer
-	work_entry->recv.pos = 0;
+/*	work_entry->recv.pos = 0;
 	work_entry->recv.capacity = sizeof(work_entry->recv.data);
 	work_entry->recv.limit = work_entry->recv.capacity;
 	work_entry->send.pos = 0;
 	work_entry->send.capacity = sizeof(work_entry->send.data);
-	work_entry->send.limit = work_entry->send.capacity;
+	work_entry->send.limit = work_entry->send.capacity;*/
 	// zlib
 	work_entry->z_decoder.zalloc = work_entry->z_encoder.zalloc = my_zmalloc;
 	work_entry->z_decoder.zfree = work_entry->z_encoder.zfree =  my_zfree;
 	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
 	if(!new)
 	{
+		if(work_entry->recv)
+			recv_buff_free(work_entry->recv);
+		if(work_entry->send)
+			recv_buff_free(work_entry->send);
 		if(work_entry->recv_u)
-		{
-			work_entry->recv_u->pos = 0;
-			work_entry->recv_u->limit = work_entry->recv_u->capacity = sizeof(work_entry->recv_u->data);
-		}
+			recv_buff_free(work_entry->recv_u);
 		if(work_entry->send_u)
-		{
-			work_entry->send_u->pos = 0;
-			work_entry->send_u->limit = work_entry->send_u->capacity = sizeof(work_entry->send_u->data);
-		}
+			recv_buff_free(work_entry->send_u);
 
 		g2_qht_clean(work_entry->qht);
 		g2_qht_put(work_entry->sent_qht);
 	}
 	else
-	{
-		work_entry->recv_u = NULL;
-		work_entry->send_u = NULL;
 		work_entry->qht = NULL;
-	}
+
+	work_entry->recv = NULL;
+	work_entry->send = NULL;
+	work_entry->recv_u = NULL;
+	work_entry->send_u = NULL;
+
 	work_entry->sent_qht = NULL;
 	work_entry->akt_packet = &(work_entry->packet_1);
 	work_entry->build_packet = &(work_entry->packet_2);
@@ -308,11 +308,14 @@ inline void g2_con_free(g2_connection_t *to_free)
 			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder.msg);
 	}
 	
+	if(to_free->recv)
+		recv_buff_free(to_free->recv);
+	if(to_free->send)
+		recv_buff_free(to_free->send);
 	if(to_free->recv_u)
-		free(to_free->recv_u);
-	
+		recv_buff_free(to_free->recv_u);
 	if(to_free->send_u)
-		free(to_free->send_u);
+		recv_buff_free(to_free->send_u);
 
 	g2_qht_put(to_free->qht);
 	g2_qht_put(to_free->sent_qht);
@@ -379,10 +382,10 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 
 	if(str_size(ACCEPT_G2) <= distance)
 	{
-		if(!strncasecmp(buffer_start(to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
+		if(!strncasecmp(buffer_start(*to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
 		//found!!
-			logg_develd_old("found for Content:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(to_con->recv));
+			logg_develd_old("found for Content:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
 			to_con->flags.content_g2 = true;
 			return false;
 		}
@@ -394,14 +397,14 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 
 static bool ulpeer_what(g2_connection_t *to_con, GCC_ATTR_UNUSED_PARAM(size_t, distance))
 {
-	if(!strncasecmp(buffer_start(to_con->recv), G2_FALSE, str_size(G2_FALSE)))
+	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE)))
 	{
 		to_con->flags.upeer = false;
 		to_con->flags.upeer_ok = true;
 		return false;
 	}
 
-	if(!strncasecmp(buffer_start(to_con->recv), G2_TRUE, str_size(G2_TRUE)))
+	if(!strncasecmp(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE)))
 	{
 		to_con->flags.upeer = true;
 		to_con->flags.upeer_ok = true;
@@ -416,7 +419,7 @@ static bool ulpeer_what(g2_connection_t *to_con, GCC_ATTR_UNUSED_PARAM(size_t, d
 static bool uagent_what(g2_connection_t *to_con, size_t distance)
 {
 	size_t n = (distance < (sizeof(to_con->uagent) - 1))? distance : sizeof(to_con->uagent) - 1;
-	strncpy(to_con->uagent, buffer_start(to_con->recv), n);
+	strncpy(to_con->uagent, buffer_start(*to_con->recv), n);
 	to_con->uagent[n] = '\0';
 	to_con->flags.uagent_ok = true;
 	logg_develd_old("found for User-Agent:\t\"%s\"\n", to_con->uagent);
@@ -435,12 +438,12 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 		if(KNOWN_ENCODINGS[i]->length > distance)
 			continue;
 
-		if(!strncasecmp(buffer_start(to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
+		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
 		//found!!
 			to_con->encoding_out = i;
 			to_con->flags.enc_out_ok = true;
-			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(to_con->recv), to_con->encoding_in);
+			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
 			return false;
 		}
 	}
@@ -461,12 +464,12 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 		if(KNOWN_ENCODINGS[i]->length > distance)
 			continue;
 
-		if(!strncasecmp(buffer_start(to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
+		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
 		//found!!
 			to_con->encoding_in = i;
 			to_con->flags.enc_in_ok = true;
-			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(to_con->recv), to_con->encoding_in);
+			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
 			return false;
 		}
 	}
@@ -480,7 +483,7 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	char buffer[distance+1];
 	int ret_val = 0;
 
-	strncpy(buffer, buffer_start(to_con->recv), distance);
+	strncpy(buffer, buffer_start(*to_con->recv), distance);
 	buffer[distance] = '\0';
 
 	ret_val = inet_pton(to_con->af_type, buffer, &(to_con->sent_addr.sin_addr));
@@ -514,7 +517,7 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 
 static bool accept_what(g2_connection_t *to_con, size_t distance)
 {
-	char *w_ptr = buffer_start(to_con->recv);
+	char *w_ptr = buffer_start(*to_con->recv);
 
 	if(to_con->flags.second_header)
 		return false;
@@ -529,7 +532,7 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 		if(!strncasecmp(w_ptr, ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
 		//found!!
-			logg_develd_old("found for Accept:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(to_con->recv));
+			logg_develd_old("found for Accept:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
 			to_con->flags.accept_g2 = true;
 			return false;
 		}
@@ -554,7 +557,7 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 static bool listen_what(g2_connection_t * to_con, size_t distance)
 {
 	/* stringdisplacements are int... */
-	logg_develd(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(to_con->recv));
+	logg_develd(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(*to_con->recv));
 	return false;
 }
 

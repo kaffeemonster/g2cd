@@ -51,10 +51,14 @@ static inline int get_act_loglevel(void);
 #define OUT   0
 #define IN    1
 
+#define EVENT_SPACE  16
+
 #define FC_CAP_END	2048 /* not used ATM*/
 #define FC_CAP_START	16
 #define FC_CAP_INC	32 /* not used ATM */
 #define FC_TRESHOLD	4
+#define FB_CAP_START	(THREAD_SUM * EVENT_SPACE * 2)
+#define FB_TRESHOLD	EVENT_SPACE
 
 #define PD_START_CAPACITY 128
 #define PD_CAPACITY_INCREMENT 32
