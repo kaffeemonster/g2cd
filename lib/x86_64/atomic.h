@@ -42,7 +42,7 @@
 #  define LOCK
 # endif
 
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"xchgq\t%0, %2"
@@ -54,7 +54,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return val;
 }
 
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		"xchgl\t%0, %2"
@@ -66,7 +66,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	return val;
 }
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -81,7 +81,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return prev;
 }
 
-static inline void atomic_inc(atomic_t *ptr)
+static always_inline void atomic_inc(atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		LOCK "incl %0"
@@ -91,7 +91,7 @@ static inline void atomic_inc(atomic_t *ptr)
 		: "cc");
 }
 
-static inline void atomic_dec(atomic_t *ptr)
+static always_inline void atomic_dec(atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		LOCK "decl %0"
@@ -101,7 +101,7 @@ static inline void atomic_dec(atomic_t *ptr)
 		: "cc");
 }
 
-static inline int atomic_dec_test(atomic_t *ptr)
+static always_inline int atomic_dec_test(atomic_t *ptr)
 {
 	unsigned char c;
 	__asm__ __volatile__(

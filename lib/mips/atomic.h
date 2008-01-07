@@ -58,7 +58,7 @@
 #  define MEM_ORDER
 # endif
 
-static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	void *ret_val, *dummy;
 
@@ -83,7 +83,7 @@ static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 }
 
 #if __mips == 64
-static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	void *ret_val, *dummy;
 
@@ -107,7 +107,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 #endif
 
 extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -121,7 +121,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return _illigal_ptr_size(val, ptr);
 }
 
-static inline int atomic_x_32(int val, atomic_t *ptr)
+static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	int ret_val, dummy;
 	__asm__ __volatile__(
@@ -145,7 +145,7 @@ static inline int atomic_x_32(int val, atomic_t *ptr)
 }
 
 #if __mips == 64
-static inline int atomic_x_64(int val, atomic_t *ptr)
+static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int ret_val, dummy;
 	__asm__ __volatile__(
@@ -168,7 +168,7 @@ static inline int atomic_x_64(int val, atomic_t *ptr)
 #endif
 
 extern int _illigal_int_size(int, atomic_t *);
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -182,7 +182,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	return _illigal_int_size(val, ptr);
 }
 
-static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 {
 	int prev;
 
@@ -211,7 +211,7 @@ static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 }
 
 #if __mips == 64
-static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 {
 	int prev;
 
@@ -238,7 +238,7 @@ static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 }
 #endif
 
-static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -252,7 +252,7 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return _illigal_int_size(nval, ptr);
 }
 
-static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -280,7 +280,7 @@ static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, at
 }
 
 #if __mips == 64
-static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -306,7 +306,7 @@ static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, at
 }
 #endif
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -320,7 +320,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return _illigal_ptr_size(nval, ptr);
 }
 
-static inline void atomic_inc(atomic_t *ptr)
+static always_inline void atomic_inc(atomic_t *ptr)
 {
 	int tmp;
 
@@ -337,7 +337,7 @@ static inline void atomic_inc(atomic_t *ptr)
 		: /* %2 */ "m" (atomic_read(ptr)));
 }
 
-static inline void atomic_dec(atomic_t *ptr)
+static always_inline void atomic_dec(atomic_t *ptr)
 {
 	int tmp;
 
@@ -354,7 +354,7 @@ static inline void atomic_dec(atomic_t *ptr)
 		: /* %2 */ "m" (atomic_read(ptr)));
 }
 
-static inline void atomic_add(int i, atomic_t *ptr)
+static always_inline void atomic_add(int i, atomic_t *ptr)
 {
 	int tmp;
 
@@ -372,7 +372,7 @@ static inline void atomic_add(int i, atomic_t *ptr)
 		  /* %3 */ "IJr" (i));
 }
 
-static inline void atomic_sub(int i, atomic_t *ptr)
+static always_inline void atomic_sub(int i, atomic_t *ptr)
 {
 	int tmp;
 
@@ -390,7 +390,7 @@ static inline void atomic_sub(int i, atomic_t *ptr)
 		  /* %3 */ "IJr" (i));
 }
 
-static inline int atomic_dec_return(atomic_t *ptr)
+static always_inline int atomic_dec_return(atomic_t *ptr)
 {
 	int tmp, dummy;
 

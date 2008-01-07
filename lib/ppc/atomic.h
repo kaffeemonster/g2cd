@@ -78,14 +78,18 @@
  *
  * OK, forget about it, gcc-4.1.1 generates nice _wrong_ sequence.
  * Seems not to work always.
- * Very nice is the fact, that the GCC manual misses some register contraints
- * for Power/ppc/rs6000, like a,Z,Y etc.
+ * Very nice is the fact, that the GCC manual misses some existing register
+ * contraints for Power/ppc/rs6000, like a,Z,Y etc.
  * And the best fact: gcc has no constraint for what I need: a memop which is
  * allways indexed (even if the index is 0) (something like Z)
- * rs6000.h even mentiones the address mode (sum of two regs), but, no contrain
+ * It gets even better:  rs6000.h even mentiones the addressing mode
+ * (sum of two regs), but, no constrain...
+ *
+ * Back to the traditional way, always pass 0 as offset, let gcc calc ptr
+ * (with maybe added offset) explicitly
  */
 
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	void *tmp;
 
@@ -107,7 +111,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return tmp;
 }
 
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	int tmp;
 
@@ -129,7 +133,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	return tmp;
 }
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 
@@ -155,7 +159,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return prev;
 }
 
-static inline void atomic_inc(atomic_t *ptr)
+static always_inline void atomic_inc(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(
@@ -173,7 +177,7 @@ static inline void atomic_inc(atomic_t *ptr)
 		: "cc");
 }
 
-static inline void atomic_dec(atomic_t *ptr)
+static always_inline void atomic_dec(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(
@@ -191,7 +195,7 @@ static inline void atomic_dec(atomic_t *ptr)
 		: "cc");
 }
 
-static inline int atomic_dec_return(atomic_t *ptr)
+static always_inline int atomic_dec_return(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(

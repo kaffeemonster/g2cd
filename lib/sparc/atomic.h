@@ -38,7 +38,7 @@
 
 /* could make problems on _real_ old Fujitsu build sparcs */
 # define atomic_px atomic_px
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
@@ -51,7 +51,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 }
 
 # define atomic_p atomic_p
-static inline int atomic_p(int val, atomic_t *ptr)
+static always_inline int atomic_p(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"

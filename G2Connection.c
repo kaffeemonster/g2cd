@@ -204,7 +204,7 @@ static void my_zfree(void *opaque, void *to_free)
 	free(to_free);
 }
 
-inline void _g2_con_clear(g2_connection_t *work_entry, int new)
+inline void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
 	// if theres zlib stuff, free it
 	if(!new)
@@ -291,7 +291,7 @@ inline void _g2_con_clear(g2_connection_t *work_entry, int new)
 	g2_packet_clean(work_entry->akt_packet);
 }
 
-inline void g2_con_free(g2_connection_t *to_free)
+inline void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 {
 	if(!to_free)
 		return;

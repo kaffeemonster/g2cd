@@ -35,9 +35,9 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-static inline int get_act_loglevel(void);
 // Own
 #include "other.h"
+static always_inline int get_act_loglevel(void);
 #include "G2Connection.h"
 #include "G2Packet.h"
 #include "lib/atomic.h"
@@ -112,7 +112,7 @@ _G2MAIN_EXTRNVAR(struct
 _G2MAIN_EXTRNVAR(size_t packet_uprod_length);
 _G2MAIN_EXTRNVAR(char *packet_uprod);
 
-static inline int get_act_loglevel(void)
+static always_inline int get_act_loglevel(void)
 {
 	return server.settings.logging.act_loglevel;
 }

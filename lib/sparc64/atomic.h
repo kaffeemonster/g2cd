@@ -37,7 +37,7 @@
 # define atomic_sread(x)	((x)->next)
 # define atomic_sset(x, y) ((x)->next = (y))
 
-static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
@@ -49,7 +49,7 @@ static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 	return val;
 }
 
-static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
 		"swapx\t\t%2, %0"
@@ -62,7 +62,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 }
 
 extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -75,7 +75,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 }
 
 // TODO: hmmm, really no swapx and swap deprecatet on sparc v9?
-static inline int atomic_x_32(int val, atomic_t *ptr)
+static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		"swap\t\t%2, %0"
@@ -87,7 +87,7 @@ static inline int atomic_x_32(int val, atomic_t *ptr)
 	return val;
 }
 
-static inline int atomic_x_64(int val, atomic_t *ptr)
+static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		"swapx\t\t%2, %0"
@@ -100,7 +100,7 @@ static inline int atomic_x_64(int val, atomic_t *ptr)
 }
 
 extern int _illigal_int_size(int, atomic_t *);
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -121,7 +121,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 # endif
 
 
-static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		MEMBAR_1
@@ -136,7 +136,7 @@ static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 	return nval;
 }
 
-static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 {
 	__asm__ __volatile__(
 		MEMBAR_1
@@ -151,7 +151,7 @@ static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 	return nval;
 }
 
-static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -163,7 +163,7 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return _illigal_int_size(nval, ptr);
 }
 
-static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -180,7 +180,7 @@ static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, at
 }
 
 // TODO: gcc happiliy chooses the 64 bit variant, but issues ld not ldx loads, BUG?
-static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -196,7 +196,7 @@ static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, at
 	return prev;
 }
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -208,7 +208,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return _illigal_ptr_size(nval, ptr);
 }
 
-static inline int atomic_add_return(int val, atomic_t *ptr)
+static always_inline int atomic_add_return(int val, atomic_t *ptr)
 {
 	int res;
 	do
@@ -217,7 +217,7 @@ static inline int atomic_add_return(int val, atomic_t *ptr)
 	return res;
 }
 
-static inline int atomic_sub_return(int val, atomic_t *ptr)
+static always_inline int atomic_sub_return(int val, atomic_t *ptr)
 {
 	int res;
 	do

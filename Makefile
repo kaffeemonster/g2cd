@@ -178,6 +178,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -ftest-coverage # needed?
 #OPT_FLAGS += -fprofile-arcs
 #CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
+CFLAGS += -O
 #	gcc 3.? make sure the OS sees our Stack-handling since we
 #	are Multithreaded or leave it - seems buggy
 #CFLAGS += -fstack-check

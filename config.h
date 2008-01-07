@@ -64,7 +64,7 @@
 /* are we on an multi-processor-mashine
  * (even virtual processors)
  */
-//#define HAVE_SMP
+#define HAVE_SMP
 /* if we have SMP, do we have Spinlocks? Solaris has none! */
 //#define HAVE_SPINLOCKS 
 

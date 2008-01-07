@@ -210,6 +210,7 @@ void *G2Accept(void *param)
 							// Some data ready to be read in?
 							g2_connection_t **tmp_con_holder;
 							g2_connection_t **tmp_con_b = e_wptr->data.ptr;
+							tmp_con_holder = tmp_con_b;
 							if(!manage_buffer_before(&(*tmp_con_b)->recv, &lrecv_buff))
 								goto killit;
 							if(!manage_buffer_before(&(*tmp_con_b)->send, &lsend_buff))

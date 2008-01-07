@@ -121,7 +121,7 @@ typedef union xxxxxx4
 #  include "generic/atomic.h"
 # endif
 
-static inline void atomic_push(atomicst_t *head, atomicst_t *node)
+static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
 	void *tmp;
 	do
@@ -129,7 +129,7 @@ static inline void atomic_push(atomicst_t *head, atomicst_t *node)
 	while(atomic_cmpalx(node, tmp, head) != tmp);
 }
 
-static inline atomicst_t *atomic_pop(atomicst_t *head)
+static always_inline atomicst_t *atomic_pop(atomicst_t *head)
 {
 	atomicst_t *ret_val, *tmp;
 	do

@@ -278,7 +278,7 @@ static inline void recv_buff_free_system(struct norm_buff *tf)
 	free(tf);
 }
 
-void recv_buff_free(struct norm_buff *ret)
+void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 {
 	int failcount = 0;
 

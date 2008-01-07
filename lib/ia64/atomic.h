@@ -40,7 +40,7 @@
 #  define atomic_px_32(val, ptr) _InterlockedExchange(&atomic_pread(ptr), val)
 #  define atomic_px_64(val, ptr) _InterlockedExchange64(&atomic_pread(ptr), val)
 # else
-static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	void *ret;
 	__asm__ __volatile__(
@@ -53,7 +53,7 @@ static inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 	return ret;
 }
 
-static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	void *ret;
 	__asm__ __volatile__(
@@ -68,7 +68,7 @@ static inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 # endif /* __INTEL_COMPILER */
 
 extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -84,7 +84,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 #  define atomic_x_32(val, ptr) _InterlockedExchange(&atomic_read(ptr), val)
 #  define atomic_x_64(val, ptr) _InterlockedExchange64(&atomic_read(ptr), val)
 # else
-static inline int atomic_x_32(int val, atomic_t *ptr)
+static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	int ret;
 	__asm__ __volatile__(
@@ -97,7 +97,7 @@ static inline int atomic_x_32(int val, atomic_t *ptr)
 	return ret;
 }
 
-static inline int atomic_x_64(int val, atomic_t *ptr)
+static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int ret;
 	__asm__ __volatile__(
@@ -112,7 +112,7 @@ static inline int atomic_x_64(int val, atomic_t *ptr)
 # endif /* __INTEL_COMPILER */
 
 extern int _illigal_int_size(int, atomic_t *);
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	switch(sizeof(val))
 	{
@@ -134,7 +134,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 #  define atomic_cmpx_32(nval, oval, ptr) _InterlockedCompareExchange_acq(&atomic_read(ptr), nval, oval)
 #  define atomic_cmpx_64(nval, oval, ptr) _InterlockedCompareExchange64_acq(&atomic_read(ptr), nval, oval)
 # else
-static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
@@ -154,7 +154,7 @@ static inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 	return res;
 }
 
-static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
@@ -175,7 +175,7 @@ static inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 }
 # endif /* __INTEL_COMPILER */
 
-static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -191,7 +191,7 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 #  define atomic_cmppx_32(nval, oval, ptr) _InterlockedCompareExchange_acq(&atomic_pread(ptr), nval, oval)
 #  define atomic_cmppx_64(nval, oval, ptr) _InterlockedCompareExchange64_acq(&atomic_pread(ptr), nval, oval)
 # else
-static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *res;
 	__asm__ __volatile__(
@@ -211,7 +211,7 @@ static inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, at
 	return res;
 }
 
-static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *res;
 	__asm__ __volatile__(
@@ -232,7 +232,7 @@ static inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, at
 }
 # endif /* __INTEL_COMPILER */
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{
@@ -244,7 +244,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return _illigal_ptr_size(nval, ptr);
 }
 
-static inline int _atomic_add_return(int val, atomic_t *ptr)
+static always_inline int _atomic_add_return(int val, atomic_t *ptr)
 {
 	int res;
 	do
@@ -253,7 +253,7 @@ static inline int _atomic_add_return(int val, atomic_t *ptr)
 	return res;
 }
 
-static inline int _atomic_sub_return(int val, atomic_t *ptr)
+static always_inline int _atomic_sub_return(int val, atomic_t *ptr)
 {
 	int res;
 	do
@@ -266,7 +266,7 @@ static inline int _atomic_sub_return(int val, atomic_t *ptr)
 #  define atomic_fetch_and_add_32(val, ptr) __fetchadd4_acq(&atomic_read(ptr), val)
 #  define atomic_fetch_and_add_64(val, ptr) __fetchadd8_acq((&atomic_read(ptr), val)
 # else
-static inline int atomic_fetch_and_add_32(int val, atomic_t *ptr)
+static always_inline int atomic_fetch_and_add_32(int val, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
@@ -279,7 +279,7 @@ static inline int atomic_fetch_and_add_32(int val, atomic_t *ptr)
 	return res;
 }
 
-static inline int atomic_fetch_and_add_64(int val, atomic_t *ptr)
+static always_inline int atomic_fetch_and_add_64(int val, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
@@ -294,7 +294,7 @@ static inline int atomic_fetch_and_add_64(int val, atomic_t *ptr)
 # endif /* __INTEL_COMPILER */
 
 //TODO: I think this must be all substituted by macros...
-static inline int atomic_fetch_and_add(int val, atomic_t *ptr)
+static always_inline int atomic_fetch_and_add(int val, atomic_t *ptr)
 {
 	switch(sizeof(val));
 	{

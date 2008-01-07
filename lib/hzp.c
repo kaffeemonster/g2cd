@@ -202,7 +202,7 @@ inline void hzp_unref(enum hzps key)
  *         free_func - the free callback, either libc free or 
  *                     your own allocator for this object.
  */
-inline void hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *))
+inline void GCC_ATTR_FASTCALL hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *))
 {
 	item->data = data;
 	item->free_func = func2free;

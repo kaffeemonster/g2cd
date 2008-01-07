@@ -49,7 +49,7 @@ struct hzp_free
 LIB_HZP_EXTRN(inline bool hzp_alloc(void));
 LIB_HZP_EXTRN(inline void hzp_ref(enum hzps, void *));
 LIB_HZP_EXTRN(inline void hzp_unref(enum hzps));
-LIB_HZP_EXTRN(inline void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)));
+LIB_HZP_EXTRN(inline void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)) GCC_ATTR_FASTCALL);
 LIB_HZP_EXTRN(inline int hzp_scan(int));
 	
 #endif

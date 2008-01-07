@@ -35,6 +35,6 @@ LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_local_get(void));
 LIB_RECV_BUFF_EXTRN(void recv_buff_local_ret(struct norm_buff *));
 LIB_RECV_BUFF_EXTRN(void recv_buff_local_refill(void));
 LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_alloc(void));
-LIB_RECV_BUFF_EXTRN(void recv_buff_free(struct norm_buff *));
+LIB_RECV_BUFF_EXTRN(void recv_buff_free(struct norm_buff *) GCC_ATTR_FASTCALL );
 
 #endif /* LIB_RECV_BUFF_H */

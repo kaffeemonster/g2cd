@@ -73,7 +73,7 @@
  *
  */
 
-static inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	unsigned long long dummy;
 
@@ -97,7 +97,7 @@ static inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return val;
 }
 
-static inline int atomic_x(int val, atomic_t *ptr)
+static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	unsigned long long dummy;
 	__asm__ __volatile__(
@@ -120,7 +120,7 @@ static inline int atomic_x(int val, atomic_t *ptr)
 	return val;
 }
 
-static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 {
 	unsigned long long prev, cmp;
 
@@ -148,7 +148,7 @@ static inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return prev;
 }
 
-static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	unsigned long long cmp;
@@ -176,7 +176,7 @@ static inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomi
 	return prev;
 }
 
-static inline void atomic_inc(atomic_t *ptr)
+static always_inline void atomic_inc(atomic_t *ptr)
 {
 	unsigned long long tmp;
 
@@ -195,7 +195,7 @@ static inline void atomic_inc(atomic_t *ptr)
 		: /* %2 */ "m" (atomic_read(ptr)));
 }
 
-static inline void atomic_dec(atomic_t *ptr)
+static always_inline void atomic_dec(atomic_t *ptr)
 {
 	unsigned long long tmp;
 
@@ -214,7 +214,7 @@ static inline void atomic_dec(atomic_t *ptr)
 		: /* %2 */ "m" (atomic_read(ptr)));
 }
 
-static inline void atomic_add(int i, atomic_t *ptr)
+static always_inline void atomic_add(int i, atomic_t *ptr)
 {
 	unsigned long long tmp;
 
@@ -234,7 +234,7 @@ static inline void atomic_add(int i, atomic_t *ptr)
 		  /* %3 */ "Ir" (i));
 }
 
-static inline void atomic_sub(int i, atomic_t *ptr)
+static always_inline void atomic_sub(int i, atomic_t *ptr)
 {
 	unsigned long long tmp;
 
@@ -254,7 +254,7 @@ static inline void atomic_sub(int i, atomic_t *ptr)
 		  /* %3 */ "Ir" (i));
 }
 
-static inline int atomic_dec_return(atomic_t *ptr)
+static always_inline int atomic_dec_return(atomic_t *ptr)
 {
 	long long tmp, ret_val;
 

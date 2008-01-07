@@ -132,6 +132,17 @@
 # define GCC_ATTR_DESTRUCT
 #endif
 
+#if _GNUC_PREREQ (2,7)
+# define GCC_ATTR_FASTCALL GCC_ATTRIB(__regparm__(3))
+#else
+# define GCC_ATTR_FASTCALL
+#endif
+
+#if _GNUC_PREREQ (3,1)
+# define always_inline inline GCC_ATTRIB(__always_inline__)
+#else
+# define always_inline inline
+#endif
 
 #ifndef HAVE_INET6_ADDRSTRLEN
 /*
