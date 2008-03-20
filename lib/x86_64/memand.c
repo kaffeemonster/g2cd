@@ -180,7 +180,7 @@ handle_remaining:
 	while(len--)
 		*dst_char++ &= *src_char++;
 
-	return old_dst;
+	return dst;
 }
 
 static char const rcsid_ma[] GCC_ATTR_USED_VAR = "$Id:$";
