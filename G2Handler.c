@@ -352,6 +352,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 	/* read */
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
+		g2_packet_t tmp_packet = { .data_trunk_is_freeable = false};
 		bool	retry;
 
 		if(!do_read(p_entry))
@@ -361,7 +362,9 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 
 		do
 		{
+			g2_packet_t *build_packet;
 			struct norm_buff *d_source = NULL;
+			struct norm_buff *d_target = NULL;
 			
 			if(ENC_DEFLATE == (*w_entry)->encoding_in)
 			{
@@ -413,24 +416,22 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			else
 				d_source = (*w_entry)->recv;
 
-			
-/*			if(!(*w_entry)->build_packet)
+			build_packet = (*w_entry)->build_packet;
+			if(!build_packet)
 			{
-				(*w_entry)->build_packet = calloc(1, sizeof(*(*w_entry)->build_packet));
-				if(!(*w_entry)->build_packet)
-				{
-					logg_errno(LOGF_DEBUG, "packet allocation");
-					return w_entry;
-				}
-				(*w_entry)->build_packet->packet_decode = CHECK_CONTROLL_BYTE;
-			}*/
+				build_packet = &tmp_packet;
+				memset(build_packet, 0, sizeof(*build_packet));
+				build_packet->packet_decode = CHECK_CONTROLL_BYTE;
+			}
+			else
+				logg_develd("taking %p\n", build_packet);
 
 			logg_develd_old("++++ space: %u\n", buffer_remaining(*(*w_entry)->recv));
 			logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 			buffer_flip(*d_source);
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
 
-			if(!g2_packet_extract_from_stream(d_source, (*w_entry)->build_packet, server.settings.default_max_g2_packet_length))
+			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length))
 			{
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
@@ -444,25 +445,15 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			}
 			else
 			{
-				if(DECODE_FINISHED == (*w_entry)->build_packet->packet_decode ||
-					PACKET_EXTRACTION_COMPLETE == (*w_entry)->build_packet->packet_decode)
+				if(DECODE_FINISHED == build_packet->packet_decode ||
+					PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
-					g2_packet_t *tmp_packet = (*w_entry)->build_packet;
-					(*w_entry)->build_packet = (*w_entry)->akt_packet;
-					(*w_entry)->akt_packet = tmp_packet;
-
-					g2_packet_clean((*w_entry)->build_packet);
-/*					g2_packet_free((*w_entry)->last_packet);
-					(*w_entry)->last_packet = (*w_entry)->akt_packet;
-					(*w_entry)->akt_packet = (*w_entry)->build_packet;
-					(*w_entry)->build_packet = NULL;*/
-
 					if(ENC_DEFLATE == (*w_entry)->encoding_out)
-						d_source = (*w_entry)->send_u;
+						d_target = (*w_entry)->send_u;
 					else
-						d_source = (*w_entry)->send;
+						d_target = (*w_entry)->send;
 
-					if(g2_packet_decide(*w_entry, d_source, g2_packet_dict))
+					if(g2_packet_decide_spec(*w_entry, d_target, g2_packet_dict, build_packet))
 					{
 						struct epoll_event tmp_eevent = {0,{0}};
 
@@ -476,10 +467,44 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 						}
 					}
 
+					/* !!! packet is seen as finished here !!! */
+					if(build_packet->source_needs_compact)
+						buffer_compact(*d_source);
+					if(build_packet != &tmp_packet)
+					{
+						logg_devel("freeing durable packet\n");
+						g2_packet_free((*w_entry)->build_packet);
+						(*w_entry)->build_packet = NULL;
+					}
+					else if(build_packet->data_trunk_is_freeable)
+					{
+						logg_devel("datatrunk freed\n");
+						free(build_packet->data_trunk.data);
+					}
+
 					retry = true;
 				}
 				else
+				{
+					/* 
+					 * it is asumed, that a package ending here has state to
+					 * be saved until next recv on the one hand, but does not 
+					 * contain volatile data
+					 */
+					if(build_packet->packet_decode != CHECK_CONTROLL_BYTE)
+					{
+						/* copy build packet to durable storage */
+						g2_packet_t *t = g2_packet_alloc();
+						if(!t)
+						{
+							logg_errno(LOGF_DEBUG, "allocating durable packet");
+							return w_entry;
+						}
+						*t = *build_packet;
+						(*w_entry)->build_packet = t;
+					}
 					retry = false;
+				}
 			}
 		} while(retry);
 	}

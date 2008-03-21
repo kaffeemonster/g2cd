@@ -149,7 +149,6 @@ static void g2_con_deinit(void)
 
 inline g2_connection_t *g2_con_alloc(size_t num)
 {
-	char *packet_spaces[2*num];
 	g2_connection_t *ret_val = NULL;
 	
 	if(num)
@@ -157,32 +156,9 @@ inline g2_connection_t *g2_con_alloc(size_t num)
 
 	if(ret_val)
 	{
-		size_t i, j;
-		for(i = 0; i < (2 * num); i++)
-		{
-			packet_spaces[i] = malloc(PACKET_SPACE_START_CAP);
-			if(!packet_spaces[i])
-			{
-				for(; i; i--)
-					free(packet_spaces[i-1]);
-
-				free(ret_val);
-				return NULL;
-			}
-		}
-
-		for(i=0, j = 0; i < num; i++, j += 2)
-		{
-			ret_val[i].packet_1.data_trunk.data = packet_spaces[j];
-			ret_val[i].packet_1.data_trunk_is_freeable = true;
-			ret_val[i].packet_1.data_trunk.capacity = PACKET_SPACE_START_CAP;
-			ret_val[i].packet_1.children = NULL;
-			ret_val[i].packet_2.data_trunk.data = packet_spaces[j+1];
-			ret_val[i].packet_2.data_trunk_is_freeable = true;
-			ret_val[i].packet_2.data_trunk.capacity = PACKET_SPACE_START_CAP;
-			ret_val[i].packet_2.children = NULL;
+		size_t i;
+		for(i = 0; i < num; i++)
 			_g2_con_clear(&ret_val[i], true);
-		}
 	}
 	
 	return ret_val;
@@ -270,6 +246,8 @@ inline void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new
 			recv_buff_free(work_entry->recv_u);
 		if(work_entry->send_u)
 			recv_buff_free(work_entry->send_u);
+		if(work_entry->build_packet)
+			g2_packet_free(work_entry->build_packet);
 
 		g2_qht_clean(work_entry->qht);
 		g2_qht_put(work_entry->sent_qht);
@@ -283,12 +261,7 @@ inline void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new
 	work_entry->send_u = NULL;
 
 	work_entry->sent_qht = NULL;
-	work_entry->akt_packet = &(work_entry->packet_1);
-	work_entry->build_packet = &(work_entry->packet_2);
-// work_entry->last_packet = &(work_entry->packet_1);
-
-	g2_packet_clean(work_entry->build_packet);
-	g2_packet_clean(work_entry->akt_packet);
+	work_entry->build_packet = NULL;
 }
 
 inline void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
@@ -320,12 +293,8 @@ inline void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 	g2_qht_put(to_free->qht);
 	g2_qht_put(to_free->sent_qht);
 
-/*	if(to_free->last_packet)
-		g2_packet_free(to_free->last_packet);*/
-	if(to_free->akt_packet)
-		_g2_packet_free(to_free->akt_packet, 0);
 	if(to_free->build_packet)
-		_g2_packet_free(to_free->build_packet, 0);
+		g2_packet_free(to_free->build_packet);
 
 	free(to_free);
 }

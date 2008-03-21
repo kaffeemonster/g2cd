@@ -294,6 +294,7 @@ int main(int argc, char **args)
 		else if(9 == i)
 		{
 			logg_pos(LOGF_ERR, "not all gone down! Aborting!\n");
+			fsync(STDOUT_FILENO);
 			return EXIT_FAILURE;
 		}
 		sleep(1);
@@ -305,6 +306,7 @@ int main(int argc, char **args)
 	pthread_join(main_threads[THREAD_UDP], NULL);
 
 	clean_up_m();
+	fsync(STDOUT_FILENO);
 	return EXIT_SUCCESS;
 }
 

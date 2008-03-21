@@ -120,11 +120,7 @@ typedef struct g2_connection
 	char						tmp1[32000], tmp2[32000];
 	
 	// Packets
-//	g2_packet_t				*last_packet;
 	g2_packet_t				*build_packet;
-	g2_packet_t				*akt_packet;
-	g2_packet_t				packet_1;
-	g2_packet_t				packet_2;
 } g2_connection_t;
 
 struct g2_con_info

@@ -26,13 +26,13 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
-// other
+/* other */
 #include "other.h"
-// Own includes
+/* Own includes */
 #define _G2PACKETSERIALIZER_C
 //#define _NEED_G2_P_TYPE
 #include "G2PacketSerializer.h"
@@ -40,7 +40,12 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 
-/* local vars */
+
+/********************************************************************
+ * 
+ * local vars
+ *
+ ********************************************************************/
 #define ENUM_CMD(x) str_it(x)
 
 static const char *g2_packet_decoder_states_txt[] = 
@@ -49,9 +54,14 @@ static const char *g2_packet_decoder_states_txt[] =
 };
 #undef ENUM_CMD
 
+
 // #define DEBUG_SERIALIZER
 #ifdef DEBUG_SERIALIZER
-/* helper */
+/********************************************************************
+ * 
+ * helper
+ *
+ ********************************************************************/
 static inline void stat_packet(g2_packet_t *x, int level)
 {
 # define str_app(x, y)		(x) = (char *)memcpy((x), (y), str_size(y)) + str_size(y)
@@ -74,13 +84,18 @@ static inline void stat_packet(g2_packet_t *x, int level)
 # define stat_packet(x, level) do { level = level; } while(0)
 #endif
 
-/* extracter funcs */
+
+/********************************************************************
+ * 
+ * extracter funcs
+ *
+ ********************************************************************/
 
 static inline int check_control_byte_p(struct pointer_buff *source, g2_packet_t *target)
 {
 	uint8_t control;
 
-	// get and interpret the control-byte of a packet
+	/* get and interpret the control-byte of a packet */
 	if(1 > buffer_remaining(*source))
 	{
 		target->more_bytes_needed = true;
@@ -111,7 +126,7 @@ static inline int check_control_byte(struct norm_buff *source, g2_packet_t *targ
 		{.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; // refer to sec_buffer.h why this is needed
+		.data = source->data}; /* refer to sec_buffer.h why this is needed */
 	int ret_val                 = check_control_byte_p(&tmp_buf, target);
 
 	source->pos                 = tmp_buf.pos;
@@ -124,7 +139,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 {
 	size_t i;
 
-	// get the up to three length-bytes
+	/* get the up to three length-bytes */
 	if(target->length_length > buffer_remaining(*source))
 	{
 		target->more_bytes_needed = true;
@@ -141,7 +156,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 		else
 			target->length = (target->length << 8) | ((size_t)tmp_byte);
 	}
-// early check packet-boundary
+/* early check packet-boundary */
 	i = target->length + target->length_length + target->type_length + 1;
 	if(max_len < i)
 	{
@@ -149,7 +164,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 		return -1;
 	}
 
-// seems to be allowed to send a packet with compound flag and no data..
+/* seems to be allowed to send a packet with compound flag and no data.. */
 	if(!target->length)
 		target->is_compound = false;
 	
@@ -163,7 +178,7 @@ static inline int read_length(struct norm_buff *source, g2_packet_t *target, siz
 		{.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; // refer to sec_buffer.h why this is needed
+		.data = source->data}; /* refer to sec_buffer.h why this is needed */
 	int ret_val                 = read_length_p(&tmp_buf, target, max_len);
 
 	source->pos                 = tmp_buf.pos;
@@ -174,7 +189,7 @@ static inline int read_length(struct norm_buff *source, g2_packet_t *target, siz
 
 static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 {
-	// fetch the up to eigth type-bytes
+	/* fetch the up to eigth type-bytes */
 	if(target->type_length > buffer_remaining(*source))
 	{
 		target->more_bytes_needed = true;
@@ -188,8 +203,10 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 		for(i = target->type_length; i; i--, w_ptr++, source->pos++)
 		{
 			*w_ptr = *buffer_start(*source);
-	// A *VERY* simple test if the packet-type is legal,
-	// hopefully we can detect de-sync-ing of the stream with this
+	/*
+	 * A *VERY* simple test if the packet-type is legal,
+	 * hopefully we can detect de-sync-ing of the stream with this
+	 */
 			if(!isgraph((int)*w_ptr))
 			{
 				logg_devel("packet with bogus type-name\n");
@@ -201,7 +218,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	}
 	else
 	{
-		// Illegal Packet...
+		/* Illegal Packet... */
 		logg_devel("packet with 0 type-length\n");
 		return -1;
 	}
@@ -216,7 +233,7 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
 		{.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; // refer to sec_buffer.h why this is needed
+		.data = source->data}; /* refer to sec_buffer.h why this is needed */
 	int ret_val                 = read_type_p(&tmp_buf, target);
 
 	source->pos                 = tmp_buf.pos;
@@ -225,7 +242,12 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
 	return ret_val;
 }
 
-/* decoder entry points */
+
+/********************************************************************
+ *
+ * decoder entry points
+ *
+ ********************************************************************/
 
 /*
  * First break out (decode) of a G2Packet from a buffer
@@ -260,7 +282,7 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 		switch(target->packet_decode)
 		{
 		case CHECK_CONTROLL_BYTE:
-		// get and interpret the control-byte of a packet
+		/* get and interpret the control-byte of a packet */
 			if(!(func_ret_val = check_control_byte_p(source, target)))
 				break;
 			else if(0 > func_ret_val)
@@ -277,7 +299,7 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 			else if(0 > func_ret_val)
 				return false;
 		case READ_TYPE:
-		// fetch the up to eigth type-bytes
+		/* fetch the up to eigth type-bytes */
 			if(!(func_ret_val = read_type_p(source, target)))
 				break;
 			else if(0 > func_ret_val)
@@ -312,10 +334,11 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
 			source->pos                   += target->length;
 			return true;
 		case DECODE_FINISHED:
-		// Yehaa, it's done!
+		/* Yehaa, it's done! */
 			target->more_bytes_needed = true;
 			break;
 		case START_EXTRACT_PACKET_FROM_STREAM:
+		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
 		case EXTRACT_PACKET_FROM_STREAM:
 		case EXTRACT_PACKET_DATA:
 		case FINISH_PACKET_DATA:
@@ -379,7 +402,7 @@ inline bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *targe
 			}
 			else
 			{
-				// Packet has no length -> DirectAction
+				/* Packet has no length -> DirectAction */
 				source->packet_decode = DECODE_FINISHED;
 				return true;
 			}
@@ -433,13 +456,14 @@ inline bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *targe
 			}
 			break;
 		case DECODE_FINISHED:
-		// Yehaa, it's done!
+		/* Yehaa, it's done! */
 			target->more_bytes_needed = true;
 			break;
 		case CHECK_CONTROLL_BYTE:
 		case READ_LENGTH:
 		case READ_TYPE:
 		case START_EXTRACT_PACKET_FROM_STREAM:
+		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
 		case EXTRACT_PACKET_FROM_STREAM:
 		case GET_PACKET_DATA:
 		case EXTRACT_PACKET_DATA:
@@ -478,6 +502,7 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 {
 	int func_ret_val;
 	bool ret_val = true;
+	bool compact = true;
 
 	target->more_bytes_needed = false;
 	
@@ -486,20 +511,20 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 		switch(target->packet_decode)
 		{
 		case CHECK_CONTROLL_BYTE:
-		// get and interpret the control-byte of a packet
+		/* get and interpret the control-byte of a packet */
 			if(!(func_ret_val = check_control_byte(source, target)))
 				break;
 			else if(0 > func_ret_val)
 				return false;
 		case READ_LENGTH:
-		// get the up to three length-bytes
+		/* get the up to three length-bytes */
 			if(!(func_ret_val = read_length(source, target, max_len)))
 				break;
 			else if(0 > func_ret_val)
 				return false;
 		case READ_TYPE:
-		// fetch the up to eigth type-bytes
-			if(!(func_ret_val = read_type(source, target)))
+		/* fetch the up to eigth type-bytes */
+		 	if(!(func_ret_val = read_type(source, target)))
 				break;
 			else if(0 > func_ret_val)
 				return false;
@@ -513,27 +538,75 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 			}
 			else
 			{
-			// Packet has no length -> DirectAction
+			/* Packet has no length -> DirectAction */
 				target->data_trunk.pos = target->data_trunk.limit = 0;
 				target->more_bytes_needed = true;
 				target->packet_decode = DECODE_FINISHED;
 			}
 			break;
 		case START_EXTRACT_PACKET_FROM_STREAM:
-		// look what have to be done to extract the data
+		/* look what have to be done to extract the data */
+			/* do we have a trunk? */
+			if(0 == target->data_trunk.capacity || !target->data_trunk.data)
+			{
+				/* we do not seem to have a trunk, try to attach the read buffer */
+	/* 
+	 * We are playing with fire here!
+	 * data < pos is seen as free, but we linked it to this packet
+	 * as long as we do not compact this buffer, data < pos
+	 * will stay were it is.
+	 *
+	 * We are assuming, that a packet with PACKET_EXTRACTION_COMPLETE
+	 * is imideatly handeld in one go. See g2Handler.c
+	 *
+	 */
+				/* all data delivered? */
+				if(target->length <= buffer_remaining(*source))
+				{
+					logg_develd_old("%p would be complete: %lu long %lu remaining\n", (void *)target,
+						(unsigned long) target->length, (unsigned long)buffer_remaining(*source));
+					target->data_trunk_is_freeable = false;
+					target->data_trunk.data = buffer_start(*source);
+					target->data_trunk.capacity = target->length;
+					source->pos += target->length;
+					buffer_clear(target->data_trunk);
+					target->data_trunk.pos = target->length;
+					target->source_needs_compact = true;
+					compact = false;
+					target->packet_decode = PACKET_EXTRACTION_COMPLETE;
+					break;
+				}
+				/* could this packet stuffed in this buffer at all? */
+				else if(target->length <= source->capacity)
+				{
+					/* ok, recv more bytes */
+					target->more_bytes_needed = true;
+					break;
+				}
+				else
+					target->packet_decode++;
+			}
+		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
+			/* is our trunk big enough? */
 			if(target->length > target->data_trunk.capacity)
 			{
-				char *tmp_ptr = realloc(target->data_trunk.data, target->length);
+				/* no, realloc */
+				char *tmp_ptr;
+				if(target->data_trunk_is_freeable)
+					tmp_ptr = realloc(target->data_trunk.data, target->length);
+				else
+					tmp_ptr = malloc(target->length);
 				if(!tmp_ptr)
 				{
 					logg_errno(LOGF_DEBUG, "reallocating packet space");
 					return false;
 				}
 
+				target->data_trunk_is_freeable = true;
 				target->data_trunk.data = tmp_ptr;
 				target->data_trunk.capacity = target->length;
-				logg_develd_old("%p -> packet space reallocated: %lu bytes\n", (void *) target, (unsigned long) target->length);
 				buffer_clear(target->data_trunk);
+				logg_develd("%p -> packet space reallocated: %lu bytes\n", (void *) target, (unsigned long) target->length);
 			}
 			else
 			{
@@ -542,7 +615,7 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 			}
 			target->packet_decode++;
 		case EXTRACT_PACKET_FROM_STREAM:
-		// grep payload
+		/* grep payload */
 			if(buffer_remaining(*source) < buffer_remaining(target->data_trunk))
 			{
 				size_t buff_remain_source = buffer_remaining(*source);
@@ -562,7 +635,7 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 				target->packet_decode++;
 			}
 		case PACKET_EXTRACTION_COMPLETE:
-		// everythings fine for now, next would be the childpackets  if some
+		/* everythings fine for now, next would be the childpackets, if some */
 			buffer_flip(target->data_trunk);
 			target->more_bytes_needed = true;
 			break;
@@ -570,13 +643,15 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 		case EXTRACT_PACKET_DATA:
 		case FINISH_PACKET_DATA:
 		case GET_CHILD_PACKETS:
-		// if we have this states in this funktion, someone filled us with a
-		// packet, wich should be filled in the real decoder function
+		/*
+		 * if we have this states in this funktion, someone filled us with a
+		 * packet, wich should be filled in the real decoder function
+		 */
 			logg_develd("wrong packet in extraction: %i %s\n", target->packet_decode,
 				g2_packet_decoder_states_txt[target->packet_decode]);
 			return false;
 		case DECODE_FINISHED:
-		// Yehaa, it's done!
+		/* Yehaa, it's done! */
 			target->more_bytes_needed = true;
 			break;
 		default:
@@ -585,8 +660,9 @@ inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t 
 		}
 	}
 
-	// remove decoded data and set buffer-position so new data gets written behind
-	buffer_compact(*source);
+	/* remove decoded data and set buffer-position so new data gets written behind */
+	if(compact)
+		buffer_compact(*source);
 
 	return ret_val;
 }

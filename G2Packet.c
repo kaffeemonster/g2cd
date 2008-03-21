@@ -59,8 +59,6 @@ static bool handle_UPROC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_UPROD(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 
-static inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *);
-
 #define PT_ENT(m, n)	{.match = (m), .last = false, .term = false, .found = {.next = (n)}}
 #define PT_ACT(a)	{.match = '\0', .last = true, .term = false, .found = {.action = (a)}}
 #define PT_TERM	{.match = 0, .last = 0, .term = true, .found = {.next = NULL}}
@@ -429,7 +427,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 			ret_val |= g2_packet_decide_spec(connec, target, LNI_packet_dict, &child_p);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
-
+	
 	return ret_val;
 }
 
@@ -562,7 +560,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
 	}
-	/*patch io and complete*/
+	/* patch io and complete */
 	patch_txt = g2_qht_patch(&connec->qht, &connec->qht->fragments);
 	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
@@ -675,11 +673,31 @@ static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 	if(dlerror())
 		return false;
 	
-
 	return false;
 }
 
-// helper-funktions
+
+/********************************************************************
+ *
+ * helper-funktions
+ * 
+ ********************************************************************/
+inline g2_packet_t *g2_packet_alloc(void)
+{
+	return malloc(sizeof(g2_packet_t));
+}
+
+inline g2_packet_t *g2_packet_calloc(void)
+{
+	g2_packet_t *t = g2_packet_alloc();
+	if(t)
+	{
+		memset(t, 0, sizeof(*t));
+		t->packet_decode = CHECK_CONTROLL_BYTE;
+	}
+	return t;
+}
+
 inline void _g2_packet_free(g2_packet_t *to_free, int is_freeable)
 {
 	if(!to_free)
@@ -724,7 +742,7 @@ inline void g2_packet_clean(g2_packet_t *to_clean)
 	to_clean->data_trunk_is_freeable = tmp_info;
 }
 
-static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type, g2_packet_t *packs)
+inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type, g2_packet_t *packs)
 {
 	char *to_match = packs->type;
 	bool ret_val = false;
@@ -765,10 +783,10 @@ static inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_bu
 	return ret_val;
 }
 
-inline bool g2_packet_decide(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type)
+/*inline bool g2_packet_decide(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type)
 {
 	return g2_packet_decide_spec(connec, target, work_type, connec->akt_packet);
-}
+}*/
 
 static char const rcsid_p[] GCC_ATTR_USED_VAR = "$Id: G2Packet.c,v 1.12 2004/12/18 18:06:13 redbully Exp redbully $";
 // EOF

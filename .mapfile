@@ -7,7 +7,7 @@
 		G2Handler;
 		timeout_timer_task;
 	# packet handling
-		g2_packet_decide;
+		g2_packet_decide_spec;
 		g2_packet_extract_from_stream;
 		g2_packet_clean;
 		_g2_packet_free;

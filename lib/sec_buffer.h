@@ -113,15 +113,26 @@ struct pointer_buff
 		(x).pos = 0; \
 	} while(0)
 
+#define buffer_unflip(x) \
+	do { \
+		(x).pos = buffer_remaining(x); \
+		(x).limit = (x).capacity; \
+	} while(0)
+
 #define buffer_compact(x) \
 	do { \
 		if(buffer_remaining(x)) \
 			if((x).pos) memmove((x).data, \
 				buffer_start(x), \
 				buffer_remaining(x)); \
-		(x).pos = buffer_remaining(x); \
-		(x).limit = (x).capacity; \
+		buffer_unflip(x); \
 	} while(0)
+
+#define buffer_headroom(x) \
+	((x).capacity - (x).limit)
+
+#define buffer_possible_remaining(x) \
+	((x).capacity - (x).pos)
 
 /*
  * only valid after a compact
