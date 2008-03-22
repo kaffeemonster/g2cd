@@ -766,14 +766,14 @@ static inline void handle_config(void)
 
 	// set the GUID
 	if(!(config = fopen(guid_file_name, "r")))
-		diedie("opening guid-file");
+		goto err;
 
 	if(16 != fscanf(config,
 		"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 		tmp_id, tmp_id+1, tmp_id+2, tmp_id+3, tmp_id+4, tmp_id+5,
 		tmp_id+6, tmp_id+7, tmp_id+8, tmp_id+9, tmp_id+10,
 		tmp_id+11, tmp_id+12, tmp_id+13, tmp_id+14, tmp_id+15))
-		diedie("reading guid");
+		goto err;
 		
 	for(i = 0; i < sizeof(server.settings.our_guid); i++)
 		server.settings.our_guid[i] = (uint8_t)tmp_id[i];
@@ -785,6 +785,16 @@ static inline void handle_config(void)
 
 	if(server.settings.want_2_send_profile)
 		read_uprofile();
+	return;
+
+err:
+	{
+		int tmp_errno = errno;
+		logg(LOGF_ERR, "Tried to open/read guid-file \"%s\", but it failed!\n"
+				"Please check situation. Maybe you want to create one with gen_guid.sh?\n", guid_file_name);
+		errno = tmp_errno;
+		diedie("opening/reading guid-file");
+	}
 }
 
 static inline void change_the_user(void)
