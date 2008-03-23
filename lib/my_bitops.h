@@ -32,13 +32,13 @@
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
-LIB_MY_BITOPS_EXTRN(inline void *memxor(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(inline void *memand(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(inline void *memneg(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(inline size_t popcountst(size_t n) GCC_ATTR_CONST);
-LIB_MY_BITOPS_EXTRN(inline size_t flsst(size_t find) GCC_ATTR_CONST);
+LIB_MY_BITOPS_EXTRN(void *memxor(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST);
+LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
 #ifndef HAVE_STRNLEN
-LIB_MY_BITOPS_EXTRN(inline size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
+LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
 #define STRNLEN_DEFINED
 #endif
 

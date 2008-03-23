@@ -52,7 +52,7 @@
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
 
-inline g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
+g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 {
 	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
 	const char *msg = NULL;
@@ -89,7 +89,7 @@ inline g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 	return w_entry;
 }
 
-inline bool do_read(struct epoll_event *p_entry)
+bool do_read(struct epoll_event *p_entry)
 {
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	ssize_t result = 0;
@@ -154,7 +154,7 @@ inline bool do_read(struct epoll_event *p_entry)
 	return ret_val;
 }
 
-inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
+bool do_write(struct epoll_event *p_entry, int epoll_fd)
 {
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	bool ret_val = true;
@@ -263,7 +263,7 @@ inline bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	return ret_val;
 }
 
-inline bool recycle_con(
+bool recycle_con(
 	g2_connection_t **w_entry,
 	struct g2_con_info *work_cons,
 	int epoll_fd,
@@ -310,7 +310,7 @@ inline bool recycle_con(
 	return true;
 }
 
-inline bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff)
+bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff)
 {
 	if(!*con_buff)
 	{
@@ -330,7 +330,7 @@ inline bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff *
 	return true;
 }
 
-inline void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff)
+void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff)
 {
 	if(*con_buff == *our_buff)
 	{

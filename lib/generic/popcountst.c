@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-inline size_t popcountst(size_t n)
+size_t popcountst(size_t n)
 {
 	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;
 	n = ((n >> 2) & MK_C(0x33333333L)) + (n & MK_C(0x33333333L));

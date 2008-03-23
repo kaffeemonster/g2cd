@@ -74,16 +74,16 @@ struct qhtable
 #define _G2QHT_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #define _G2QHT_EXTRNVAR(x) extern x
 #else
-#define _G2QHT_EXTRN(x) x GCC_ATTR_VIS("hidden")
+#define _G2QHT_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
 #define _G2QHT_EXTRNVAR(x)
 #endif // _G2QHT_C
 
-_G2QHT_EXTRN(inline void g2_qht_clean(struct qhtable *));
-_G2QHT_EXTRN(inline void g2_qht_put(struct qhtable *));
-_G2QHT_EXTRN(inline void g2_qht_frag_clean(struct qht_fragment *));
-_G2QHT_EXTRN(inline const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
-_G2QHT_EXTRN(inline int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
-_G2QHT_EXTRN(inline bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
+_G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
+_G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
+_G2QHT_EXTRN(void g2_qht_frag_clean(struct qht_fragment *));
+_G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
+_G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
+_G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
 
 #endif // _G2QHT_H
 //EOF

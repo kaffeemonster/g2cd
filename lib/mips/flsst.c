@@ -33,6 +33,7 @@ static inline size_t flsst(size_t find)
 	return SIZE_T_BITS - found;
 }
 
+static inline size_t flsst_64(size_t find);
 #if __mips == 64
 static inline size_t flsst_64(size_t find)
 {
@@ -45,7 +46,7 @@ static inline size_t flsst_64(size_t find)
 
 extern size_t illigal_size_t_size(size_t);
 
-inline size_t flsst(size_t find)
+size_t flsst(size_t find)
 {
 	switch(sizeof(size_t))
 	{

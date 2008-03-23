@@ -66,16 +66,16 @@ enum g2_packet_encoder_states
 #define _G2PACKSER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #define _G2PACKSER_EXTRNVAR(x) extern x
 #else
-#define _G2PACKSER_EXTRN(x) x GCC_ATTR_VIS("hidden")
+#define _G2PACKSER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
 #define _G2PACKSER_EXTRNVAR(x)
 #endif // _G2PACKET_C
 
 #ifndef _NEED_ONLY_SERIALIZER_STATES
 #include "G2Packet.h"
 
-_G2PACKSER_EXTRN(inline bool g2_packet_decode(struct pointer_buff *, g2_packet_t *, int));
-_G2PACKSER_EXTRN(inline bool g2_packet_decode_from_packet(g2_packet_t *, g2_packet_t *, int));
-_G2PACKSER_EXTRN(inline bool g2_packet_extract_from_stream(struct norm_buff *, g2_packet_t *, size_t));
+_G2PACKSER_EXTRN(bool g2_packet_decode(struct pointer_buff *, g2_packet_t *, int));
+_G2PACKSER_EXTRN(bool g2_packet_decode_from_packet(g2_packet_t *, g2_packet_t *, int));
+_G2PACKSER_EXTRN(bool g2_packet_extract_from_stream(struct norm_buff *, g2_packet_t *, size_t));
 #else
 #undef _G2PACKETSERIALIZER_H
 #endif

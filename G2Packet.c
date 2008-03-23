@@ -682,12 +682,12 @@ static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
  * helper-funktions
  * 
  ********************************************************************/
-inline g2_packet_t *g2_packet_alloc(void)
+g2_packet_t *g2_packet_alloc(void)
 {
 	return malloc(sizeof(g2_packet_t));
 }
 
-inline g2_packet_t *g2_packet_calloc(void)
+g2_packet_t *g2_packet_calloc(void)
 {
 	g2_packet_t *t = g2_packet_alloc();
 	if(t)
@@ -698,7 +698,7 @@ inline g2_packet_t *g2_packet_calloc(void)
 	return t;
 }
 
-inline void _g2_packet_free(g2_packet_t *to_free, int is_freeable)
+void _g2_packet_free(g2_packet_t *to_free, int is_freeable)
 {
 	if(!to_free)
 		return;
@@ -721,7 +721,7 @@ inline void _g2_packet_free(g2_packet_t *to_free, int is_freeable)
 		free(to_free);
 }
 
-inline void g2_packet_clean(g2_packet_t *to_clean)
+void g2_packet_clean(g2_packet_t *to_clean)
 {
 	bool tmp_info = to_clean->data_trunk_is_freeable;
 
@@ -742,7 +742,7 @@ inline void g2_packet_clean(g2_packet_t *to_clean)
 	to_clean->data_trunk_is_freeable = tmp_info;
 }
 
-inline bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type, g2_packet_t *packs)
+bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type, g2_packet_t *packs)
 {
 	char *to_match = packs->type;
 	bool ret_val = false;

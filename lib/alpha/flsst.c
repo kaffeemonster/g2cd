@@ -25,7 +25,7 @@
 
 #include "../my_bitopsm.h"
 
-inline size_t flsst(size_t find)
+size_t flsst(size_t find)
 {
 	size_t found;
 	/* alpha knows clz */

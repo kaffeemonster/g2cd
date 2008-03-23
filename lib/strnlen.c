@@ -47,7 +47,7 @@ size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_VIS("hidden");
 
 #define has_nul_byte(x) \
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
-inline size_t strnlen(const char *s, size_t maxlen)
+size_t strnlen(const char *s, size_t maxlen)
 {
 	const char *p = s - 1;
 

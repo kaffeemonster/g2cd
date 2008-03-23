@@ -62,15 +62,15 @@ typedef struct g2_packet
 #define _G2PACK_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #define _G2PACK_EXTRNVAR(x) extern x
 #else
-#define _G2PACK_EXTRN(x) x GCC_ATTR_VIS("hidden")
+#define _G2PACK_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
 #define _G2PACK_EXTRNVAR(x)
 #endif // _G2PACKET_C
 
-_G2PACK_EXTRN(inline g2_packet_t *g2_packet_alloc(void));
-_G2PACK_EXTRN(inline g2_packet_t *g2_packet_calloc(void));
+_G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void));
+_G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
 #define g2_packet_free(x) _g2_packet_free((x), true)
-_G2PACK_EXTRN(inline void _g2_packet_free(g2_packet_t *, int));
-_G2PACK_EXTRN(inline void g2_packet_clean(g2_packet_t *to_clean));
+_G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
+_G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 	
 #endif //_G2PACKET_H
 
@@ -98,7 +98,7 @@ typedef struct g2_p_type
 } g2_p_type_t;
 
 _G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict[];)
-_G2PACK_EXTRN(inline bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *));
+_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *));
 # endif // _HAVE_G2_P_TYPE
 #endif // _NEED_G2_P_TYPE
 

@@ -46,10 +46,10 @@ struct hzp_free
 	void (*free_func)(void *);
 };
 
-LIB_HZP_EXTRN(inline bool hzp_alloc(void));
-LIB_HZP_EXTRN(inline void hzp_ref(enum hzps, void *));
-LIB_HZP_EXTRN(inline void hzp_unref(enum hzps));
-LIB_HZP_EXTRN(inline void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)) GCC_ATTR_FASTCALL);
-LIB_HZP_EXTRN(inline int hzp_scan(int));
+LIB_HZP_EXTRN(bool hzp_alloc(void));
+LIB_HZP_EXTRN(void hzp_ref(enum hzps, void *));
+LIB_HZP_EXTRN(void hzp_unref(enum hzps));
+LIB_HZP_EXTRN(void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)) GCC_ATTR_FASTCALL);
+LIB_HZP_EXTRN(int hzp_scan(int));
 	
 #endif

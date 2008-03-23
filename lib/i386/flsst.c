@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-inline size_t flsst(size_t find)
+size_t flsst(size_t find)
 {
 	size_t found;
 	__asm__ __volatile__(

@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-inline size_t popcountst(size_t n)
+size_t popcountst(size_t n)
 {
 	/* according to POWER5 spec */
 	size_t tmp;

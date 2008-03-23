@@ -147,7 +147,7 @@ static void g2_con_deinit(void)
 // TODO: free connections up again, remainder, want to see them in valgrind
 }
 
-inline g2_connection_t *g2_con_alloc(size_t num)
+g2_connection_t *g2_con_alloc(size_t num)
 {
 	g2_connection_t *ret_val = NULL;
 	
@@ -180,7 +180,7 @@ static void my_zfree(void *opaque, void *to_free)
 	free(to_free);
 }
 
-inline void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
+void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
 	// if theres zlib stuff, free it
 	if(!new)
@@ -264,7 +264,7 @@ inline void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new
 	work_entry->build_packet = NULL;
 }
 
-inline void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
+void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 {
 	if(!to_free)
 		return;
@@ -299,7 +299,7 @@ inline void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 	free(to_free);
 }
 
-inline g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
+g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
 {
 	int failcount = 0;
 	g2_connection_t *ret_val = NULL;
@@ -322,7 +322,7 @@ inline g2_connection_t *_g2_con_get_free(const char *from_file, const char *from
 	return g2_con_alloc(1);
 }
 
-inline void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
+void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
 {
 	int failcount = 0;
 

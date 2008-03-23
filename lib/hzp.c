@@ -93,7 +93,7 @@ static void hzp_deinit(void)
  * returns: true - everythings fine
  *          false - ooops
  */
-inline bool hzp_alloc(void)
+bool hzp_alloc(void)
 {
 	if(pthread_getspecific(key2hzp))
 		return true;
@@ -141,7 +141,7 @@ static inline struct hzp *hzp_alloc_intern(void)
  *	params: key - the subsystem you want
  *	        new_ref - the mem you want to reference
  */
-inline void hzp_ref(enum hzps key, void *new_ref)
+void hzp_ref(enum hzps key, void *new_ref)
 {
 	struct hzp *t_hzp = pthread_getspecific(key2hzp);
 
@@ -174,7 +174,7 @@ inline void hzp_ref(enum hzps key, void *new_ref)
  *
  *  params: key - the subsystem you mean
  */
-inline void hzp_unref(enum hzps key)
+void hzp_unref(enum hzps key)
 {
 	hzp_ref(key, NULL);
 }
@@ -202,7 +202,7 @@ inline void hzp_unref(enum hzps key)
  *         free_func - the free callback, either libc free or 
  *                     your own allocator for this object.
  */
-inline void GCC_ATTR_FASTCALL hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *))
+void GCC_ATTR_FASTCALL hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *))
 {
 	item->data = data;
 	item->free_func = func2free;
@@ -242,7 +242,7 @@ static inline bool hzp_fs_contains(struct hzp_fs *head, const void *data)
  * 
  *
  */
-inline int hzp_scan(int threshold)
+int hzp_scan(int threshold)
 {
 	atomicst_t thead = ATOMIC_INIT(NULL), mhead = ATOMIC_INIT(NULL);
 	atomicst_t *whead = NULL;

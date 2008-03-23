@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-inline size_t popcountst(size_t n)
+size_t popcountst(size_t n)
 {
 	size_t tmp;
 	__asm__ ("popc\t%1, %0\n" : "=r" (tmp) : "r" (n));

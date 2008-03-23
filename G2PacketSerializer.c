@@ -270,7 +270,7 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
  *  false - unrecoverable error (or illegal data), just dump the source of this
  *    byte waste.
  */
-inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int level)
+bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int level)
 {
 	int func_ret_val;
 	bool ret_val = true;
@@ -379,7 +379,7 @@ inline bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, i
  *  false - unrecoverable error (or illegal data), just dump the source of this
  *    byte waste.
  */
-inline bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int level)
+bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int level)
 {
 	bool ret_val = true;
 	size_t remaining_length;
@@ -498,7 +498,7 @@ inline bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *targe
  *  false - unrecoverable error (or illegal data), just dump the source of this
  *    byte waste.
  */
-inline bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target, size_t max_len)
+bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target, size_t max_len)
 {
 	int func_ret_val;
 	bool ret_val = true;

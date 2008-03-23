@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-inline size_t popcountst(size_t n)
+size_t popcountst(size_t n)
 {
 	size_t tmp;
 #  ifdef __INTEL_COMPILER

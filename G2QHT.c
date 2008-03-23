@@ -358,7 +358,7 @@ static inline void _g2_qht_clean(struct qhtable *to_clean, bool reset_needed)
 }
 
 /* helper-funktions */
-inline void g2_qht_clean(struct qhtable *to_clean)
+void g2_qht_clean(struct qhtable *to_clean)
 {
 	_g2_qht_clean(to_clean, true);
 }
@@ -379,7 +379,7 @@ static void g2_qht_free_hzp(void *qtable)
 	free(to_free);
 }
 
-inline void g2_qht_put(struct qhtable *to_free)
+void g2_qht_put(struct qhtable *to_free)
 {
 	if(!to_free)
 		return;
@@ -390,7 +390,7 @@ inline void g2_qht_put(struct qhtable *to_free)
 		logg_develd("qht refcnt below zero! %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
 }
 
-inline void g2_qht_frag_clean(struct qht_fragment *to_clean)
+void g2_qht_frag_clean(struct qht_fragment *to_clean)
 {
 	if(!to_clean)
 		return;
@@ -409,7 +409,7 @@ static inline void g2_qht_global_patch(void *pbuf, size_t plength)
 }
 
 /* funcs */
-inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
+const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 {
 	struct qhtable *tmp_table;
 	const char *ret_val = NULL;
@@ -485,7 +485,7 @@ inline const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *fr
 	return ret_val;
 }
 
-inline int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
+int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 {
 	uint8_t *tmp_ptr;
 	struct qht_fragment *tablef = &ttable->fragments;
@@ -563,7 +563,7 @@ inline int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 	return tablef->nr < tablef->count ? 0 : 1;
 }
 
-inline bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
+bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 {
 	size_t w_size, bits;
 	struct qhtable *tmp_table;

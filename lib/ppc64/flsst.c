@@ -24,7 +24,7 @@
  */
 
 extern size_t _funny_st_size(size_t);
-inline size_t flsst(size_t find)
+size_t flsst(size_t find)
 {
 	size_t found;
 	/* ppc does not know fls but clz */
