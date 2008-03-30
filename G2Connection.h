@@ -138,7 +138,7 @@ typedef struct
 } action_string;
 
 #define MAX_HEADER_LENGTH	(NORM_BUFF_CAPACITY/2)
-#define KNOWN_HEADER_FIELDS_SUM	14
+#define KNOWN_HEADER_FIELDS_SUM	18
 
 //Stringconstants
 // var
@@ -166,12 +166,16 @@ typedef struct
 #define CONTENT_KEY			"Content-Type"
 #define CONTENT_ENC_KEY		"Content-Encoding"
 #define UPEER_KEY				"X-Ultrapeer"
+#define HUB_KEY				"X-Hub"
 #define UPEER_NEEDED_KEY	"X-Ultrapeer-Needed"
+#define HUB_NEEDED_KEY		"X-Hub-Needed"
+#define X_TRY_UPEER_KEY		"X-Try-Ultrapeers"
+#define X_TRY_HUB_KEY		"X-Try-Hubs"
+#define X_REQUERIES_KEY		"X-Requeries"
 #define GGEP_KEY				"GGEP"
 #define PONG_C_KEY			"Pong-Caching"
 #define QUERY_ROUTE_KEY		"X-Query-Routing"
 #define VEND_MSG_KEY			"Vendor-Message"
-#define X_TRY_UPEER_KEY		"X-Try-Ultrapeers"
 
 #ifndef _G2CONNECTION_C
 #define _G2CON_EXTRN(x) extern x GCC_ATTR_VIS("hidden")

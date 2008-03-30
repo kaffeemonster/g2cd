@@ -43,6 +43,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#ifdef HELGRIND_ME
+# include <valgrind/helgrind.h>
+#else
+# define VALGRIND_HG_CLEAN_MEMORY(x, y)
+#endif
 // other
 #include "other.h"
 // Own includes
@@ -226,6 +231,7 @@ void *G2Accept(void *param)
 									manage_buffer_after(&tmp_con->recv, &lrecv_buff);
 									manage_buffer_after(&tmp_con->send, &lsend_buff);
 									recycle_con(tmp_con_holder, work_cons, epoll_fd, true);
+									VALGRIND_HG_CLEAN_MEMORY(tmp_con, sizeof(*tmp_con));
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
 										logg_errno(LOGF_NOTICE, "sending connection to Handler");
@@ -1076,7 +1082,11 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			pr_ch = (size_t)
 			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 				UPEER_KEY ": %s\r\n"
-				UPEER_NEEDED_KEY ": %s\r\n\r\n",
+				UPEER_NEEDED_KEY ": %s\r\n\r\n"
+				HUB_KEY ": %s\r\n"
+				HUB_NEEDED_KEY ": %s\r\n",
+				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
+				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE,
 				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
 				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE
 			);

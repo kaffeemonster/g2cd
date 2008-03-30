@@ -263,6 +263,7 @@ CFLAGS += -DDEBUG_DEVEL
 CFLAGS += -DHAVE_CONFIG_H
 CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
+CFLAGS += -DHELGRIND_ME
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
 CFLAGS += -D_GNU_SOURCE
