@@ -50,11 +50,13 @@ static bool empty_action_p(g2_connection_t *, g2_packet_t *, struct norm_buff *)
 static bool handle_KHL(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_KHL_TS(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_LNI(g2_connection_t *, g2_packet_t *, struct norm_buff *);
+static bool handle_LNI_HS(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_LNI_NA(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_LNI_GU(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_LNI_V(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_PI(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_QHT(g2_connection_t *, g2_packet_t *, struct norm_buff *);
+static bool handle_HAW(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_UPROC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_UPROD(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
@@ -66,158 +68,170 @@ static bool handle_G2CDC(g2_connection_t *, g2_packet_t *, struct norm_buff *);
 /*
  * seventh type-char-layer
  */
-// CRAWLA - anwser? not my buisines
+/* CRAWLA - anwser? not my bussines */
 static const g2_p_type_t packet_dict_CRAWLA0[] = { PT_ACT(empty_action_p), PT_TERM };
-// CRAWLR
+/* CRAWLR */
 static const g2_p_type_t packet_dict_CRAWLR0[] = { PT_ACT(NULL), PT_TERM };
 
 /*
  * sixth type-char-layer
  */
-// UPROD
+/* UPROD */
 static const g2_p_type_t packet_dict_UPROD0[] = { PT_ACT(handle_UPROD), PT_TERM };
-// UPROC
+/* UPROC */
 static const g2_p_type_t packet_dict_UPROC0[] = { PT_ACT(handle_UPROC), PT_TERM };
-// CRAWLx
+/* CRAWLx */
 static const g2_p_type_t packet_dict_CRAWLx[] = {
 	PT_ENT('A', packet_dict_CRAWLA0),
 	PT_ENT('R', packet_dict_CRAWLR0),
 	PT_TERM};
-// G2CDC
+/* G2CDC */
 static const g2_p_type_t packet_dict_G2CDC0[] = { PT_ACT(handle_G2CDC), PT_TERM };
 
 /*
  * fith type-char-layer
  */
-// UPROx
+/* UPROx */
 static const g2_p_type_t packet_dict_UPROx[] = {
 	PT_ENT('D', packet_dict_UPROD0),
 	PT_ENT('C', packet_dict_UPROC0),
 	PT_TERM};
-//CRAWx
+/* CRAWx */
 static const g2_p_type_t packet_dict_CRAWL[] = { PT_ENT('L', packet_dict_CRAWLx), PT_TERM };
-// G2CDx
+/* G2CDx */
 static const g2_p_type_t packet_dict_G2CDC[] = { PT_ENT('C', packet_dict_G2CDC0), PT_TERM };
 
 /*
  * fourth type-char-layer
  */
-// KHL
+/* KHL */
 static const g2_p_type_t packet_dict_KHL0[] = { PT_ACT(handle_KHL), PT_TERM };
-// LNI
+/* LNI */
 static const g2_p_type_t packet_dict_LNI0[] = { PT_ACT(handle_LNI), PT_TERM };
-// QHT
+/* QHT */
 static const g2_p_type_t packet_dict_QHT0[] = { PT_ACT(handle_QHT), PT_TERM };
-// QKR
+/* QKR */
 static const g2_p_type_t packet_dict_QKR0[] = { PT_ACT(NULL), PT_TERM };
-// QKA
+/* QKA */
 static const g2_p_type_t packet_dict_QKA0[] = { PT_ACT(NULL), PT_TERM };
-// UPRx
+/* UPRx */
 static const g2_p_type_t packet_dict_UPRO[] = { PT_ENT('O', packet_dict_UPROx), PT_TERM };
-// CRAx
+/* HAW */
+static const g2_p_type_t packet_dict_HAW0[] = { PT_ACT(handle_HAW), PT_TERM };
+/* CRAx */
 static const g2_p_type_t packet_dict_CRAW[] = { PT_ENT('W', packet_dict_CRAWL), PT_TERM };
-// G2Cx
+/* G2Cx */
 static const g2_p_type_t packet_dict_G2CD[] = { PT_ENT('D', packet_dict_G2CDC), PT_TERM };
 
 /*
  * third type-char-layer
  */
-// KHx
+/* KHx */
 static const g2_p_type_t packet_dict_KHL[] = { PT_ENT('L', packet_dict_KHL0), PT_TERM };
-// LNx
+/* LNx */
 static const g2_p_type_t packet_dict_LNI[] = { PT_ENT('I', packet_dict_LNI0), PT_TERM };
-// PI
+/* PI */
 static const g2_p_type_t packet_dict_PI0[] = { PT_ACT(handle_PI), PT_TERM };
-// PO
+/* PO */
 static const g2_p_type_t packet_dict_PO0[] = { PT_ACT(NULL), PT_TERM };
-// Q2
+/* Q2 */
 static const g2_p_type_t packet_dict_Q20[] = { PT_ACT(NULL), PT_TERM };
-// QHx
+/* QHx */
 static const g2_p_type_t packet_dict_QHT[] = { PT_ENT('T', packet_dict_QHT0), PT_TERM };
-// QKx
+/* QKx */
 static const g2_p_type_t packet_dict_QKx[] = {
 	PT_ENT('A', packet_dict_QKA0),
 	PT_ENT('R', packet_dict_QKR0),
 	PT_TERM};
-// UPx
+/* UPx */
 static const g2_p_type_t packet_dict_UPR[] = { PT_ENT('R', packet_dict_UPRO), PT_TERM };
-// CRx
+/* HAx */
+static const g2_p_type_t packet_dict_HAW[] = { PT_ENT('W', packet_dict_HAW0), PT_TERM };
+/* CRx */
 static const g2_p_type_t packet_dict_CRA[] = { PT_ENT('A', packet_dict_CRAW), PT_TERM };
-// G2x
+/* G2x */
 static const g2_p_type_t packet_dict_G2C[] = { PT_ENT('C', packet_dict_G2CD), PT_TERM };
 
 /* 
  * second type-char-layer
  */
-// Kx
+/* Kx */
 static const g2_p_type_t packet_dict_KH[] = { PT_ENT('H', packet_dict_KHL), PT_TERM };
-// Lx
+/* Lx */
 static const g2_p_type_t packet_dict_LN[] = { PT_ENT('N', packet_dict_LNI), PT_TERM };
-// Px
+/* Px */
 static const g2_p_type_t packet_dict_Px[] = {
 		PT_ENT('I', packet_dict_PI0),
 		PT_ENT('O', packet_dict_PO0),
 		PT_TERM};
-// Qx
+/* Qx */
 static const g2_p_type_t packet_dict_Qx[] = {
 		PT_ENT('H', packet_dict_QHT),
 		PT_ENT('K', packet_dict_QKx),
 		PT_ENT('2', packet_dict_Q20),
 		PT_TERM};
-// Ux
+/* Ux */
 static const g2_p_type_t packet_dict_UP[] = { PT_ENT('P', packet_dict_UPR), PT_TERM };
-// Cx
+/* Hx */
+static const g2_p_type_t packet_dict_HA[] = { PT_ENT('A', packet_dict_HAW), PT_TERM };
+/* Cx */
 static const g2_p_type_t packet_dict_CR[] = { PT_ENT('R', packet_dict_CRA), PT_TERM };
-// Gx
+/* Gx */
 static const g2_p_type_t packet_dict_G2[] = { PT_ENT('2', packet_dict_G2C), PT_TERM };
 
 /*
  * first type-char-layer
  */
 const g2_p_type_t g2_packet_dict[] = {
-		PT_ENT('K', packet_dict_KH),
-		PT_ENT('L', packet_dict_LN),
-		PT_ENT('P', packet_dict_Px),
-		PT_ENT('Q', packet_dict_Qx),
-		PT_ENT('U', packet_dict_UP),
-		PT_ENT('C', packet_dict_CR),
-		PT_ENT('G', packet_dict_G2),
-		PT_TERM
+	PT_ENT('K', packet_dict_KH),
+	PT_ENT('L', packet_dict_LN),
+	PT_ENT('P', packet_dict_Px),
+	PT_ENT('Q', packet_dict_Qx),
+	PT_ENT('U', packet_dict_UP),
+	PT_ENT('H', packet_dict_HA),
+	PT_ENT('C', packet_dict_CR),
+	PT_ENT('G', packet_dict_G2),
+	PT_TERM
 };
 
 /*
  * LNI-childs
  */
-// third
-// /LNI/HS
-static const g2_p_type_t LNI_packet_dict_HS0[] = { PT_ACT(empty_action_p), PT_TERM };
-// /LNI/GU
+/* third */
+/* /LNI/HS */
+static const g2_p_type_t LNI_packet_dict_HS0[] = { PT_ACT(handle_LNI_HS), PT_TERM };
+/* /LNI/GU */
 static const g2_p_type_t LNI_packet_dict_GU0[] = { PT_ACT(handle_LNI_GU), PT_TERM };
-// /LNI/LS
+/* /LNI/FW */
+static const g2_p_type_t LNI_packet_dict_FW0[] = { PT_ACT(NULL), PT_TERM };
+/* /LNI/LS */
 static const g2_p_type_t LNI_packet_dict_LS0[] = { PT_ACT(empty_action_p), PT_TERM };
-// /LNI/NA
+/* /LNI/NA */
 static const g2_p_type_t LNI_packet_dict_NA0[] = { PT_ACT(handle_LNI_NA), PT_TERM };
-// /LNI/QK
+/* /LNI/QK */
 static const g2_p_type_t LNI_packet_dict_QK0[] = { PT_ACT(NULL), PT_TERM };
 
-// second
-// /LNI/Hx
+/* second */
+/* /LNI/Hx */
 static const g2_p_type_t LNI_packet_dict_HS[] = { PT_ENT('S', LNI_packet_dict_HS0), PT_TERM };
-// /LNI/Gx
+/* /LNI/Gx */
 static const g2_p_type_t LNI_packet_dict_GU[] = { PT_ENT('U', LNI_packet_dict_GU0), PT_TERM };
-// /LNI/Lx
+/* /LNI/Fx */
+static const g2_p_type_t LNI_packet_dict_FW[] = { PT_ENT('W', LNI_packet_dict_FW0), PT_TERM };
+/* /LNI/Lx */
 static const g2_p_type_t LNI_packet_dict_LS[] = { PT_ENT('S', LNI_packet_dict_LS0), PT_TERM };
-// /LNI/Nx
+/* /LNI/Nx */
 static const g2_p_type_t LNI_packet_dict_NA[] = { PT_ENT('A', LNI_packet_dict_NA0), PT_TERM };
-// /LNI/Qx
+/* /LNI/Qx */
 static const g2_p_type_t LNI_packet_dict_QK[] = { PT_ENT('K', LNI_packet_dict_QK0), PT_TERM };
-// /LNI/V
+/* /LNI/V */
 static const g2_p_type_t LNI_packet_dict_V0[] = { PT_ACT(handle_LNI_V), PT_TERM };
 
-// first
+/* first */
 static const g2_p_type_t LNI_packet_dict[] = {
 	PT_ENT('G', LNI_packet_dict_GU),
 	PT_ENT('H', LNI_packet_dict_HS),
+	PT_ENT('F', LNI_packet_dict_FW),
 	PT_ENT('L', LNI_packet_dict_LS),
 	PT_ENT('N', LNI_packet_dict_NA),
 	PT_ENT('Q', LNI_packet_dict_QK),
@@ -229,23 +243,23 @@ static const g2_p_type_t LNI_packet_dict[] = {
 /*
  * KHL-childs
  */
-// third
-// /KHL/TS
+/* third */
+/* /KHL/TS */
 static const g2_p_type_t KHL_packet_dict_TS0[] = { PT_ACT(handle_KHL_TS), PT_TERM };
-// /KHL/NH
+/* /KHL/NH */
 static const g2_p_type_t KHL_packet_dict_NH0[] = { PT_ACT(NULL), PT_TERM };
-// /KHL/CH
+/* /KHL/CH */
 static const g2_p_type_t KHL_packet_dict_CH0[] = { PT_ACT(NULL), PT_TERM };
 
-// second
-// /KHL/Tx
+/* second */
+/* /KHL/Tx */
 static const g2_p_type_t KHL_packet_dict_TS[] = { PT_ENT('S', KHL_packet_dict_TS0), PT_TERM };
-// /KHL/Nx
+/* /KHL/Nx */
 static const g2_p_type_t KHL_packet_dict_NH[] = { PT_ENT('H', KHL_packet_dict_NH0), PT_TERM };
-// /KHL/Cx
+/* /KHL/Cx */
 static const g2_p_type_t KHL_packet_dict_CH[] = { PT_ENT('H', KHL_packet_dict_CH0), PT_TERM };
 
-// first
+/* first */
 static const g2_p_type_t KHL_packet_dict[] = { 
 	PT_ENT('C', KHL_packet_dict_CH),
 	PT_ENT('N', KHL_packet_dict_NH),
@@ -257,44 +271,44 @@ static const g2_p_type_t KHL_packet_dict[] = {
 /*
  * CRAWLR-childs
  */
-// seventh
-// /CRAWLR/RLEAF
+/* seventh */
+/* /CRAWLR/RLEAF */
 static const g2_p_type_t CRAWLR_packet_dict_RLEAF0[] = { PT_ACT(NULL), PT_TERM };
-// /CRAWLR/RNAME
+/* /CRAWLR/RNAME */
 static const g2_p_type_t CRAWLR_packet_dict_RNAME0[] = { PT_ACT(NULL), PT_TERM };
 
-// sixth
-// /CRAWLR/RLEAx
+/* sixth */
+/* /CRAWLR/RLEAx */
 static const g2_p_type_t CRAWLR_packet_dict_RLEAF[] = { PT_ENT('F', CRAWLR_packet_dict_RLEAF0), PT_TERM };
-// /CRAWLR/RNAMx
+/* /CRAWLR/RNAMx */
 static const g2_p_type_t CRAWLR_packet_dict_RNAME[] = { PT_ENT('E', CRAWLR_packet_dict_RNAME0), PT_TERM };
-// /CRAWLR/RGPS
+/* /CRAWLR/RGPS */
 static const g2_p_type_t CRAWLR_packet_dict_RGPS0[] = { PT_ACT(NULL), PT_TERM };
-// /CRAWLR/REXT
+/* /CRAWLR/REXT */
 static const g2_p_type_t CRAWLR_packet_dict_REXT0[] = { PT_ACT(NULL), PT_TERM };
 
-// fourth
-// /CRAWLR/RLEx
+/* fourth */
+/* /CRAWLR/RLEx */
 static const g2_p_type_t CRAWLR_packet_dict_RLEA[] = { PT_ENT('A', CRAWLR_packet_dict_RLEAF), PT_TERM };
-// /CRAWLR/RNAx
+/* /CRAWLR/RNAx */
 static const g2_p_type_t CRAWLR_packet_dict_RNAM[] = { PT_ENT('M', CRAWLR_packet_dict_RNAME), PT_TERM };
-// /CRAWLR/RGPx
+/* /CRAWLR/RGPx */
 static const g2_p_type_t CRAWLR_packet_dict_RGPS[] = { PT_ENT('S', CRAWLR_packet_dict_RGPS0), PT_TERM };
-// /CRAWLR/REXx
+/* /CRAWLR/REXx */
 static const g2_p_type_t CRAWLR_packet_dict_REXT[] = { PT_ENT('T', CRAWLR_packet_dict_REXT0), PT_TERM };
 
-// third
-// /CRAWLR/RLx
+/* third */
+/* /CRAWLR/RLx */
 static const g2_p_type_t CRAWLR_packet_dict_RLE[] = { PT_ENT('E', CRAWLR_packet_dict_RLEA), PT_TERM };
-// /CRAWLR/RNx
+/* /CRAWLR/RNx */
 static const g2_p_type_t CRAWLR_packet_dict_RNA[] = { PT_ENT('A', CRAWLR_packet_dict_RNAM), PT_TERM };
-// /CRAWLR/RGx
+/* /CRAWLR/RGx */
 static const g2_p_type_t CRAWLR_packet_dict_RGP[] = { PT_ENT('P', CRAWLR_packet_dict_RGPS), PT_TERM };
-// /CRAWLR/REx
+/* /CRAWLR/REx */
 static const g2_p_type_t CRAWLR_packet_dict_REX[] = { PT_ENT('X', CRAWLR_packet_dict_REXT), PT_TERM };
 
-// second
-// /CRAWLR/Rx
+/* second */
+/* /CRAWLR/Rx */
 static const g2_p_type_t CRAWLR_packet_dict_Rx[] = {
 	PT_ENT('E', CRAWLR_packet_dict_REX),
 	PT_ENT('G', CRAWLR_packet_dict_RGP),
@@ -303,10 +317,34 @@ static const g2_p_type_t CRAWLR_packet_dict_Rx[] = {
 	PT_TERM
 };
 
-// first
+/* first */
 static const g2_p_type_t CRAWLR_packet_dict[] = { PT_ENT('R', CRAWLR_packet_dict_Rx), PT_TERM };
 
 
+/*
+ * HAW-childs
+ */
+/* third */
+/* /HAW/HS */
+static const g2_p_type_t HAW_packet_dict_HS0[] = { PT_ACT(NULL), PT_TERM };
+/* /HAW/NA */
+static const g2_p_type_t HAW_packet_dict_NA0[] = { PT_ACT(NULL), PT_TERM };
+
+/* second */
+/* /HAW/Hx */
+static const g2_p_type_t HAW_packet_dict_HS[] = { PT_ENT('S', HAW_packet_dict_HS0), PT_TERM };
+/* /HAW/Nx */
+static const g2_p_type_t HAW_packet_dict_NA[] = { PT_ENT('A', HAW_packet_dict_NA0), PT_TERM };
+/* /HAW/V */
+static const g2_p_type_t HAW_packet_dict_V0[] = { PT_ACT(NULL), PT_TERM };
+
+/* first */
+static const g2_p_type_t HAW_packet_dict[] = {
+	PT_ENT('H', HAW_packet_dict_HS),
+	PT_ENT('N', HAW_packet_dict_NA),
+	PT_ENT('V', HAW_packet_dict_V0),
+	PT_TERM
+};
 
 /*
  * prebuild packets
@@ -431,9 +469,32 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 	return ret_val;
 }
 
+static bool handle_LNI_HS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
+{
+	uint16_t akt_leaf, max_leaf;
+	if(4 <= buffer_remaining(source->data_trunk))
+	{
+		get_unaligned_endian(akt_leaf, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
+		get_unaligned_endian(max_leaf, (uint16_t *) (buffer_start(source->data_trunk)+2), source->big_endian);
+	}
+	else
+	{
+		akt_leaf = 0;
+		max_leaf = 0;
+	}
+
+	logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
+			connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
+
+	connec->flags.upeer = true;
+// TODO: now this connection is a hubconnection, move it
+
+	return false;
+}
+
 static bool handle_LNI_GU(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
-	logg_packet(STDSF, "/LNI/GU");
+	logg_packet_old(STDSF, "/LNI/GU");
 
 	if(sizeof(connec->guid) == buffer_remaining(source->data_trunk))
 		memcpy(connec->guid, buffer_start(source->data_trunk), sizeof(connec->guid));
@@ -458,8 +519,6 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		get_unaligned_endian(tmp_port, (uint16_t *) (buffer_start(source->data_trunk)+4), source->big_endian);
 		connec->sent_addr.sin_port = tmp_port;
 
-//		logg_packet(STDSF, "/LNI/NA");
-
 		{
 			char addr_buf[INET6_ADDRSTRLEN];
 			logg_packet("/LNI/NA:\t%s:%hu\n", inet_ntop(connec->af_type, &connec->sent_addr.sin_addr, addr_buf, sizeof(addr_buf)), ntohs(connec->sent_addr.sin_port));
@@ -482,14 +541,14 @@ static bool handle_LNI_V(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_
 	memcpy(connec->vendor_code, buffer_start(source->data_trunk), min_length);
 	connec->vendor_code[min_length] = '\0';
 
-	logg_packet(STDLF, "/LNI/V", connec->vendor_code);
+	logg_packet(STDLF, "\t/LNI/V", connec->vendor_code);
 	
 	return false;
 }
 
 static bool handle_PI(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packet_t *source, struct norm_buff *target)
 {
-	// simple /PI-packet
+	/* simple /PI-packet */
 	if(!source->is_compound)
 	{
 		if(sizeof(packet_po) <= buffer_remaining(*target))
@@ -508,7 +567,6 @@ static bool handle_PI(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packe
 	return false;
 }
 
-// struct norm_buff *target GCC_ATTR_UNUSED
 static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source)
 {
 	struct qht_fragment frag;
@@ -568,7 +626,6 @@ qht_patch_end:
 	return false;
 }
 
-// struct norm_buff *target GCC_ATTR_UNUSED
 static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source)
 {
 	uint32_t qht_ent;
@@ -619,6 +676,49 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UN
 	return false;
 }
 
+static bool handle_HAW(g2_connection_t *connec, g2_packet_t *source, struct norm_buff * target)
+{
+	bool ret_val = false, keep_decoding;
+
+	do
+	{
+		g2_packet_t child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+		if(!keep_decoding)
+		{
+			logg_packet(STDLF, "HAW", "broken child");
+			connec->flags.dismissed = true;
+			break;
+		}
+		if(child_p.packet_decode == DECODE_FINISHED)
+			ret_val |= g2_packet_decide_spec(connec, target, HAW_packet_dict, &child_p);
+//		source->num_child++; // put within if
+	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+	if(18 <= buffer_remaining(source->data_trunk))
+	{
+		uint8_t ttl, hops, guid[16];
+
+		ttl  = *buffer_start(source->data_trunk);
+		hops = *(buffer_start(source->data_trunk) + 1);
+		memcpy(guid, buffer_start(source->data_trunk) + 2, sizeof(guid));
+
+		logg_packet("/HAW\tttl: %u hops: %u guid: "
+			"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
+				ttl, hops, guid[0], guid[1], guid[2], guid[3], guid[4], guid[5],
+				guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12],
+				guid[13], guid[14], guid[15]);
+		source->data_trunk.pos += 18;
+	}
+	else
+		logg_packet(STDLF, "HAW", "no ttl, hops, guid?");
+
+
+	return ret_val;
+}
+
 static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), struct norm_buff *target)
 {
 	// /UPROC-packet, user-profile-request, if we want to and have an
@@ -639,12 +739,13 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 
 static bool handle_UPROD(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
+	logg_packet_old(STDSF, "/UPROD");
 	if(source->is_compound)
 	{
 //		g2_packet_t sub_packet;
 
 // TODO: write UPROD subdecoder
-//		logg_packet("/UPROD/xxx -> TODO: subdecoder\n");
+		logg_packet(STDLF, "/UPROD", "/xxx -> TODO: subdecoder");
 //		logg_packet("/UPROD/%s -> data\n\"%s\"\n", source->children->type, source->children->data);
 	}
 	else

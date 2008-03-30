@@ -45,8 +45,9 @@
 #define DEFAULT_PCK_LEN_MAX		0x020000
 #define DEFAULT_SEND_PROFILE		true
 
-#define DEFAULT_SERVER_UPEER		false
-#define DEFAULT_ENC_IN		ENC_DEFLATE
+#define DEFAULT_SERVER_UPEER		true
+// #define DEFAULT_ENC_IN		ENC_DEFLATE
+#define DEFAULT_ENC_IN		ENC_NONE
 #define DEFAULT_ENC_OUT		ENC_NONE
 
 // real constants, should not be run-time configurable

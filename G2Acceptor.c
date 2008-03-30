@@ -1082,9 +1082,9 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			pr_ch = (size_t)
 			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 				UPEER_KEY ": %s\r\n"
-				UPEER_NEEDED_KEY ": %s\r\n\r\n"
+				UPEER_NEEDED_KEY ": %s\r\n"
 				HUB_KEY ": %s\r\n"
-				HUB_NEEDED_KEY ": %s\r\n",
+				HUB_NEEDED_KEY ": %s\r\n\r\n",
 				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
 				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE,
 				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
