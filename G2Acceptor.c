@@ -43,11 +43,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-#ifdef HELGRIND_ME
-# include <valgrind/helgrind.h>
-#else
-# define VALGRIND_HG_CLEAN_MEMORY(x, y)
-#endif
 // other
 #include "other.h"
 // Own includes
@@ -231,7 +226,7 @@ void *G2Accept(void *param)
 									manage_buffer_after(&tmp_con->recv, &lrecv_buff);
 									manage_buffer_after(&tmp_con->send, &lsend_buff);
 									recycle_con(tmp_con_holder, work_cons, epoll_fd, true);
-									VALGRIND_HG_CLEAN_MEMORY(tmp_con, sizeof(*tmp_con));
+									g2_con_helgrind_transfer(tmp_con);
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
 										logg_errno(LOGF_NOTICE, "sending connection to Handler");

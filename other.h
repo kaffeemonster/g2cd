@@ -250,6 +250,15 @@ typedef void (*sighandler_t)(int);
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 #define anum(x) (sizeof((x))/sizeof(*(x)))
 
+/* compiler LART */
+#ifdef __GNUC__
+#define barrier()	asm volatile ("")
+#define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
+#else
+#define barrier()	do { } while (0)
+#define mem_barrier(x)	do {} while (0)
+#endif
+
 /* unaligned access */
 #ifdef __GNUC__
 # ifdef __linux__

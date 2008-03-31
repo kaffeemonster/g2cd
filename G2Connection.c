@@ -307,6 +307,14 @@ void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 	free(to_free);
 }
 
+#ifdef HELGRIND_ME
+# include <valgrind/helgrind.h>
+void GCC_ATTR_FASTCALL g2_con_helgrind_transfer(g2_connection_t *connec)
+{
+	VALGRIND_HG_CLEAN_MEMORY(connec, sizeof(*connec));
+}
+#endif
+
 g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
 {
 	int failcount = 0;

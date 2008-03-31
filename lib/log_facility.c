@@ -110,8 +110,15 @@ static struct big_buff *logg_get_buf(void)
 
 	/* Gnarf, when we we are called from another constuctor, log_level is still 0 */
 	/* !!! but we won't get here, loglevel is now tested at the call site... !!! */
-	if(!logg_tls_ready)
+	if(!logg_tls_ready) {
+		/*
+		 * force compiler to recheck the bool, it optimizes the access
+		 * away (check above plus only change in "not called" function)
+		 * valgrind sees everything...
+		 */
+		barrier();
 		server.settings.logging.act_loglevel = LOGF_ERR;
+	}
 
 	if(!ret_buf)
 	{

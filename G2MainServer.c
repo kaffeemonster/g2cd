@@ -244,7 +244,8 @@ int main(int argc, char **args)
 			// all abord?
 			for(i = 0; i < THREAD_SUM; i++)
 			{
-				logg_develd_old("Up is thread num %lu: %s\n", (unsigned long) i, (all_abord[i]) ? "true" : "false");
+				logg_develd_old("Up is thread num %lu: %s\n", (unsigned long) i,
+						(server.status.all_abord[i]) ? "true" : "false");
 				if(!server.status.all_abord[i])
 				{
 					server_running = false;
