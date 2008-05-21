@@ -1,7 +1,7 @@
 /* bin2o.c
  * little helper to make a .o from (data)files
  *
- * Copytight (c) 2006 Jan Seiffert
+ * Copytight (c) 2006 - 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -276,7 +276,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		memmove(buf->name, c_ptr+1, strlen(c_ptr+1)+1);
 	if(0 == strlen(buf->name))
 		sprintf(buf->name, "%X", e_sym++);
-	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align 32\n", buf->name);
+	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align 8\n", buf->name);
 
 	if((c_ptr = strrchr(buf->name, '.')))
 		*c_ptr = '\0';

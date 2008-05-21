@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004, 2005 Jan Seiffert
+ * Copyright (c) 2004 - 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -133,7 +133,12 @@
 #endif
 
 #if _GNUC_PREREQ (2,7)
-# define GCC_ATTR_FASTCALL GCC_ATTRIB(__regparm__(3))
+# ifdef __i386__
+/* only really needed for f***ed x86 */
+#  define GCC_ATTR_FASTCALL GCC_ATTRIB(__regparm__(3))
+# else
+#  define GCC_ATTR_FASTCALL
+# endif
 #else
 # define GCC_ATTR_FASTCALL
 #endif

@@ -2,7 +2,7 @@
  * G2Connection.c
  * helper-function for G2-Connections
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004 - 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -325,14 +325,14 @@ g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, 
 	do
 	{
 		size_t i = 0;
-		do
+		for(i = 0; i < anum(free_cons); i++)
 		{
 			if(atomic_pread(&free_cons[i]))
 			{
 				if((ret_val = atomic_pxa(ret_val, &free_cons[i])))
 					return ret_val;
 			}
-		} while(++i < anum(free_cons));
+		}
 	} while(++failcount < 2);
 
 	return g2_con_alloc(1);
@@ -347,18 +347,19 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 	do
 	{
 		size_t i = 0;
-		do
+		for(i = 0; i < 20; i++)
 		{
 			if(!atomic_pread(&free_cons[i]))
 			{
 				if(!(to_return = atomic_pxa(to_return, &free_cons[i])))
 					return;
 			}
-		} while(++i < anum(free_cons));
+		}
 	} while(++failcount < 2);
 
 	hzp_deferfree(&to_return->hzp, to_return, (void (*)(void *))g2_con_free);
 }
+
 
 	/* actionstring-functions */
 static bool content_what(g2_connection_t *to_con, size_t distance)

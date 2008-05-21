@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004,2007 Jan Seiffert
+ * Copyright (c) 2004 - 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -32,7 +32,9 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <time.h>
+#ifdef HAVE_DLOPEN
 #include <dlfcn.h>
+#endif
 // other
 #include "other.h"
 // Own includes
@@ -756,6 +758,7 @@ static bool handle_UPROD(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 
 static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
+#ifdef HAVE_DLOPEN
 	static void *handle;
 	const struct s_data
 	{
@@ -770,10 +773,10 @@ static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 	}
 
 	(void) dlerror();
-	s_data = dlsym(handle, "s_data");
+	s_data = dlsym(handle, "sbox");
 	if(dlerror())
 		return false;
-	
+#endif
 	return false;
 }
 

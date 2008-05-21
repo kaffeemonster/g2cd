@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogenarated
 #
-# Copyright (c) 2004, Jan Seiffert
+# Copyright (c) 2004 - 2008 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -40,6 +40,7 @@ CC = gcc
 HOSTCC = gcc
 CC_VER_INFO = --version
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
+#AS = as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
