@@ -179,7 +179,7 @@
  * optimises them to pointer arith. to save loop counter
  */
 
-# if _GNUC_PREREQ(4, 0)
+# if _GNUC_PREREQ(4, 1)
 #  define PPC_MEM_CONSTRAIN	"Z"
 # else
 #  define PPC_MEM_CONSTRAIN	"V"
