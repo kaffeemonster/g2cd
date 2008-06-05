@@ -91,6 +91,9 @@ MEMNEGSRC = \
 	$(MPL)/x86_64/memneg.c \
 	$(MPL)/ppc/memneg.c \
 	$(MPL)/ppc64/memneg.c
+STRNLENSRC = \
+	$(MPL)/generic/strnlen.c \
+	$(MPL)/i386/strnlen.c
 
 LIBASRCS = \
 	$(LIBSRCS) \
@@ -100,7 +103,8 @@ LIBASRCS = \
 	$(POPCOUNSTSRC) \
 	$(MEMXORSRC) \
 	$(MEMANDSRC) \
-	$(MEMNEGSRC)
+	$(MEMNEGSRC) \
+	$(STRNLENSRC)
 
 # base src files
 LIBSRCS = \
@@ -127,10 +131,8 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/hzp.o \
-	$(MPL)/atomic.o
-
-# with autoconf it will be added dynamically
-LIBOBJS += $(MPL)/strnlen.o
+	$(MPL)/atomic.o \
+	$(MPL)/strnlen.o
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a

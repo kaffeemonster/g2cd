@@ -1,8 +1,8 @@
 /*
  * strnlen.c
- * strnlen for non-GU platforms
+ * strnlen for non-GNU platforms
  *
- * Copyright (c) 2005,2006 Jan Seiffert
+ * Copyright (c) 2005-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,9 +34,17 @@
  * We always provide one, since this implementation is only
  * marginaly slower than glibc one.
  *
- * Timing on Athlon X2 2.5GHz, 3944416 bytes, 1000 runs:
- * glibc: 5230ms
- *   our: 5350ms
+ * Timing on Athlon X2 2.5GHz, 3944416 bytes, 10000 runs, +-70ms:
+ * glibc: 52100ms
+ *   our: 54000ms
+ *   SSE: 33050ms
+ *  SSE2: 27100ms
+ *
+ * Timing on Athlon X2 2.5GHz, 261 bytes, 10000000 runs, +-10ms:
+ * glibc: 3650ms
+ *   our: 3530ms
+ *   SSE: 1970ms
+ *  SSE2: 2440ms
  */
 
 #include "../config.h"
@@ -50,37 +58,15 @@ size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_VIS("hidden");
 #define STRNLEN_DEFINED
 #endif
 
-#define has_nul_byte(x) \
-	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
-
-size_t strnlen(const char *s, size_t maxlen)
-{
-	const char *p = s;
-
-	if(!s)
-		return 0;
-
-	if(!IS_ALIGN(p, SOST))
-	{
-		size_t i = (const char *) ALIGN(p, SOST) - p;
-		while(maxlen && *p && i)
-			maxlen--, p++, i--;
-	}
-	if(SOST > maxlen || !*p)
-		goto OUT;
-
-	{
-	register const size_t *d = ((const size_t *)p);
-	while(!has_nul_byte(*d) && SOSTM1 < maxlen)
-		d++, maxlen -= SOST;
-	p = (const char *)d;
-	}
-
-OUT:
-	while(maxlen && *p)
-		maxlen--, p++;
-
-	return p - s;
-}
-
-static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
+#ifdef I_LIKE_ASM
+# ifdef __i386__
+#  include "i386/strnlen.c"
+# elif __x86_64__
+	/* works for both */
+#  include "i386/strnlen.c"
+# else
+#  include "generic/strnlen.c"
+# endif
+#else
+# include "generic/strnlen.c"
+#endif
