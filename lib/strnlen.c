@@ -30,8 +30,13 @@
  *
  * return value: the string length or maxlen, what comes first
  *
- * since strnlen is a GNU extension we have to provide our own
- * on systems which do not provide one.
+ * since strnlen is a GNU extension we have to provide our own.
+ * We always provide one, since this implementation is only
+ * marginaly slower than glibc one.
+ *
+ * Timing on Athlon X2 2.5GHz, 3944416 bytes, 1000 runs:
+ * glibc: 5230ms
+ *   our: 5350ms
  */
 
 #include "../config.h"
@@ -47,30 +52,33 @@ size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_VIS("hidden");
 
 #define has_nul_byte(x) \
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
+
 size_t strnlen(const char *s, size_t maxlen)
 {
-	const char *p = s - 1;
+	const char *p = s;
 
 	if(!s)
 		return 0;
-	maxlen++;
 
-	do
+	if(!IS_ALIGN(p, SOST))
 	{
-		p++;
-		maxlen--;
-		if(IS_ALIGN(p, SOST) && SOSTM1 < (maxlen - SOST))
-		{
-			register const size_t *d = ((const size_t *)p) - 1;
-			maxlen += SOST;
-			do
-			{
-				d++;
-				maxlen -= SOST;
-			} while(!has_nul_byte(*d) && SOSTM1 < maxlen);
-			p = (const char *)d;
-		}
-	} while(maxlen && *p);
+		size_t i = (const char *) ALIGN(p, SOST) - p;
+		while(maxlen && *p && i)
+			maxlen--, p++, i--;
+	}
+	if(SOST > maxlen || !*p)
+		goto OUT;
+
+	{
+	register const size_t *d = ((const size_t *)p);
+	while(!has_nul_byte(*d) && SOSTM1 < maxlen)
+		d++, maxlen -= SOST;
+	p = (const char *)d;
+	}
+
+OUT:
+	while(maxlen && *p)
+		maxlen--, p++;
 
 	return p - s;
 }
