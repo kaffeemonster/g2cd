@@ -36,6 +36,7 @@ LIBHEADS = \
 	$(MPL)/recv_buff.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
+	$(MPL)/list.h \
 	$(MPL)/i386/x86.h
 
 # epoll emuls

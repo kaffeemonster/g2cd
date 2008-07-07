@@ -122,13 +122,10 @@
 
 #if _GNUC_PREREQ (2,7)
 # define GCC_ATTR_CONSTRUCT GCC_ATTRIB(__constructor__)
-#else
-# define GCC_ATTR_CONSTRUCT
-#endif
-
-#if _GNUC_PREREQ (2,7)
 # define GCC_ATTR_DESTRUCT GCC_ATTRIB(__destructor__)
 #else
+/* needs a warning, code is broken now */
+# define GCC_ATTR_CONSTRUCT
 # define GCC_ATTR_DESTRUCT
 #endif
 
@@ -143,10 +140,24 @@
 # define GCC_ATTR_FASTCALL
 #endif
 
+#if _GNUC_PREREQ (2,96)
+# define likely(x)	__builtin_expect(!!(x), 1)
+# define unlikely(x)	__builtin_expect(!!(x), 0)
+#else
+# define likely(x)	(x)
+# define unlikely(x)	(x)
+#endif 
+
 #if _GNUC_PREREQ (3,1)
 # define always_inline inline GCC_ATTRIB(__always_inline__)
 #else
 # define always_inline inline
+#endif
+
+#if _GNUC_PREREQ (3,1)
+# define prefetch(x) __builtin_prefetch(x)
+#else
+# define prefetch(x) do { } while(0)
 #endif
 
 #ifndef HAVE_INET6_ADDRSTRLEN

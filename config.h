@@ -75,12 +75,25 @@
 //TODO: backtrace brocken ATM
 //#define WANT_BACKTRACES
 
+/* Is __thread keyword for thread local storage available?
+ * This option is unused ATM, since __thread has its share
+ * of problems (no descructors, portability).
+ * It only gets interresting if pthread_{get|set}_specific
+ * start to show up high in profiles.
+ * __thread should be cheaper since direct CPU-instructions
+ * get generated (for example addressing over the %gs segment
+ * selector on x86: movl %gs:-4, %eax) instead of a call
+ * over the GOT, a runtimecheck for a proper key, a runtime
+ * address calculation, and finaly load and return.
+ */
+//#define HAVE___THREAD
+
 /* how many bytes must be avail to switch away
  * from byte wise working
  */
 #define SYSTEM_MIN_BYTES_WORK 128
 
-/* not needed anymore */
+/* not needed anymore, simply hang it of sizeof(type) */
 /* It is always a bad thing[tm] to fiddle around with the
  * System-dependend allingment, but sometimes...
  * Meaning of all this:
@@ -124,7 +137,7 @@
  * a multiple of the datatype.
  * The Memoryfetchunit also plays some tricks, like accessing 2
  * consecutive 32Bits is faster on an 8 alignment, due to magic
- * (eg.: Proccesor always reads 64bit).
+ * (eg.: Proccesor memory bus always reads 64bit).
  * But this is all Black Magic[tm], good values to orientate is
  * the alignment of pointers return by malloc on your arch.
  * All in all, to get the most out of it, you must know your
