@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,15 +25,14 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-//System includes
+/* System includes */
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <ctype.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -43,22 +42,9 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <unistd.h>
-#ifdef WANT_BACKTRACES
-# include <setjmp.h>
-# include <ucontext.h>
-# ifdef __GLIBC__
-#  include <execinfo.h>
-#  include <malloc.h>
-#  ifdef __linux__
-#   include <syscall.h>
-#  endif
-# endif
-#endif
-//#include <zlib.h>
-// other
-#include "other.h"
-//Own Includes
+/* Own Includes */
 #define _G2MAINSERVER_C
+#include "other.h"
 #include "G2MainServer.h"
 #include "G2Acceptor.h"
 #include "G2Handler.h"
@@ -69,26 +55,27 @@
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
 #include "lib/atomic.h"
+#include "lib/backtrace.h"
 #include "version.h"
 #include "builtin_defaults.h"
 
-//Thread data
+/* Thread data */
 static pthread_t main_threads[THREAD_SUM];
 static int sock_com[THREAD_SUM_COM][2];
 static int accept_2_handler[2];
 static struct pollfd sock_poll[THREAD_SUM_COM];
 static volatile sig_atomic_t server_running = true;
 
-//
+/* helper vars */
 static bool be_daemon = DEFAULT_BE_DAEMON;
 static int log_to_fd = -1;
 
-//
+/* bulk data */
 static const char guid_file_name[] = DEFAULT_FILE_GUID;
 static const char profile_file_name[] = DEFAULT_FILE_PROFILE;
 static const char user_name[] = DEFAULT_USER;
 
-// Internal prototypes
+/* Internal prototypes */
 static inline void clean_up_m(void);
 static inline void parse_cmdl_args(int, char **);
 static inline void fork_to_background(void);
@@ -97,49 +84,35 @@ static inline void change_the_user(void);
 static inline void setup_resources(void);
 static inline void read_uprofile(void);
 static void sig_stop_func(int signr, siginfo_t *, void *);
-#ifdef WANT_BACKTRACES
-static void sig_segv_print(int signr, siginfo_t *, void *);
-#endif
 
 int main(int argc, char **args)
 {
 	size_t i, j;
 
-#ifdef WANT_BACKTRACES
-	{
-		struct sigaction sas;
-		memset(&sas, 0, sizeof(sas));
-		sas.sa_sigaction = sig_segv_print;
-		sas.sa_flags = SA_SIGINFO;
-		if(sigaction(SIGSEGV, &sas, NULL))
-			logg_pos(LOGF_NOTICE, "Unable to register SIGSEGV-handler\n");
-		if(sigaction(SIGILL, &sas, NULL))
-			logg_pos(LOGF_NOTICE, "Unable to register SIGILL-handler\n");
-		if(sigaction(SIGBUS, &sas, NULL))
-			logg_pos(LOGF_NOTICE, "Unable to register SIGBUS-handler\n");
-		if(sigaction(SIGFPE, &sas, NULL))
-			logg_pos(LOGF_NOTICE, "Unable to register SIGFPE-handler\n");
-	}
-#endif
-	
-	// we have to shourtcut this a little bit, else we would see 
-	// nothing on the sreen until the config is read (and there
-	// are enough Points of failure until that)
+	/*
+	 * we have to shourtcut this a little bit, else we would see 
+	 * nothing on the sreen until the config is read (and there
+	 * are enough Points of failure until that)
+	 */
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL_START;
+
+	/* first and foremost, before something can go wrong */
+	backtrace_init();
 
 	parse_cmdl_args(argc, args);
 
-	// setup how we are set-up :)
+	/* setup how we are set-up :) */
 	handle_config();
 
-	// become a daemon if wished (useless while devel but i
-	// stumbled over a snippet) stdin will be /dev/null, stdout
-	// and stderr unchanged, if no log_to_fd defined it will
-	// point to a /dev/null fd.
+	/* become a daemon if wished (useless while devel but i
+	 * stumbled over a snippet) stdin will be /dev/null, stdout
+	 * and stderr unchanged, if no log_to_fd defined it will
+	 * point to a /dev/null fd.
+	 */
 	if(be_daemon)
 		fork_to_background();
 
-	// output (log) to file?
+	/* output (log) to file? */
 	if(-1 != log_to_fd)
 	{
 		if(STDOUT_FILENO != dup2(log_to_fd, STDOUT_FILENO))
@@ -159,13 +132,13 @@ int main(int argc, char **args)
 	}
 
 /* ANYTHING what need any priviledges should be done before */
-	// Drop priviledges
+	/* Drop priviledges */
 	change_the_user();
 
-	// allocate needed working resources
+	/* allocate needed working resources */
 	setup_resources();
 
-	//fire up threads
+	/* fire up threads */
 	if(pthread_create(&main_threads[THREAD_ACCEPTOR], &server.settings.t_def_attr, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2Accept");
@@ -176,8 +149,10 @@ int main(int argc, char **args)
 	if(pthread_create(&main_threads[THREAD_HANDLER], &server.settings.t_def_attr, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
 	{
 		logg_errno(LOGF_CRIT, "pthread_create G2Handler");
-		// Critical Moment: we could not run further for normal
-		// shutdown, but when clean_up'ed now->undefined behaivor
+		/*
+		 * Critical Moment: we could not run further for normal
+		 * shutdown, but when clean_up'ed now->undefined behaivor
+		 */
 		return EXIT_FAILURE;
 	}
 
@@ -192,9 +167,9 @@ int main(int argc, char **args)
 		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
 		server_running = false;
 	}
+	/* threads startet */
 
-
-	// send the pipe between Acceptor and Handler
+	/* send the pipe between Acceptor and Handler */
 	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_ACCEPTOR][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0))
 	{
 		logg_errno(LOGF_CRIT, "sending IPC Pipe");
@@ -206,17 +181,19 @@ int main(int argc, char **args)
 		server_running = false;
 	}
 
-	// set signalhandler
+	/* set signalhandler */
 	{
 		struct sigaction old_sas, new_sas;
 		memset(&new_sas, 0, sizeof(new_sas));
 		memset(&old_sas, 0, sizeof(old_sas));
 		new_sas.sa_handler = SIG_IGN;
-		// See what the Signal-status is, at the moment
+		/* See what the Signal-status is, at the moment */
 		if(!sigaction(SIGINT, &new_sas, &old_sas))
 		{
-			// if we are already ignoring this signal
-			// (backgrounded?), don't register it
+			/*
+			 * if we are already ignoring this signal
+			 * (backgrounded?), don't register it
+			 */
 			if(SIG_IGN != old_sas.sa_handler)
 			{
 				memset(&new_sas, 0, sizeof(new_sas));
@@ -232,9 +209,8 @@ int main(int argc, char **args)
 		}
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
-	//	if(SIG_ERR == signal(SIGHUP, sig_stop_func))
-	//			server_running = false;
 	}
+
 
 	/* main server wait loop */
 	while(server_running)
@@ -242,14 +218,14 @@ int main(int argc, char **args)
 		int num_poll = poll(sock_poll, THREAD_SUM_COM, 110000);
 		switch(num_poll)
 		{
-		// Normally: see what has happened
+		/* Normally: see what has happened */
 		default:
-			logg_pos(LOGF_INFO, "was durch die pipe gekommen\n");
+			logg_pos(LOGF_INFO, "bytes at the pipes\n");
 			server_running = false;
 			break;
-		// Nothing happened (or just the Timeout)
+		/* Nothing happened (or just the Timeout) */
 		case 0:
-			// all abord?
+			/* all abord? */
 			for(i = 0; i < THREAD_SUM; i++)
 			{
 				logg_develd_old("Up is thread num %lu: %s\n", (unsigned long) i,
@@ -267,19 +243,18 @@ int main(int argc, char **args)
 				logg_develd("HZP reclaimed chunks: %i\n", num_poll);
 			}
 			break;
-		// Something bad happened
+		/* Something bad happened */
 		case -1:
 			if(EINTR == errno) break;
-			// Print what happened
+			/* Print what happened */
 			logg_errno(LOGF_ERR, "poll");
-			//and get out here (at the moment)
+			/* and get out here (at the moment) */
 			server_running = false;
-			//return EXIT_FAILURE;
 			break;
 		}
 	}
 
-	// send all threads the abort-code
+	/* send all threads the abort-code */
 	timeout_timer_abort();
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
@@ -287,8 +262,10 @@ int main(int argc, char **args)
 			logg_errno(LOGF_WARN, "initiating stop");
 	}
 	
-	// wait a moment until all threads have gracefully stoped,
-	// or exit anyway
+	/*
+	 * wait a moment until all threads have gracefully stoped,
+	 * or exit anyway
+	 */
 	for(i = 0; i < 10; i++)
 	{
 		bool all_down = false;
@@ -313,7 +290,7 @@ int main(int argc, char **args)
 		sleep(1);
 	}
 	
-	//collect the threads
+	/* collect the threads */
 	pthread_join(main_threads[THREAD_ACCEPTOR], NULL);
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_UDP], NULL);
@@ -325,344 +302,13 @@ int main(int argc, char **args)
 
 static void sig_stop_func(int signr, GCC_ATTR_UNUSED_PARAM(siginfo_t, *si), GCC_ATTR_UNUSED_PARAM(void, *vuc))
 {
-	// if reregistering the Signal-hanlder fails,
-/*	if(SIG_ERR == signal(SIGINT, sig_stop_func))
-		exit(EXIT_FAILURE);
-	// droping it all to the Ground, since we have to be
-	// carefull while in a signal-handler
-*/
 	if(SIGINT == signr || SIGHUP == signr)
 		server_running = false;
 }
 
-#ifdef WANT_BACKTRACES
-static char *my_crashdump(char *buf, unsigned char *addr, int lines)
-{
-/*	unsigned char *org_addr = addr;*/
-	int i;
-
-	addr -= lines * 8;
-	for(i = lines; i; i--, addr += 16)
-	{
-		int j;
-
-		buf += sprintf(buf, "%p:  ", addr);
-		for(j = 0; j < 2; j++)
-		{
-			int k = 0;
-			for(; k < 8; k++)
-				buf += sprintf(buf, "%02X ", (unsigned int)addr[k] & 0xFF);
-			*buf++ = ' ';
-		}
-		*buf++ = '\t';
-		for(j = 0; j < 2; j++)
-		{
-			int k = 0;
-			for(; k < 8; k++)
-				*buf++ = isprint(addr[k]) ? addr[k] : (isspace(addr[k]) ? ' ' : '.');
-			*buf++ = ' ';
-		}
-		*buf++ = '\n';
-	}
-	return buf;
-}
-
-static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
-{
-	static pthread_mutex_t bt_mutex = PTHREAD_MUTEX_INITIALIZER;
-	static sigjmp_buf catch_sigsegv;
-	static volatile sig_atomic_t critical = 0;
-	static char path[4096];
-	const char *osl = NULL, *isl = NULL;
-	char *wptr = NULL; 
-	struct ucontext *uc = vuc;
-# ifdef __GLIBC__
-#  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
-	void **buffer = (void **) path;
-# endif
-	int stderrfd = fileno(stderr), ret_val = 0, i;
-
-# ifdef __sun__
-#  define DEBUG_CMD \
- "/usr/proc/bin/pstack "
-# else
-#  define DEBUG_CMD \
- "echo 'info threads\nthread apply all bt full\ninfo frame\ndetach\nquit\n' |\
- gdb -batch -x /dev/stdin "
-# endif
-
-# define DEATHSTR_1 \
-"                                                            <~     ° *  * |X|\n\
-                                                                 °    \\*|*|X|\n\
-=======================================================================*@@|X|\n\
-                                                              |ouch|° /*|*|X|\n\
-                                                              °      *  * |X|\n\
-We crashed hard!!! Please fasten your seat belts...\n\
-We will now try scary things to aid debuging the situation.\n\
-(you may see unrelated program output spilling out of buffers)\n"
-	write(stderrfd, DEATHSTR_1, str_size(DEATHSTR_1));
-	/* lock out the other threads, if another one apaers, simply deadlock */
-	if(SIGSEGV == signr && critical)
-	{
-		/* maybe we caught a sigsegv in our own sighandler, try to resume */
-		siglongjmp(catch_sigsegv, 666);
-	}
-	else
-	{
-		if(pthread_mutex_lock(&bt_mutex))
-		{
-# define DEATHSTR_2 "\"I'm scared Dave. Will i dream?\"\n\
-Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
-			write(stderrfd, DEATHSTR_2, str_size(DEATHSTR_2));
-			goto out;
-		}
-	}
-	fflush(NULL);
-
-	/* first dump on Info what we can find ourself, maybe no debugger */
-	/* signal name and reason */
-	switch(signr)
-	{
-	case SIGSEGV:
-		osl = "SIGSEGV -> EIIYYY!!\nSurrounded, outnumbered and outgunned";
-		switch(si->si_code)
-		{
-		case SEGV_MAPERR:
-			isl = "address not mapped to object"; break;
-		case SEGV_ACCERR:
-			isl = "invalid permissions for mapped object"; break;
-		case 128: /* Linux only? x86 only? */
-			isl = "(unshure) priveleged instruction, probaly a SIGILL";
-		default:
-			isl = "Unknown SIGSEGV problem"; break;
-		}
-		break;
-	case SIGILL:
-		osl = "SIGILL -> OHOH!!\nMan the lifeboats";
-		switch(si->si_code)
-		{
-		case ILL_ILLOPC:
-			isl = "illegal opcode"; break;
-		case ILL_ILLOPN:
-			isl = "illegal operand"; break;
-		case ILL_ILLADR:
-			isl = "illegal addressing mode"; break;
-	   case ILL_ILLTRP:
-			isl = "illegal trap"; break;
-		case ILL_PRVOPC:
-			isl = "privileged opcode"; break;
-		case ILL_PRVREG:
-			isl = "privileged register"; break;
-		case ILL_COPROC:
-			isl = "coprocessor error"; break;
-		case ILL_BADSTK:
-			isl = "internal stack error"; break;
-		default:
-			isl = "Unknown SIGILL problem"; break;
-		}
-		break;
-	case SIGBUS:
-		osl = "SIGBUS -> grml...\nNo one expects the Spanish inquesition";
-		switch(si->si_code)
-		{
-		case BUS_ADRALN:
-			isl = "invalid address alignment"; break;
-		case BUS_ADRERR:
-			isl = "non-existent physical address"; break;
-		case BUS_OBJERR:
-			isl = "object specific hardware error"; break;
-		default:
-			isl = "Unknown SIGBUS problem"; break;
-		}
-		break;
-	case SIGFPE:
-		osl = "SIGFPE -> Whoot!°\nWho the fuck is using floating point??";
-		switch(si->si_code)
-		{
-		case FPE_INTDIV:
-			isl = "integer divide by zero"; break;
-		case FPE_INTOVF:
-			isl = "integer overflow"; break;
-		case FPE_FLTDIV:
-			isl = "floating point divide by zero"; break;
-		case FPE_FLTOVF:
-			isl = "floating point overflow"; break;
-		case FPE_FLTUND:
-			isl = "floating point underflow"; break;
-		case FPE_FLTRES:
-			isl = "floating point inexact result"; break;
-		case FPE_FLTINV:
-			isl = "floating point invalid operation"; break;
-		case FPE_FLTSUB:
-			isl = "subscript out of range"; break;
-		default:
-			isl = "Unknown SIGFPE problem"; break;
-		}
-		break;
-	default:
-		pthread_mutex_unlock(&bt_mutex);
-		return;
-	}
-	ret_val = sprintf(path, "\n\n[%u:%u]\n%s\nWhy: %s (%i)\n",
-			(unsigned) getpid(),
-# ifdef __linux__
-			(unsigned) syscall(__NR_gettid),
-# else
-			0,
-# endif
-			osl, isl, si->si_code);
-	write(stderrfd, path, ret_val);
-	/* errno set? */
-	if(si->si_errno)
-	{
-		ret_val = sprintf(path, "Errno: %i\n", si->si_errno);
-		write(stderrfd, path, ret_val);
-	}
-
-	/* Dump registers, a better dump would be plattformspecific */
-	wptr = path + sprintf(path, "\nRegisters:\n");
-	for(i = 0; i < NGREG; i++)
-# if defined __powerpc__ || defined __powerpc64__
-/* whoever made the powerpc-linux-gnu header...
- * I mean, an old sun an a new Linux i386 have it in sync, afaik only ppc, gnarf
- */
-#  if __WORDSIZE == 32
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.uc_regs->gregs[i]);
-#  else
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.gp_regs[i]);
-# endif
-# else
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.gregs[i]);
-# endif
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
-	
-	/* Stackinfo */
-	ret_val = sprintf(path, "Stack ref:\t0x%016lX\tsize: %lu\tflags: %i\n",
-			(unsigned long) uc->uc_stack.ss_sp,
-			(unsigned long) uc->uc_stack.ss_size,
-			uc->uc_stack.ss_flags);
-	write(stderrfd, path, ret_val);
-	wptr = path;
-	if(SIGSEGV != signr && uc->uc_stack.ss_sp)
-	{
-		/* blaerch, catch a sigsegv in our own signalhandler, memref can be bogus */
-		if(!sigsetjmp(catch_sigsegv, 0))
-		{
-			wptr = path;
-			critical = 1;
-			wptr = my_crashdump(wptr, (unsigned char *)uc->uc_stack.ss_sp, 8);
-		}
-		critical = 0; 
-	}
-	*wptr++= '\n'; *wptr++ = '\0';
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
-	
-	/* whats at the memref */
-	ret_val = sprintf(path, "Memory ref:\t0x%016lX\n", (unsigned long)si->si_addr);
-	write(stderrfd, path, ret_val);
-	wptr = path;
-	if(SIGSEGV != signr && si->si_addr)
-	{
-		/* blaerch, catch a sigsegv in our own signalhandler, memref can be bogus */
-		if(!sigsetjmp(catch_sigsegv, 0))
-		{
-			wptr = path;
-			critical = 1;
-			wptr = my_crashdump(wptr, (unsigned char *)si->si_addr, 8);
-		}
-		critical = 0;
-	}
-	*wptr++= '\n'; *wptr++ = '\0';
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
-
-	fflush(NULL);
-
-	/* Now get the real bt */
-# define DEATHSTR_3 "\ntrying to get backtrace...\n\
--------------- start of backtrace --------------\n"
-	write(stderrfd, DEATHSTR_3, str_size(DEATHSTR_3));
-	strcpy(path, DEBUG_CMD);
-	{
-		wptr = path + str_size(DEBUG_CMD);
-		ret_val = 0;
-# ifndef __sun__
-		ret_val = readlink("/proc/self/exe", wptr, path + (sizeof(path)-1) - wptr);
-# endif
-		if(-1 != ret_val)
-		{
-			wptr += ret_val;
-			ret_val = snprintf(wptr, path + (sizeof(path)-1) - wptr, " %d\n", (int)getpid());
-			if(ret_val < path + (sizeof(path)-1) - wptr)
-				wptr += ret_val;
-			else
-				ret_val = -1; 
-		}
-		*wptr = '\0';
-	}
-
-	write(stderrfd, path, strlen(path));
-
-	if(-1 == ret_val || system(path))
-	{
-# ifdef __GLIBC__
-		ret_val = backtrace(buffer, BACKTRACE_DEPTH);
-		backtrace_symbols_fd(buffer, ret_val, stderrfd);
-# else
-# define DEATHSTR_4 "No real backtrace available ;(\n"
-		write(stderrfd, DEATHSTR_4, str_size(DEATHSTR_4));
-# endif
-	}
-# define DEATHSTR_5 \
-"--------------- end of backtrace ---------------\n" \
-"+++++++++++++++ start of mappings ++++++++++++++\n"
-	write(stderrfd, DEATHSTR_5, str_size(DEATHSTR_5));
-	if(!access("/proc/self/maps", R_OK))
-	{
-		int mfd = open("/proc/self/maps", O_RDONLY);
-		if(-1 != mfd)
-		{
-			ssize_t rret;
-			do
-			{
-				rret = read(mfd, path, sizeof(path));
-	
-				if(rret > 0)
-					write(stderrfd, path, rret);
-			} while(rret > 0);
-			close(mfd);
-		}
-	}
-# define DEATHSTR_6 \
-"++++++++++++++++ end of mappings ++++++++++++++\n\n" \
-"Now the same SIG again, so you can get a CORE-file:\n"
-	write(stderrfd, DEATHSTR_6, str_size(DEATHSTR_6));
-
-out:
-	/* do not reregister, we want to crash again after
-	 * this debug-print
-	 */
-	{
-		struct sigaction sas;
-		memset(&sas, 0, sizeof(sas));
-		sas.sa_handler = SIG_DFL;
-		if(sigaction(SIGSEGV, &sas, NULL))
-			exit(EXIT_FAILURE);
-		if(sigaction(SIGILL, &sas, NULL))
-			exit(EXIT_FAILURE);
-		if(sigaction(SIGBUS, &sas, NULL))
-			exit(EXIT_FAILURE);
-		if(sigaction(SIGFPE, &sas, NULL))
-			exit(EXIT_FAILURE);
-	}
-}
-#endif
-
 static inline void parse_cmdl_args(int argc, char **args)
 {
-	// seeking our options
+	/* seeking our options */
 	while(true)
 	{
 		int opt_val = getopt(argc, args, "hdl:");
@@ -703,32 +349,38 @@ static inline void fork_to_background(void)
 
 	switch((child = fork()))
 	{
-	// child
+	/* child */
 	case 0:
 		if(-1 == setsid())
 			diedie("becomming session-leader");
 
 		switch((child = fork()))
 		{
-		// child
+		/* child */
 		case 0:
-			// change the w-dir and better also chroot
-			/* if(chdir("/"))
+			/* change the w-dir and better also chroot */
+#if 0
+			/* chrooting needs some knobs first */
+			if(chdir("/"))
 			{
 				logg_errno("changing working directory");
 				return EXIT_FAILURE;
-			}*/
-
-			// connect stdin with dave null,
-			// maybe stderr and stdout
+			}
+#endif
+			/*
+			 * connect stdin with dave null,
+			 * maybe stderr and stdout
+			 */
 			if(-1 == (tmp_fd = open("/dev/null", O_RDONLY)))
 				diedie("opening /dev/null");
 			
 			if(STDIN_FILENO != dup2(tmp_fd, STDIN_FILENO))
 				diedie("mapping stdin");
 
-			// maybe the log-to-file option already
-			// defined a log-file
+			/*
+			 * maybe the log-to-file option already
+			 * defined a log-file
+			 */
 			if(-1 == log_to_fd)
 				log_to_fd = tmp_fd;
 			else
@@ -736,7 +388,7 @@ static inline void fork_to_background(void)
 			break;
 		case -1:
 			diedie("forking for daemon-mode");
-		// parent
+		/* parent */
 		default:
 			while(true)
 				exit(EXIT_SUCCESS);
@@ -744,7 +396,7 @@ static inline void fork_to_background(void)
 		break;
 	case -1:
 		diedie("forking for daemon-mode");
-	// parent
+	/* parent */
 	default:
 		logg_develd_old("own pid %i\tchild %i\n", getpid(), child);
 		waitpid(child, &ch_status, 0);
@@ -759,12 +411,12 @@ static inline void handle_config(void)
 	unsigned int *tmp_id = tmp_id_2;
 	size_t i;
 
-	// whats fixed
+	/* whats fixed */
 	server.status.our_server_upeer_needed = true;
 	atomic_set(&server.status.act_connection_sum, 0);
 
 // TODO: read from config files
-	// var settings
+	/* var settings */
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
@@ -777,7 +429,7 @@ static inline void handle_config(void)
 	server.settings.default_max_g2_packet_length = DEFAULT_PCK_LEN_MAX;
 	server.settings.want_2_send_profile = DEFAULT_SEND_PROFILE;
 
-	// set the GUID
+	/* set the GUID */
 	if(!(config = fopen(guid_file_name, "r")))
 		goto err;
 
@@ -793,7 +445,7 @@ static inline void handle_config(void)
 
 	fclose(config);
 
-	// read the user-profile
+	/* read the user-profile */
 	packet_uprod = NULL;
 
 	if(server.settings.want_2_send_profile)
@@ -821,20 +473,24 @@ static inline void change_the_user(void)
 	if(setgid((gid_t) nameinfo->pw_gid))
 	{
 		logg_errno(LOGF_WARN, "setting GID");
-// Abort disabeled during devel. Maybe configurable with
-// commandline-switch?
+/*
+ * Abort disabeled during devel. Maybe configurable with
+ * commandline-switch?
+ */
 //		exit(EXIT_FAILURE);
 	}
 
 	if(setuid((uid_t) nameinfo->pw_uid))
 	{
 		logg_errno(LOGF_WARN, "setting UID");
-// Abort disabeled during devel. Maybe configurable with
-// commandline-switch?
+/* 
+ * Abort disabeled during devel. Maybe configurable with
+ * commandline-switch?
+ */
 //		exit(EXIT_FAILURE);
 	}
 
-	// wiping the structure for security-reasons
+	/* wiping the structure for security-reasons */
 	memset(nameinfo, 0, sizeof(*nameinfo));
 #else
 	/* Attention! Our Windau-friends know about users and user-
@@ -866,11 +522,11 @@ static inline void change_the_user(void)
 	 *
 	 *   Chose a different account!
 	 */
-	// maybe we could at least stop using the admin-account
+	/* maybe we could at least stop using the admin-account */
 	logg_develd("uid = %lu\n", (unsigned long) getuid());
 	if(500 == getuid())
 		die("We don't want to use the Admin-account!\n");
-#endif // __CYGWIN__
+#endif /* __CYGWIN__ */
 }
 
 static inline void setup_resources(void)
@@ -878,12 +534,12 @@ static inline void setup_resources(void)
 	size_t i;
 	struct rlimit our_limit;
 
-	// check and raise our open-file limit
+	/* check and raise our open-file limit */
 /*
  * WARNING:
  * On Linux (as of 10.01.2005, 2.4.x & 2.6.10) the vanilla
  * sources (and propably others) *DON'T* respect this setting.
- * They simply cut of at a compile-time constant of 1024.Some
+ * They simply cut of at a compile-time constant of 1024. Some
  * distributions seem to aply a patch for this for years now
  * (SuSE, RedHat standard), some not (RedHat Enterprise,
  * Gentoo). So even if this is successfully set, opening fd's
@@ -944,8 +600,8 @@ static inline void setup_resources(void)
 			pthread_attr_setstacksize(&server.settings.t_def_attr, 64 * 1024);
 	}
 
-	// IPC
-	// open Sockets for IPC
+	/* IPC */
+	/* open Sockets for IPC */
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		if(socketpair(PF_UNIX, SOCK_DGRAM, 0, sock_com[i]))
@@ -958,13 +614,15 @@ static inline void setup_resources(void)
 				if(close(sock_com[i-1][1]))
 					logg_errno(LOGF_WARN, "reclaiming FD's");
 			}
-			// calling cleanup here could be bad,
-			// hopefully OS handles it
+			/* 
+			 * calling cleanup here could be bad,
+			 * hopefully OS handles it
+			 */
 			exit(EXIT_FAILURE);
 		}
 	}
 
-	// open pipes for IPC
+	/* open pipes for IPC */
 	if(0 > pipe(accept_2_handler))
 	{
 		logg_errno(LOGF_CRIT, "opening acceptor-handler pipe");
@@ -972,7 +630,7 @@ static inline void setup_resources(void)
 		exit(EXIT_FAILURE);
 	}
 
-	// adding socket-fd's to a poll-structure
+	/* adding socket-fd's to a poll-structure */
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		sock_poll[i].fd = sock_com[i][OUT];
@@ -1016,7 +674,7 @@ static inline void read_uprofile(void)
 		goto read_uprofile_end;
 	}
 
-	// calculate inner /XML length
+	/* calculate inner /XML length */
 	
 	if(f_bytes <= 0x0000FFL)
 		xml_length_length = 1;
@@ -1030,10 +688,10 @@ static inline void read_uprofile(void)
 		goto read_uprofile_end;
 	}
 
-	xml_length = 1;                  // /XML-Control-byte
-	xml_length += xml_length_length; // /XML-length
-	xml_length += 3;                 // /XML-Type-length
-	xml_length += f_bytes;           // /XML-Payload
+	xml_length = 1;                  /* /XML-Control-byte */
+	xml_length += xml_length_length; /* /XML-length */
+	xml_length += 3;                 /* /XML-Type-length */
+	xml_length += f_bytes;           /* /XML-Payload */
 
 	if(xml_length <= 0x0000FF)
 		uprod_length_length = 1;
@@ -1047,10 +705,10 @@ static inline void read_uprofile(void)
 		goto read_uprofile_end;
 	}
 
-	uprod_length = 1;                   // /UPROD-Control-byte
-	uprod_length += uprod_length_length;// /UPROD-length
-	uprod_length += 5;                  // /UPROD-Type-length
-	uprod_length += xml_length;         // /UPROD-child-length
+	uprod_length = 1;                   /* /UPROD-Control-byte */
+	uprod_length += uprod_length_length;/* /UPROD-length */
+	uprod_length += 5;                  /* /UPROD-Type-length */
+	uprod_length += xml_length;         /* /UPROD-child-length */
 
 // TODO: make it send-buffer-capacity transparent
 	if(uprod_length > NORM_BUFF_CAPACITY)
@@ -1120,27 +778,16 @@ static inline void clean_up_m(void)
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		close(sock_com[i][0]);
-			// output?
+			/* output? */
 		close(sock_com[i][1]);
-			// output?
+			/* output? */
 	}
 
 	close(accept_2_handler[0]);
 	close(accept_2_handler[1]);
 
-	// no locking here, since maybe we are here because a thread
-	// already has trouble with it and by the way... it
-	// shouldn't matter anyhow at this point
-//	for(i = free_cons->limit; i; i--, free_cons->limit--)
-//		g2_con_free(free_cons->data[i-1]);
-
-//	free(free_cons);
-
 	if(packet_uprod)
 		free(packet_uprod);
-
-	// what should i do if this fails?
-//	pthread_mutex_destroy(&free_cons_mutex);
 
 	fclose(stdin);
 	fclose(stdout); // get a sync if we output to a file

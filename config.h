@@ -73,7 +73,7 @@
 
 /* this is callong for trouble, but helpfull */
 //TODO: backtrace brocken ATM
-//#define WANT_BACKTRACES
+#define WANT_BACKTRACES
 
 /* Is __thread keyword for thread local storage available?
  * This option is unused ATM, since __thread has its share

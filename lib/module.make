@@ -37,6 +37,7 @@ LIBHEADS = \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
 	$(MPL)/list.h \
+	$(MPL)/backtrace.h \
 	$(MPL)/i386/x86.h
 
 # epoll emuls
@@ -119,6 +120,7 @@ LIBSRCS = \
 	$(MPL)/strnlen.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/hzp.c \
+	$(MPL)/backtrace.c \
 	$(MPL)/atomic.c
 
 # base objectfiles
@@ -132,6 +134,7 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/hzp.o \
+	$(MPL)/backtrace.o \
 	$(MPL)/atomic.o \
 	$(MPL)/strnlen.o
 
@@ -158,6 +161,7 @@ $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h G2MainServer.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
+$(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/my_bitops.h: other.h
 $(MPL)/my_bitopsm.h: other.h config.h
