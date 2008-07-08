@@ -43,10 +43,12 @@ static always_inline int get_act_loglevel(void);
 #include "lib/atomic.h"
 #include "lib/log_facility.h"
 
-#define THREAD_SUM		3
 #define THREAD_ACCEPTOR		0
 #define THREAD_HANDLER		1
 #define THREAD_UDP		2
+#define THREAD_TIMER	3
+#define THREAD_SUM_COM	3
+#define THREAD_SUM		4
 
 #define OUT   0
 #define IN    1

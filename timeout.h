@@ -32,10 +32,11 @@ typedef int to_id;
 #define _TOUT_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #else
 #define _TOUT_EXTRN(x) x GCC_ATTR_VIS("hidden")
-#endif // _G2MAINSERVER_C
+#endif
 
 _TOUT_EXTRN(inline bool add_timeout(to_id *));
 _TOUT_EXTRN(inline bool cancel_timeout(const to_id));
+_TOUT_EXTRN(void timeout_timer_abort(void));
 _TOUT_EXTRN(void *timeout_timer_task(void *));
 
 #endif //_TIMEOUT_H

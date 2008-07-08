@@ -64,6 +64,7 @@
 #include "G2Handler.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
+#include "timeout.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
@@ -73,9 +74,9 @@
 
 //Thread data
 static pthread_t main_threads[THREAD_SUM];
-static int sock_com[THREAD_SUM][2];
+static int sock_com[THREAD_SUM_COM][2];
 static int accept_2_handler[2];
-static struct pollfd sock_poll[THREAD_SUM];
+static struct pollfd sock_poll[THREAD_SUM_COM];
 static volatile sig_atomic_t server_running = true;
 
 //
@@ -185,6 +186,13 @@ int main(int argc, char **args)
 		logg_errno(LOGF_CRIT, "pthread_create G2UDP");
 		server_running = false;
 	}
+	
+	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL))
+	{
+		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
+		server_running = false;
+	}
+
 
 	// send the pipe between Acceptor and Handler
 	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_ACCEPTOR][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0))
@@ -231,7 +239,7 @@ int main(int argc, char **args)
 	/* main server wait loop */
 	while(server_running)
 	{
-		int num_poll = poll(sock_poll, THREAD_SUM, 110000);
+		int num_poll = poll(sock_poll, THREAD_SUM_COM, 110000);
 		switch(num_poll)
 		{
 		// Normally: see what has happened
@@ -253,8 +261,11 @@ int main(int argc, char **args)
  				}
  			}
 			/* service our memleak ;) */
-			num_poll = hzp_scan(NORM_HZP_THRESHOLD);
-			logg_develd("HZP reclaimed chunks: %i\n", num_poll);
+			if(server_running) /* not when someone lost, maybe deadlock */
+			{
+				num_poll = hzp_scan(NORM_HZP_THRESHOLD);
+				logg_develd("HZP reclaimed chunks: %i\n", num_poll);
+			}
 			break;
 		// Something bad happened
 		case -1:
@@ -269,7 +280,8 @@ int main(int argc, char **args)
 	}
 
 	// send all threads the abort-code
-	for(i = 0; i < THREAD_SUM; i++)
+	timeout_timer_abort();
+	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		if(0 > send(sock_com[i][OUT], "All lost", sizeof("All lost"), 0))
 			logg_errno(LOGF_WARN, "initiating stop");
@@ -934,7 +946,7 @@ static inline void setup_resources(void)
 
 	// IPC
 	// open Sockets for IPC
-	for(i = 0; i < THREAD_SUM; i++)
+	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		if(socketpair(PF_UNIX, SOCK_DGRAM, 0, sock_com[i]))
 		{
@@ -961,7 +973,7 @@ static inline void setup_resources(void)
 	}
 
 	// adding socket-fd's to a poll-structure
-	for(i = 0; i < THREAD_SUM; i++)
+	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		sock_poll[i].fd = sock_com[i][OUT];
 		sock_poll[i].events = POLLIN;
@@ -1105,7 +1117,7 @@ static inline void clean_up_m(void)
 
 	pthread_attr_destroy(&server.settings.t_def_attr);
 
-	for(i = 0; i < THREAD_SUM; i++)
+	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		close(sock_com[i][0]);
 			// output?
