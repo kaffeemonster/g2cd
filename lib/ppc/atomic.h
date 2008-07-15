@@ -186,7 +186,7 @@
 # endif
 
 
-static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
+static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	void *tmp;
 
@@ -208,7 +208,43 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 	return tmp;
 }
 
-static always_inline int atomic_x(int val, atomic_t *ptr)
+static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
+{
+	void *tmp;
+
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx\t%0,%y2\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.\t%3,%y2\n\t"
+		"bne-\t1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_pread(ptr)),
+		  /* %3 */ "r" (val),
+		  /* %4 */ "m" (atomic_pread(ptr)) /* dependency only, see above */
+		: "cc");
+
+	return tmp;
+}
+
+
+extern void *_illigal_ptr_size(volatile void *val, atomicptr_t *ptr);
+static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
+{
+		switch(sizeof(val))
+	{
+	case 4:
+		return atomic_px_32(val, ptr);
+	case 8:
+		return atomic_px_64(val, ptr);
+	}
+	return _illigal_ptr_size(val, ptr);
+}
+
+static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	int tmp;
 
@@ -230,7 +266,42 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 	return tmp;
 }
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline int atomic_x_64(int val, atomic_t *ptr)
+{
+	int tmp;
+
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx\t%0,%y2\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.\t%3,%y2\n\t"
+		"bne-\t1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "r" (val),
+		  /* %4 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+
+	return tmp;
+}
+
+extern int _illigal_int_size(int, atomic_t *);
+static always_inline int atomic_x(int val, atomic_t *ptr)
+{
+	switch(sizeof(val))
+	{
+	case 4:
+		return atomic_x_32(val, ptr);
+	case 8:
+		return atomic_x_64(val, ptr);
+	}
+	return _illigal_int_size(val, ptr);
+}
+
+static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 
@@ -256,7 +327,45 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 	return prev;
 }
 
-static always_inline void atomic_inc(atomic_t *ptr)
+static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+{
+	void *prev;
+
+	__asm__ __volatile__ (
+		"1:\n\t"
+		"ldarx\t%0,%y2 \n\t"
+		"cmpd\t0,%0,%3 \n\t"
+		"bne\t2f\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.\t%4,%y2 \n\t"
+		"bne-\t1b"
+		SYNC
+		"\n2:"
+		: /* %0 */ "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_pread(ptr)),
+		  /* %3 */ "r" (oval),
+		  /* %4 */ "r" (nval),
+		  /* %5 */ "m" (atomic_pread(ptr)) /* dependency only, see above */
+		: "cc");
+
+	return prev;
+}
+
+static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+{
+	switch(sizeof(nval))
+	{
+	case 4:
+		return atomic_cmppx_32(nval, oval, ptr);
+	case 8:
+		return atomic_cmppx_64(nval, oval, ptr);
+	}
+	return _illigal_ptr_size(nval, ptr);
+}
+
+static always_inline void atomic_inc_32(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(
@@ -274,7 +383,38 @@ static always_inline void atomic_inc(atomic_t *ptr)
 		: "cc");
 }
 
-static always_inline void atomic_dec(atomic_t *ptr)
+static always_inline void atomic_inc_64(atomic_t *ptr)
+{
+	int tmp;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx\t%0,%y2\n\t"
+		"addic\t%0,%0,1\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.\t%0,%y2 \n\t"
+		"bne-\t1b"
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+}
+
+static always_inline void atomic_inc(atomic_t *ptr)
+{
+	switch(sizeof(atomic_read(ptr)))
+	{
+	case 4:
+		atomic_inc_32(ptr); break;
+	case 8:
+		atomic_inc_64(ptr); break;
+	default:
+		_illigal_int_size(0, ptr);
+	}
+}
+
+static always_inline void atomic_dec_32(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(
@@ -292,12 +432,43 @@ static always_inline void atomic_dec(atomic_t *ptr)
 		: "cc");
 }
 
-static always_inline int atomic_dec_return(atomic_t *ptr)
+static always_inline void atomic_dec_64(atomic_t *ptr)
 {
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%y2\n\t"
+		"ldarx\t%0,%y2\n\t"
+		"addic\t%0,%0,-1\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.\t%0,%y2\n\t"
+		"bne-\t1b"
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+}
+
+static always_inline void atomic_dec(atomic_t *ptr)
+{
+	switch(sizeof(atomic_read(ptr)))
+	{
+	case 4:
+		atomic_dec_32(ptr); break;
+	case 8:
+		atomic_dec_64(ptr); break;
+	default:
+		_illigal_int_size(0, ptr);
+	}
+}
+
+static always_inline int atomic_dec_return_32(atomic_t *ptr)
+{
+	int tmp;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx\t%0,%y2\n\t"
 		"addic\t%0,%0,-1\n\t"
 		PPC405_ERR77(%y2)
 		"stwcx.\t%0,%y2\n\t"
@@ -310,6 +481,38 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 		  /* %3 */ "m" (atomic_read(ptr)) /* dependency only, see above */
 		: "cc");
 	return tmp;
+}
+
+static always_inline int atomic_dec_return_64(atomic_t *ptr)
+{
+	int tmp;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx\t%0,%y2\n\t"
+		"addic\t%0,%0,-1\n\t"
+		PPC405_ERR77(%y2)
+		"stwcx.\t%0,%y2\n\t"
+		"bne-\t1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+	return tmp;
+}
+
+static always_inline int atomic_dec_return(atomic_t *ptr)
+{
+	switch(sizeof(atomic_read(ptr)))
+	{
+	case 4:
+		return atomic_dec_return_32(ptr);
+	case 8:
+		return atomic_dec_return_64(ptr);
+	}
+	return _illigal_int_size(0, ptr);
 }
 
 #define atomic_dec_test(x) (atomic_dec_return((x)) == 0)

@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t, ppc implementation
  *
- * Copyright (c) 2006 Jan Seiffert
+ * Copyright (c) 2006-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,11 +25,20 @@
 
 #include "../my_bitopsm.h"
 
+extern size_t _illigal_size_t_size(size_t);
 size_t flsst(size_t find)
 {
 	size_t found;
 /* ppc does not know fls but clz */
-	__asm__("cntlzw\t%0, %1\n" : "=r" (found) : "r" (find));
+	switch(sizeof(find))
+	{
+	case 4:	__asm__("cntlzw\t%0, %1\n" : "=r" (found) : "r" (find));
+		break;
+	case 8:	__asm__("cntlzd\t%0, %1\n" : "=r" (found) : "r" (find));
+		break;
+	default:
+		return _illigal_size_t_size(find);
+	}
 	return SIZE_T_BITS - found;
 }
 

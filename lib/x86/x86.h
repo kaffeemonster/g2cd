@@ -27,29 +27,38 @@
 # define _X86_H
 
 # ifdef __SSE__
-#  define SSE_PREFETCH(x) "prefetchnta	" #x "\n\t"
+#  define SSE_PREFETCH(x) "prefetcht0	" #x "\n\t"
+#  define PREFETCH(x) "prefetcht0	" #x "\n\t"
 #  define SSE_FENCE	"sfence\n"
 #  ifdef __SSE2__
 #   define SSE_MOVE(x, y) "movdqa	" #x ", " #y "\n\t"
-#   define SSE_STORE(x, y) "movntdq	" #x ", " #y "\n\t"
+#   define SSE_STORE(x, y) "movdqa	" #x ", " #y "\n\t"
 #   define SSE_AND(x, y) "pand	" #x ", " #y "\n\t"
 #   define SSE_XOR(x, y) "pxor	" #x ", " #y "\n\t"
 #  else
 #   define SSE_MOVE(x, y) "movaps	" #x ", " #y "\n\t"
-#   define SSE_STORE(x, y) "movntps	" #x ", " #y "\n\t"
+#   define SSE_STORE(x, y) "movps	" #x ", " #y "\n\t"
 #   define SSE_AND(x, y) "andps	" #x ", " #y "\n\t"
 #   define SSE_XOR(x, y) "xorps	" #x ", " #y "\n\t"
 #  endif
 # endif
 # ifdef __MMX__
 #  ifdef __SSE__
-#	 define MMX_PREFETCH(x) "prefetchnta	" #x "\n\t"
-#   define MMX_STORE(x, y) "movntq	" #x ", " #y "\n\t"
+#	 define MMX_PREFETCH(x) "prefetcht0	" #x "\n\t"
+#   define PREFETCH(x) "prefetcht0	" #x "\n\t"
+#   define MMX_STORE(x, y) "movq	" #x ", " #y "\n\t"
 #   define MMX_FENCE	"sfence\n"
 #  else
 #   define MMX_PREFETCH(x)
+#   define PREFETCH(x)
 #   define MMX_STORE(x, y) "movq	" #x ", " #y "\n\t"
 #   define MMX_FENCE
 #  endif
+# endif
+
+# ifdef __i386__
+#  define SIZE_T_BYTE	4
+# else
+#  define SIZE_T_BYTE	8
 # endif
 #endif /* _X86_H */

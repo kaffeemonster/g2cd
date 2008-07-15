@@ -59,11 +59,9 @@ size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_VIS("hidden");
 #endif
 
 #ifdef I_LIKE_ASM
-# ifdef __i386__
-#  include "i386/strnlen.c"
-# elif __x86_64__
+# if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
-#  include "i386/strnlen.c"
+#  include "x86/strnlen.c"
 # else
 #  include "generic/strnlen.c"
 # endif

@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  * 
- * Copyright (c) 2006, Jan Seiffert
+ * Copyright (c) 2006-2008 Jan Seiffert
  * 
  * This file is part of g2cd.
  *
@@ -94,10 +94,9 @@ typedef union xxxxxx4
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
 
 # if (!defined NEED_GENERIC) && (defined I_LIKE_ASM)
-#  ifdef __i386__
-#   include "i386/atomic.h"
-#  elif defined(__x86_64__)
-#   include "x86_64/atomic.h"
+#  if defined(__i386__) || defined(__x86_64__)
+	/* work for both */
+#   include "x86/atomic.h"
 #  elif defined(__IA64__)
 #   include "ia64/atomic.h"
 #  elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
@@ -110,7 +109,7 @@ typedef union xxxxxx4
 #   include "sparc/atomic.h"
 #  elif defined(__mips)
 #   include "mips/atomic.h"
-#  elif defined(__powerpc__)
+#  elif defined(__powerpc__) || defined(__powerpc64__)
 #   include "ppc/atomic.h"
 #  elif defined(__alpha__)
 #   include "alpha/atomic.h"

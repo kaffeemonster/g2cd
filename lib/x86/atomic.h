@@ -1,10 +1,10 @@
 /*
  * atomic.h
- * atomic primitves for x86_64
+ * atomic primitves for x86
  *
  * Thanks Linux Kernel
  * 
- * Copyright (c) 2006, Jan Seiffert
+ * Copyright (c) 2006-2008 Jan Seiffert
  * 
  * This file is part of g2cd.
  *
@@ -42,10 +42,18 @@
 #  define LOCK
 # endif
 
+/*
+ * Make sure to avoid asm operant size suffixes, this is
+ * used in 32Bit & 64Bit
+ *
+ * %z should give operandsize (see ppc/atomic.h rant), don't
+ * know since when...
+ */
+
 static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
-		"xchgq\t%0, %2"
+		"xchg	%0, %2"
 		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -57,7 +65,7 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		"xchgl\t%0, %2"
+		"xchg	%0, %2"
 		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -70,7 +78,7 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 {
 	void *prev;
 	__asm__ __volatile__(
-		LOCK "cmpxchgq %2,%3"
+		LOCK "cmpxchg %2,%3"
 		: /* %0 */ "=a"(prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -84,7 +92,7 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 static always_inline void atomic_inc(atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		LOCK "incl %0"
+		LOCK "inc%z0 %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
 		: /* %1 */ "m" (atomic_read(ptr))
@@ -94,7 +102,7 @@ static always_inline void atomic_inc(atomic_t *ptr)
 static always_inline void atomic_dec(atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		LOCK "decl %0"
+		LOCK "dec%z0 %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
 		: /* %1 */ "m" (atomic_read(ptr))
@@ -105,8 +113,8 @@ static always_inline int atomic_dec_test(atomic_t *ptr)
 {
 	unsigned char c;
 	__asm__ __volatile__(
-		LOCK "decl %0\n\t"
-		"setz %1"
+		LOCK "dec%z0 %0\n\t"
+		"setz	%1"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr)),
 		  /* %1 */ "=qm" (c)

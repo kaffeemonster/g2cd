@@ -358,5 +358,8 @@ do { \
 # error "No unaligned access macros for your machine/compiler written yet"
 #endif /**/
 
+#define str_it2(x)	#x
+#define str_it(x)	str_it2(x)
+
 #endif /* _OTHER_H */
 /* EOF */

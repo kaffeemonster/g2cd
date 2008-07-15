@@ -10,11 +10,9 @@ TARED_FILES += \
 TARED_DIRS += \
 	$(MPL) \
 	$(MPL)/generic \
-	$(MPL)/i386 \
-	$(MPL)/x86_64 \
+	$(MPL)/x86 \
 	$(MPL)/mips \
 	$(MPL)/ppc \
-	$(MPL)/ppc64 \
 	$(MPL)/sparc \
 	$(MPL)/sparc64 \
 	$(MPL)/ia64 \
@@ -38,7 +36,7 @@ LIBHEADS = \
 	$(MPL)/atomic.h \
 	$(MPL)/list.h \
 	$(MPL)/backtrace.h \
-	$(MPL)/i386/x86.h
+	$(MPL)/x86/x86.h
 
 # epoll emuls
 EPOLLSRS = \
@@ -51,8 +49,7 @@ EPOLLSRS = \
 ATOMSRC = \
 	$(MPL)/generic/atomic.h \
 	$(MPL)/generic/atomic.c \
-	$(MPL)/i386/atomic.h \
-	$(MPL)/x86_64/atomic.h \
+	$(MPL)/x86/atomic.h \
 	$(MPL)/mips/atomic.h \
 	$(MPL)/ia64/atomic.h \
 	$(MPL)/ppc/atomic.h \
@@ -63,39 +60,31 @@ ATOMSRC = \
 # arch src files
 FLSSTSRC = \
 	$(MPL)/generic/flsst.c \
-	$(MPL)/i386/flsst.c \
-	$(MPL)/x86_64/flsst.c \
+	$(MPL)/x86/flsst.c \
 	$(MPL)/mips/flsst.c \
 	$(MPL)/ppc/flsst.c \
-	$(MPL)/ppc64/flsst.c \
 	$(MPL)/alpha/flsst.c
 POPCOUNSTSRC = \
 	$(MPL)/generic/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
 	$(MPL)/sparc64/popcountst.c \
-	$(MPL)/ppc64/popcountst.c \
+	$(MPL)/ppc/popcountst.c \
 	$(MPL)/alpha/popcountst.c
 MEMXORSRC = \
 	$(MPL)/generic/memxor.c \
-	$(MPL)/i386/memxor.c \
-	$(MPL)/x86_64/memxor.c \
-	$(MPL)/ppc/memxor.c \
-	$(MPL)/ppc64/memxor.c
+	$(MPL)/x86/memxor.c \
+	$(MPL)/ppc/memxor.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
-	$(MPL)/i386/memand.c \
-	$(MPL)/x86_64/memand.c \
-	$(MPL)/ppc/memand.c \
-	$(MPL)/ppc64/memand.c
+	$(MPL)/x86/memand.c \
+	$(MPL)/ppc/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
-	$(MPL)/i386/memneg.c \
-	$(MPL)/x86_64/memneg.c \
-	$(MPL)/ppc/memneg.c \
-	$(MPL)/ppc64/memneg.c
+	$(MPL)/x86/memneg.c \
+	$(MPL)/ppc/memneg.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
-	$(MPL)/i386/strnlen.c
+	$(MPL)/x86/strnlen.c
 
 LIBASRCS = \
 	$(LIBSRCS) \
@@ -163,11 +152,12 @@ $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
+$(MPL)/atomic.h: $(ATOMICSRC)
 $(MPL)/my_bitops.h: other.h
 $(MPL)/my_bitopsm.h: other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: other.h config.h
-$(MPL)/i386/memxor.c $(MPL)/x86_64/memxor.c $(MPL)/i386/memand.c $(MPL)/x86_64/memand.c $(MPL)/i386/memneg.c $(MPL)/x86_64/memneg.c: $(MPL)/i386/x86.h
+$(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 
 # give all files the std deps, so get rebuilt if something changes
 $(LIBOBJS): $(LIB_STD_DEPS)

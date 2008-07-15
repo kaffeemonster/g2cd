@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -37,10 +37,9 @@
 /* size_t flsst(size_t find) */
 
 #ifdef I_LIKE_ASM
-# ifdef __i386__
-#  include "i386/flsst.c"
-# elif defined(__x86_64__)
-#  include "x86_64/flsst.c"
+# if defined(__i386__) || defined(__x86_64__)
+	/* works for both */
+#  include "x86/flsst.c"
 # elif defined(__mips)
 #  include "mips/flsst.c"
 # elif defined(__powerpc__)

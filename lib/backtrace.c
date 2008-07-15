@@ -144,7 +144,7 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 #  define DEBUG_CMD \
  "gdb -nw -q -r "
 #  define DEBUG_CMDS \
-	"set pagination off\ninfo threads\nthread apply all bt full\ninfo frame\ndetach\nquit\n"
+	"set pagination off\ninfo threads\nthread apply all bt full\ninfo frame\ninfo registers\ndisass $pc\nlist\ndetach\nquit\n"
 # endif
 
 # define DEATHSTR_1 \

@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006, 2007 Jan Seiffert
+ * Copyright (c) 2006-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -208,8 +208,9 @@ insert_in_heap:
 			die("zpad heap probably corrupted, underflow!\n");
 		if((unsigned char *)tmp_zheap > (z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)))
 		{
-			logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %u + %u - %u = %p\n",
-				(void *)tmp_zheap, z_pad->pad, sizeof(z_pad->pad), sizeof(z_pad->window), sizeof(*zheap),
+			logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %lu + %lu - %lu = %p\n",
+				(void *)tmp_zheap, z_pad->pad, (unsigned long)sizeof(z_pad->pad),
+				(unsigned long)sizeof(z_pad->window), (unsigned long)sizeof(*zheap),
 				(void *)(z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)));
 			exit(EXIT_FAILURE);
 		}

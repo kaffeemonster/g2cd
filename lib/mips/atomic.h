@@ -55,6 +55,19 @@
 # ifdef HAVE_SMP
 #  define MEM_ORDER	"\tsync\n"
 # else
+// TODO: Maybe a nop needed here to fill branch slot
+/*
+ * MIPS and its instruction timing...
+ * after a branch or call (branch with link) the next
+ * instruction after the branch still gets executed,
+ * /before/ the branch, because it is already in the
+ * cpu pipeline.
+ * The MIPS assambler can automatically fill these
+ * slots with nops itself. But you can also
+ * fill these slots yourself...
+ * Automagic with unclear manual override: needs
+ * manual inspection what gets generated (binary).
+ */
 #  define MEM_ORDER
 # endif
 

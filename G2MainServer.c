@@ -606,7 +606,7 @@ static inline void setup_resources(void)
 	{
 		if(socketpair(PF_UNIX, SOCK_DGRAM, 0, sock_com[i]))
 		{
-			logg_errnod(LOGF_CRIT, "creating internal Socket num %u", i);
+			logg_errnod(LOGF_CRIT, "creating internal Socket num %lu", (unsigned long)i);
 			for( ; i; i--)
 			{
 				if(close(sock_com[i-1][0]))

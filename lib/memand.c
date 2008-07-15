@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient
  *
- * Copyright (c) 2006,2007 Jan Seiffert
+ * Copyright (c) 2006-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -75,14 +75,12 @@
 /* void *memand(void *dst, const void *src, size_t len) */
 
 #ifdef I_LIKE_ASM
-# ifdef __i386__
-#  include "i386/memand.c"
-# elif __x86_64__
-#  include "x86_64/memand.c"
-# elif __powerpc__
+# if defined(__i386__) || defined(__x86_64__)
+	/* works for both */
+#  include "x86/memand.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+	/* works for both */
 #  include "ppc/memand.c"
-# elif __powerpc64__
-#  include "ppc64/memand.c"
 # else
 #  include "generic/memand.c"
 # endif

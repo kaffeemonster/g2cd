@@ -2,7 +2,7 @@
  * memxor.c
  * xor two memory region efficient
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -75,14 +75,12 @@
 /* void *memxor(void *dst, const void *src, size_t len) */
 
 #ifdef I_LIKE_ASM
-# ifdef __i386__
-#  include "i386/memxor.c"
-# elif __x86_64__
-#  include "x86_64/memxor.c"
-# elif __powerpc__
+# if defined(__i386__) | defined(__x86_64__)
+	/* works for both */
+#  include "x86/memxor.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+	/* works for both */
 #  include "ppc/memxor.c"
-# elif __powerpc64__
-#  include "ppc64/memxor.c"
 # else
 #  include "generic/memxor.c"
 # endif

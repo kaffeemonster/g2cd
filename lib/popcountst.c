@@ -47,7 +47,8 @@
  */
 #  include "sparc64/popcountst.c"
 # elif __ppc64__
-#  include "ppc64/popcountst.c"
+	/* only available > POWER5, doesn't talk about 32Bit */
+#  include "ppc/popcountst.c"
 # elif __alpha__
 #  include "alpha/popcountst.c"
 # else

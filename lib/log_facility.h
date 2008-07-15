@@ -2,7 +2,7 @@
  * log_facility.h
  * header-file for log_facility.c, the logging logic/magic
  *
- * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,8 +27,6 @@
 #define _LOG_FACILITY_H
 
 #define str_size(x)	(sizeof(x) - 1)
-#define str_it2(x)	#x
-#define str_it(x)	str_it2(x)
 
 #ifdef DEBUG_DEVEL
 # define logg_devel(x) logg_more(LOGF_DEVEL, __FILE__, __func__, __LINE__, 0, x)
