@@ -260,7 +260,7 @@ int hzp_scan(int threshold)
 		return 0;
 
 	/* gather list of used mem */
-	atomic_sset(&thead, atomic_sread(&hzp_threads.head));
+	thead.next = atomic_sread(&hzp_threads.head);
 	whead = &thead;
 	while(atomic_sread(whead))
 	{

@@ -113,6 +113,9 @@ typedef union xxxxxx4
 #   include "ppc/atomic.h"
 #  elif defined(__alpha__)
 #   include "alpha/atomic.h"
+#  elif defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
+	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+#   include "arm/atomic.h"
 #  else
 #   include "generic/atomic.h"
 #  endif
@@ -124,7 +127,7 @@ static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
 	void *tmp;
 	do
-		tmp = deatomic(atomic_sset(node, atomic_sread(head)));
+		tmp = deatomic(node->next = atomic_sread(head));
 	while(atomic_cmpalx(node, tmp, head) != tmp);
 }
 

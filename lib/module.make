@@ -56,7 +56,8 @@ ATOMSRC = \
 	$(MPL)/ppc/atomic.h \
 	$(MPL)/sparc/atomic.h \
 	$(MPL)/sparc64/atomic.h \
-	$(MPL)/alpha/atomic.h
+	$(MPL)/alpha/atomic.h \
+	$(MPL)/arm/atomic.h
 
 # arch src files
 FLSSTSRC = \
