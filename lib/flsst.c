@@ -42,12 +42,16 @@
 #  include "x86/flsst.c"
 # elif defined(__mips)
 #  include "mips/flsst.c"
-# elif defined(__powerpc__)
+# elif defined(__powerpc__) || defined(__powerpc64__)
+	/* works for both */
 #  include "ppc/flsst.c"
-# elif defined(__powerpc64__)
-#  include "ppc64/flsst.c"
 # elif defined(__alpha__)
 #  include "alpha/flsst.c"
+# elif defined(__ARM_ARCH_5__) || defined(__ARM_ARCH_5T__) || \
+	defined(__ARM_ARCH_5TE__) || defined(__ARM_ARCH_5TEJ__) || \
+	defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
+	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+#  include "arm/flsst.c"
 # else
 #  include "generic/flsst.c"
 # endif

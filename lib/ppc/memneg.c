@@ -109,7 +109,7 @@ alignment_16:
 	{
 		register vector int *dst_vec = (vector int *) dst_char;
 		register vector const int *src_vec = (vector const int *) src_char;
-		static vector const int all_one = {~0, ~0, ~0, ~0};
+		static vector const int all_one = {~0U, ~0U, ~0U, ~0U};
 		register size_t small_len = len / (sizeof(*dst_vec)/sizeof(*dst_char));
 		
 		/* 

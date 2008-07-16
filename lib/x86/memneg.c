@@ -33,7 +33,7 @@
 void *memneg(void *dst, const void *src, size_t len)
 {
 #if defined(__MMX__) || defined (__SSE__)
-	static const uint32_t all_ones[4] GCC_ATTR_ALIGNED(16) = {~0, ~0, ~0, ~0};
+	static const uint32_t all_ones[4] GCC_ATTR_ALIGNED(16) = {~0U, ~0U, ~0U, ~0U};
 #endif
 	char *dst_char;
 	const char *src_char;

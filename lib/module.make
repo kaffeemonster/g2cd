@@ -16,7 +16,8 @@ TARED_DIRS += \
 	$(MPL)/sparc \
 	$(MPL)/sparc64 \
 	$(MPL)/ia64 \
-	$(MPL)/alpha
+	$(MPL)/alpha \
+	$(MPL)/arm
 
 # dependencies for all files
 LIB_STD_DEPS = \
@@ -63,7 +64,8 @@ FLSSTSRC = \
 	$(MPL)/x86/flsst.c \
 	$(MPL)/mips/flsst.c \
 	$(MPL)/ppc/flsst.c \
-	$(MPL)/alpha/flsst.c
+	$(MPL)/alpha/flsst.c \
+	$(MPL)/arm/flsst.c
 POPCOUNSTSRC = \
 	$(MPL)/generic/popcountst.c \
 	$(MPL)/ia64/popcountst.c \

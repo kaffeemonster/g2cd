@@ -211,7 +211,6 @@ int main(int argc, char **args)
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
 	}
 
-
 	/* main server wait loop */
 	while(server_running)
 	{

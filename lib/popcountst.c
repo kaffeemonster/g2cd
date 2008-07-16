@@ -46,7 +46,7 @@
  * tools. This will Bomb on a real v8 (maybe not a v8+)...
  */
 #  include "sparc64/popcountst.c"
-# elif __ppc64__
+# elif __powerpc64__
 	/* only available > POWER5, doesn't talk about 32Bit */
 #  include "ppc/popcountst.c"
 # elif __alpha__
