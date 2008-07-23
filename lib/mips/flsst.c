@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t, mips implementation
  *
- * Copyright (c) 2007 Jan Seiffert
+ * Copyright (c) 2007-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,7 +25,7 @@
 
 #include "../my_bitopsm.h"
 
-static inline size_t flsst(size_t find)
+static inline size_t flsst_32(size_t find)
 {
 	size_t found;
 	/* mips knows clz */

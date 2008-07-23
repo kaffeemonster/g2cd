@@ -254,7 +254,7 @@ int main(int argc, char **args)
 	}
 
 	/* send all threads the abort-code */
-	timeout_timer_abort();
+	timeout_timer_task_abort();
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
 		if(0 > send(sock_com[i][OUT], "All lost", sizeof("All lost"), 0))

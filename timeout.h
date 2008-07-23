@@ -26,7 +26,14 @@
 #ifndef _TIMEOUT_H
 #define _TIMEOUT_H
 
-typedef int to_id;
+#include <sys/time.h>
+#include "lib/list.h"
+
+struct timeout
+{
+	struct list_head l;
+	struct timespec t;
+};
 
 #ifndef _TIMEOUT_C
 #define _TOUT_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
@@ -34,9 +41,9 @@ typedef int to_id;
 #define _TOUT_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #endif
 
-_TOUT_EXTRN(inline bool add_timeout(to_id *));
-_TOUT_EXTRN(inline bool cancel_timeout(const to_id));
-_TOUT_EXTRN(void timeout_timer_abort(void));
+_TOUT_EXTRN(bool timeout_add(struct timeout *, unsigned int));
+_TOUT_EXTRN(bool timeout_cancel(struct timeout *));
+_TOUT_EXTRN(void timeout_timer_task_abort(void));
 _TOUT_EXTRN(void *timeout_timer_task(void *));
 
 #endif //_TIMEOUT_H
