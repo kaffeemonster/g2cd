@@ -84,6 +84,11 @@ static inline void change_the_user(void);
 static inline void setup_resources(void);
 static inline void read_uprofile(void);
 static void sig_stop_func(int signr, siginfo_t *, void *);
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+static void test_cpu(void);
+#else
+static void test_cpu(void) { }
+#endif
 
 int main(int argc, char **args)
 {
@@ -103,6 +108,15 @@ int main(int argc, char **args)
 
 	/* setup how we are set-up :) */
 	handle_config();
+
+	/* 
+	 * sometimes things really stink, like cpu-bugs...
+	 * x86 specific code to warn the user that atomic ops may
+	 * "fail". Would have liked to hide it somewhere in lib/arch,
+	 * but i either put it in a file where it does not belong, or
+	 * it would not get picked up.
+	 */
+	test_cpu();
 
 	/* become a daemon if wished (useless while devel but i
 	 * stumbled over a snippet) stdin will be /dev/null, stdout
@@ -792,6 +806,168 @@ static inline void clean_up_m(void)
 	fclose(stdout); // get a sync if we output to a file
 	fclose(stderr);
 }
+
+#if defined(__i386__) || defined(__x86_64__)
+enum cpu_vendor
+{
+	X86_VENDOR_OTHER,
+	X86_VENDOR_INTEL,
+	X86_VENDOR_AMD,
+};
+
+static struct cpuinfo
+{
+	enum cpu_vendor vendor;
+	union v_str
+	{
+		char s[13];
+		uint32_t r[3];
+	} vendor_str;
+	uint32_t family;
+	uint32_t model;
+	uint32_t stepping;
+	int count;
+} our_cpu;
+
+struct cpuid_regs
+{
+	uint32_t	eax, ebx, ecx, edx;
+};
+
+static inline void cpuid(struct cpuid_regs *regs, uint32_t func)
+{
+	/* save ebx around cpuid call, PIC code needs it */
+	asm volatile (
+		"xchg	%1, %%ebx\n\t"
+		"cpuid\n\t"
+		"xchg	%1, %%ebx\n"
+		: /* %0 */ "=a" (regs->eax),
+		  /* %1 */ "=r" (regs->ebx),
+		  /* %2 */ "=c" (regs->ecx),
+		  /* %4 */ "=d" (regs->edx)
+		: /* %5 */ "0" (func)
+		: "cc"
+		);
+}
+
+#define CPUID_STEPPING(x)	((x) & 0x0F)
+#define CPUID_MODEL(x)	(((x) >> 4) & 0x0F)
+#define CPUID_FAMILY(x)	(((x) >> 8) & 0x0F)
+#define CPUID_XMODEL(x)	(((x) >> 16) & 0x0F)
+#define CPUID_XFAMILY(x)	(((x) >> 20) & 0xFF)
+
+static void identify_vendor(struct cpuinfo *);
+
+void test_cpu(void)
+{
+	struct cpuid_regs a;
+	
+// TODO: test for cpuid instruction, but means we are running on < Pentium...
+
+	cpuid(&a, 0);
+	our_cpu.vendor_str.r[0] = a.ebx;
+	our_cpu.vendor_str.r[1] = a.edx;
+	our_cpu.vendor_str.r[2] = a.ecx;
+	our_cpu.vendor_str.s[12] = '\0';
+	identify_vendor(&our_cpu);
+
+
+	cpuid(&a, 1);
+	our_cpu.family   = CPUID_FAMILY(a.eax);
+	our_cpu.model    = CPUID_MODEL(a.eax);
+	our_cpu.stepping = CPUID_STEPPING(a.eax);
+
+	switch(our_cpu.vendor)
+	{
+	case X86_VENDOR_INTEL:
+		if(our_cpu.family == 0x0F || our_cpu.family == 0x06)
+			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+		break;
+	case X86_VENDOR_AMD:
+		if(our_cpu.family == 0x0F)
+			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+		break;
+	default:
+		if(our_cpu.model == 0x0F)
+			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+		break;
+	}
+
+	if(our_cpu.family == 0x0F)
+		our_cpu.family += CPUID_XFAMILY(a.eax);
+
+	logg_posd(LOGF_DEBUG, "Vendor: \"%s\" Family: %d Model: %d Stepping: %d\n",
+			our_cpu.vendor_str.s, our_cpu.family, our_cpu.model, our_cpu.stepping);
+
+	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)
+		return;
+
+# ifdef __linux__
+#  define S_STR "\nprocessor"
+#  define S_SIZE (sizeof(S_STR)-1)
+	{
+		char read_buf[4096];
+		FILE *f;
+		char *w_ptr;
+		size_t ret;
+
+		f = fopen("/proc/cpuinfo", "r");
+		/* if we couldn't read it, simply check*/
+		if(!f)
+			goto check;
+
+		read_buf[0] = '\n';
+		ret = fread(read_buf + 1, 1, sizeof(read_buf) - 2, f);
+		read_buf[ret + 1] = '\0';
+		w_ptr = read_buf;
+
+		while((w_ptr = strstr(w_ptr, S_STR)))
+		{
+			our_cpu.count++;
+			w_ptr += S_SIZE;
+		}
+
+		fclose(f);
+
+		/* if we only have 1 CPU, no problem */
+		if(1 == our_cpu.count)
+			return;
+	}
+check:
+# endif
+	/* 
+	 * early AMD Opterons and everything remotely derived from them
+	 * seem to drop the ball on read-modify-write instructions after a
+	 * locked instruction (missing internal lfence, they say). Ok, you
+	 * also need > 1 Processor.
+	 * This is unfortunatly all wild speculation, no (visible) Errata,
+	 * no info, but:
+	 * Google speaks of Opteron Rev. E Model 32..63 in their perftools stuff
+	 * MySQL seem to hit it on 64Bit
+	 * Slowlaris trys to detect it, marks everything affected < Model 0x40
+	 *  (but since they don't build mashines with every avail. AMD
+	 *  processor (only Servers with Opterons...), this smells like a
+	 *  sledgehammer)
+	 */
+	if(our_cpu.vendor == X86_VENDOR_AMD &&
+	   our_cpu.family == 0x0F &&
+		our_cpu.model  >= 32 &&
+		our_cpu.model  <= 63)
+		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences.\nThis may leed to errors or crashes. But there is a chance i frobnicatet it myself;-)\n");
+
+	return;
+}
+
+static void identify_vendor(struct cpuinfo *cpu)
+{
+	if(!strcmp(cpu->vendor_str.s, "GenuineIntel"))
+		cpu->vendor = X86_VENDOR_INTEL;
+	else if(!strcmp(cpu->vendor_str.s, "AuthenticAMD"))
+		cpu->vendor = X86_VENDOR_AMD;
+	else
+		cpu->vendor = X86_VENDOR_OTHER;
+}
+#endif
 
 /* 
  * hmpf, ok, we try to say the compiler to include them (if it
