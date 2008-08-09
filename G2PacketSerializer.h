@@ -2,7 +2,7 @@
  * G2PacketSerializer.h
  * header-file for G2PacketSerializer.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004 - 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,14 +24,15 @@
  */
 
 #ifndef _G2PACKETSERIALIZER_H
-#define _G2PACKETSERIALIZER_H
+# define _G2PACKETSERIALIZER_H
 
-#include "lib/sec_buffer.h"
+# include "other.h"
+# include "lib/sec_buffer.h"
 
-#ifndef _SERIALIZER_STATES_DEFINED
-#define _SERIALIZER_STATES_DEFINED
+# ifndef _SERIALIZER_STATES_DEFINED
+#  define _SERIALIZER_STATES_DEFINED
 
-#define G2_PACKET_DECODER_STATES \
+#  define G2_PACKET_DECODER_STATES \
 	ENUM_CMD( CHECK_CONTROLL_BYTE ), \
 	ENUM_CMD( READ_LENGTH ), \
 	ENUM_CMD( READ_TYPE ), \
@@ -47,38 +48,38 @@
 	ENUM_CMD( DECODE_FINISHED ), \
 	ENUM_CMD( MAX_DECODER_STATE) /* keep this entry the last */
 
-#define ENUM_CMD(x) x
+#  define ENUM_CMD(x) x
 enum g2_packet_decoder_states
 {
 	G2_PACKET_DECODER_STATES
-};
-#undef ENUM_CMD
+} GCC_ATTR_PACKED;
+#  undef ENUM_CMD
 
 enum g2_packet_encoder_states
 {
-	CONCAT_HEADER, // = 50
-	ENCODE_FINISHED, // = 100
-};
+	CONCAT_HEADER, /* = 50 */
+	ENCODE_FINISHED, /* = 100 */
+} GCC_ATTR_PACKED;
 
-#endif
+# endif
 
-#ifndef _G2PACKETSERIALIZER_C
-#define _G2PACKSER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
-#define _G2PACKSER_EXTRNVAR(x) extern x
-#else
-#define _G2PACKSER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
-#define _G2PACKSER_EXTRNVAR(x)
-#endif // _G2PACKET_C
+# ifndef _G2PACKETSERIALIZER_C
+#  define _G2PACKSER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+#  define _G2PACKSER_EXTRNVAR(x) extern x
+# else
+#  define _G2PACKSER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
+#  define _G2PACKSER_EXTRNVAR(x)
+# endif /* _G2PACKET_C */
 
-#ifndef _NEED_ONLY_SERIALIZER_STATES
-#include "G2Packet.h"
+# ifndef _NEED_ONLY_SERIALIZER_STATES
+# include "G2Packet.h"
 
 _G2PACKSER_EXTRN(bool g2_packet_decode(struct pointer_buff *, g2_packet_t *, int));
 _G2PACKSER_EXTRN(bool g2_packet_decode_from_packet(g2_packet_t *, g2_packet_t *, int));
 _G2PACKSER_EXTRN(bool g2_packet_extract_from_stream(struct norm_buff *, g2_packet_t *, size_t));
-#else
-#undef _G2PACKETSERIALIZER_H
-#endif
+# else
+#  undef _G2PACKETSERIALIZER_H
+# endif
 
-#endif //_G2PACKETSERIALIZER_H
-//EOF
+#endif /* _G2PACKETSERIALIZER_H */
+/* EOF */

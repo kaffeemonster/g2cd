@@ -2,7 +2,7 @@
  * G2Packet.h
  * home of g2_packet_t and header-file for G2Packet.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,20 +36,20 @@
 
 typedef struct g2_packet
 {
-	// internal state
+	/* internal state */
+	size_t	length;
 	enum g2_packet_decoder_states packet_decode;
 	enum g2_packet_encoder_states packet_encode;
-	size_t	length;
 	uint8_t	length_length;
 	uint8_t	type_length;
 	bool		more_bytes_needed;
 	bool		source_needs_compact;
 
-	// packet-data
+	/* packet-data */
 	bool		child_is_freeable;
 	struct g2_packet *children;
 	size_t	num_child;
-	char		type[16]; //8+1;
+	char		type[16]; /* 8+1; */
 	bool		big_endian;
 	bool		is_compound;
 	bool		c_reserved;
@@ -64,7 +64,7 @@ typedef struct g2_packet
 #else
 #define _G2PACK_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
 #define _G2PACK_EXTRNVAR(x)
-#endif // _G2PACKET_C
+#endif /* _G2PACKET_C */
 
 _G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
@@ -72,7 +72,7 @@ _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
 _G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 	
-#endif //_G2PACKET_H
+#endif /* _G2PACKET_H */
 
 #ifdef _NEED_G2_P_TYPE
 # undef _NEED_G2_P_TYPE
@@ -99,8 +99,8 @@ typedef struct g2_p_type
 
 _G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict[];)
 _G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *));
-# endif // _HAVE_G2_P_TYPE
-#endif // _NEED_G2_P_TYPE
+# endif /* _HAVE_G2_P_TYPE */
+#endif /* _NEED_G2_P_TYPE */
 
-#endif //! defined _G2PACKET_H || defined _NEED_G2_P_TYPE
-//EOF
+#endif /*! defined _G2PACKET_H || defined _NEED_G2_P_TYPE */
+/* EOF */

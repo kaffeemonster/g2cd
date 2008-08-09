@@ -26,12 +26,15 @@
 #ifndef _G2CONNECTION_H
 #define _G2CONNECTION_H
 
-// Includes if included
+/* Includes if included */
 #include <stdbool.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <zlib.h>
+
+/* Own */
+#include "other.h"
 
 enum g2_connection_states
 {
@@ -51,16 +54,14 @@ enum g2_connection_states
 	CHECK_ENC_IN,
 	FINISH_CONNECTION,
 	G2CONNECTED
-};
+} GCC_ATTR_PACKED;
 
 enum g2_connection_encodings
 {
 	ENC_NONE,
 	ENC_DEFLATE,
-};
+} GCC_ATTR_PACKED;
 
-// Own
-#include "other.h"
 #include "G2Packet.h"
 #include "G2QHT.h"
 #include "version.h"
@@ -72,18 +73,15 @@ enum g2_connection_encodings
 typedef struct g2_connection
 {
 	struct hzp_free   hzp;
-	// System Com-Things
+	/* System Com-Things */
 	union combo_addr  remote_host;
 	uint32_t          poll_interrests;
 	int               com_socket;
 
-	// Internal States
+	/* Internal States */
 	union combo_addr  sent_addr;
-	enum g2_connection_states     connect_state;
-	enum g2_connection_encodings  encoding_in;
-	enum g2_connection_encodings  encoding_out;
 	double				time_diff;
-	// flags
+	/* flags */
 	struct
 	{
 		bool				dismissed;
@@ -102,8 +100,12 @@ typedef struct g2_connection
 		bool				second_header;
 		bool				t1;
 	} flags;
+	/* more state */
+	enum g2_connection_states     connect_state;
+	enum g2_connection_encodings  encoding_in;
+	enum g2_connection_encodings  encoding_out;
 
-	// Buffer
+	/* Buffer */
 	char						uagent[40+1];
 	char						vendor_code[4+1];
 	uint8_t					guid[16];
@@ -119,7 +121,7 @@ typedef struct g2_connection
 // TODO: WTF these arrays where supossed to? zlib buffer?
 	char						tmp1[32000], tmp2[32000];
 	
-	// Packets
+	/* Packets */
 	g2_packet_t				*build_packet;
 } g2_connection_t;
 
@@ -140,8 +142,8 @@ typedef struct
 #define MAX_HEADER_LENGTH	(NORM_BUFF_CAPACITY/2)
 #define KNOWN_HEADER_FIELDS_SUM	18
 
-//Stringconstants
-// var
+/* Stringconstants */
+/* var */
 #define GNUTELLA_CONNECT_STRING	"GNUTELLA CONNECT/0.6"
 #define GNUTELLA_STRING				"GNUTELLA/0.6"
 #define ACCEPT_G2						"application/x-gnutella2"
@@ -153,11 +155,11 @@ typedef struct
 #define STATUS_500					"500 Internal Error"
 #define STATUS_501					"501 Not Implemented"
 
-// encoding
+/* encoding */
 #define ENC_NONE_S			"none"
 #define ENC_DEFLATE_S		"deflate"
 
-// headerfields
+/* headerfields */
 #define ACCEPT_KEY			"Accept"
 #define UAGENT_KEY			"User-Agent"
 #define ACCEPT_ENC_KEY		"Accept-Encoding"
@@ -183,7 +185,7 @@ typedef struct
 #else
 #define _G2CON_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
 #define _G2CON_EXTRNVAR(x)
-#endif // _G2CONNECTION_C
+#endif /* _G2CONNECTION_C */
 
 _G2CON_EXTRNVAR(const action_string *KNOWN_ENCODINGS[];)
 _G2CON_EXTRNVAR(const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM];)
@@ -202,5 +204,5 @@ _G2CON_EXTRN(void g2_con_helgrind_transfer(g2_connection_t *) GCC_ATTR_FASTCALL)
 #define g2_con_helgrind_transfer(x)
 #endif
 
-#endif // _G2CONNECTION_H
-//EOF
+#endif /* _G2CONNECTION_H */
+/* EOF */
