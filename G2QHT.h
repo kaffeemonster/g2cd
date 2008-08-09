@@ -31,7 +31,6 @@
 #include <sys/types.h>
 #include <time.h>
 // Own
-#include "version.h"
 #include "lib/hzp.h"
 #include "lib/atomic.h"
 

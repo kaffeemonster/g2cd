@@ -2,7 +2,7 @@
  * G2ConHelper.h
  * header-file for G2ConHelper.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,16 +24,17 @@
  */
 
 #ifndef _G2CONHELPER_H
-#define _G2CONHELPER_H
+# define _G2CONHELPER_H
 
-#include "G2Connection.h"
-#include "lib/my_epoll.h"
+# include "G2Connection.h"
+# include "lib/my_epoll.h"
+# include "lib/sec_buffer.h"
 
-#ifndef _G2CONHELPERL_C
-#define _G2CONHELPER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
-#else
-#define _G2CONHELPER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
-#endif /* _G2CONHELPER_C */
+# ifndef _G2CONHELPERL_C
+#  define _G2CONHELPER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+# else
+#  define _G2CONHELPER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
+# endif /* _G2CONHELPER_C */
 
 _G2CONHELPER_EXTRN(g2_connection_t **handle_socket_abnorm(struct epoll_event *));
 _G2CONHELPER_EXTRN(bool do_read(struct epoll_event *));

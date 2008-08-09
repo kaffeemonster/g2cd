@@ -25,14 +25,12 @@
 
 #if ! defined _G2PACKET_H || defined _NEED_G2_P_TYPE
 #ifndef _G2PACKET_H
-#define _G2PACKET_H
+# define _G2PACKET_H
 
-#include <stdbool.h>
-#include "other.h"
-#define _NEED_ONLY_SERIALIZER_STATES
-#include "G2PacketSerializer.h"
-#undef _NEED_ONLY_SERIALIZER_STATES
-#include "lib/sec_buffer.h"
+# include <stdbool.h>
+# include "other.h"
+# include "G2PacketSerializerStates.h"
+# include "lib/sec_buffer.h"
 
 typedef struct g2_packet
 {
@@ -58,17 +56,17 @@ typedef struct g2_packet
 	struct pointer_buff data_trunk;
 } g2_packet_t;
 
-#ifndef _G2PACKET_C
-#define _G2PACK_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
-#define _G2PACK_EXTRNVAR(x) extern x
-#else
-#define _G2PACK_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
-#define _G2PACK_EXTRNVAR(x)
-#endif /* _G2PACKET_C */
+# ifndef _G2PACKET_C
+#  define _G2PACK_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+#  define _G2PACK_EXTRNVAR(x) extern x
+# else
+#  define _G2PACK_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
+#  define _G2PACK_EXTRNVAR(x)
+# endif /* _G2PACKET_C */
 
 _G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
-#define g2_packet_free(x) _g2_packet_free((x), true)
+# define g2_packet_free(x) _g2_packet_free((x), true)
 _G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 	
