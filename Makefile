@@ -703,8 +703,8 @@ G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h
 timeout.o: timeout.h
 #	header-deps
-G2MainServer.h: G2Connection.h lib/atomic.h
-G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h version.h
+G2MainServer.h: G2Connection.h lib/atomic.h lib/combo_addr.h
+G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/recv_buff.h lib/my_epoll.h
 G2Packet.h: lib/sec_buffer.h
 

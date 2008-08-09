@@ -160,6 +160,12 @@
 # define prefetch(x) do { } while(0)
 #endif
 
+/* 
+ * since IPv6 is in "heavy deployment", they should not suddenly
+ * change the addr len...
+ */
+#define INET6_ADDRLEN 16
+
 #ifndef HAVE_INET6_ADDRSTRLEN
 /*
  * This buffersize is needed, but we not have it everywere, even on Systems

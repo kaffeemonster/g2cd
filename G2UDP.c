@@ -54,13 +54,13 @@
 #define FLAG_CRITICAL	((~(FLAG_DEFLATE | FLAG_ACK)) & 0x0F)
 
 //internal prototypes
-static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, struct sockaddr_in *);
-static inline void handle_udp_packet(struct norm_buff *, struct sockaddr_in *);
+static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, union combo_addr *);
+static inline void handle_udp_packet(struct norm_buff *, union combo_addr *);
 //static inline bool init_memory();
-static inline bool init_con_u(int *);
-static inline void clean_up_u(int, int);
+static inline bool init_con_u(int *, union combo_addr *);
+static inline void clean_up_u(int, struct pollfd[2]);
 
-#define G2UDP_FD_SUM 2
+#define G2UDP_FD_SUM 3
 
 //data-structures
 static int out_file;
@@ -76,7 +76,7 @@ static void *G2UDP_loop(void *param)
 {
 	struct norm_buff d_hold = { .pos = 0, .limit = NORM_BUFF_CAPACITY, .capacity = NORM_BUFF_CAPACITY, .data = {0}};
 	//other variables
-	struct sockaddr_in from;
+	union combo_addr from;
 
 	while(worker.keep_going)
 	{
@@ -109,24 +109,30 @@ static void *G2UDP_loop(void *param)
 			default:
 				if(poll_me[0].revents)
 				{
-					handle_udp_sock(&poll_me[0], &d_hold, &from);
-					if(!--num_poll)
-						break;
-				}
-				if(poll_me[1].revents)
-				{
 // TODO: Check for a proper stop-sequence ??
 					/*
 					 * everything but 'ready for write' means:
 					 * we're finished...
 					 */
-					if(poll_me[1].revents & ~POLLOUT)
+					if(poll_me[0].revents & ~POLLOUT)
 						worker.keep_going = false;
 
 					/* mask out any write interrest */
-					poll_me[1].events &= ~POLLOUT;
+					poll_me[0].events &= ~POLLOUT;
 					if(!--num_poll)
 						break;				
+				}
+				if(poll_me[1].revents)
+				{
+					handle_udp_sock(&poll_me[1], &d_hold, &from);
+					if(!--num_poll)
+						break;
+				}
+				if(poll_me[2].revents)
+				{
+					handle_udp_sock(&poll_me[2], &d_hold, &from);
+					if(!--num_poll)
+						break;
 				}
 				logg_pos(LOGF_ERR, "too much in poll\n");
 				worker.keep_going = false;
@@ -144,8 +150,6 @@ static void *G2UDP_loop(void *param)
 			/* Nothing happened (or just the Timeout) */
 			case 0:
 				repoll = true;
-			//	putchar('-');
-			//	fflush(stdout);
 				break;
 			}
 		} while(repoll);
@@ -171,20 +175,34 @@ static void *G2UDP_loop(void *param)
 
 void *G2UDP(void *param)
 {
-	poll_me[1].fd = *((int *)param);
-	logg(LOGF_INFO, "UDP:\t\tOur SockFD -> %d\t\tMain SockFD -> %d\n", poll_me[1].fd, *(((int *)param)-1));
+	poll_me[0].fd = *((int *)param);
+	logg(LOGF_INFO, "UDP:\t\tOur SockFD -> %d\t\tMain SockFD -> %d\n", poll_me[0].fd, *(((int *)param)-1));
 
 	/* Setup locks */
 	if(pthread_mutex_init(&worker.lock, NULL))
 		goto out_lock;
 	if(pthread_cond_init(&worker.cond, NULL))
 		goto out_cond;
-	/* Setting up the UDP Socket */
-	if(!init_con_u(&poll_me[0].fd))
-		goto out;
-	else
 	{
 		char tmp_nam[sizeof("./G2UDPincomming.bin") + 12];
+		bool ipv4_ready;
+		bool ipv6_ready;
+
+		poll_me[2].fd = poll_me[1].fd = -1;
+		/* Setting up the UDP Socket */
+		ipv4_ready = server.settings.bind.use_ip4 ? init_con_u(&poll_me[1].fd, &server.settings.bind.ip4) : false;
+		ipv6_ready = server.settings.bind.use_ip6 ? init_con_u(&poll_me[2].fd, &server.settings.bind.ip6) : false;
+	
+		if(server.settings.bind.use_ip4 && !ipv4_ready)
+			goto out;
+		if(server.settings.bind.use_ip6 && !ipv6_ready)
+		{
+			if(ipv4_ready)
+				logg(LOGF_ERR, "Error starting IPv6, continueing, but maybe not what you want!\n");
+			else
+				goto out;
+		}
+
 		snprintf(tmp_nam, sizeof(tmp_nam), "./G2UDPincomming%lu.bin", (unsigned long)getpid());
 		if(0 > (out_file = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
 		{
@@ -194,8 +212,8 @@ void *G2UDP(void *param)
 	}
 	
 	/* Setting first entry to be polled, our UDPsocket */
-	poll_me[0].events = POLLIN | POLLERR;
-	poll_me[1].events = POLLIN;
+	poll_me[0].events = POLLIN;
+	poll_me[1].events = POLLIN | POLLERR;
 
 	worker.keep_going = true;
 //TODO: Set up other worker threads
@@ -209,13 +227,13 @@ out:
 out_cond:
 	pthread_mutex_destroy(&worker.lock);
 out_lock:
-	clean_up_u(poll_me[0].fd, poll_me[1].fd);
+	clean_up_u(poll_me[0].fd, &poll_me[1]);
 	pthread_exit(NULL);
 	/* to avoid warning about reaching end of non-void function */
 	return NULL;
 }
 
-static void handle_udp_packet(struct norm_buff *d_hold, struct sockaddr_in *from)
+static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from)
 {
 	gnd_packet_t tmp_packet;
 	char addr_buf[INET6_ADDRSTRLEN];
@@ -242,7 +260,8 @@ static void handle_udp_packet(struct norm_buff *d_hold, struct sockaddr_in *from
 	tmp_byte = *buffer_start(*d_hold);
 	d_hold->pos++;
 
-	/* according to the specs, if there is a bit
+	/*
+	 * according to the specs, if there is a bit
 	 * set in the lower nibble we can't assume
 	 * any meaning too, discard the packet
 	 */
@@ -254,7 +273,8 @@ static void handle_udp_packet(struct norm_buff *d_hold, struct sockaddr_in *from
 	tmp_packet.flags.deflate = (tmp_byte & FLAG_DEFLATE) ? true : false;
 	tmp_packet.flags.ack_me = (tmp_byte & FLAG_ACK) ? true : false;
 
-	/* get the packet-sequence-number,
+	/*
+	 * get the packet-sequence-number,
 	 * fortunately byte-sex doesn't matter the
 	 * numbers must only be diffrent or same
 	 */
@@ -281,9 +301,8 @@ static void handle_udp_packet(struct norm_buff *d_hold, struct sockaddr_in *from
 		"\n----------\nseq: %u\tpart: %u/%u\ndeflate: %s\tack_me: %s\nsa_family: %i\nsin_addr:sin_port: %s:%hu\n----------\n",
 		(unsigned)tmp_packet.sequence, (unsigned)tmp_packet.part, (unsigned)tmp_packet.count,
 		(tmp_packet.flags.deflate) ? "true" : "false", (tmp_packet.flags.ack_me) ? "true" : "false", 
-		((struct sockaddr *)from)->sa_family,
-		inet_ntop(((struct sockaddr *)from)->sa_family, &from->sin_addr, addr_buf, sizeof(addr_buf)),
-		ntohs(from->sin_port));
+		from->s_fam, combo_addr_print(from, addr_buf, sizeof(addr_buf)),
+		ntohs(combo_addr_port(from)));
 						
 		d_hold->pos += (res_byte > buffer_remaining(*d_hold)) ? buffer_remaining(*d_hold) : res_byte;
 
@@ -334,7 +353,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, struct sockaddr_in *from
 	}
 }
 
-static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_hold, struct sockaddr_in *from)
+static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_hold, union combo_addr *from)
 {
 	ssize_t result;
 	socklen_t from_len;
@@ -363,7 +382,7 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 			buffer_start(*d_hold),
 			buffer_remaining(*d_hold),
 			0,
-			(struct sockaddr *)from,
+			&from->sa,
 			&from_len);
 	} while(-1 == result && EINTR == errno);
 					
@@ -380,11 +399,9 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 			{
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %s\tFromPort: %hu\n",
-					"EOF reached!",
-					errno,
-					udp_poll->fd,
-					inet_ntop(((struct sockaddr *)from)->sa_family, &from->sin_addr, addr_buf, sizeof(addr_buf)),
-					ntohs(from->sin_port));
+					"EOF reached!", errno, udp_poll->fd,
+					combo_addr_print(from, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(from)));
 				worker.keep_going = false;
 			}
 			else
@@ -409,64 +426,62 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 	}
 }
 
-static inline bool init_con_u(int *udp_so)
+#define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
+static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 {
-	//sock-things
-	struct sockaddr_in our_addr;
-	int yes = 1; // for setsockopt() SO_REUSEADDR, below
+	const char *e;
+	int yes = 1; /* for setsockopt() SO_REUSEADDR, below */
 
-	*udp_so = socket(AF_INET, SOCK_DGRAM, 0);
-	if(-1 == *udp_so)
-	{
-		logg_errno(LOGF_ERR, "socket");
+	if(-1 == (*udp_so = socket(our_addr->s_fam, SOCK_DGRAM, 0))) {
+		logg_errno(LOGF_ERR, "creating socket");
 		return false;
 	}
 	
-	// lose the pesky "address already in use" error message
-	if(-1 == setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
-	{
-		logg_errno(LOGF_ERR, "setsockopt");
-		close(*udp_so);
-		return false;
+	/* lose the pesky "address already in use" error message */
+	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
+		OUT_ERR("setsockopt reuse");
+
+	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
+		if(setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
+			OUT_ERR("setsockopt V6ONLY");
 	}
 
-	memset(&our_addr, 0, sizeof(our_addr));
-	our_addr.sin_family = AF_INET;
-	our_addr.sin_port = server.settings.portnr_2_bind;
-	our_addr.sin_addr.s_addr = server.settings.ip_2_bind;
+	if(bind(*udp_so, &our_addr->sa, sizeof(*our_addr)))
+		OUT_ERR("bindding udp fd");
 
-	if(bind(*udp_so, (struct sockaddr *)&our_addr, sizeof(our_addr)))
-	{
-		logg_errno(LOGF_ERR, "bind");
-		close(*udp_so);
-		return false;
-	}
+	/* Get our own IP? */
+#if 0
+	socklen_t len;
+	getsockname(sock, (sockaddr *) &my_addr, &len);
+#endif
+	logg_develd_old("Port: %d\n", ntohs(combo_addr_port(our_addr)));
 
-	// Die gebundene Ip rausfinden?
-	//socklen_t len;
-	//getsockname(sock, (sockaddr *) &my_addr, &len);
-	logg_develd_old("Port: %d\n", ntohs(my_addr.sin_port));
-
-// UDP and non-blocking?? that's two points of unrelaiability,
-// no, thanks
-//	if(fcntl(*udp_so, F_SETFL, O_NONBLOCK))
-//	{
-//		logg_errno(LOGF_ERR, "udp non-blocking");
-//		close(*udp_so);
-//		return(false);
-//	}
-
+#if 0
+	/*
+	 * UDP and non-blocking?? that's two points of unrelaiability,
+	 * no, thanks
+	 */
+	if(fcntl(*udp_so, F_SETFL, O_NONBLOCK))
+		OUR_ERR("udp non-blocking");
+#endif
 	return true;
+out_err:
+		logg_errno(LOGF_ERR, e);
+		close(*udp_so);
+		*udp_so = -1;
+		return false;
 }
 
-static inline void clean_up_u(int udp_so, int who_to_say)
+static inline void clean_up_u(int who_to_say, struct pollfd udp_so[2])
 {
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
-	if(0 <= udp_so)
-		close(udp_so);
+	if(0 <= udp_so[0].fd)
+		close(udp_so[0].fd);
+	if(0 <= udp_so[1].fd)
+		close(udp_so[1].fd);
 	if(0 <= out_file)
 		close(out_file);
 

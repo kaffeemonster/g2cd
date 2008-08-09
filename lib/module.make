@@ -32,6 +32,7 @@ LIBHEADS = \
 	$(MPL)/my_epoll.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
+	$(MPL)/combo_addr.h \
 	$(MPL)/recv_buff.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \

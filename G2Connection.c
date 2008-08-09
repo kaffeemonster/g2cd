@@ -190,7 +190,7 @@ static void my_zfree(void *opaque, void *to_free)
 
 void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
-	// if theres zlib stuff, free it
+	/* if theres zlib stuff, free it */
 	if(!new)
 	{
 		if(Z_OK != inflateEnd(&work_entry->z_decoder))
@@ -218,29 +218,27 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	/*
 	 * reinitialise stuff
 	 */
-	//networking
-	work_entry->sin_size = sizeof (work_entry->remote_host);
-	work_entry->af_type = AF_INET;
+	/* networking */
 	work_entry->com_socket = -1;
 
-	// Internal States
-	work_entry->sent_addr.sin_family = AF_INET;
+	/* Internal States */
+	work_entry->sent_addr.s_fam = AF_INET;
 #if 0
-	// they are zero by coincidence, but lets shove some cycles
+	/* they are zero by coincidence, but lets shove some cycles */
 	work_entry->connect_state = UNCONNECTED;
 	work_entry->encoding_in = ENC_NONE;
 	work_entry->encoding_out = ENC_NONE;
 	work_entry->time_diff = 0.0;
 #endif
 
-	// Buffer
+	/* Buffer */
 /*	work_entry->recv.pos = 0;
 	work_entry->recv.capacity = sizeof(work_entry->recv.data);
 	work_entry->recv.limit = work_entry->recv.capacity;
 	work_entry->send.pos = 0;
 	work_entry->send.capacity = sizeof(work_entry->send.data);
 	work_entry->send.limit = work_entry->send.capacity;*/
-	// zlib
+	/* zlib */
 	work_entry->z_decoder.zalloc = work_entry->z_encoder.zalloc = my_zmalloc;
 	work_entry->z_decoder.zfree = work_entry->z_encoder.zfree =  my_zfree;
 	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
@@ -472,11 +470,12 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	strncpy(buffer, buffer_start(*to_con->recv), distance);
 	buffer[distance] = '\0';
 
-	ret_val = inet_pton(to_con->af_type, buffer, &(to_con->sent_addr.sin_addr));
+	ret_val = combo_addr_read(buffer, &to_con->sent_addr);
 	
 	if(0 < ret_val)
 	{
-		logg_develd_old("found for Remote-IP:\t%s\n", inet_ntop(to_con->af_type, &to_con->sent_addr.sin_addr, char addr_buf[INET6_ADDRSTRLEN], sizeof(addr_buf)));
+		logg_develd_old("found for Remote-IP:\t%s\n", combo_addr_print(&to_con->sent_addr,
+			char addr_buf[INET6_ADDRSTRLEN], sizeof(addr_buf)));
 		to_con->flags.addr_ok = true;
 		return false;
 	}
@@ -488,9 +487,8 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 			char addr_buf[INET6_ADDRSTRLEN];
 			logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 				"got illegal remote-ip",
-				inet_ntop(to_con->af_type, &to_con->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-				//inet_ntoa(to_con->remote_host.sin_addr),
-				ntohs(to_con->remote_host.sin_port),
+				combo_addr_print(&to_con->remote_host, addr_buf, sizeof(addr_buf)),
+				ntohs(combo_addr_port(&to_con->remote_host)),
 				to_con->com_socket);
 		}
 		else

@@ -2,7 +2,7 @@
  * config.h
  * the configurable compatibility-options
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -70,6 +70,12 @@
 
 /* do we want to use my inline-asm's */
 #define I_LIKE_ASM
+
+/* your arch a little picky bout lots of conditional branches?*/
+#if defined(__powerpc__) || defined(__powerpc64__)
+# define I_HATE_CBRANCH
+#endif
+
 
 /* this is callong for trouble, but helpfull */
 //TODO: backtrace brocken ATM

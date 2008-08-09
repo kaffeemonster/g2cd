@@ -2,7 +2,7 @@
  * G2ConHelper.c
  * G2-specific network-helper functions
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2008, Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -61,9 +61,11 @@ g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 		msg = "error in connection!";
 	if(p_entry->events & (uint32_t)EPOLLHUP)
 		msg = "HUP in connection";
-// grmpf... EPoll removes NVal-fd automagicly...
-//	if(p_entry->events & (uint32_t)POLLNVAL)
-//		msg = "NVal Socket-FD in poll_data!";
+/* 
+ * grmpf... EPoll removes NVal-fd automagicly...
+ * if(p_entry->events & (uint32_t)POLLNVAL)
+ * 	msg = "NVal Socket-FD in poll_data!";
+ */
 
 	if(!msg)
 		msg = "unknown problem";
@@ -72,9 +74,8 @@ g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 			msg,
-			inet_ntop((*w_entry)->af_type, &(*w_entry)->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-			//inet_ntoa((*w_entry)->remote_host.sin_addr),
-			ntohs((*w_entry)->remote_host.sin_port),
+			combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
+			ntohs(combo_addr_port(&(*w_entry)->remote_host)),
 			(*w_entry)->com_socket);
 /*
  * Under Linux get errno out off ERRQUEUE and print/log it
@@ -100,21 +101,18 @@ bool do_read(struct epoll_event *p_entry)
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 			"no recv buffer!",
-			inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-			//inet_ntoa(w_entry->remote_host.sin_addr),
-			ntohs(w_entry->remote_host.sin_port),
+			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+			ntohs(combo_addr_port(&w_entry->remote_host)),
 			w_entry->com_socket);
 		w_entry->flags.dismissed = true;
 		return false;
 	}
 #endif
 
-	do
-	{
+	do	{
 		errno = 0;
 		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv), buffer_remaining(*w_entry->recv), 0);
 	} while(-1 == result && EINTR == errno);
-	//(w_entry->recv.data + w_entry->recv.pos),
 
 	switch(result)
 	{
@@ -129,9 +127,8 @@ bool do_read(struct epoll_event *p_entry)
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"EOF reached!", errno,
-					inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-					//inet_ntoa(w_entry->remote_host.sin_addr),
-					ntohs(w_entry->remote_host.sin_port),
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
 					w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				ret_val = false;
@@ -165,9 +162,8 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 			"no send buffer!",
-			inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-			//inet_ntoa(w_entry->remote_host.sin_addr),
-			ntohs(w_entry->remote_host.sin_port),
+			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+			ntohs(combo_addr_port(&w_entry->remote_host)),
 			w_entry->com_socket);
 		w_entry->flags.dismmised = true;
 		ret_val = false;
@@ -175,8 +171,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 #endif
 
 	buffer_flip(*w_entry->send);
-	do
-	{
+	do	{
 		errno = 0;
 		result = send(w_entry->com_socket, w_entry->send->data, w_entry->send->limit, 0);
 	} while(-1 == result && EINTR == errno);
@@ -200,9 +195,8 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"Dismissed!",
-					inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-					//inet_ntoa(w_entry->remote_host.sin_addr),
-					ntohs(w_entry->remote_host.sin_port),
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
 					w_entry->com_socket);
 				ret_val = false;
 			}
@@ -216,9 +210,8 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"Dismissed!",
-					inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-					//inet_ntoa(w_entry->remote_host.sin_addr),
-					ntohs(w_entry->remote_host.sin_port),
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
 					w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				ret_val = false;
@@ -228,7 +221,6 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		}
 		else
 		{
-			//putchar('-');
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry))
 			{
@@ -241,17 +233,15 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"EOF reached!", errno,
-					inet_ntop(w_entry->af_type, &w_entry->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-					//inet_ntoa(w_entry->remote_host.sin_addr),
-					ntohs(w_entry->remote_host.sin_port),
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
 					w_entry->com_socket);
 				ret_val = false;
 			}
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno)
-		{
+		if(EAGAIN != errno) {
 			logg_errno(LOGF_DEBUG, "write");
 			ret_val = false;
 		}
@@ -274,7 +264,7 @@ bool recycle_con(
 	g2_connection_t **w_last = &work_cons->data[work_cons->limit-1];
 	g2_connection_t *tmp_con = *w_entry;
 
-	// remove from WorkCons
+	/* remove from WorkCons */
 	if(w_entry < w_last)
 		memmove(w_entry, (w_entry + 1), (w_last - w_entry) * sizeof(*w_entry));
 
@@ -283,16 +273,15 @@ bool recycle_con(
 
 	tmp_eevent.events = 0;
 	tmp_eevent.data.u64 = 0;
-	// remove from EPoll
+	/* remove from EPoll */
 	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, tmp_con->com_socket, &tmp_eevent))
 		logg_errno(LOGF_ERR, "removing bad socket from EPoll");
 
 	if(!keep_it)
 	{
 		int ret_val;
-		// free the fd
-		do
-		{
+		/* free the fd */
+		do {
 			ret_val = close(tmp_con->com_socket);
 		} while(ret_val && EINTR == errno);
 		if(ret_val)
@@ -300,7 +289,7 @@ bool recycle_con(
 
 		atomic_dec(&server.status.act_connection_sum);
 
-		// return datastructure to FreeCons
+		/* return datastructure to FreeCons */
 		g2_con_clear(tmp_con);
 		g2_con_ret_free(tmp_con);
 	}
@@ -319,8 +308,7 @@ bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_bu
 		{
 			logg_devel_old("allocating\n");
 			*our_buff = recv_buff_local_get();
-			if(!*our_buff)
-			{
+			if(!*our_buff) {
 				logg_pos(LOGF_WARN, "allocating recv buff failed\n");
 				return false;
 			}
@@ -356,4 +344,4 @@ void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buf
 }
 
 static char const rcsid_ch[] GCC_ATTR_USED_VAR = "$Id: G2ConHelper.c,v 1.12 2005/07/29 09:24:04 redbully Exp redbully $";
-// EOF
+/* EOF */

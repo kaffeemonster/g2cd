@@ -2,7 +2,7 @@
  * G2Connection.h
  * home of g2_connection_t and header-file for G2Connection.c
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -60,28 +60,28 @@ enum g2_connection_encodings
 };
 
 // Own
+#include "other.h"
 #include "G2Packet.h"
 #include "G2QHT.h"
 #include "version.h"
 #include "lib/sec_buffer.h"
+#include "lib/combo_addr.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
 
 typedef struct g2_connection
 {
-	struct hzp_free		hzp;
+	struct hzp_free   hzp;
 	// System Com-Things
-	struct sockaddr_in	remote_host;
-	socklen_t				sin_size;
-	uint32_t					poll_interrests;
-	int						af_type;
-	int						com_socket;
+	union combo_addr  remote_host;
+	uint32_t          poll_interrests;
+	int               com_socket;
 
 	// Internal States
-	struct sockaddr_in	sent_addr;
-	enum g2_connection_states	connect_state;
-	enum g2_connection_encodings	encoding_in;
-	enum g2_connection_encodings	encoding_out;
+	union combo_addr  sent_addr;
+	enum g2_connection_states     connect_state;
+	enum g2_connection_encodings  encoding_in;
+	enum g2_connection_encodings  encoding_out;
 	double				time_diff;
 	// flags
 	struct

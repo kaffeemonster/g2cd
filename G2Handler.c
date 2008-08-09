@@ -436,9 +436,8 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"failed to decode packet-stream",
-					inet_ntop((*w_entry)->af_type, &(*w_entry)->remote_host.sin_addr, addr_buf, sizeof(addr_buf)),
-					//inet_ntoa(w_entry->remote_host.sin_addr),
-					ntohs((*w_entry)->remote_host.sin_port),
+					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
 					(*w_entry)->com_socket);			
 				(*w_entry)->flags.dismissed = true;
 				return w_entry;

@@ -433,8 +433,14 @@ static inline void handle_config(void)
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
-	server.settings.portnr_2_bind = htons(DEFAULT_PORT);
-	server.settings.ip_2_bind = htonl(DEFAULT_ADDR);
+	server.settings.bind.ip4.s_fam = AF_INET;
+	server.settings.bind.ip4.in.sin_port = htons(DEFAULT_PORT);
+	server.settings.bind.ip4.in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
+	server.settings.bind.use_ip4 = true;
+	server.settings.bind.ip6.s_fam = AF_INET6;
+	server.settings.bind.ip6.in6.sin6_port = htons(DEFAULT_PORT);
+	server.settings.bind.ip6.in6.sin6_addr = in6addr_any;
+	server.settings.bind.use_ip6 = true;
 	server.status.our_server_upeer = DEFAULT_SERVER_UPEER;
 	server.settings.default_in_encoding = DEFAULT_ENC_IN;
 	server.settings.default_out_encoding = DEFAULT_ENC_OUT;

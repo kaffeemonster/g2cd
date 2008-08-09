@@ -40,6 +40,7 @@
 static always_inline int get_act_loglevel(void);
 #include "G2Connection.h"
 #include "G2Packet.h"
+#include "lib/combo_addr.h"
 #include "lib/atomic.h"
 #include "lib/log_facility.h"
 
@@ -93,8 +94,13 @@ _G2MAIN_EXTRNVAR(struct
 				bool add_date_time;
 				const char *time_date_format;
 			} logging;
-			in_port_t portnr_2_bind;
-			in_addr_t ip_2_bind;
+			struct
+			{
+				union combo_addr ip4;
+				union combo_addr ip6;
+				bool use_ip4;
+				bool use_ip6;
+			} bind;
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;
 			size_t default_max_g2_packet_length;

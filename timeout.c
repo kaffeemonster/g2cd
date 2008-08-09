@@ -82,30 +82,61 @@ static always_inline unsigned long usec2nsec(unsigned long usec)
 
 static always_inline int delta2index(long delta)
 {
-	int i;
+#ifndef I_HATE_CBRANCH
+	int res;
 
 	if(delta <= 0)
-		i = 0;
+		res = 0;
 	else if(delta <= 5)
-		i = 1;
+		res = 1;
 	else if(delta <= 12)
-		i = 2;
+		res = 2;
 	else if(delta <= 25)
-		i = 3;
+		res = 3;
 	else if(delta <= 45)
-		i = 4;
+		res = 4;
 	else if(delta <= 60)
-		i = 5;
+		res = 5;
 	else if(delta <= 120)
-		i = 6;
+		res = 6;
 	else if(delta <= 180)
-		i = 7;
+		res = 7;
 	else if(delta <= 300)
-		i = 8;
+		res = 8;
 	else
-		i = 9;
+		res = 9;
 
-	return i;
+	return res;
+#else
+	/* 
+	 * PPC doesn't like conditional jumps and lots of
+	 * cmps are also harmfull (updating FLAGS is microcoded
+	 * and microcode is bad implemented...)
+	 */
+	unsigned long x_lt;
+	unsigned long res;
+
+	x_lt = (unsigned long)((d - 301) >> (BPL-1));
+	res = (x_lt & 8) | (~x_lt & 9);
+	x_lt = (unsigned long)((d - 181) >> (BPL-1));
+	res = (x_lt & 7) | (~x_lt & res);
+	x_lt = (unsigned long)((d - 121) >> (BPL-1));
+	res = (x_lt & 6) | (~x_lt & res);
+	x_lt = (unsigned long)((d -  61) >> (BPL-1));
+	res = (x_lt & 5) | (~x_lt & res);
+	x_lt = (unsigned long)((d -  46) >> (BPL-1));
+	res = (x_lt & 4) | (~x_lt & res);
+	x_lt = (unsigned long)((d -  26) >> (BPL-1));
+	res = (x_lt & 3) | (~x_lt & res);
+	x_lt = (unsigned long)((d -  13) >> (BPL-1));
+	res = (x_lt & 2) | (~x_lt & res);
+	x_lt = (unsigned long)((d -   6) >> (BPL-1));
+	res = (x_lt & 1) | (~x_lt & res);
+	x_lt = (unsigned long)((d -   1) >> (BPL-1));
+	res = (x_lt & 0) | (~x_lt & res);
+
+	return (int) res;
+#endif
 }
 
 static always_inline long timespec_delta_sec(struct timespec *a, struct timespec *b)

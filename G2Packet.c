@@ -473,17 +473,14 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct norm
 
 static bool handle_LNI_HS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
-	uint16_t akt_leaf, max_leaf;
-	if(4 <= buffer_remaining(source->data_trunk))
-	{
+	uint16_t akt_leaf = 0, max_leaf = 0;
+	size_t rem = buffer_remaining(source->data_trunk);
+
+	/* sometimes Shareaza only sends 2 bytes, thats only the leaf count */
+	if(2 <= rem)
 		get_unaligned_endian(akt_leaf, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
+	if(4 <= rem)
 		get_unaligned_endian(max_leaf, (uint16_t *) (buffer_start(source->data_trunk)+2), source->big_endian);
-	}
-	else
-	{
-		akt_leaf = 0;
-		max_leaf = 0;
-	}
 
 	logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
 			connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
@@ -508,28 +505,45 @@ static bool handle_LNI_GU(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 
 static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
-	if(6 == buffer_remaining(source->data_trunk))
+	size_t rem = buffer_remaining(source->data_trunk);
+	uint16_t	tmp_port;
+
+	if(6 != rem && 18 != rem)
 	{
-		uint16_t	tmp_port;
+		logg_packet(STDLF, "/LNI/NA", "NA not an IPv4 or IPv6 address");
+		return false;
+	}
+
+	if(6 == rem)
+	{
+		connec->sent_addr.s_fam = AF_INET;
 		/* 
 		 * the addr comes in network byteorder over the wire, when we only load and store it,
 		 * result should be in network byteorder again.
 		 */
-		get_unaligned(connec->sent_addr.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
+		get_unaligned(connec->sent_addr.in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
 
-		/* load port and fix it for those, who sent it wrong way round */
-		get_unaligned_endian(tmp_port, (uint16_t *) (buffer_start(source->data_trunk)+4), source->big_endian);
-		connec->sent_addr.sin_port = tmp_port;
-
-		{
-			char addr_buf[INET6_ADDRSTRLEN];
-			logg_packet("/LNI/NA:\t%s:%hu\n", inet_ntop(connec->af_type, &connec->sent_addr.sin_addr, addr_buf, sizeof(addr_buf)), ntohs(connec->sent_addr.sin_port));
-		}
+		source->data_trunk.pos += 4;
 	}
-	else if(18 == buffer_remaining(source->data_trunk))
-		logg_packet(STDLF, "/LNI/NA", "NA could be an IPv6 address -> TODO");
 	else
-		logg_packet(STDLF, "/LNI/NA", "NA not an IPv4 address");
+	{
+		connec->sent_addr.s_fam = AF_INET6;
+		/*
+		 * Assume network byte order
+		 */
+		memcpy(&connec->sent_addr.in6.sin6_addr.s6_addr,buffer_start(source->data_trunk), INET6_ADDRLEN);
+
+		source->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	/* load port and fix it for those, who sent it wrong way round */
+	get_unaligned_endian(tmp_port, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
+	connec->sent_addr.in.sin_port = tmp_port;
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+		logg_packet("/LNI/NA:\t%s:%hu\n", combo_addr_print(&connec->sent_addr,
+			addr_buf, sizeof(addr_buf)), ntohs(combo_addr_port(&connec->sent_addr)));
+	}
 	
 	return false;
 }
