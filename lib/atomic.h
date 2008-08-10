@@ -123,24 +123,37 @@ typedef union xxxxxx4
 #  include "generic/atomic.h"
 # endif
 
+# ifndef ATOMIC_PUSH_ARCH
 static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
-	void *tmp;
-	do
-		tmp = deatomic(node->next = atomic_sread(head));
-	while(atomic_cmpalx(node, tmp, head) != tmp);
+	void *tmp1, *tmp2;
+	tmp2 = deatomic(atomic_sread(head));
+	do {
+		node->next = tmp2;
+		tmp1 = tmp2;
+		tmp2 = atomic_cmpalx(node, tmp2, head);
+	} while(unlikely(tmp1 != tmp2));
 }
+# endif
 
 static always_inline atomicst_t *atomic_pop(atomicst_t *head)
 {
-	atomicst_t *ret_val, *tmp;
+	atomicst_t *tmp1, *tmp2;
+	if(!(tmp2 = deatomic(atomic_sread(head))))
+		return NULL;
 	do
 	{
-		if(!(tmp = deatomic(atomic_sread(head))))
-			return NULL;
-	} while((ret_val = atomic_cmpalx(atomic_sread(tmp), tmp, head)) != tmp);
-	/* ABA race */
-	return ret_val;
+		tmp1 = tmp2;
+		tmp2 = atomic_cmpalx(atomic_sread(tmp2), tmp2, head);
+		if(!tmp2)
+			break;
+	} while(unlikely(tmp1 != tmp2));
+	/* 
+	 * We may now have poped the "wrong" element
+	 * If you wanted simply the next, everthing is OK
+	 * If you wanted THIS element, oops
+	 */
+	return tmp2;
 }
 
 #endif /* LIB_ATOMIC_H */

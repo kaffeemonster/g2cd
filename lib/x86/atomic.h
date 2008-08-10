@@ -89,6 +89,28 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 	return prev;
 }
 
+static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
+{
+	void *prev, *tmp;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"mov	%0, %3\n\t"
+		"mov	%0, %2\n\t"
+		LOCK "cmpxchg %4,%5\n\t"
+		"cmp	%0, %2\n\t"
+		"jne	1b\n"
+		: /* %0 */ "=a"(prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_sread(head)),
+		  /* %2 */ "=&r" (tmp),
+		  /* %3 */ "=m" (atomic_sread(node))
+		: /* %4 */ "r"(node),
+		  /* %5 */ "m"(atomic_sread(head)),
+		  /* %6 */ "0"(atomic_sread(head))
+		: "cc");
+}
+# define ATOMIC_PUSH_ARCH
+
 static always_inline void atomic_inc(atomic_t *ptr)
 {
 	__asm__ __volatile__(

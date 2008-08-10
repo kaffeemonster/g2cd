@@ -113,29 +113,31 @@ static always_inline int delta2index(long delta)
 	 * cmps are also harmfull (updating FLAGS is microcoded
 	 * and microcode is bad implemented...)
 	 */
+# define BPL (sizeof(long)*BITS_PER_CHAR)
 	unsigned long x_lt;
 	unsigned long res;
 
-	x_lt = (unsigned long)((d - 301) >> (BPL-1));
+	x_lt = (unsigned long)((delta - 301) >> (BPL-1));
 	res = (x_lt & 8) | (~x_lt & 9);
-	x_lt = (unsigned long)((d - 181) >> (BPL-1));
+	x_lt = (unsigned long)((delta - 181) >> (BPL-1));
 	res = (x_lt & 7) | (~x_lt & res);
-	x_lt = (unsigned long)((d - 121) >> (BPL-1));
+	x_lt = (unsigned long)((delta - 121) >> (BPL-1));
 	res = (x_lt & 6) | (~x_lt & res);
-	x_lt = (unsigned long)((d -  61) >> (BPL-1));
+	x_lt = (unsigned long)((delta -  61) >> (BPL-1));
 	res = (x_lt & 5) | (~x_lt & res);
-	x_lt = (unsigned long)((d -  46) >> (BPL-1));
+	x_lt = (unsigned long)((delta -  46) >> (BPL-1));
 	res = (x_lt & 4) | (~x_lt & res);
-	x_lt = (unsigned long)((d -  26) >> (BPL-1));
+	x_lt = (unsigned long)((delta -  26) >> (BPL-1));
 	res = (x_lt & 3) | (~x_lt & res);
-	x_lt = (unsigned long)((d -  13) >> (BPL-1));
+	x_lt = (unsigned long)((delta -  13) >> (BPL-1));
 	res = (x_lt & 2) | (~x_lt & res);
-	x_lt = (unsigned long)((d -   6) >> (BPL-1));
+	x_lt = (unsigned long)((delta -   6) >> (BPL-1));
 	res = (x_lt & 1) | (~x_lt & res);
-	x_lt = (unsigned long)((d -   1) >> (BPL-1));
+	x_lt = (unsigned long)((delta -   1) >> (BPL-1));
 	res = (x_lt & 0) | (~x_lt & res);
 
 	return (int) res;
+# undef BPL
 #endif
 }
 

@@ -2,7 +2,7 @@
 #
 # G2CD-Makefile
 # uhm, and a nice example how a Makefile can look like, when
-# not autogenarated
+# not autogerated
 #
 # Copyright (c) 2004 - 2008 Jan Seiffert
 #

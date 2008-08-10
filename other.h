@@ -155,6 +155,12 @@
 #endif
 
 #if _GNUC_PREREQ (3,1)
+# define noinline GCC_ATTRIB(__noinline__)
+#else
+# define noinline
+#endif
+
+#if _GNUC_PREREQ (3,1)
 # define prefetch(x) __builtin_prefetch(x)
 #else
 # define prefetch(x) do { } while(0)

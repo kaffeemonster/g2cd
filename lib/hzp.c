@@ -58,7 +58,7 @@ static atomic_t nr_free;
 static void hzp_init(void) GCC_ATTR_CONSTRUCT;
 static void hzp_deinit(void) GCC_ATTR_DESTRUCT;
 static void hzp_free(void *dt_hzp);
-static inline struct hzp *hzp_alloc_intern(void);
+static struct hzp *hzp_alloc_intern(void);
 
 /*
  * hzp_init - init hzp
@@ -101,7 +101,7 @@ bool hzp_alloc(void)
 	return hzp_alloc_intern() ? true : false;
 }
 
-static inline struct hzp *hzp_alloc_intern(void)
+static noinline struct hzp *hzp_alloc_intern(void)
 {
 	struct hzp *new_hzp = calloc(1, sizeof(*new_hzp));
 	if(!new_hzp)
@@ -116,6 +116,9 @@ static inline struct hzp *hzp_alloc_intern(void)
 		logg_errno(LOGF_CRIT, "hzp key not initilised?");
 		return NULL;
 	}
+	
+	if(!new_hzp)
+		logg_errno(LOGF_ALERT, "thread with no hzp, couldn't get one, were doomed!!");
 
 	return new_hzp;
 }
@@ -145,17 +148,10 @@ void hzp_ref(enum hzps key, void *new_ref)
 {
 	struct hzp *t_hzp = pthread_getspecific(key2hzp);
 
-	if(!t_hzp)
-	{
-		if(!(t_hzp = hzp_alloc_intern()))
-		{
-			logg_errno(LOGF_ALERT, "thread with no hzp, couldn't get one, were doomed!!");
+	if(!t_hzp && !(t_hzp = hzp_alloc_intern()))
 			return;
-		}
-	}
 
-	if(HZP_MAX <= key)
-	{
+	if(unlikely(HZP_MAX <= key)) {
 		logg_errno(LOGF_CRIT, "thread with wrong hzp key?!");
 		return;
 	}
@@ -220,19 +216,18 @@ struct hzp_fs
 	void *ptr;
 };
 
-static inline void hzp_fs_push(struct hzp_fs *head, struct hzp_fs *new)
+static inline void hzp_fs_push(struct hzp_fs *head, struct hzp_fs *new, void *data)
 {
+	new->ptr = data;
 	new->next = head->next;
 	head->next = new;
 }
 
 static inline bool hzp_fs_contains(struct hzp_fs *head, const void *data)
 {
-	while(head)
-	{
+	for(; head; head = head->next) {
 		if(head->ptr == data)
 			return true;
-		head = head->next;
 	}
 	return false;
 }
@@ -244,57 +239,53 @@ static inline bool hzp_fs_contains(struct hzp_fs *head, const void *data)
  */
 int hzp_scan(int threshold)
 {
-	atomicst_t thead = ATOMIC_INIT(NULL), mhead = ATOMIC_INIT(NULL);
-	atomicst_t *whead = NULL;
+	atomicst_t mhead;
+	atomicst_t *whead = NULL, *thead = NULL;
 	struct hzp_fs *uhead = NULL;
 	int freed = 0;
 
 	if(threshold > atomic_read(&nr_free))
 		return 0;
 
-	/* get all to free entrys */
-	atomic_pxs(&mhead.next, &hzp_freelist.head);
-	atomic_set(&nr_free, 0);
-
-	if(!atomic_sread(&mhead))
+	/* get all to free entrys, remove from atomic context */
+	whead = atomic_pxs(NULL, &hzp_freelist.head);
+	if(!whead)
 		return 0;
+	atomic_set(&nr_free, 0);
+	mhead.next = whead;
 
 	/* gather list of used mem */
-	thead.next = atomic_sread(&hzp_threads.head);
-	whead = &thead;
+	whead = deatomic(&hzp_threads.head);
 	while(atomic_sread(whead))
 	{
 		int i;
 		struct hzp *entry = container_of(deatomic(atomic_sread(whead)), struct hzp, lst);
 		if(entry->flags.used)
 		{
-			for(i = 0; i < HZP_MAX; i++)
-			{
-				void *hptr = deatomic(entry->ptr[i]);
-				if(hptr)
-				{
-					struct hzp_fs *tmp = alloca(sizeof(*tmp));
-					tmp->ptr = hptr;
-					hzp_fs_push(uhead, tmp);
-				}
+			for(i = 0; i < HZP_MAX; i++) {
+				if(deatomic(entry->ptr[i]))
+					hzp_fs_push(uhead, alloca(sizeof(*uhead)), deatomic(entry->ptr[i]));
 			}
 			/* shut up, we want to travers the list... */
 			whead = deatomic(atomic_sread(whead));
 		}
 		else
 		{
+			atomicst_t *x = atomic_pop(whead);
 			logg_develd("unused hzp entry: %p\t%p\t%p, trying to free....\n",
-				(void *)whead, deatomic(atomic_sread(whead)), (void *)entry);
-			free(atomic_pop(whead));
+				(void *)x, (void *)whead, (void *)entry);
+			free(x);
 		}
 	}
 
 	/* check gathered list against our to-free list */
-	while((whead = atomic_pop(&mhead)))
+	for(whead = deatomic(atomic_sread(&mhead)), thead = whead ? deatomic(atomic_sread(whead)) : NULL;
+	    whead; whead = thead, thead = thead ? deatomic(atomic_sread(thead)) : NULL)
 	{
 		struct hzp_free *mentry = container_of(whead, struct hzp_free, st);
 		if(hzp_fs_contains(uhead, mentry->data))
 		{
+			/* readd to atomic context */
 			atomic_push(&hzp_freelist.head, whead);
 			atomic_inc(&nr_free);
 		}
