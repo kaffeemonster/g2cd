@@ -71,7 +71,7 @@ static inline void stat_packet(g2_packet_t *x, int level)
 	*pr_ptr++ = '\n'; *pr_ptr = '\0';
 
 	for(i = level; i; i--) str_app(pr_ptr, "   +");
-	pr_ptr += sprintf(pr_ptr, "-Type: \"%s\"\tlength: %u\n", x->type, x->length);
+	pr_ptr += sprintf(pr_ptr, "-Type: \"%s\"\tlength: %u\n", g2_ptype_names[x->type], x->length);
 	for(i = level; i; i--) str_app(pr_ptr, "   +");
 	pr_ptr += sprintf(pr_ptr, "-ll: %hhu\ttl: %hhu\n", x->length_length, x->type_length);
 	for(i = level; i; i--) str_app(pr_ptr, "   +");
@@ -189,16 +189,18 @@ static inline int read_length(struct norm_buff *source, g2_packet_t *target, siz
 
 static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 {
+	char type_str[16]; /* 8 + 1 */
+	type_str[0] = '\0';
+
 	/* fetch the up to eigth type-bytes */
-	if(target->type_length > buffer_remaining(*source))
-	{
+	if(target->type_length > buffer_remaining(*source)) {
 		target->more_bytes_needed = true;
 		return 0;
 	}
 
 	if(target->type_length)
 	{
-		char *w_ptr = target->type;
+		char *w_ptr = type_str;
 		size_t i;
 		for(i = target->type_length; i; i--, w_ptr++, source->pos++)
 		{
@@ -207,21 +209,19 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	 * A *VERY* simple test if the packet-type is legal,
 	 * hopefully we can detect de-sync-ing of the stream with this
 	 */
-			if(!isgraph((int)*w_ptr))
-			{
-				logg_devel("packet with bogus type-name\n");
+			if(!isgraph((int)*w_ptr)) {
+				logg_devel("packet with bogus/ugly type-name\n");
 				return -1;
 			}
 		}
 
 		*w_ptr = '\0';
-	}
-	else
-	{
-		/* Illegal Packet... */
+	} else { /* Illegal Packet... */
 		logg_devel("packet with 0 type-length\n");
 		return -1;
 	}
+
+	g2_packet_find_type(target, type_str);
 
 	target->packet_decode++;
 	return 1;

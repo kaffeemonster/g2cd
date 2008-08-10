@@ -142,6 +142,7 @@ OPT_FLAGS += -ffast-math
 #OPT_FLAGS += -fomit-frame-pointer
 #	gcc >= 3.x and supported for target (-march ?)
 OPT_FLAGS += -fprefetch-loop-arrays
+OPT_FLAGS += -fpeel-loops
 OPT_FLAGS += -funroll-loops
 #	gcc >= 3.4? we want this and not the above
 #OPT_FLAGS += -fold-unroll-loops
@@ -162,7 +163,7 @@ OPT_FLAGS += -funswitch-loops
 #OPT_FLAGS += -ftree-loop-ivcanon
 #OPT_FLAGS += -fivopts
 # hmmm, breaks in memxor...
-#OPT_FLAGS += -ftree-vectorize
+OPT_FLAGS += -ftree-vectorize
 OPT_FLAGS += -freorder-blocks-and-partition
 #OPT_FLAGS += -fmove-loop-invariants
 OPT_FLAGS += -fbranch-target-load-optimize

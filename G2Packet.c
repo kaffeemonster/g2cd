@@ -348,6 +348,245 @@ static const g2_p_type_t HAW_packet_dict[] = {
 	PT_TERM
 };
 
+#define ENUM_CMD(x) str_it(x)
+const char *const g2_ptype_names[] = 
+{
+	G2_PACKET_TYPES
+};
+#undef ENUM_CMD
+
+#define PT_T \
+	{ .c = 0, .u = { .t = PT_UNKNOWN }}
+#define PT_E(x) \
+	{ .c = '\0', .u = { .t = x }}
+#define PT_N(x, y) \
+	{ .c = x, .u = { .d = y}}
+
+static const struct 
+{
+	const char c;
+	union
+	{
+		const enum g2_ptype t;
+		const unsigned char d;
+	} u;
+} g2_ptype_state_table[] = {
+/* CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC */
+[  0] =	PT_N('H', 2), /* CH */
+[  1] =	PT_T,
+[  3] =		PT_E(PT_CH), /* CH0 */
+[  4] =		PT_T,
+/* FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF */
+[  5] =	PT_N('W', 2), /* FW */
+[  6] =	PT_T,
+[  7] =		PT_E(PT_FW), /* FW0 */
+[  8] =		PT_T,	
+/* GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG */
+[  9] =	PT_N('U', 3), /* GU */
+[ 10] =	PT_N('2', 4), /* G2 */
+[ 11] =	PT_T,
+[ 12] =		PT_E(PT_GU), /* GU0 */
+[ 13] =		PT_T,
+[ 14] =		PT_N('C', 2), /* G2C */
+[ 15] =		PT_T,
+[ 16] =			PT_N('D', 2), /* G2CD */
+[ 17] =			PT_T,
+[ 18] =				PT_N('C', 2), /* G2CDC */
+[ 19] =				PT_T,
+[ 20] =					PT_E(PT_G2CDC), /* G2CDC0 */
+[ 21] =					PT_T,
+/* HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH */
+[ 22] =	PT_N('S', 3), /* HS */
+[ 23] =	PT_N('A', 4), /* HA */
+[ 24] =	PT_T,
+[ 25] =		PT_E(PT_HS), /* HS0 */
+[ 26] =		PT_T,
+[ 27] =		PT_N('W', 2), /* HAW */
+[ 28] =		PT_T,
+[ 29] =			PT_E(PT_HAW), /* HAW0 */
+[ 30] =			PT_T,
+/* KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK */
+[ 31] =	PT_N('H', 2), /* KH */
+[ 32] =	PT_T,
+[ 33] =		PT_N('L', 2), /* KHL */
+[ 34] =		PT_T,
+[ 35] =			PT_E(PT_KHL), /* KHL0 */
+[ 36] =			PT_T,
+/* LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL */
+[ 37] =	PT_N('N', 3), /* LN */
+[ 38] =	PT_N('S', 6), /* LS */
+[ 39] =	PT_T,
+[ 40] =		PT_N('I', 2), /* LNI */
+[ 41] =		PT_T,
+[ 42] =			PT_E(PT_LNI), /* LNI0 */
+[ 43] =			PT_T,
+[ 44] =		PT_E(PT_LS), /* LS0 */
+[ 45] =		PT_T,
+/* NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN */
+[ 46] =	PT_N('A', 3), /* NA */
+[ 47] =	PT_N('H', 4), /* NH */
+[ 48] =	PT_T,
+[ 49] =		PT_E(PT_NA), /* NA0 */
+[ 50] =		PT_T,
+[ 51] =		PT_E(PT_NH), /* NH0 */
+[ 52] =		PT_T,
+/* PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP */
+[ 53] =	PT_N('I', 3), /* PI */
+[ 54] =	PT_N('O', 4), /* PO */
+[ 55] =	PT_T,
+[ 56] =		PT_E(PT_PI), /* PI0 */
+[ 57] =		PT_T,
+[ 58] =		PT_E(PT_PO), /* PO0 */
+[ 59] =		PT_T,
+/* QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ */
+[ 60] =	PT_N('H', 3), /* QH */
+[ 61] =	PT_N('K', 6), /* QK */
+[ 62] =	PT_T,
+[ 63] =		PT_N('T', 2), /* QHT */
+[ 64] =		PT_T,
+[ 65] =			PT_E(PT_QHT), /* QHT0 */
+[ 66] =			PT_T,
+[ 67] =		PT_E(PT_QK), /* QK0 */
+[ 68]	=		PT_N('A', 3), /* QKA */
+[ 69]	=		PT_N('R', 4), /* QKR */
+[ 70] =		PT_T,
+[ 71] =			PT_E(PT_QKA), /* QKA0 */
+[ 72] =			PT_T,
+[ 73] =			PT_E(PT_QKR), /* QKR0 */
+[ 74] =			PT_T,
+/* RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR */
+[ 75] =	PT_N('E', 5), /* RE */
+[ 76] =	PT_N('G', 6), /* RG */
+[ 77]	=	PT_N('L', 7), /* RL */
+[ 78]	=	PT_N('N', 8), /* RN */
+[ 79] =	PT_T,
+[ 80] =		PT_N('X', 8), /* REX */
+[ 81] =		PT_T,
+[ 82] =		PT_N('P', 8), /* RGP */
+[ 83] =		PT_T,
+[ 84] =		PT_N('E', 8), /* RLE */
+[ 85] =		PT_T,
+[ 86] =		PT_N('A', 8), /* RNA */
+[ 87]	=		PT_T,
+[ 88]	=			PT_N('T', 8), /* REXT */
+[ 89] =			PT_T,
+[ 90] =			PT_N('S', 8), /* RGPS */
+[ 91] =			PT_T,
+[ 92] =			PT_N('A', 8), /* RLEA */
+[ 93] =			PT_T,
+[ 94] =			PT_N('M', 8), /* RNAM */
+[ 95] =			PT_T,
+[ 96] =				PT_E(PT_REXT), /* REXT0 */
+[ 97]	=				PT_T,
+[ 98]	=				PT_E(PT_RGPS), /* RGPS0 */
+[ 99] =				PT_T,
+[100] =				PT_N('F', 4), /* RLEAF */
+[101] =				PT_T,
+[102]	=				PT_N('E', 4), /* RNAME */
+[103]	=				PT_T,
+[104] =					PT_E(PT_RLEAF), /* RLEAF0 */
+[105] =					PT_T,
+[106] =					PT_E(PT_RNAME), /* RNAME0 */
+[107] =					PT_T,
+/* TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT */
+[108] =	PT_N('S', 2), /* TS */
+[109] =	PT_T,
+[110] =		PT_E(PT_TS), /* TS0 */
+[111]	=		PT_T,
+/* UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU */
+[112] =	PT_N('P', 2), /* UP */
+[113] =	PT_T,
+[114] =		PT_N('R', 2), /* UPR */
+[115] =		PT_T,
+[116] =				PT_N('O', 2), /* UPRO */
+[117] =				PT_T,
+[118] =					PT_N('C', 3), /* UPROC */
+[119] = 					PT_N('D', 4), /* UPROD */
+[120]	=					PT_T,
+[121]	=						PT_E(PT_UPROC), /* UPROC0 */
+[122] =						PT_T,
+[123] =						PT_E(PT_UPROD), /* UPROD0 */
+[124] =						PT_T,
+/* VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV */
+[125] =	PT_E(PT_V), /* V0 */
+[126] =	PT_T,
+};
+
+static const unsigned char g2_ptype_dict_table[256] =
+{
+	/*       00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, */
+	/* 00 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*      NUL,SOH,STX,ETX,EOT,ENQ,ACK,BEL, BS, HT, LF, VT, FF, CR, SO, SI, */
+	/* 10 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*      DLE,DC1,DC2,DC3,DC4,NAK,SYN,ETB,CAN, EM,SUB,ESC, FS, GS, RS, US, */
+	/* 20 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*      SPC,  !,  ",  #,  $,  %,  &,  '   (,  ),  *,  +,  ,,  -,  .,  /, */
+	/* 30 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*        0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  :,  ;,  <,  =,  >,  ?, */
+	/* 40 */ -1, -1, -1,  0, -1, -1,  5,  9, 22, -1, -1, 31, 37, -1, 46, -1,
+	/*        @,  A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O, */
+	/* 50 */ 53, 60, 75, -1,108,112,125, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*        P,  Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z,  [,  \,  ],  ^,  _, */
+	/* 60 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*        `,  a,  b,  c,  d,  e,  f,  g,  h,  i,  j,  k,  l,  m,  n,  o, */
+	/* 70 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*        p,  q,  r,  s,  t,  u,  v,  w,  x,  y,  z,  {,  |   },  ~,DEL, */
+	/* 80 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* 90 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* A0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* B0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* C0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* D0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* E0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+	/* F0 */ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */
+};
+
+void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
+{
+	unsigned char i = g2_ptype_dict_table[(unsigned char)type_str[0]];
+	unsigned int j = 1;
+
+	prefetch(&g2_ptype_state_table[i]);
+	packet->type = PT_UNKNOWN;
+	if(unlikely((unsigned char)-1 == i))
+		goto out;
+
+	do
+	{
+		const char match = g2_ptype_state_table[i].c;
+		logg_develd_old("\tm: '%c', '%c', %i, %i\n", match ? : '0',
+			type_str[j] ? : '0', i, g2_ptype_state_table[i].u.d);
+		if(type_str[j] == match)
+		{
+			if(0 == match) {
+				packet->type = g2_ptype_state_table[i].u.t;
+				break;;
+			}
+			i += g2_ptype_state_table[i].u.d;
+			j++;
+		}
+		else
+		{
+			i++;
+			if(0 == g2_ptype_state_table[i].c &&
+			   PT_UNKNOWN == g2_ptype_state_table[i].u.t)
+				break;
+		}
+	} while(j < sizeof(type_str) && type_str[j]);
+
+out:
+	if(PT_UNKNOWN == packet->type)
+		logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\"\tC: %s\n", type_str, packet->is_compound ? "true" : "false");
+}
+
 /*
  * prebuild packets
  */
@@ -359,7 +598,9 @@ static const char packet_uproc[]	= { 0x20, 'U', 'P', 'R', 'O', 'C' };
 #define STDSF	"%s\n"
 #define STDLF	"%s -> /%s\n"
 
-// funktions
+/*
+ * functions
+ */
 static bool empty_action_p(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct norm_buff *, target))
 {
 	return false;
@@ -862,9 +1103,8 @@ void g2_packet_clean(g2_packet_t *to_clean)
 
 bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, const g2_p_type_t *work_type, g2_packet_t *packs)
 {
-	char *to_match = packs->type;
+	const char *to_match = g2_ptype_names[packs->type];
 	bool ret_val = false;
-	bool done = false;
 
 	do
 	{
@@ -872,17 +1112,16 @@ bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, co
 		{
 			if(work_type->last)
 			{
-				done = true;
 				if(work_type->found.action)
 				{
 					if(empty_action_p == work_type->found.action)
-						logg_packet("*/%s\tC: %s -> ignored\n", packs->type, packs->is_compound ? "true" : "false");
+						logg_packet("*/%s\tC: %s -> ignored\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 					else
-						logg_packet("*/%s\tC: %s\n", packs->type, packs->is_compound ? "true" : "false");
+						logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 					ret_val |= work_type->found.action(connec, packs, target);
 				}
 				else
-					logg_packet("*/%s\tC: %s -> No action\n", packs->type, packs->is_compound ? "true" : "false");
+					logg_packet("*/%s\tC: %s -> No action\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 
 				break;
 			}
@@ -894,9 +1133,6 @@ bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, co
 		else
 			work_type++;
 	} while(!work_type->term);
-
-	if(!done)
-		logg_packet("*/%s\tC: %s -> Unknown, undecoded: %s\n", packs->type, packs->is_compound ? "true" : "false", to_match);
 
 	return ret_val;
 }

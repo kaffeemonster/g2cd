@@ -32,26 +32,64 @@
 # include "G2PacketSerializerStates.h"
 # include "lib/sec_buffer.h"
 
+#define G2_PACKET_TYPES \
+	ENUM_CMD( UNKNOWN ), \
+	ENUM_CMD( KHL     ), \
+	ENUM_CMD( LNI     ), \
+	ENUM_CMD( PI      ), \
+	ENUM_CMD( PO      ), \
+	ENUM_CMD( QHT     ), \
+	ENUM_CMD( UPROC   ), \
+	ENUM_CMD( UPROD   ), \
+	ENUM_CMD( QKR     ), \
+	ENUM_CMD( QKA     ), \
+	ENUM_CMD( HAW     ), \
+	ENUM_CMD( CRAWLA  ), \
+	ENUM_CMD( CRAWLR  ), \
+	ENUM_CMD( G2CDC   ), \
+	ENUM_CMD( TS      ), \
+	ENUM_CMD( NA      ), \
+	ENUM_CMD( HS      ), \
+	ENUM_CMD( LS      ), \
+	ENUM_CMD( GU      ), \
+	ENUM_CMD( V       ), \
+	ENUM_CMD( NH      ), \
+	ENUM_CMD( CH      ), \
+	ENUM_CMD( QK      ), \
+	ENUM_CMD( FW      ), \
+	ENUM_CMD( RLEAF   ), \
+	ENUM_CMD( RNAME   ), \
+	ENUM_CMD( RGPS    ), \
+	ENUM_CMD( REXT    ), \
+	ENUM_CMD( MAXIMUM )
+
+#define ENUM_CMD(x) PT_##x
+enum g2_ptype
+{
+	G2_PACKET_TYPES
+} GCC_ATTR_PACKED;
+#undef ENUM_CMD
+
 typedef struct g2_packet
 {
 	/* internal state */
-	size_t	length;
+	size_t   length;
 	enum g2_packet_decoder_states packet_decode;
 	enum g2_packet_encoder_states packet_encode;
-	uint8_t	length_length;
-	uint8_t	type_length;
-	bool		more_bytes_needed;
-	bool		source_needs_compact;
+	uint8_t  length_length;
+	uint8_t  type_length;
+	bool     more_bytes_needed;
+	bool     source_needs_compact;
 
 	/* packet-data */
-	bool		child_is_freeable;
 	struct g2_packet *children;
-	size_t	num_child;
-	char		type[16]; /* 8+1; */
-	bool		big_endian;
-	bool		is_compound;
-	bool		c_reserved;
-	bool		data_trunk_is_freeable;
+	size_t   num_child;
+	bool     child_is_freeable;
+	enum g2_ptype type;
+	bool     big_endian;
+	bool     is_compound;
+	bool     c_reserved;
+	bool     data_trunk_is_freeable;
 
 	struct pointer_buff data_trunk;
 } g2_packet_t;
@@ -69,6 +107,8 @@ _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
 # define g2_packet_free(x) _g2_packet_free((x), true)
 _G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
+_G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));
+_G2PACK_EXTRNVAR(const char *const g2_ptype_names[PT_MAXIMUM]);
 	
 #endif /* _G2PACKET_H */
 
