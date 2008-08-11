@@ -41,6 +41,7 @@
 	ENUM_CMD( QHT     ), \
 	ENUM_CMD( UPROC   ), \
 	ENUM_CMD( UPROD   ), \
+	ENUM_CMD( Q2      ), \
 	ENUM_CMD( QKR     ), \
 	ENUM_CMD( QKA     ), \
 	ENUM_CMD( HAW     ), \
@@ -108,8 +109,8 @@ _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
 _G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 _G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));
-_G2PACK_EXTRNVAR(const char *const g2_ptype_names[PT_MAXIMUM]);
-	
+_G2PACK_EXTRNVAR(const char const g2_ptype_names[PT_MAXIMUM][8]);
+
 #endif /* _G2PACKET_H */
 
 #ifdef _NEED_G2_P_TYPE
@@ -119,24 +120,9 @@ _G2PACK_EXTRNVAR(const char *const g2_ptype_names[PT_MAXIMUM]);
 #  include "lib/sec_buffer.h"
 #  include "G2Connection.h"
 
-struct g2_p_type;
-
-union p_type_action
-{
-	bool (*action) (g2_connection_t *, g2_packet_t *, struct norm_buff *);
-	const struct g2_p_type *next;
-};
-
-typedef struct g2_p_type
-{
-	const char match;
-	const bool last;
-	const bool term;
-	const union p_type_action found;
-} g2_p_type_t;
-
-_G2PACK_EXTRNVAR(const g2_p_type_t g2_packet_dict[];)
-_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, const g2_p_type_t *, g2_packet_t *));
+typedef bool (*g2_ptype_action_func) (g2_connection_t *, g2_packet_t *, struct norm_buff *) ;
+_G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM]);
+_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, g2_ptype_action_func const*, g2_packet_t *));
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */
 
