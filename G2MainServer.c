@@ -840,7 +840,48 @@ struct cpuid_regs
 	uint32_t	eax, ebx, ecx, edx;
 };
 
-static inline void cpuid(struct cpuid_regs *regs, uint32_t func)
+static always_inline size_t read_flags(void)
+{
+	size_t f;
+
+	asm volatile(
+		"pushf\n\t"
+		"pop %0\n\t"
+		: "=r" (f)
+	);
+
+	return f;
+}
+
+static always_inline void write_flags(size_t f)
+{
+	asm volatile(
+		"push %0\n\t"
+		"popf\n\t"
+		: : "r" (f) : "cc"
+	);
+}
+
+static inline bool has_cpuid(void)
+{
+	const size_t id_mask = (1 << 21);
+	size_t f;
+
+	f = read_flags();
+	write_flags(f | id_mask);
+	f = read_flags() & id_mask;
+	if (!f)
+		return false;
+	f = read_flags() & ~id_mask;
+	write_flags(f);
+	f = read_flags() & id_mask;
+	if (f)
+		return false;
+
+	return true;
+}
+
+static always_inline void cpuid(struct cpuid_regs *regs, uint32_t func)
 {
 	/* save ebx around cpuid call, PIC code needs it */
 	asm volatile (
@@ -868,7 +909,12 @@ void test_cpu(void)
 {
 	struct cpuid_regs a;
 	
-// TODO: test for cpuid instruction, but means we are running on < Pentium...
+	if(unlikely(!has_cpuid())) {
+		/* distinguish 386 from 486, same trick for EFLAGS bit 18 */
+		strcpy(our_cpu.vendor_str.s, "{3|4}86??");
+		logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
+		return;
+	}
 
 	cpuid(&a, 0);
 	our_cpu.vendor_str.r[0] = a.ebx;
