@@ -32,39 +32,100 @@
 # include "G2PacketSerializerStates.h"
 # include "lib/sec_buffer.h"
 
+/*
+ * This is the list of all known packet types (names)
+ * Every entry gets:
+ * - An enum value of PT_{NAME}
+ * - gets atomagic recognized by the packet typer
+ * - packets get their type set to their PT_{NAME} when
+ *   they pass the Packet{De}Serializer
+ *
+ * If you hit an unknown packet, simply add it, everything fine.
+ *
+ * These entrys are not sortet alphabeticaly, but grouped
+ * by correlance (there are arrays of function pointer, we
+ * want to keep the "related" packets in one cache line).
+ *
+ * The number behind the name is an internal detail of the packer
+ * typer ATM. It's the sorting weight when packets share the same
+ * prefix. A packet sortet first gets tested first everytime a
+ * packet decends in this prefix!! So this should be the common packet.
+ * (Do not confuse with the sorting down here, which is <see above>.
+ * When there is no "collision", the packet typer sorts alphabeticaly,
+ * then by weight)
+ *
+ * Hint: ATM there are some hacky optimisations to reduce
+ * cache footprint, so after more than 126 Packet types
+ * things need to be reviewd. And hopefully none gets
+ * interresting ideas what are legal characters in a type.
+ */
 #define G2_PACKET_TYPES \
-	ENUM_CMD( UNKNOWN ), \
-	ENUM_CMD( KHL     ), \
-	ENUM_CMD( LNI     ), \
-	ENUM_CMD( PI      ), \
-	ENUM_CMD( PO      ), \
-	ENUM_CMD( QHT     ), \
-	ENUM_CMD( UPROC   ), \
-	ENUM_CMD( UPROD   ), \
-	ENUM_CMD( Q2      ), \
-	ENUM_CMD( QKR     ), \
-	ENUM_CMD( QKA     ), \
-	ENUM_CMD( HAW     ), \
-	ENUM_CMD( CRAWLA  ), \
-	ENUM_CMD( CRAWLR  ), \
-	ENUM_CMD( G2CDC   ), \
-	ENUM_CMD( TS      ), \
-	ENUM_CMD( NA      ), \
-	ENUM_CMD( HS      ), \
-	ENUM_CMD( LS      ), \
-	ENUM_CMD( GU      ), \
-	ENUM_CMD( V       ), \
-	ENUM_CMD( NH      ), \
-	ENUM_CMD( CH      ), \
-	ENUM_CMD( QK      ), \
-	ENUM_CMD( FW      ), \
-	ENUM_CMD( RLEAF   ), \
-	ENUM_CMD( RNAME   ), \
-	ENUM_CMD( RGPS    ), \
-	ENUM_CMD( REXT    ), \
-	ENUM_CMD( MAXIMUM )
+	ENUM_CMD( UNKNOWN, 0 ), /* The unknown !! ALWAYS keep at zero !! */ \
+	ENUM_CMD( CRAWLA , 1 ), \
+	ENUM_CMD( CRAWLR , 1 ), \
+	ENUM_CMD( G2CDC  , 1 ), \
+	ENUM_CMD( HAW    , 1 ), \
+	ENUM_CMD( KHL    , 1 ), \
+	ENUM_CMD( LNI    , 1 ), \
+	ENUM_CMD( PI     , 1 ), \
+	ENUM_CMD( PO     , 1 ), \
+	ENUM_CMD( PUSH   , 1 ), \
+	ENUM_CMD( Q2     , 1 ), \
+	ENUM_CMD( QA     , 1 ), \
+	ENUM_CMD( QH2    , 1 ), \
+	ENUM_CMD( QHT    , 1 ), \
+	ENUM_CMD( QKR    , 1 ), \
+	ENUM_CMD( QKA    , 1 ), \
+	ENUM_CMD( UPROC  , 1 ), \
+	ENUM_CMD( UPROD  , 1 ), /* root packets */ \
+	ENUM_CMD( DN     , 1 ), \
+	ENUM_CMD( GU     , 1 ), \
+	ENUM_CMD( HS     , 1 ), \
+	ENUM_CMD( LS     , 1 ), \
+	ENUM_CMD( NA     , 1 ), \
+	ENUM_CMD( NH     , 1 ), \
+	ENUM_CMD( MD     , 1 ), \
+	ENUM_CMD( TS     , 1 ), \
+	ENUM_CMD( URN    , 1 ), \
+	ENUM_CMD( V      , 1 ), /* commom child packets */ \
+	ENUM_CMD( FW     , 1 ), /* LNI? */ \
+	ENUM_CMD( BUP    , 1 ), /* QH2 */ \
+	ENUM_CMD( H      , 1 ), /* QH2 */ \
+	ENUM_CMD( HG     , 1 ), /* QH2 */ \
+	ENUM_CMD( PCH    , 1 ), /* QH2 */ \
+	ENUM_CMD( UPRO   , 1 ), /* QH2 */ \
+	ENUM_CMD( CSC    , 1 ), /* QH2/H */ \
+	ENUM_CMD( COM    , 1 ), /* QH2/H */ \
+	ENUM_CMD( G      , 1 ), /* QH2/H */ \
+	ENUM_CMD( ID     , 1 ), /* QH2/H */ \
+	ENUM_CMD( PART   , 1 ), /* QH2/H */ \
+	ENUM_CMD( PVU    , 1 ), /* QH2/H */ \
+	ENUM_CMD( SZ     , 1 ), /* QH2/H */ \
+	ENUM_CMD( URL    , 1 ), /* QH2/H */ \
+	ENUM_CMD( SS     , 1 ), /* QH2/HG */ \
+	ENUM_CMD( I      , 1 ), /* Q2 */ \
+	ENUM_CMD( SZR    , 1 ), /* Q2 */ \
+	ENUM_CMD( UDP    , 1 ), /* Q2 PI */ \
+	ENUM_CMD( D      , 1 ), /* QA */ \
+	ENUM_CMD( FR     , 1 ), /* QA */ \
+	ENUM_CMD( RA     , 1 ), /* QA */ \
+	ENUM_CMD( S      , 1 ), /* QA */ \
+	ENUM_CMD( NICK   , 1 ), /* QH2/UPRO */ \
+	ENUM_CMD( SNA    , 1 ), /* QKA */ \
+	ENUM_CMD( QNA    , 1 ), /* QKA */ \
+	ENUM_CMD( QK     , 1 ), /* QKA */ \
+	ENUM_CMD( RNA    , 1 ), /* QKR */ \
+	ENUM_CMD( RLEAF  , 1 ), /* CRAWLR */ \
+	ENUM_CMD( RNAME  , 1 ), /* CRAWLR */ \
+	ENUM_CMD( RGPS   , 1 ), /* CRAWLR */ \
+	ENUM_CMD( REXT   , 1 ), /* CRAWLR */ \
+	ENUM_CMD( CH     , 1 ), \
+	ENUM_CMD( RELAY  , 1 ), /* PI PO */ \
+	ENUM_CMD( TO     , 1 ), \
+	ENUM_CMD( XML    , 1 ), /* UPROD */ \
+	ENUM_CMD( MAXIMUM, 0 ) /* loop counter, hopefully none invents a Packet with this name... */
 
-#define ENUM_CMD(x) PT_##x
+#define ENUM_CMD(x, y) PT_##x
 enum g2_ptype
 {
 	G2_PACKET_TYPES

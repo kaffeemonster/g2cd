@@ -189,7 +189,7 @@ static inline int read_length(struct norm_buff *source, g2_packet_t *target, siz
 
 static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 {
-	char type_str[16]; /* 8 + 1 */
+	char type_str[16]; /* 8 + 2 */
 	type_str[0] = '\0';
 
 	/* fetch the up to eigth type-bytes */
@@ -215,6 +215,12 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 			}
 		}
 
+		/*
+		 * insert 2 zeros so we can match one behind a zero ;)
+		 * We should have enough space, type can only be
+		 * 8 char long, we have 16
+		 */
+		*w_ptr++ = '\0';
 		*w_ptr = '\0';
 	} else { /* Illegal Packet... */
 		logg_devel("packet with 0 type-length\n");

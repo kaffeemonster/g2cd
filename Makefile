@@ -40,7 +40,7 @@ CC = gcc
 HOSTCC = gcc
 CC_VER_INFO = --version
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
-#AS = as
+AS = as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
@@ -340,6 +340,7 @@ HEADS = \
 	G2Connection.h \
 	G2ConHelper.h \
 	G2Packet.h \
+	G2PacketTyper.h \
 	G2PacketSerializer.h \
 	G2PacketSerializerStates.h \
 	G2QHT.h \
@@ -362,6 +363,7 @@ MSRCS = \
 	timeout.c
 SRCS = \
 	$(MSRCS) \
+	G2PacketTyperGenerator.c \
 	ccdrv.c \
 	arflock.c \
 	calltree.c
@@ -545,9 +547,11 @@ strip: .$(MAIN).dbg
 eclean: libclean zlibclean
 	-$(RM) $(OBJS) $(RTL_DUMPS) sbox.bin sbox.bin.tmp ccdrv.o arflock.o bin2o.o
 clean: eclean
-	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
+	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o G2PacketTyperGenerator calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
 	-$(RM) version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
+edistclean: distclean
+	$(RM) G2PacketTyper.h
 
 #	generate dependencies on whish
 #depend: $(DEPENDS)
@@ -644,7 +648,10 @@ arflock: arflock.c ccdrv Makefile
 		chmod a+x $@ )
 
 bin2o: bin2o.c ccdrv Makefile
-	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC)  $(HOSTCFLAGS) bin2o.c -o $@
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) bin2o.c -o $@
+
+G2PacketTyperGenerator: G2PacketTyperGenerator.c ccdrv Makefile G2Packet.h
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) G2PacketTyperGenerator.c -o $@
 
 .INTERMEDIATE: sbox.bin
 sbox.bin: $(TARED_FILES)
@@ -666,6 +673,8 @@ print_pretty: $(TARED_FILES)
 # Depend.-tracking
 #
 #
+G2PacketTyper.h: G2PacketTyperGenerator ccdrv
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator $@
 
 #	Batch-creation of version-info
 version.h: Makefile
@@ -700,7 +709,7 @@ G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSeriali
 G2UDP.o: G2UDP.h
 G2Connection.o: G2Connection.h G2QHT.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
-G2Packet.o: G2Packet.h G2PacketSerializer.h G2Connection.h G2QHT.h
+G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
 timeout.o: timeout.h

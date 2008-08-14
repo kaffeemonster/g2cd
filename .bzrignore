@@ -7,6 +7,8 @@ g2cd
 ccdrv
 arflock
 bin2o
+G2PacketTyperGenerator
+G2PacketTyper.h
 calltree
 guid.txt
 version.h
