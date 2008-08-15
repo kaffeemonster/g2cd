@@ -38,7 +38,10 @@
 /* inline size_t popcountst(size_t n) */
 
 #ifdef I_LIKE_ASM
-# ifdef __IA64__
+# if defined(__i386__) || defined(__x86_64__)
+	/* works for both */
+#  include "x86/popcountst.c"
+# elif defined(__IA64__)
 #  include "ia64/popcountst.c"
 # elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
 /* 

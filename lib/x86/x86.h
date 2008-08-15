@@ -23,42 +23,52 @@
  * $Id:$
  */
 
-#ifndef _X86_H
-# define _X86_H
+#undef SSE_PREFETCH
+#undef SSE_FENCE
+#undef SSE_MOVE
+#undef SSE_STORE
+#undef SSE_AND
+#undef SSE_XOR
+#undef MMX_PREFETCH
+#undef PREFETCH
+#undef MMX_STORE
+#undef MMX_FENCE
+#undef SIZE_T_BYTE
 
-# ifdef __SSE__
-#  define SSE_PREFETCH(x) "prefetcht0	" #x "\n\t"
-#  define PREFETCH(x) "prefetcht0	" #x "\n\t"
-#  define SSE_FENCE	"sfence\n"
-#  ifdef __SSE2__
-#   define SSE_MOVE(x, y) "movdqa	" #x ", " #y "\n\t"
-#   define SSE_STORE(x, y) "movdqa	" #x ", " #y "\n\t"
-#   define SSE_AND(x, y) "pand	" #x ", " #y "\n\t"
-#   define SSE_XOR(x, y) "pxor	" #x ", " #y "\n\t"
-#  else
-#   define SSE_MOVE(x, y) "movaps	" #x ", " #y "\n\t"
-#   define SSE_STORE(x, y) "movps	" #x ", " #y "\n\t"
-#   define SSE_AND(x, y) "andps	" #x ", " #y "\n\t"
-#   define SSE_XOR(x, y) "xorps	" #x ", " #y "\n\t"
-#  endif
-# endif
-# ifdef __MMX__
-#  ifdef __SSE__
-#	 define MMX_PREFETCH(x) "prefetcht0	" #x "\n\t"
-#   define PREFETCH(x) "prefetcht0	" #x "\n\t"
-#   define MMX_STORE(x, y) "movq	" #x ", " #y "\n\t"
-#   define MMX_FENCE	"sfence\n"
-#  else
-#   define MMX_PREFETCH(x)
-#   define PREFETCH(x)
-#   define MMX_STORE(x, y) "movq	" #x ", " #y "\n\t"
-#   define MMX_FENCE
-#  endif
-# endif
-
-# ifdef __i386__
-#  define SIZE_T_BYTE	4
+#ifdef HAVE_SSE
+# define SSE_PREFETCH(x)	"prefetcht0	" #x "\n\t"
+# define PREFETCH(x)	"prefetcht0	" #x "\n\t"
+# define SSE_FENCE	"sfence\n"
+# ifdef HAVE_SSE2
+#  define SSE_MOVE(x, y)	"movdqa	" #x ", " #y "\n\t"
+#  define SSE_STORE(x, y)	"movdqa	" #x ", " #y "\n\t"
+#  define SSE_AND(x, y)	"pand	" #x ", " #y "\n\t"
+#  define SSE_XOR(x, y)	"pxor	" #x ", " #y "\n\t"
 # else
-#  define SIZE_T_BYTE	8
+#  define SSE_MOVE(x, y)	"movaps	" #x ", " #y "\n\t"
+#  define SSE_STORE(x, y)	"movaps	" #x ", " #y "\n\t"
+#  define SSE_AND(x, y)	"andps	" #x ", " #y "\n\t"
+#  define SSE_XOR(x, y)	"xorps	" #x ", " #y "\n\t"
 # endif
-#endif /* _X86_H */
+#endif
+#ifdef HAVE_MMX
+# ifdef HAVE_SSE
+#  define MMX_PREFETCH(x)	"prefetcht0	" #x "\n\t"
+#  define PREFETCH(x)	"prefetcht0	" #x "\n\t"
+#  define MMX_STORE(x, y)	"movq	" #x ", " #y "\n\t"
+#  define MMX_FENCE	"sfence\n"
+# else
+#  define MMX_PREFETCH(x)
+#  define PREFETCH(x)
+#  define MMX_STORE(x, y)	"movq	" #x ", " #y "\n\t"
+#  define MMX_FENCE
+# endif
+#else
+# define PREFETCH(x)
+#endif
+
+#ifdef __i386__
+# define SIZE_T_BYTE	4
+#else
+# define SIZE_T_BYTE	8
+#endif

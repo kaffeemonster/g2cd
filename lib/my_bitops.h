@@ -3,7 +3,7 @@
  * header-file for some global usefull bitbanging
  * functions
  *
- * Copyright (c) 2004, 2005, 2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,15 +31,28 @@
 # include "../other.h"
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
+# if defined(I_LIKE_ASM) && (defined(__i386__) || defined(__x86_64__))
+#  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) extern x (*y) z GCC_ATTR_VIS("hidden")
+# else
+#  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) x y z GCC_ATTR_VIS("hidden")
+# endif
 
-LIB_MY_BITOPS_EXTRN(void *memxor(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST);
+LIB_MY_BITOPS_EXTRN_P(void *, memxor, (void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN_P(void *, memand, (void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN_P(void *, memneg, (void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN_P(size_t, popcountst, (size_t n) GCC_ATTR_CONST);
 LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
 #ifndef HAVE_STRNLEN
 LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
 #define STRNLEN_DEFINED
 #endif
+
+struct test_cpu_feature
+{
+	void (*func)(void);
+	long flags_needed;
+};
+
+LIB_MY_BITOPS_EXTRN(void test_cpu_feature(void (**)(void), struct test_cpu_feature *, size_t));
 
 # endif

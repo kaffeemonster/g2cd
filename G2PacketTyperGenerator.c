@@ -345,7 +345,8 @@ static void print_table_hl(void)
 		strcat(tmp, p_names[table_hl[i].type].c);
 
 		printf("[% 4d] '%c' %s\tla: %c lt: %c n: %-4u d: %-4u\n%s", i,
-		       table_hl[i].c ? : '0', tmp, table_hl[i].last ? 't' : 'f',
+		       table_hl[i].c ? table_hl[i].c : '0',
+		       tmp, table_hl[i].last ? 't' : 'f',
 		       table_hl[i].last_table ? 't' : 'f', table_hl[i].next,
 		       table_hl[i].delta, table_hl[i].last_table ? "\n" : "");
 	}

@@ -373,5 +373,9 @@ do { \
 #define str_it2(x)	#x
 #define str_it(x)	str_it2(x)
 
+#define DFUNC_NAME2(fname, add) fname##add
+#define DFUNC_NAME(fname, add) DFUNC_NAME2(fname, add)
+#define DVAR_NAME(fname, add) DFUNC_NAME2(fname, add)
+
 #endif /* _OTHER_H */
 /* EOF */

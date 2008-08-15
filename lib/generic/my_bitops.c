@@ -1,8 +1,8 @@
 /*
- * popcountst.c
- * calculate popcount in size_t, generic implementation
+ * my_bitops.c
+ * some nity grity bitops, generic fallback/nop
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,24 +23,11 @@
  * $Id:$
  */
 
-#ifndef ARCH_NAME_SUFFIX
-# define F_NAME(z, x, y) z, y
-#else
-# define F_NAME(z, x, y) static z x##y
-#endif
-
-F_NAME(size_t, popcountst, _generic) (size_t n)
+void test_cpu_feature(void (**func)(void),
+	GCC_ATTR_UNUSED_PARAM(struct test_cpu_feature *, t),
+	GCC_ATTR_UNUSED_PARAM(size_t, l))
 {
-	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;
-	n = ((n >> 2) & MK_C(0x33333333L)) + (n & MK_C(0x33333333L));
-	n = ((n >> 4) + n) & MK_C(0x0f0f0f0fL);	
-	n = ((n >> 8) + n);
-	n = ((n >> 16) + n);
-	if(SIZE_T_BITS >= 64)
-		n = ((n >> 32) + n);
-	n &= 0xff;
-	return n;
+	func = func;
 }
-#undef F_NAME
 
-static char const rcsid_pcg[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mbg[] GCC_ATTR_USED_VAR = "$Id:$";

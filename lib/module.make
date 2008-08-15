@@ -38,6 +38,7 @@ LIBHEADS = \
 	$(MPL)/atomic.h \
 	$(MPL)/list.h \
 	$(MPL)/backtrace.h \
+	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h
 
 # epoll emuls
@@ -70,6 +71,7 @@ FLSSTSRC = \
 	$(MPL)/arm/flsst.c
 POPCOUNSTSRC = \
 	$(MPL)/generic/popcountst.c \
+	$(MPL)/x86/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
 	$(MPL)/sparc64/popcountst.c \
 	$(MPL)/ppc/popcountst.c \
@@ -77,18 +79,24 @@ POPCOUNSTSRC = \
 MEMXORSRC = \
 	$(MPL)/generic/memxor.c \
 	$(MPL)/x86/memxor.c \
+	$(MPL)/x86/memxor_tmpl.c \
 	$(MPL)/ppc/memxor.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
 	$(MPL)/x86/memand.c \
+	$(MPL)/x86/memand_tmpl.c \
 	$(MPL)/ppc/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
 	$(MPL)/x86/memneg.c \
+	$(MPL)/x86/memneg_tmpl.c \
 	$(MPL)/ppc/memneg.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
 	$(MPL)/x86/strnlen.c
+MY_BITOPSSRC = \
+	$(MPL)/generic/my_bitops.c \
+	$(MPL)/x86/my_bitops.c
 
 LIBASRCS = \
 	$(LIBSRCS) \
@@ -99,7 +107,8 @@ LIBASRCS = \
 	$(MEMXORSRC) \
 	$(MEMANDSRC) \
 	$(MEMNEGSRC) \
-	$(STRNLENSRC)
+	$(STRNLENSRC) \
+	$(MY_BITOPSSRC)
 
 # base src files
 LIBSRCS = \
@@ -129,7 +138,8 @@ LIBOBJS = \
 	$(MPL)/hzp.o \
 	$(MPL)/backtrace.o \
 	$(MPL)/atomic.o \
-	$(MPL)/strnlen.o
+	$(MPL)/strnlen.o \
+	$(MPL)/my_bitops.o
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a
@@ -158,10 +168,16 @@ $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)
 $(MPL)/my_bitops.h: other.h
+$(MPL)/my_bitops.o: $(MPL)/my_bitops.h $(MY_BITOPSSRC)
 $(MPL)/my_bitopsm.h: other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: other.h config.h
 $(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
+$(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
+$(MPL)/x86/memxor.c: $(MPL)/x86/memxor_tmpl.c
+$(MPL)/x86/memand.c: $(MPL)/x86/memand_tmpl.c
+$(MPL)/x86/memneg.c: $(MPL)/x86/memned_tmpl.c
+
 
 # give all files the std deps, so get rebuilt if something changes
 $(LIBOBJS): $(LIB_STD_DEPS)
