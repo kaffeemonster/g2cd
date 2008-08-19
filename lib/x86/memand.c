@@ -35,10 +35,12 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 #include "memand_tmpl.c"
 
 #define HAVE_MMX
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _MMX
+#ifndef __x86_64__
+# undef ARCH_NAME_SUFFIX
+# define ARCH_NAME_SUFFIX _MMX
 static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memand_tmpl.c"
+# include "memand_tmpl.c"
+#endif
 
 #define HAVE_SSE
 #undef ARCH_NAME_SUFFIX
@@ -52,19 +54,39 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 #include "memand_tmpl.c"
 
+#define HAVE_SSE3
+#undef ARCH_NAME_SUFFIX
+#define ARCH_NAME_SUFFIX _SSE3
+static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#include "memand_tmpl.c"
+
+#if HAVE_BINUTILS >= 219
+# define HAVE_AVX
+# undef ARCH_NAME_SUFFIX
+# define ARCH_NAME_SUFFIX _AVX
+static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+# include "memand_tmpl.c"
+#endif
+
 void *(*memand)(void *dst, const void *src, size_t len) = memand_x86;
 
 static void memand_select(void) GCC_ATTR_CONSTRUCT;
 static void memand_select(void)
 {
-	struct test_cpu_feature f[] =
+	static const struct test_cpu_feature f[] =
 	{
-		{.func = (void (*)(void))memand_SSE2, .flags_needed = CFEATURE_SSE2},
-		{.func = (void (*)(void))memand_SSE, .flags_needed = CFEATURE_SSE},
-		{.func = (void (*)(void))memand_MMX, .flags_needed = CFEATURE_MMX},
-		{.func = (void (*)(void))memand_x86, .flags_needed = -1},
+#if HAVE_BINUTILS >= 219
+		{.func = (void (*)(void))memand_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+#endif
+		{.func = (void (*)(void))memand_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+		{.func = (void (*)(void))memand_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+		{.func = (void (*)(void))memand_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#ifndef __x86_64__
+		{.func = (void (*)(void))memand_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+#endif
+		{.func = (void (*)(void))memand_x86, .flags_needed = -1, .callback = NULL},
 	};
-	test_cpu_feature((void (**)(void))&memand, f, anum(f));
+	test_cpu_feature(&memand, f, anum(f));
 }
 
 

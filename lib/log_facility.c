@@ -86,7 +86,7 @@ static void logg_deinit(void)
 {
 	struct big_buff *tmp_buf;
 
-	if(!logg_tls_ready)
+	if(unlikely(!logg_tls_ready))
 		return;
 
 	if((tmp_buf = pthread_getspecific(key2logg)))
@@ -103,8 +103,11 @@ static struct big_buff *logg_get_buf(void)
 	struct big_buff *ret_buf;
 	
 	/* for the rare case we are called from another constructor and are not ready */
-	if(logg_tls_ready && (ret_buf = pthread_getspecific(key2logg)))
-		return ret_buf;
+	if(likely(logg_tls_ready)) {
+		ret_buf = pthread_getspecific(key2logg);
+		if(likely(ret_buf))
+			return ret_buf;
+	}
 
 	ret_buf = malloc(sizeof(*ret_buf) + (NORM_BUFF_CAPACITY / 4));
 
@@ -253,7 +256,7 @@ static int logg_internal(
 			}
 			else if((size_t)ret_val > buffer_remaining(*logg_buff))
 				len = (((size_t)ret_val * 2) + 1023) & ~((size_t) 1023);
-			if(len != logg_buff->capacity)
+			if(unlikely(len != logg_buff->capacity))
 			{
 				struct big_buff *tmp_buf = realloc(logg_buff, sizeof(*logg_buff) + len);
 				if(tmp_buf)
@@ -268,7 +271,7 @@ static int logg_internal(
 				}
 			}
 			ret_val = snprintf(buffer_start(*logg_buff), buffer_remaining(*logg_buff), "%s:%s()@%u: ", file, func, line);
-		} while(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff));
+		} while(unlikely(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff)));
 		logg_buff->pos += (size_t)ret_val;
 	}
 
@@ -288,7 +291,7 @@ static int logg_internal(
 		}
 		else if((size_t)ret_val > buffer_remaining(*logg_buff))
 			len = (((size_t)ret_val * 2) + 1023) & ~((size_t)1023); /* align to a k */
-		if(len != logg_buff->capacity)
+		if(unlikely(len != logg_buff->capacity))
 		{
 			struct big_buff *tmp_buf = realloc(logg_buff, sizeof(*logg_buff) + len);
 			if(tmp_buf)
@@ -307,7 +310,7 @@ static int logg_internal(
 		ret_val = vsnprintf(buffer_start(*logg_buff), buffer_remaining(*logg_buff), fmt, tmp_valist);
 		va_end(tmp_valist);
 		/* error? repeat */
-	} while(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff));
+	} while(unlikely(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff)));
 	logg_buff->pos += (size_t)ret_val;
 	
 	
@@ -324,6 +327,7 @@ static int logg_internal(
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
+			size_t err_str_len;
 #if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
 # ifdef HAVE_GNU_STRERROR_R
 			/*
@@ -333,7 +337,7 @@ static int logg_internal(
 			 * wich needs a #define __GNU_SOURCE, but conflicts
 			 * with this...
 			 */
-			const char *s = strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff));
+			const char *s = strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)-2);
 # else
 			/* 
 			 * Ol Solaris seems to have a static msgtable, so
@@ -342,11 +346,17 @@ static int logg_internal(
 			 */
 			const char *s = strerror(old_errno);
 # endif
-			if(!s)
+			if(s)
+				err_str_len = strnlen(s, buffer_remaining(*logg_buff)-2);
+			else {
 				s = "Unknown system error";
+				err_str_len = strlen(s) < (buffer_remaining(*logg_buff)-2) ?
+				              strlen(s) : buffer_remaining(*logg_buff)-2;
+			}
+
 			if(s != buffer_start(*logg_buff))
-				strncpy(buffer_start(*logg_buff), s, buffer_remaining(*logg_buff) - 2);
-			logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
+				memcpy(buffer_start(*logg_buff), s, err_str_len);
+			logg_buff->pos += err_str_len;
 #else
 			if(!strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)))
 				logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
@@ -379,7 +389,8 @@ int logg_ent(const enum loglevel level, const char *fmt, ...)
 	va_list args;
 	int ret_val;
 
-	if(level > get_act_loglevel())
+	/* we already checked at the call site */
+	if(unlikely(level > get_act_loglevel()))
 		return 0;
 
 	va_start(args, fmt);
@@ -401,7 +412,7 @@ int logg_more_ent(
 	va_list args;
 	int ret_val;
 
-	if(level > get_act_loglevel())
+	if(unlikely(level > get_act_loglevel()))
 		return 0;
 
 	va_start(args, fmt);

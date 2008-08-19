@@ -36,9 +36,10 @@ static void popcount_select(void)
 	struct test_cpu_feature f[] =
 	{
 		{.func = (void (*)(void))popcountst_SSE4, .flags_needed = CFEATURE_POPCNT},
+		{.func = (void (*)(void))popcountst_SSE4, .flags_needed = CFEATURE_SSE4A},
 		{.func = (void (*)(void))popcountst_generic, .flags_needed = -1 },
 	};
-	test_cpu_feature((void (**)(void))&popcountst, f, anum(f));
+	test_cpu_feature(&popcountst, f, anum(f));
 }
 
 static size_t popcountst_SSE4(size_t n)

@@ -150,9 +150,9 @@ OPT_FLAGS += -funroll-loops
 #OPT_FLAGS += -fmove-all-movables
 #	gcc >= 3.4
 OPT_FLAGS += -funit-at-a-time
-OPT_FLAGS += -fweb
+#OPT_FLAGS += -fweb
 #	gcc >= 3.? *warning* experimental options
-OPT_FLAGS += -ftracer
+#OPT_FLAGS += -ftracer
 # gcc < 4.x only, they dumped it...
 #OPT_FLAGS += -fnew-ra
 OPT_FLAGS += -funswitch-loops
@@ -179,8 +179,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #CFLAGS += -O1
 #OPT_FLAGS += -ftest-coverage # needed?
 #OPT_FLAGS += -fprofile-arcs
-#CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
-CFLAGS += -O
+CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
 #	gcc 3.? make sure the OS sees our Stack-handling since we
 #	are Multithreaded or leave it - seems buggy
 #CFLAGS += -fstack-check
@@ -266,6 +265,7 @@ CFLAGS += -DHAVE_CONFIG_H
 CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
 CFLAGS += -DHELGRIND_ME
+#CFLAGS += -DHAVE_BINUTILS=219
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
 CFLAGS += -D_GNU_SOURCE

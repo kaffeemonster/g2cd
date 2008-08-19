@@ -23,9 +23,13 @@
  * $Id:$
  */
 
+#undef AVX_MOVE
+#undef AVX_XOR
+#undef AVX_STORE
 #undef SSE_PREFETCH
 #undef SSE_FENCE
 #undef SSE_MOVE
+#undef SSE_LOAD
 #undef SSE_STORE
 #undef SSE_AND
 #undef SSE_XOR
@@ -35,6 +39,12 @@
 #undef MMX_FENCE
 #undef SIZE_T_BYTE
 
+#ifdef HAVE_AVX
+# define AVX_MOVE(s, d)	"vmovdqa	" #s ", " #d "\n\t"
+# define AVX_STORE(s, d)	"vmovdqa	" #s ", " #d "\n\t"
+# define AVX_AND(sa, sb, d)	"vandpd	" #sa ", " #sb ", " #d "\n\t"
+# define AVX_XOR(sa, sb, d)	"vxorpd	" #sa ", " #sb ", " #d "\n\t"
+#endif
 #ifdef HAVE_SSE
 # define SSE_PREFETCH(x)	"prefetcht0	" #x "\n\t"
 # define PREFETCH(x)	"prefetcht0	" #x "\n\t"
@@ -44,6 +54,11 @@
 #  define SSE_STORE(x, y)	"movdqa	" #x ", " #y "\n\t"
 #  define SSE_AND(x, y)	"pand	" #x ", " #y "\n\t"
 #  define SSE_XOR(x, y)	"pxor	" #x ", " #y "\n\t"
+#  ifdef HAVE_SSE3
+#   define SSE_LOAD(x, y)	"lddqu	" #x ", " #y "\n\t"
+#  else
+#   define SSE_LOAD(x, y)	"movdqu	" #x ", " #y "\n\t"
+#  endif
 # else
 #  define SSE_MOVE(x, y)	"movaps	" #x ", " #y "\n\t"
 #  define SSE_STORE(x, y)	"movaps	" #x ", " #y "\n\t"
@@ -71,4 +86,15 @@
 # define SIZE_T_BYTE	4
 #else
 # define SIZE_T_BYTE	8
+#endif
+
+#undef ALIGNMENT_WANTED
+#ifdef HAVE_AVX
+#define ALIGNMENT_WANTED 32
+#elif defined(HAVE_SSE)
+#define ALIGNMENT_WANTED 16
+#elif defined(HAVE_MMX)
+#define ALIGNMENT_WANTED 8
+#else
+#define ALIGNMENT_WANTED SOST
 #endif

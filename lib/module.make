@@ -176,7 +176,7 @@ $(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
 $(MPL)/x86/memxor.c: $(MPL)/x86/memxor_tmpl.c
 $(MPL)/x86/memand.c: $(MPL)/x86/memand_tmpl.c
-$(MPL)/x86/memneg.c: $(MPL)/x86/memned_tmpl.c
+$(MPL)/x86/memneg.c: $(MPL)/x86/memneg_tmpl.c
 
 
 # give all files the std deps, so get rebuilt if something changes

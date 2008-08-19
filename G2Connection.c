@@ -275,14 +275,12 @@ void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 	if(!to_free)
 		return;
 
-	if(Z_OK != inflateEnd(&to_free->z_decoder))
-	{
+	if(unlikely(Z_OK != inflateEnd(&to_free->z_decoder))) {
 		if(to_free->z_decoder.msg)
 			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_decoder.msg);
 	}
 
-	if(Z_OK != deflateEnd(&to_free->z_encoder))
-	{
+	if(unlikely(Z_OK != deflateEnd(&to_free->z_encoder))) {
 		if(to_free->z_encoder.msg)
 			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder.msg);
 	}
@@ -364,7 +362,7 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 {
 	to_con->flags.content_ok = true;
 
-	if(str_size(ACCEPT_G2) <= distance)
+	if(likely(str_size(ACCEPT_G2) <= distance))
 	{
 		if(!strncasecmp(buffer_start(*to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
@@ -419,7 +417,7 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 
 	for(i = 0; i < sizeof(KNOWN_ENCODINGS)  / sizeof(action_string *); i++)
 	{
-		if(KNOWN_ENCODINGS[i]->length > distance)
+		if(unlikely(KNOWN_ENCODINGS[i]->length > distance))
 			continue;
 
 		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))

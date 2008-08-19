@@ -486,7 +486,7 @@ static void print_trailer(void)
 		"\n"
 		"#define T_IS_END(x)	((x) & T_END_FLAG)\n"
 		"#define T_IS_LAST(x)	((x) & T_LAST_FLAG)\n"
-		"#define T_GET_CHAR(x)	((char)(((x)&0x3F)?((x)&0x3F)+0x20:(x)&0x3F))\n"
+		"#define T_GET_CHAR(x)	((char)((likely((x)&0x3F))?((x)&0x3F)+0x20:(x)&0x3F))\n"
 		"\n"
 		"#define T_LEND(x, y) \\\n"
 		"	{ .c = ((x)?(x)-0x20:(x))|T_LAST_FLAG|T_END_FLAG, .u = { .t = y }}\n"

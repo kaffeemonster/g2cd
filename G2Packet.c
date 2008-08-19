@@ -197,10 +197,10 @@ void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
 		const char match = T_GET_CHAR(x);
 		logg_develd_old("\tp x: 0x%02X m: 0x%02X, '%c', %i, %i\n", x, match ? : '0',
 			type_str[j] ? : '0', i, g2_ptype_state_table[i].u.d);
-		if(type_str[j] == match)
+		if(likely(type_str[j] == match))
 		{
-			if(T_IS_LAST(x)) {
-				if(type_str[j+1] == '\0') {
+			if(likely(T_IS_LAST(x))) {
+				if(likely(type_str[j+1] == '\0')) {
 					packet->type = g2_ptype_state_table[i].u.t;
 					break;;
 				}
@@ -210,7 +210,7 @@ void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
 				continue;
 			}
 		}
-		if(T_IS_END(x))
+		if(unlikely(T_IS_END(x)))
 			break;
 		i++;
 	} while(j < 16);

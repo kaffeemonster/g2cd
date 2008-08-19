@@ -68,8 +68,7 @@ static void recv_buff_init(void)
 		struct norm_buff *tmp = recv_buff_alloc_system();
 		if(tmp)
 		{
-			if((tmp = atomic_pxa(tmp, &free_buffs[i])))
-			{
+			if((tmp = atomic_pxa(tmp, &free_buffs[i]))) {
 				logg_pos(LOGF_CRIT, "another thread working while init???");
 				recv_buff_free_system(tmp);
 			}
@@ -80,8 +79,7 @@ static void recv_buff_init(void)
 			if(FB_TRESHOLD < i)
 				break;
 
-			for(; i > 0; --i)
-			{
+			for(; i > 0; --i) {
 				tmp = NULL;
 				recv_buff_free_system(atomic_pxa(tmp, &free_buffs[i]));
 			}
@@ -101,8 +99,7 @@ static void recv_buff_deinit(void)
 		size_t i = 0;
 		do
 		{
-			if(atomic_pread(&free_buffs[i]))
-			{
+			if(atomic_pread(&free_buffs[i])) {
 				struct norm_buff *ret = NULL;
 				if((ret = atomic_pxa(ret, &free_buffs[i])))
 					recv_buff_free_system(ret);
@@ -121,8 +118,7 @@ static void recv_buff_free_lorg(void *vorg)
 		return;
 #ifndef DEBUG_DEVEL_OLD
 	org = vorg;
-	for(i = org->pos; i < (int)anum(org->buffs);)
-	{
+	for(i = org->pos; i < (int)anum(org->buffs);) {
 		struct norm_buff *tmp = org->buffs[i];
 		org->buffs[i++] = NULL;
 		recv_buff_free_system(tmp);
@@ -131,7 +127,7 @@ static void recv_buff_free_lorg(void *vorg)
 	free(org);
 }
 
-static inline struct local_buffer_org *recv_buff_init_lorg(void)
+static noinline struct local_buffer_org *recv_buff_init_lorg(void)
 {
 	struct local_buffer_org *org = calloc(1, sizeof(*org));
 	int i;
@@ -140,8 +136,7 @@ static inline struct local_buffer_org *recv_buff_init_lorg(void)
 		return NULL;
 	
 	org->pos = anum(org->buffs);
-	if(pthread_setspecific(key2lrecv, org))
-	{
+	if(unlikely(pthread_setspecific(key2lrecv, org))) {
 		logg_errno(LOGF_CRIT, "local recv_buff key not initialized?");
 		free(org);
 		return NULL;
@@ -150,8 +145,7 @@ static inline struct local_buffer_org *recv_buff_init_lorg(void)
 	for(i = org->pos; i > (int)((anum(org->buffs) / 3) + 2);)
 	{
 		org->buffs[--i] = recv_buff_alloc_system();
-		if(!org->buffs[i])
-		{
+		if(!org->buffs[i]) {
 			i++;
 			break;
 		}
@@ -165,20 +159,22 @@ void recv_buff_local_refill(void)
 	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 	int i;
 
-	if(!org)
-	{
+	if(!org) {
 		org = recv_buff_init_lorg();
 		if(!org)
 			return;
 	}
 
-	for(i = org->pos; i > (int)((anum(org->buffs) / 3) + 2);)
+	i = org->pos;
+	if(unlikely(i > (int)((anum(org->buffs) / 3) + 2)))
 	{
-		org->buffs[--i] = recv_buff_alloc();
-		if(!org->buffs[i])
+		for(; i > (int)((anum(org->buffs) / 3) + 2);)
 		{
-			i++;
-			break;
+			org->buffs[--i] = recv_buff_alloc();
+			if(!org->buffs[i]) {
+				i++;
+				break;
+			}
 		}
 	}
 	org->pos = i;
@@ -193,15 +189,13 @@ struct norm_buff *recv_buff_local_get(void)
 	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 	struct norm_buff *ret_val;
 
-	if(!org)
-	{
+	if(!org) {
 		org = recv_buff_init_lorg();
 		if(!org)
 			return recv_buff_alloc();
 	}
 
-	if(org->pos < (int)anum(org->buffs))
-	{
+	if(likely(org->pos < (int)anum(org->buffs))) {
 		ret_val = org->buffs[org->pos];
 		org->buffs[org->pos++] = NULL;
 		logg_develd_old("allocating recv_buff local pos: %d\n", org->pos);
@@ -222,15 +216,13 @@ void recv_buff_local_ret(struct norm_buff *buf)
 	if(!org)
 	{
 		org = recv_buff_init_lorg();
-		if(!org)
-		{
+		if(!org) {
 			recv_buff_free(buf);
 			return;
 		}
 	}
 
-	if(org->pos > 0)
-	{
+	if(likely(org->pos > 0)) {
 		org->buffs[--org->pos] = buf;
 		logg_develd_old("freeing recv_buff local pos: %d\n", org->pos);
 	}
@@ -243,15 +235,14 @@ static inline struct norm_buff *recv_buff_alloc_system(void)
 {
 	struct norm_buff *ret = malloc(sizeof(*ret));
 	logg_devel_old("allocating recv_buffer from sys\n");
-	if(ret)
-	{
+	if(ret) {
 		ret->capacity = sizeof(ret->data);
 		buffer_clear(*ret);
 	}
 	return ret;
 }
 
-struct norm_buff *recv_buff_alloc(void)
+struct noinline norm_buff *recv_buff_alloc(void)
 {
 	int failcount = 0;
 	struct norm_buff *ret_val = NULL;
@@ -261,8 +252,7 @@ struct norm_buff *recv_buff_alloc(void)
 		size_t i = 0;
 		do
 		{
-			if(atomic_pread(&free_buffs[i]))
-			{
+			if(atomic_pread(&free_buffs[i])) {
 				if((ret_val = atomic_pxa(ret_val, &free_buffs[i])))
 					return ret_val;
 			}
@@ -290,8 +280,7 @@ void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 		size_t i = 0;
 		do
 		{
-			if(!atomic_pread(&free_buffs[i]))
-			{
+			if(!atomic_pread(&free_buffs[i])) {
 				if(!(ret = atomic_pxa(ret, &free_buffs[i])))
 					return;
 			}

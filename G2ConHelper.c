@@ -301,29 +301,29 @@ bool recycle_con(
 
 bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff)
 {
-	if(!*con_buff)
+	if(unlikely(*con_buff))
+		return true;
+
+	logg_devel_old("no buffer\n");
+	if(!*our_buff)
 	{
-		logg_devel_old("no buffer\n");
-		if(!*our_buff)
-		{
-			logg_devel_old("allocating\n");
-			*our_buff = recv_buff_local_get();
-			if(!*our_buff) {
-				logg_pos(LOGF_WARN, "allocating recv buff failed\n");
-				return false;
-			}
+		logg_devel_old("allocating\n");
+		*our_buff = recv_buff_local_get();
+		if(!*our_buff) {
+			logg_pos(LOGF_WARN, "allocating recv buff failed\n");
+			return false;
 		}
-		*con_buff = *our_buff;
 	}
+	*con_buff = *our_buff;
 	return true;
 }
 
 void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff)
 {
-	if(*con_buff == *our_buff)
+	if(likely(*con_buff == *our_buff))
 	{
 		logg_devel_old("local buffer\n");
-		if(buffer_cempty(**con_buff)) /* buffer is empty */
+		if(likely(buffer_cempty(**con_buff))) /* buffer is empty */
 		{
 			logg_devel_old("empty\n");
 			*con_buff = NULL;

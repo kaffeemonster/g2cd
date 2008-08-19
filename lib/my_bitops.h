@@ -50,9 +50,11 @@ LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
 struct test_cpu_feature
 {
 	void (*func)(void);
+	int (*callback)(void);
 	long flags_needed;
 };
 
-LIB_MY_BITOPS_EXTRN(void test_cpu_feature(void (**)(void), struct test_cpu_feature *, size_t));
+LIB_MY_BITOPS_EXTRN(void test_cpu_feature(void *, const struct test_cpu_feature *, size_t));
+LIB_MY_BITOPS_EXTRN(int test_cpu_feature_avx_callback(void));
 
 # endif

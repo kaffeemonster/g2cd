@@ -61,6 +61,7 @@
 	FEATURE1( TM      , 29 ), \
 	FEATURE1( PBE     , 31 ), \
 	FEATURE2( SSE3    ,  0 ), \
+	FEATURE2( PCLMULQDQ, 1 ), \
 	FEATURE2( MONITOR ,  3 ), \
 	FEATURE2( DSCPL   ,  4 ), \
 	FEATURE2( VMX     ,  5 ), \
@@ -69,6 +70,7 @@
 	FEATURE2( TM2     ,  8 ), \
 	FEATURE2( SSSE3   ,  9 ), \
 	FEATURE2( CNXTID  , 10 ), \
+	FEATURE2( FMA     , 12 ), \
 	FEATURE2( CX16    , 13 ), \
 	FEATURE2( XTPR    , 14 ), \
 	FEATURE2( PDCM    , 15 ), \
@@ -78,8 +80,11 @@
 	FEATURE2( X2APIC  , 21 ), \
 	FEATURE2( MOVBE   , 22 ), \
 	FEATURE2( POPCNT  , 23 ), \
+	FEATURE2( AES     , 25 ), \
 	FEATURE2( XSAVE   , 26 ), \
 	FEATURE2( OSXSAVE , 27 ), \
+	FEATURE2( AVX     , 28 ), \
+	FEATURE2( RAZ     , 31 ), /* WTF? found in AMD CPUID spec. */ \
 	FEATURE3( SYSCALL , 11 ), \
 	FEATURE3( NX      , 20 ), \
 	FEATURE3( MMXEXT  , 22 ), \
@@ -100,6 +105,9 @@
 	FEATURE4( 3DNOWPRE,  8 ), \
 	FEATURE4( OSVW    ,  9 ), \
 	FEATURE4( IBS     , 10 ), \
+	FEATURE4( SSE5    , 11 ), \
+	FEATURE4( SKINIT  , 12 ), \
+	FEATURE4( WDT     , 13 )
 
 # define ENUM_CMD(x,y) CFEATURE_##x = y
 enum x86_cpu_features

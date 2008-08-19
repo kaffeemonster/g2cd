@@ -85,6 +85,6 @@ _LOGF_EXTRN(int logg_more_ent(const enum loglevel, const char *, const char *, c
 #define logg(l,f, ...) \
 	((l <= get_act_loglevel()) ? logg_ent(l, f, ## __VA_ARGS__) : 0)
 #define logg_more(le, fi, fu, li, e, fmt, ...) \
-	((le <= get_act_loglevel()) ? logg_more_ent(le, fi, fu, li, e, fmt, ## __VA_ARGS__) : 0)
+	((unlikely(le <= get_act_loglevel())) ? logg_more_ent(le, fi, fu, li, e, fmt, ## __VA_ARGS__) : 0)
 
 #endif //_LOG_FACILITY_H

@@ -158,7 +158,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 	}
 /* early check packet-boundary */
 	i = target->length + target->length_length + target->type_length + 1;
-	if(max_len < i)
+	if(unlikely(max_len < i))
 	{
 		logg_develd("packet too long! max: %zu tl: %zu\n", max_len, i);
 		return -1;
@@ -193,7 +193,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	type_str[0] = '\0';
 
 	/* fetch the up to eigth type-bytes */
-	if(target->type_length > buffer_remaining(*source)) {
+	if(unlikely(target->type_length > buffer_remaining(*source))) {
 		target->more_bytes_needed = true;
 		return 0;
 	}
@@ -209,7 +209,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	 * A *VERY* simple test if the packet-type is legal,
 	 * hopefully we can detect de-sync-ing of the stream with this
 	 */
-			if(!isgraph((int)*w_ptr)) {
+			if(unlikely(!isgraph((int)*w_ptr))) {
 				logg_devel("packet with bogus/ugly type-name\n");
 				return -1;
 			}
@@ -314,29 +314,27 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 		case DECIDE_DECODE:
 			stat_packet(target, level);
 			target->data_trunk.pos      = 0;
-			target->data_trunk.limit    = 0;
-			target->data_trunk.capacity = 0;
 			target->data_trunk.data     = NULL;
 
 			if(0 < target->length)
-			{
 				target->packet_decode = GET_PACKET_DATA;
-			}
 			else
 			{
 				/* Packet has no length -> DirectAction */
-				target->data_trunk.pos = target->data_trunk.limit = 0;
-				target->packet_decode = DECODE_FINISHED;
+				target->data_trunk.limit = target->data_trunk.capacity = 0;
+				target->packet_decode    = DECODE_FINISHED;
 				return true;
 			}
-		//	break;
 		case GET_PACKET_DATA:
 			/* length is checked above (READ_LENGTH) to not exceed buffer */
 			target->data_trunk_is_freeable = false;
 			target->data_trunk.limit       = target->length;
 			target->data_trunk.capacity    = target->length;
 			target->data_trunk.data        = buffer_start(*source);
-			target->packet_decode          = DECODE_FINISHED;
+			if(!target->is_compound)
+				target->packet_decode       = DECODE_FINISHED;
+			else
+				target->packet_decode       = GET_CHILD_PACKETS;
 			source->pos                   += target->length;
 			return true;
 		case DECODE_FINISHED:
@@ -448,7 +446,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 						return ret_val;
 					}
 					/* is there only this byte? */
-					else if(1 == remaining_length)
+					else if(unlikely(1 == remaining_length))
 					{
 						/* 
 						 * Whoa! thats wrong, one byte cannot be a child,
@@ -567,7 +565,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 	 *
 	 */
 				/* all data delivered? */
-				if(target->length <= buffer_remaining(*source))
+				if(likely(target->length <= buffer_remaining(*source)))
 				{
 					logg_develd_old("%p would be complete: %lu long %lu remaining\n", (void *)target,
 						(unsigned long) target->length, (unsigned long)buffer_remaining(*source));

@@ -30,56 +30,29 @@
  * used in 32Bit & 64Bit
  */
 
-void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
+static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
 {
-#if defined(HAVE_MMX) || defined (HAVE_SSE)
-	static const uint32_t all_ones[4] GCC_ATTR_ALIGNED(16) = {~0U, ~0U, ~0U, ~0U};
+#if defined(HAVE_MMX) || defined (HAVE_SSE) || defined (HAVE_AVX)
+	static const uint32_t all_ones[8] GCC_ATTR_ALIGNED(32) = {~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U};
 #endif
-	char *dst_char;
-	const char *src_char;
+	char *dst_char = dst;
+	const char *src_char = src;
 
 	if(!dst)
 		return dst;
 
 	if(!src)
 		src = (const void *) dst;
-	
-	dst_char = dst;
-	src_char = src;
 
-	if(SYSTEM_MIN_BYTES_WORK > len)
+	if(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*4) > len)
 		goto no_alignment_wanted;
-
+	else
 	{
-		char *tmp_dst;
-		const char *tmp_src;
-#ifdef HAVE_SSE
-		tmp_dst = (char *)ALIGN(dst_char, 16);
-		tmp_src = (const char *)ALIGN(src_char, 16);
-
-		if((tmp_dst - dst_char) == (tmp_src - src_char))
-		{
-			size_t bla = tmp_dst - dst_char;
-			for(; bla && len; bla--, len--)
-				*dst_char++ = ~(*src_char++);
-			goto alignment_16;
-		}
-#endif
-#ifdef HAVE_MMX
-		tmp_dst = (char *)ALIGN(dst_char, 8);
-		tmp_src = (const char *)ALIGN(src_char, 8);
-
-		if((tmp_dst - dst_char) == (tmp_src - src_char))
-		{
-			size_t bla = tmp_dst - dst_char;
-			for(; bla && len; bla--, len--)
-				*dst_char++ = ~(*src_char++);
-			goto alignment_8;
-		}
-#endif
-		tmp_dst = (char *)ALIGN(dst_char, SOST);
-		tmp_src = (const char *)ALIGN(src_char, SOST);
-
+		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED))-dst_char;
+		len -= i;
+		for(; i; i--)
+			*dst_char++ = ~(*src_char++);
+		i = (((intptr_t)dst_char)&((ALIGNMENT_WANTED*2)-1))^(((intptr_t)src_char)&((ALIGNMENT_WANTED*2)-1));
 		/*
 		 * x86 special:
 		 * x86 handles misalignment in hardware for ordinary ops.
@@ -90,12 +63,18 @@ void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t le
 		 * Either its also aligned by accident, or working
 		 * unaligned dwordwise is still faster than bytewise.
 		 */
-		{
-			size_t bla = tmp_dst - dst_char;
-			for(; bla && len; bla--, len--)
-				*dst_char++ = ~(*src_char++);
+		if(i &  1)
 			goto alignment_size_t;
-		}
+		if(i &  2)
+			goto alignment_size_t;
+		if(i &  4)
+			goto alignment_size_t;
+		if(i &  8)
+			goto alignment_8;
+		if(i & 16)
+			goto alignment_16;
+		/* fall throuh */
+		goto alignment_32;
 	}
 
 	/* fall throuh if alignment fails */
@@ -107,15 +86,85 @@ void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t le
 	 * neg it with a hopefully bigger and
 	 * maschine-native datatype
 	 */
-#ifdef HAVE_SSE
+alignment_32:
+#ifdef HAVE_AVX
+alignment_16:
+alignment_8:
+	/*
+	 * neging 256 bit at once even sounds better!
+	 * and alignment is handeld more transparent!
+	 * they only forgot the pxor instruction for
+	 * avx, again...
+	 */
+	{
+		register intptr_t d0;
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCH(128(%2))
+			AVX_MOVE(%4, %%ymm0)
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			AVX_MOVE(%4, %%ymm1)
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(196(%1))
+			SSE_PREFETCH(196(%2))
+			AVX_XOR(    (%1), %%ymm0, %%ymm2)
+			AVX_XOR(  32(%1), %%ymm1, %%ymm3)
+			"add	$64, %1\n\t"
+			AVX_STORE(%%ymm2,   (%2))
+			AVX_STORE(%%ymm3, 32(%2))
+			"add	$64, %2\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$32, %5\n\t"
+			"jne	3f\n\t"
+			AVX_XOR(    (%1), %%ymm0, %%ymm2)
+			"add	$32, %1\n\t"
+			AVX_STORE(%%ymm2,  (%2))
+			"add	$32, %2\n"
+			"3:\n\t"
+			"test	$16, %5\n\t"
+			"jne	4f\n\t"
+			AVX_XOR(    (%1), %%xmm0, %%xmm2)
+			"add	$16, %1\n\t"
+			AVX_STORE(%%xmm2,  (%2))
+			"add	$16, %2\n"
+			"4:\n\t"
+			/* done! */
+			SSE_FENCE
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
+			: "0" (len/64), "m" (*all_ones), "r" (len%64)
+			: "cc", "memory",
+#ifdef __avx__
+			  "ymm0", "ymm1", "ymm2", "ymm3"
+#else
+			  /*
+			   * since these registers overlap, the compiler does not
+			   * need to know where exactly the party is hapening, when
+			   * he does not understand what ymm is
+			   */
+			  "xmm0", "xmm1", "xmm2", "xmm3"
+#endif
+		);
+		len %= 16;
+		goto handle_remaining;
+	}
+#else
+alignment_16:
+# ifdef HAVE_SSE
 	/*
 	 * neging 16 byte at once is quite attracktive,
 	 * if its fast...
 	 * there is no mmx/sse not, make it with xor
 	 * __builtin_ia32_xorps
 	 */
-alignment_16:
-	if(len/32)
 	{
 		register intptr_t d0;
 
@@ -125,6 +174,8 @@ alignment_16:
 			SSE_PREFETCH(32(%1))
 			SSE_PREFETCH(32(%2))
 			SSE_MOVE(%4, %%xmm2)
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
 			SSE_MOVE(%4, %%xmm3)
 			".p2align 3\n"
 			"1:\n\t"
@@ -139,23 +190,79 @@ alignment_16:
 			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
-			"jnz	1b\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"jne	3f\n\t"
+			SSE_MOVE(   (%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_STORE(%%xmm0,  (%2))
+			"add	$16, %2\n"
+			"3:\n\t"
+			/* done */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones)
+			: "0" (len/32), "m" (*all_ones), "r" (len%32)
 			: "cc", "xmm0", "xmm1", "xmm2", "xmm3", "memory"
 		);
-		len %= 32;
+		len %= 16;
 		goto handle_remaining;
 	}
-#endif
-#ifdef HAVE_MMX
+# endif
+alignment_8:
+# ifdef HAVE_SSE3
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(32(%2))
+			SSE_MOVE(%4, %%xmm2)
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			SSE_MOVE(%4, %%xmm3)
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(64(%2))
+			SSE_LOAD(   (%1), %%xmm0)
+			SSE_LOAD( 16(%1), %%xmm1)
+			"add	$32, %1\n\t"
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_XOR(  %%xmm3, %%xmm1)
+			SSE_STORE(%%xmm0,   (%2))
+			SSE_STORE(%%xmm1, 16(%2))
+			"add	$32, %2\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"jne	3f\n\t"
+			SSE_LOAD(   (%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_STORE(%%xmm0,  (%2))
+			"add	$16, %2\n"
+			"3:\n\t"
+			/* done */
+			SSE_FENCE
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
+			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "cc", "xmm0", "xmm1", "xmm2", "xmm3", "memory"
+		);
+		len %= 16;
+		goto handle_remaining;
+	}
+# elif defined(HAVE_MMX) && !defined(__x86_64__)
 	/*
 	 * neging 8 byte on a 32Bit maschine is also atractive
 	 * __builtin_ia32_pneg
 	 */
-alignment_8:
-	if(len/32)
 	{
 		register intptr_t d0;
 
@@ -164,10 +271,12 @@ alignment_8:
 			MMX_PREFETCH(  (%2))
 			MMX_PREFETCH(32(%1))
 			MMX_PREFETCH(32(%2))
-			"movq %4, %%mm4\n\t"
-			"movq %4, %%mm5\n\t"
-			"movq %4, %%mm6\n\t"
-			"movq %4, %%mm7\n\t"
+			"movq	%4, %%mm4\n\t"
+			"movq	%4, %%mm5\n\t"
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			"movq	%4, %%mm6\n\t"
+			"movq	%4, %%mm7\n\t"
 			".p2align 3\n"
 			"1:\n\t"
 			MMX_PREFETCH(64(%1))
@@ -187,15 +296,38 @@ alignment_8:
 			MMX_STORE(%%mm3, 24(%2))
 			"add	$32, %2\n\t"
 			"dec	%0\n\t"
-			"jnz	1b\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"jne	3f\n\t"
+			"movq	 (%1), %%mm0\n\t"
+			"movq	8(%1), %%mm1\n\t"
+			"add	$16, %1\n\t"
+			"pxor	%%mm4, %%mm0\n\t"
+			"pxor	%%mm5, %%mm1\n\t"
+			MMX_STORE(%%mm0,  (%2))
+			MMX_STORE(%%mm1, 8(%2))
+			"add	$16, %2\n"
+			"3:\n\t"
+			"test	$8, %5\n\t"
+			"jne	4f\n\t"
+			"movq	 (%1), %%mm0\n\t"
+			"add	$8, %1\n\t"
+			"pxor	%%mm4, %%mm0\n\t"
+			MMX_STORE(%%mm0,  (%2))
+			"add	$8, %2\n"
+			"4:\n\t"
+			/* done */
 			MMX_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones)
+			: "0" (len/32), "m" (*all_ones), "r" (len%32)
 			: "cc", "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7", "memory"
 		);
-		len %= 32;
+		len %= 8;
 		goto handle_remaining;
 	}
+# endif
 #endif
 	/*
 	 * unfortunadly my gcc created horrible loop-code with two

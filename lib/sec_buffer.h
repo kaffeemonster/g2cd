@@ -86,14 +86,14 @@ struct pointer_buff
 # define buffer_remaining(x) ((x).limit - (x).pos)
 #else
 # define buffer_start(x) ( \
-	((x).pos > (x).capacity) ? \
+	(unlikely((x).pos > (x).capacity)) ? \
 	logg_posd(LOGF_EMERG, \
 		"buffer pos of by %lu", \
 		(long unsigned) (x).pos - (x).capacity), \
 	(x).data + (x).pos : \
 	(x).data + (x).pos)
 # define buffer_remaining(x) ( \
-	((x).pos > (x).limit) ? \
+	(unlikely((x).pos > (x).limit)) ? \
 	logg_posd(LOGF_EMERG, \
 		"buffer wrap around by %lu", \
 		(long unsigned) (x).pos - (x).limit), \

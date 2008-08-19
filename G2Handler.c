@@ -26,7 +26,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -37,16 +37,16 @@
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #endif
-// System net-includes
+/* System net-includes */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-// other
+/* other */
 #include "other.h"
-// Own includes
+/* Own includes */
 #define _G2HANDLER_C
 #include "G2Handler.h"
 #include "G2MainServer.h"
@@ -60,25 +60,25 @@
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 
-//internal prototypes
+/* internal prototypes */
 static inline bool init_memory_h(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool handle_from_accept(struct g2_con_info **, int, int);
 static inline g2_connection_t **handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
-// do not inline, we take a pointer of it, and when its called, performance doesn't matter
+/* do not inline, we take a pointer of it, and when its called, performance doesn't matter */
 static void clean_up_h(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Handler(void *param)
 {
-	//data-structures
+	/* data-structures */
 	struct g2_con_info *work_cons = NULL;
 	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
-	//sock-things
+	/* sock-things */
 	int from_accept = -1;
 	int epoll_fd = -1;
 	int sock2main;
 
-	//other variables
+	/* other variables */
 	struct epoll_event *eevents = NULL;
 	struct epoll_event *e_wptr = NULL;
 	size_t i;
@@ -88,7 +88,7 @@ void *G2Handler(void *param)
 	sock2main = *((int *)param);
 	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
-	// getting memory for our FD's and everything else
+	/* getting memory for our FD's and everything else */
 	if(!init_memory_h(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))
 	{ 
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
@@ -99,50 +99,47 @@ void *G2Handler(void *param)
 	}
 	logg(LOGF_DEBUG, "Handler:\tEPoll-FD -> %i\n", epoll_fd);
 
-	if(sizeof(from_accept) != recv(sock2main, &from_accept, sizeof(from_accept), 0))
-	{
+	if(sizeof(from_accept) != recv(sock2main, &from_accept, sizeof(from_accept), 0)) {
 		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
 		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	logg(LOGF_DEBUG, "Handler:\tfrom_accept -> %i\n", from_accept);
 
-	// Setting first entry to be polled, our Pipe from Acceptor
+	/* Setting first entry to be polled, our Pipe from Acceptor */
 	eevents->events = EPOLLIN;
-	// Attention - very ugly, but i have to distinguish these two sockets, and all the other
+	/* Attention - very ugly, but i have to distinguish these two sockets, and all the other */
 	eevents->data.ptr = (void *)1;
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, from_accept, eevents))
-	{
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, from_accept, eevents)) {
 		logg_errno(LOGF_ERR, "adding acceptor-pipe to epoll");
 		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	eevents->data.ptr = (void *)0;
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents))
-	{
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents)) {
 		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
 		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 
-	// we are up and running
+	/* we are up and running */
 	server.status.all_abord[THREAD_HANDLER] = true;
 	while(keep_going)
 	{
 		recv_buff_local_refill();
-		// Let's do it
+		/* Let's do it */
 		num_poll = my_epoll_wait(epoll_fd, eevents, EVENT_SPACE, 8000);
 		e_wptr = eevents;
 		switch(num_poll)
 		{
-		// Normally: see what has happened
+		/* Normally: see what has happened */
 		default:
 			for(i = num_poll; i; i--, e_wptr++)
 			{
-				// A common Socket
+				/* A common Socket? */
 				if(e_wptr->data.ptr)
 				{
-					if(((void *)1) != e_wptr->data.ptr)
+					if(likely(((void *)1) != e_wptr->data.ptr))
 					{
 						logg_develd_old("-------- Events: 0x%0X, PTR: %p\n", e_wptr->events, e_wptr->data.ptr);
 						// Any problems?
@@ -153,8 +150,7 @@ void *G2Handler(void *param)
 							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
 							if(tmp_con_holder)
 								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
-							else
-							{
+							else {
 								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
 								keep_going = false;
 							}
@@ -166,13 +162,11 @@ void *G2Handler(void *param)
 							g2_connection_t **tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd, &lrecv_buff, &lsend_buff);
 							if(tmp_con_holder)
 							{
-								if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff)
-								{
+								if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff) {
 									(*tmp_con_holder)->recv = NULL;
 									buffer_clear(*lrecv_buff);
 								}
-								if(lsend_buff && (*tmp_con_holder)->send == lsend_buff)
-								{
+								if(lsend_buff && (*tmp_con_holder)->send == lsend_buff) {
 									(*tmp_con_holder)->send = NULL;
 									buffer_clear(*lsend_buff);
 								}
@@ -180,12 +174,12 @@ void *G2Handler(void *param)
 							}
 						}
 					}
-					// the from_acceptor-pipe
+					/* the from_acceptor-pipe */
 					else
 					{
 						if(e_wptr->events & (uint32_t) EPOLLIN)
 							handle_from_accept(&work_cons, from_accept, epoll_fd);
-						// if there is no read-interrest, we're blown up
+						/* if there is no read-interrest, we're blown up */
 						else
 						{
 							logg_pos(LOGF_ERR, "from_acceptor-pipe is wired\n");
@@ -194,22 +188,20 @@ void *G2Handler(void *param)
 						}
 					}
 				}
-				// the abort-socket
+				/* the abort-socket */
 				else
 				{
 // TODO: Check for a proper stop-sequence ??
 					// everything but 'ready for write' means:
 					// we're finished...
-					if(e_wptr->events & ~((uint32_t)EPOLLOUT))
-					{
+					if(e_wptr->events & ~((uint32_t)EPOLLOUT)) {
 						keep_going = false;
 						break;
 					}
 
-					// else stop this write interrest
+					/* else stop this write interrest */
 					e_wptr->events = (uint32_t)EPOLLIN;
-					if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sock2main, e_wptr))
-					{
+					if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sock2main, e_wptr)) {
 						logg_errno(LOGF_ERR, "changing epoll-interrests for socket-2-main");
 						keep_going = false;
 						break;
@@ -217,27 +209,24 @@ void *G2Handler(void *param)
 				}
 			}
 			break;
-		// Nothing happened (or just the Timeout)
+		/* Nothing happened (or just the Timeout) */
 		case 0:
-			//putchar('*');
-			//fflush(stdout);
 			break;
-		// Something bad happened
+		/* Something bad happened */
 		case -1:
 			if(EINTR == errno)
 				break;
-			// Print what happened
+			/* Print what happened */
 			logg_errno(LOGF_ERR, "poll");
-			//and get out here (at the moment)
+			/* and get out here (at the moment) */
 			keep_going = false;
-			//exit(EXIT_FAILURE);
 			break;
 		}
 	}
 
 	clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 	pthread_exit(NULL);
-	return NULL; // to avoid warning about reaching end of non-void funktion
+	return NULL; /* to avoid warning about reaching end of non-void funktion */
 }
 
 static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_info **work_cons,

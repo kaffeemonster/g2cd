@@ -35,10 +35,12 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 #include "memxor_tmpl.c"
 
 #define HAVE_MMX
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _MMX
+#ifndef __x86_64__
+# undef ARCH_NAME_SUFFIX
+# define ARCH_NAME_SUFFIX _MMX
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memxor_tmpl.c"
+# include "memxor_tmpl.c"
+#endif
 
 #define HAVE_SSE
 #undef ARCH_NAME_SUFFIX
@@ -52,19 +54,41 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 #include "memxor_tmpl.c"
 
+#define HAVE_SSE3
+#undef ARCH_NAME_SUFFIX
+#define ARCH_NAME_SUFFIX _SSE3
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#include "memxor_tmpl.c"
+
+#if HAVE_BINUTILS >= 219
+# define HAVE_AVX
+# undef ARCH_NAME_SUFFIX
+# define ARCH_NAME_SUFFIX _AVX
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+# include "memxor_tmpl.c"
+#endif
+
 void *(*memxor)(void *dst, const void *src, size_t len) = memxor_x86;
 
 static void memxor_select(void) GCC_ATTR_CONSTRUCT;
 static void memxor_select(void)
 {
-	struct test_cpu_feature f[] =
+	static const struct test_cpu_feature f[] =
 	{
-		{.func = (void (*)(void))memxor_SSE2, .flags_needed = CFEATURE_SSE2},
-		{.func = (void (*)(void))memxor_SSE, .flags_needed = CFEATURE_SSE},
-		{.func = (void (*)(void))memxor_MMX, .flags_needed = CFEATURE_MMX},
-		{.func = (void (*)(void))memxor_x86, .flags_needed = -1},
+#if HAVE_BINUTILS >= 219
+		{.func = (void (*)(void))memxor_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+#endif
+		{.func = (void (*)(void))memxor_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+		{.func = (void (*)(void))memxor_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+		{.func = (void (*)(void))memxor_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#ifndef __x86_64__
+		{.func = (void (*)(void))memxor_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+#endif
+		{.func = (void (*)(void))memxor_x86, .flags_needed = -1, .callback = NULL},
 	};
-	test_cpu_feature((void (**)(void))&memxor, f, anum(f));
+	test_cpu_feature(
+			&memxor,
+			f, anum(f));
 }
 
 

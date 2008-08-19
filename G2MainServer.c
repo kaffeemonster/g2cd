@@ -115,14 +115,12 @@ int main(int argc, char **args)
 	/* output (log) to file? */
 	if(-1 != log_to_fd)
 	{
-		if(STDOUT_FILENO != dup2(log_to_fd, STDOUT_FILENO))
-		{
+		if(STDOUT_FILENO != dup2(log_to_fd, STDOUT_FILENO)) {
 			logg_errno(LOGF_CRIT, "mapping stdout");
 			return EXIT_FAILURE;
 		}
-				
-		if(STDERR_FILENO != dup2(log_to_fd, STDERR_FILENO))
-		{
+
+		if(STDERR_FILENO != dup2(log_to_fd, STDERR_FILENO)) {
 // TODO: Can we logg here?
 			puts("mapping stderr");
 			return EXIT_FAILURE;
@@ -139,8 +137,7 @@ int main(int argc, char **args)
 	setup_resources();
 
 	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_ACCEPTOR], &server.settings.t_def_attr, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN]))
-	{
+	if(pthread_create(&main_threads[THREAD_ACCEPTOR], &server.settings.t_def_attr, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN])) {
 		logg_errno(LOGF_CRIT, "pthread_create G2Accept");
 		clean_up_m();
 		return EXIT_FAILURE;
@@ -156,27 +153,23 @@ int main(int argc, char **args)
 		return EXIT_FAILURE;
 	}
 
-	if(pthread_create(&main_threads[THREAD_UDP], &server.settings.t_def_attr, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN]))
-	{
+	if(pthread_create(&main_threads[THREAD_UDP], &server.settings.t_def_attr, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN])) {
 		logg_errno(LOGF_CRIT, "pthread_create G2UDP");
 		server_running = false;
 	}
-	
-	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL))
-	{
+
+	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
 		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
 		server_running = false;
 	}
 	/* threads startet */
 
 	/* send the pipe between Acceptor and Handler */
-	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_ACCEPTOR][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0))
-	{
+	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_ACCEPTOR][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0)) {
 		logg_errno(LOGF_CRIT, "sending IPC Pipe");
 		server_running = false;
 	}
-	if(sizeof(accept_2_handler[OUT]) != send(sock_com[THREAD_HANDLER][OUT], &accept_2_handler[OUT], sizeof(accept_2_handler[OUT]), 0))
-	{
+	if(sizeof(accept_2_handler[OUT]) != send(sock_com[THREAD_HANDLER][OUT], &accept_2_handler[OUT], sizeof(accept_2_handler[OUT]), 0)) {
 		logg_errno(LOGF_CRIT, "sending IPC Pipe");
 		server_running = false;
 	}
@@ -272,16 +265,14 @@ int main(int argc, char **args)
 		{
 			if(!server.status.all_abord[j]) 
 				all_down = true;
-			else
-			{
+			else {
 				all_down = false;
 				break;
 			}
 		}
 
 		if(all_down) break;
-		else if(9 == i)
-		{
+		else if(9 == i) {
 			logg_pos(LOGF_ERR, "not all gone down! Aborting!\n");
 			fsync(STDOUT_FILENO);
 			return EXIT_FAILURE;
@@ -551,7 +542,7 @@ static inline void setup_resources(void)
  * could still fail.
  */
 #define FD_RESSERVE 20UL
-	if(!getrlimit(RLIMIT_NOFILE, &our_limit))
+	if(likely(!getrlimit(RLIMIT_NOFILE, &our_limit)))
 	{
 		logg_posd(LOGF_DEBUG,
 			"FDs: max_con=%lu\thard_limit=%lu %s\tsoft_limit=%lu\n",
@@ -716,7 +707,7 @@ static inline void read_uprofile(void)
 	uprod_length += xml_length;         /* /UPROD-child-length */
 
 // TODO: make it send-buffer-capacity transparent
-	if(uprod_length > NORM_BUFF_CAPACITY)
+	if(unlikely(uprod_length > NORM_BUFF_CAPACITY))
 	{
 		logg_pos(LOGF_NOTICE, "profile-file too big\n");
 		goto read_uprofile_end;
