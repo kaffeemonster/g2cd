@@ -320,13 +320,11 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
 
 	/* get buffer */
-	if(!manage_buffer_before(&(*w_entry)->recv, lrecv_buff))
-	{
+	if(!manage_buffer_before(&(*w_entry)->recv, lrecv_buff)) {
 		(*w_entry)->flags.dismissed = true;
 		return w_entry;
 	}
-	if(!manage_buffer_before(&(*w_entry)->send, lsend_buff))
-	{
+	if(!manage_buffer_before(&(*w_entry)->send, lsend_buff)) {
 		(*w_entry)->flags.dismissed = true;
 		return w_entry;
 	}
@@ -334,14 +332,48 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 	/* write */
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
-		if(!do_write(p_entry, epoll_fd))
-			return w_entry;
+		if(!list_empty(&(*w_entry)->packets_to_send))
+		{
+			struct iovec vec[32];
+			struct list_head *e, *head = &(*w_entry)->packets_to_send;
+			ssize_t ret;
+			size_t vused = 0;
+
+			for(e = head->next;
+			    prefetch(e->next), e != head && vused < anum(vec);
+			    e = e->next)
+			{
+				g2_packet_t *p = list_entry(e, g2_packet_t, list);
+				ret = g2_packet_serialize_to_iovec(p, &vec[vused], anum(vec) - vused);
+				if(-1 == ret)
+				{
+					char addr_buf[INET6_ADDRSTRLEN];
+					logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+						"failed to encode packet-stream",
+						combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
+						ntohs(combo_addr_port(&(*w_entry)->remote_host)),
+						(*w_entry)->com_socket);
+					(*w_entry)->flags.dismissed = true;
+					return w_entry;
+				}
+				vused += (size_t)ret;
+			}
+
+			ret = do_writev(p_entry, epoll_fd, vec, vused, !buffer_cempty(*(*w_entry)->send)||vused==anum(vec));
+			if(-1 == ret)
+				return w_entry;
+			/* TODO: cleanup packets_to_send */
+		}
+		else if(!buffer_cempty(*(*w_entry)->send)) {
+			if(!do_write(p_entry, epoll_fd))
+				return w_entry;
+		}
 	}
 
 	/* read */
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
-		g2_packet_t tmp_packet = { .data_trunk_is_freeable = false};
+		g2_packet_t tmp_packet;
 		bool	retry;
 
 		if(!do_read(p_entry))
@@ -406,11 +438,10 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				d_source = (*w_entry)->recv;
 
 			build_packet = (*w_entry)->build_packet;
-			if(!build_packet)
-			{
+			if(!build_packet) {
 				build_packet = &tmp_packet;
-				memset(build_packet, 0, sizeof(*build_packet));
-				build_packet->packet_decode = CHECK_CONTROLL_BYTE;
+				g2_packet_init(build_packet);
+				INIT_PBUF(&tmp_packet.data_trunk);
 			}
 			else
 				logg_develd("taking %p\n", build_packet);
@@ -427,7 +458,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 					"failed to decode packet-stream",
 					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
 					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-					(*w_entry)->com_socket);			
+					(*w_entry)->com_socket);
 				(*w_entry)->flags.dismissed = true;
 				return w_entry;
 			}
@@ -448,8 +479,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 						(*w_entry)->poll_interrests |= (uint32_t)EPOLLOUT;
 						tmp_eevent.events = (*w_entry)->poll_interrests;
 						tmp_eevent.data.ptr = w_entry;
-						if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent))
-						{
+						if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
 							logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 							return w_entry;
 						}
@@ -458,37 +488,36 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 					/* !!! packet is seen as finished here !!! */
 					if(build_packet->source_needs_compact)
 						buffer_compact(*d_source);
-					if(build_packet != &tmp_packet)
-					{
+
+					if(build_packet->is_freeable)
 						logg_devel("freeing durable packet\n");
-						g2_packet_free((*w_entry)->build_packet);
-						(*w_entry)->build_packet = NULL;
-					}
 					else if(build_packet->data_trunk_is_freeable)
-					{
 						logg_devel("datatrunk freed\n");
-						free(build_packet->data_trunk.data);
-					}
+
+					if((*w_entry)->build_packet &&
+					   (*w_entry)->build_packet != build_packet)
+						logg_devel("w_entrys packet is not the same???");
+
+					g2_packet_free(build_packet);
+					(*w_entry)->build_packet = NULL;
 
 					retry = true;
 				}
 				else
 				{
 					/* 
-					 * it is asumed, that a package ending here has state to
+					 * it is assumed that a package ending here has state to
 					 * be saved until next recv on the one hand, but does not 
 					 * contain volatile data
 					 */
 					if(build_packet->packet_decode != CHECK_CONTROLL_BYTE)
 					{
 						/* copy build packet to durable storage */
-						g2_packet_t *t = g2_packet_alloc();
-						if(!t)
-						{
+						g2_packet_t *t = g2_packet_clone(build_packet);
+						if(!t) {
 							logg_errno(LOGF_DEBUG, "allocating durable packet");
 							return w_entry;
 						}
-						*t = *build_packet;
 						(*w_entry)->build_packet = t;
 					}
 					retry = false;

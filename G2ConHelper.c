@@ -95,7 +95,7 @@ bool do_read(struct epoll_event *p_entry)
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	ssize_t result = 0;
 	bool ret_val = true;
-#ifdef DEBUG_LEVEL
+#ifdef DEBUG_DEVEL
 	if(!w_entry->recv)
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
@@ -138,8 +138,7 @@ bool do_read(struct epoll_event *p_entry)
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno)
-		{
+		if(EAGAIN != errno) {
 			logg_errno(LOGF_DEBUG, "write");
 			w_entry->flags.dismissed = true;
 			ret_val = false;
@@ -151,12 +150,101 @@ bool do_read(struct epoll_event *p_entry)
 	return ret_val;
 }
 
+static size_t iovec_len(const struct iovec vec[], size_t cnt)
+{
+	size_t i, len;
+	for(i = 0, len = 0; i < cnt; i++)
+		len += vec[i].iov_len;
+	return len;
+}
+
+ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec vec[], size_t cnt, bool more)
+{
+	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
+	ssize_t result = 0;
+
+	if(!cnt)
+		return 0;
+
+	do	{
+		errno = 0;
+		result = writev(w_entry->com_socket, vec, cnt);
+	} while(-1 == result && EINTR == errno);
+
+	switch(result)
+	{
+	default:
+		if(!more && iovec_len(vec, cnt) <= (size_t)result)
+		{
+			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+				w_entry->flags.dismissed = true;
+				result = -1;
+			}
+			else if(w_entry->flags.dismissed)
+			{
+				char addr_buf[INET6_ADDRSTRLEN];
+				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+					"Dismissed!",
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
+				result = -1;
+			}
+		}
+		break;
+	case  0:
+		if(iovec_len(vec, cnt))
+		{
+			if(EAGAIN != errno)
+			{
+				char addr_buf[INET6_ADDRSTRLEN];
+				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+					"Dismissed!",
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
+				w_entry->flags.dismissed = true;
+				result = -1;
+			}
+			else
+				logg_devel("not ready to write\n");
+		}
+		else if(!more)
+		{
+			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+				w_entry->flags.dismissed = true;
+				result = -1;
+			}
+			else if(w_entry->flags.dismissed)
+			{
+				char addr_buf[INET6_ADDRSTRLEN];
+				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
+					"EOF reached!", errno,
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
+				result = -1;
+			}
+		}
+		break;
+	case -1:
+		if(EAGAIN != errno)
+			logg_errno(LOGF_DEBUG, "write");
+		break;
+	}
+	return result;
+}
+
 bool do_write(struct epoll_event *p_entry, int epoll_fd)
 {
 	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
 	bool ret_val = true;
 	ssize_t result = 0;
-#ifdef DEBUG_LEVEL
+#ifdef DEBUG_DEVEL
 	if(!w_entry->send)
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
@@ -165,7 +253,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
 			ntohs(combo_addr_port(&w_entry->remote_host)),
 			w_entry->com_socket);
-		w_entry->flags.dismmised = true;
+		w_entry->flags.dismissed = true;
 		ret_val = false;
 	}
 #endif
@@ -184,8 +272,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		if(!buffer_remaining(*w_entry->send))
 		{
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry))
-			{
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;
@@ -222,8 +309,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		else
 		{
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry))
-			{
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;
@@ -245,7 +331,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 			logg_errno(LOGF_DEBUG, "write");
 			ret_val = false;
 		}
-		break; 
+		break;
 	}
 	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_entry->send->pos, work_entry->send->limit);
 	buffer_compact(*w_entry->send);

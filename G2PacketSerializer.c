@@ -96,16 +96,14 @@ static inline int check_control_byte_p(struct pointer_buff *source, g2_packet_t 
 	uint8_t control;
 
 	/* get and interpret the control-byte of a packet */
-	if(1 > buffer_remaining(*source))
-	{
+	if(1 > buffer_remaining(*source)) {
 		target->more_bytes_needed = true;
 		return 0;
 	}
 			
 	control = *buffer_start(*source);
 	source->pos++;
-	if(!control)
-	{
+	if(!control) {
 		logg_devel("stream terminated '\\0'\n");
 		return -1;
 	}
@@ -537,9 +535,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			stat_packet(target, func_ret_val);
 
 			if(0 < target->length)
-			{
 				target->packet_decode = START_EXTRACT_PACKET_FROM_STREAM;
-			}
 			else
 			{
 			/* Packet has no length -> DirectAction */
@@ -551,7 +547,9 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 		case START_EXTRACT_PACKET_FROM_STREAM:
 		/* look what have to be done to extract the data */
 			/* do we have a trunk? */
-			if(0 == target->data_trunk.capacity || !target->data_trunk.data)
+			if(!target->data_trunk_is_freeable  ||
+			   0 == target->data_trunk.capacity ||
+			   !target->data_trunk.data)
 			{
 				/* we do not seem to have a trunk, try to attach the read buffer */
 	/* 
@@ -595,25 +593,32 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			if(target->length > target->data_trunk.capacity)
 			{
 				/* no, realloc */
-				char *tmp_ptr;
+				char *tmp_ptr = NULL;
 				if(target->data_trunk_is_freeable)
 					tmp_ptr = realloc(target->data_trunk.data, target->length);
-				else
+				else if(target->length > sizeof(target->data))
 					tmp_ptr = malloc(target->length);
-				if(!tmp_ptr)
+
+				if(tmp_ptr) {
+					target->data_trunk_is_freeable = true;
+					target->data_trunk.capacity = target->length;
+				}
+				else
 				{
-					logg_errno(LOGF_DEBUG, "reallocating packet space");
-					return false;
+					if(target->length > sizeof(target->data)) {
+						logg_errno(LOGF_DEBUG, "reallocating packet space");
+						return false;
+					}
+					target->data_trunk_is_freeable = false;
+					tmp_ptr = target->data;
+					target->data_trunk.capacity = sizeof(target->data);
 				}
 
-				target->data_trunk_is_freeable = true;
 				target->data_trunk.data = tmp_ptr;
-				target->data_trunk.capacity = target->length;
 				buffer_clear(target->data_trunk);
-				logg_develd("%p -> packet space reallocated: %lu bytes\n", (void *) target, (unsigned long) target->length);
+				logg_develd("%p -> packet space %p reallocated: %lu bytes\n", (void *) target, (void *) target->data_trunk.data, (unsigned long) target->length);
 			}
-			else
-			{
+			else {
 				target->data_trunk.pos = 0;
 				target->data_trunk.limit = target->length;
 			}
@@ -686,7 +691,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 	return ret_val;
 }*/
 
-/*
+
 #if 0
 		case GET_CHILD_PACKETS:
 		// if we have some (is_compound && length != 0) get ChildPackete
@@ -793,7 +798,220 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			}
 			else return ret_val;
 			break;
+#endif
 
+ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t vlen)
+{
+	static const size_t priv_zero = 0;
+	size_t vused = 0;
+	ssize_t ret;
+
+	switch(p->packet_encode)
+	{
+	case DECIDE_ENCODE:
+		p->packet_encode = PREPARE_SERIALIZATION;
+	case PREPARE_SERIALIZATION:
+		ret = g2_packet_serialize_prep(p);
+		if(-1 == ret)
+			return ret;
+	case SERIALIZATION_PREPARED:
+		p->packet_encode = IOVEC_HEADER;
+	case IOVEC_HEADER:
+		if(!vlen || vused == vlen)
+			break;
+		vec[vused].iov_base  = p->data;
+		vec[vused++].iov_len = 1 + p->length_length + p->type_length;
+		p->packet_encode = IOVEC_CHILD;
+	case IOVEC_CHILD:
+		if(!vlen || vused == vlen)
+			break;
+		{
+			struct list_head *e;
+			for(e = p->children.next;
+			    prefetch(e->next), e != &p->children && vused < vlen;
+			    e = e->next)
+			{
+				g2_packet_t *child = list_entry(e, g2_packet_t, list);
+				ret = g2_packet_serialize_to_iovec(child, &vec[vused], vlen - vused);
+				if(-1 == ret)
+					return ret;
+				vused += (size_t)ret;
+			}
+		}
+		/* stay in this state until we are sure there is no more child data */
+		if(vused == vlen)
+			break;
+		p->packet_encode = IOVEC_ZERO;
+	case IOVEC_ZERO:
+		if(p->is_compound && p->data_trunk.data && buffer_remaining(p->data_trunk))
+		{
+			if(!vlen || vused == vlen)
+				break;
+			vec[vused].iov_base  = (void *)(intptr_t)&priv_zero;
+			vec[vused++].iov_len = 1;
+		}
+		p->packet_encode = IOVEC_DATA;
+	case IOVEC_DATA:
+		if(p->data_trunk.data && buffer_remaining(p->data_trunk))
+		{
+			if(!vlen || vused == vlen)
+				break;
+			vec[vused].iov_base  = buffer_start(p->data_trunk);
+			vec[vused++].iov_len = buffer_remaining(p->data_trunk);
+		}
+		p->packet_encode = IOVEC_CLEANAFTER;
+	case IOVEC_CLEANAFTER:
+	case ENCODE_FINISHED:
+		break;
+	}
+
+	return vused;
+}
+
+/*
+ * g2_packet_serialize_prep - prepare packet for serialization
+ *
+ * p - the packet to prepare
+ *
+ * our job is to go over the packet (and it childs) and:
+ * - gather the lengths
+ * - set the fields length_length, type_length, endian, compound
+ * - write out every header
+ *
+ * return value: REAL packet length !! with header
+ *               -1 on error
+ */
+ssize_t g2_packet_serialize_prep(g2_packet_t *p)
+{
+	size_t size = 0, child_size = 0, i, j;
+	uint8_t control = 0;
+
+	/* calculate the inner packet length */
+	if(!list_empty(&p->children)) {
+		struct list_head *e;
+		list_for_each(e, &p->children) {
+			g2_packet_t *child = list_entry(e, g2_packet_t, list);
+			ssize_t ret = g2_packet_serialize_prep(child);
+			if(-1 == ret)
+				return ret;
+			child_size += (size_t)ret;
+		}
+		p->is_compound = true;
+		size += child_size;
+	} else
+		p->is_compound = false;
+
+	if(p->data_trunk.data && buffer_remaining(p->data_trunk)) {
+		size += size ? 1 : 0; /* child terminator */
+		size += buffer_remaining(p->data_trunk);
+	}
+
+	/* check inner length */
+	if(!size)
+		p->length_length = 0;
+	else if(size <= 0xFF)
+		p->length_length = 1;
+	else if(size <= 0xFFFF)
+		p->length_length = 2;
+	else if(size <= 0xFFFFFF)
+		p->length_length = 3;
+	else {
+		size_t difference;
+		/* normaly we should NEVER reach this! */
+		logg_develd("Packet with very big size! Trying scary fixup for \"%s\": %lu\n",
+			g2_ptype_names[p->type], (unsigned long)size);
+		difference = size - child_size;
+		if(0 == difference || difference >= buffer_remaining(p->data_trunk))
+			return -1;
+		p->data_trunk.limit -= difference;
+		size = 0xFFFFFF;
+		p->length_length = 3;
+	}
+
+	p->length = size;
+	p->type_length = g2_ptype_names_length[p->type];
+	/*
+	 * don't touch endiannes, inner packet data mandates
+	 * endiannes. We can adapt how we write the length
+	 * But beware: endiannes has to be set up!
+	 */
+	/* p->big_endian  = host_endian ; */
+
+/*	control |= p->c_reserved  ? 0x01 : 0; */ /* we don't set this bit */
+	control |= p->big_endian  ? 0x02 : 0;
+	control |= p->is_compound ? 0x04 : 0;
+	control |= (p->type_length-1) << 3;
+	control |= p->length_length << 6;
+	/*
+	 * It is possible to create a zero control byte (no length,
+	 * 1 char type, no options), and this is not allowed.
+	 * Set is_compound in this case, like Shareaza does and is
+	 * stated in the spec. 
+	 * I personaly don't like this, since it creates a special
+	 * case: is_compound is only valid if there is data. And you
+	 * always have to look for is_compound because a packet may
+	 * grow children.
+	 * We could also set big_endian without harm, there is no data
+	 * this can affect ;), but i think every WinApp would go belly
+	 * up on such a packet...
+	 * I don't know why they choose this special meaning for
+	 * is_compound, big_endian would have been easier.
+	 */
+	control = control ? control : 0x04;
+
+	/* check if headerspace is free */
+	if(p->data_trunk.data == p->data)
+	{
+		size_t size_needed = p->length_length + p->type_length + 1;
+		/*OhOh, we have a Problem, data to sent stored in header space */
+		if((sizeof(p->data) - size_needed) < buffer_remaining(p->data_trunk)) {
+			char *tmp_ptr;
+			/* totaly fucked up, header and data to big */
+			logg_develd("Packet with stuffed data! Expensive Fixup for \"%s\": %lu\n",
+				g2_ptype_names[p->type], (unsigned long)buffer_remaining(p->data_trunk));
+			if(!(tmp_ptr = malloc(16)))
+				return -1;
+			memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
+			p->data_trunk.data = tmp_ptr;
+			p->data_trunk_is_freeable = true;
+		}
+		else if(size_needed > p->data_trunk.pos)
+		{
+			size_t dlength = buffer_remaining(p->data_trunk);
+			/* move data up */
+			memmove(p->data + size_needed, buffer_start(p->data_trunk), dlength);
+			p->data_trunk.pos  = 0;
+			p->data_trunk.data = p->data + size_needed;
+			p->data_trunk.limit = dlength;
+			p->data_trunk.capacity = sizeof(p->data) - size_needed;
+			p->data_trunk_is_freeable = false;
+		}
+		/* else we are lucky bastards */
+	}
+
+	i = 0;
+	p->data[i++] = control;
+	/* write the inner packet length */
+	if(!p->big_endian) {
+		uint32_t nsize = size;
+		for(j = 0; j < p->length_length; j++, nsize >>=8)
+			p->data[i++] = (char)(nsize & 0xFF);
+	} else {
+		for(j = p->length_length; j--;)
+			p->data[i++] = (char)(size >> (j*8)) & 0xFF;
+	}
+	for(j = 0; j < p->type_length; i++, j++)
+		p->data[i] = g2_ptype_names[p->type][j];
+
+	/*
+	 * return REAL packet length !!
+	 */
+	p->packet_encode = SERIALIZATION_PREPARED;
+	return size + p->length_length + p->type_length + 1;
+}
+
+/*
+#if 0
   public boolean encode(ByteBuffer target, G2Packet source, int level)
 	{
 		source.more_bytes_needed = false;

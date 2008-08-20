@@ -64,33 +64,35 @@ static bool listen_what(g2_connection_t *, size_t);
 	/* con buffer */
 static atomicptra_t free_cons[FC_CAP_START];
 	/* encoding */
-static const action_string enc_as00	= {NULL,		str_size(ENC_NONE_S),		ENC_NONE_S};
-static const action_string enc_as01	= {NULL,		str_size(ENC_DEFLATE_S),	ENC_DEFLATE_S};
+static const action_string enc_as00 = {NULL, str_size(ENC_NONE_S),    ENC_NONE_S};
+static const action_string enc_as01 = {NULL, str_size(ENC_DEFLATE_S), ENC_DEFLATE_S};
+static const action_string enc_as02 = {NULL, str_size(ENC_LZO_S),     ENC_LZO_S};
 
 const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 {
 	&enc_as00,
 	&enc_as01,
+	&enc_as02,
 };
 	/* headerfields */
-static const action_string h_as00 = {&accept_what,		str_size(ACCEPT_KEY),		ACCEPT_KEY};
-static const action_string h_as01 = {&uagent_what,		str_size(UAGENT_KEY),		UAGENT_KEY};
-static const action_string h_as02 = {&a_encoding_what,str_size(ACCEPT_ENC_KEY),	ACCEPT_ENC_KEY};
-static const action_string h_as03 = {&remote_ip_what,	str_size(REMOTE_ADR_KEY),	REMOTE_ADR_KEY};
-static const action_string h_as04 = {&listen_what,		str_size(LISTEN_ADR_KEY),	LISTEN_ADR_KEY};
-static const action_string h_as05 = {&content_what,	str_size(CONTENT_KEY),		CONTENT_KEY};
-static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY),	CONTENT_ENC_KEY};
-static const action_string h_as07 = {&ulpeer_what,		str_size(UPEER_KEY),			UPEER_KEY};
-static const action_string h_as08 = {&ulpeer_what,		str_size(HUB_KEY),			HUB_KEY};
-static const action_string h_as09 = {NULL,				str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
-static const action_string h_as10 = {NULL,				str_size(HUB_NEEDED_KEY),	HUB_NEEDED_KEY};
-static const action_string h_as11 = {NULL,				str_size(X_REQUERIES_KEY),	X_REQUERIES_KEY};
-static const action_string h_as12 = {NULL,				str_size(X_TRY_UPEER_KEY),	X_TRY_UPEER_KEY};
-static const action_string h_as13 = {NULL,				str_size(X_TRY_HUB_KEY),	X_TRY_HUB_KEY};
-static const action_string h_as14 = {&empty_action_c,	str_size(GGEP_KEY),			GGEP_KEY};
-static const action_string h_as15 = {&empty_action_c,	str_size(PONG_C_KEY),		PONG_C_KEY};
-static const action_string h_as16 = {&empty_action_c,	str_size(QUERY_ROUTE_KEY),	QUERY_ROUTE_KEY};
-static const action_string h_as17 = {&empty_action_c,	str_size(VEND_MSG_KEY),		VEND_MSG_KEY};
+static const action_string h_as00 = {&accept_what,    str_size(ACCEPT_KEY),      ACCEPT_KEY};
+static const action_string h_as01 = {&uagent_what,    str_size(UAGENT_KEY),      UAGENT_KEY};
+static const action_string h_as02 = {&a_encoding_what,str_size(ACCEPT_ENC_KEY),  ACCEPT_ENC_KEY};
+static const action_string h_as03 = {&remote_ip_what, str_size(REMOTE_ADR_KEY),  REMOTE_ADR_KEY};
+static const action_string h_as04 = {&listen_what,    str_size(LISTEN_ADR_KEY),  LISTEN_ADR_KEY};
+static const action_string h_as05 = {&content_what,   str_size(CONTENT_KEY),     CONTENT_KEY};
+static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY), CONTENT_ENC_KEY};
+static const action_string h_as07 = {&ulpeer_what,    str_size(UPEER_KEY),       UPEER_KEY};
+static const action_string h_as08 = {&ulpeer_what,    str_size(HUB_KEY),         HUB_KEY};
+static const action_string h_as09 = {NULL,            str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
+static const action_string h_as10 = {NULL,            str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
+static const action_string h_as11 = {NULL,            str_size(X_REQUERIES_KEY), X_REQUERIES_KEY};
+static const action_string h_as12 = {NULL,            str_size(X_TRY_UPEER_KEY), X_TRY_UPEER_KEY};
+static const action_string h_as13 = {NULL,            str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
+static const action_string h_as14 = {&empty_action_c, str_size(GGEP_KEY),        GGEP_KEY};
+static const action_string h_as15 = {&empty_action_c, str_size(PONG_C_KEY),      PONG_C_KEY};
+static const action_string h_as16 = {&empty_action_c, str_size(QUERY_ROUTE_KEY), QUERY_ROUTE_KEY};
+static const action_string h_as17 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") = 
 {
@@ -128,8 +130,7 @@ static void g2_con_init(void)
 		g2_connection_t *tmp = g2_con_alloc(1);
 		if(tmp)
 		{
-			if((tmp = atomic_pxa(tmp, &free_cons[i])))
-			{
+			if((tmp = atomic_pxa(tmp, &free_cons[i]))) {
 				logg_pos(LOGF_CRIT, "another thread working while init???\n");
 				g2_con_free(tmp);
 			}
@@ -140,8 +141,7 @@ static void g2_con_init(void)
 			if(FC_TRESHOLD < i)
 				break;
 
-			for(; i > 0; --i)
-			{
+			for(; i > 0; --i) {
 				tmp = NULL;
 				g2_con_free(atomic_pxa(tmp, &free_cons[i]));
 			}
@@ -162,8 +162,7 @@ g2_connection_t *g2_con_alloc(size_t num)
 	if(num)
 		ret_val = malloc(num * sizeof(g2_connection_t));
 
-	if(ret_val)
-	{
+	if(ret_val) {
 		size_t i;
 		for(i = 0; i < num; i++)
 			_g2_con_clear(&ret_val[i], true);
@@ -193,13 +192,11 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	/* if theres zlib stuff, free it */
 	if(!new)
 	{
-		if(Z_OK != inflateEnd(&work_entry->z_decoder))
-		{
+		if(Z_OK != inflateEnd(&work_entry->z_decoder)) {
 			if(work_entry->z_decoder.msg)
 				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder.msg);
 		}
-		if(Z_OK != deflateEnd(&work_entry->z_encoder))
-		{
+		if(Z_OK != deflateEnd(&work_entry->z_encoder)) {
 			if(work_entry->z_encoder.msg)
 				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder.msg);
 		}
@@ -244,6 +241,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
 	if(!new)
 	{
+		struct list_head *e, *n;
+
 		if(work_entry->recv)
 			recv_buff_free(work_entry->recv);
 		if(work_entry->send)
@@ -257,6 +256,12 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 
 		g2_qht_clean(work_entry->qht);
 		g2_qht_put(work_entry->sent_qht);
+
+		list_for_each_safe(e, n, &work_entry->packets_to_send) {
+			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+			list_del(e);
+			g2_packet_free(entry);
+		}
 	}
 	else
 		work_entry->qht = NULL;
@@ -268,6 +273,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 
 	work_entry->sent_qht = NULL;
 	work_entry->build_packet = NULL;
+	INIT_LIST_HEAD(&work_entry->packets_to_send);
 }
 
 void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
@@ -323,8 +329,7 @@ g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, 
 		size_t i = 0;
 		for(i = 0; i < anum(free_cons); i++)
 		{
-			if(atomic_pread(&free_cons[i]))
-			{
+			if(atomic_pread(&free_cons[i])) {
 				if((ret_val = atomic_pxa(ret_val, &free_cons[i])))
 					return ret_val;
 			}
@@ -345,8 +350,7 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 		size_t i = 0;
 		for(i = 0; i < 20; i++)
 		{
-			if(!atomic_pread(&free_cons[i]))
-			{
+			if(!atomic_pread(&free_cons[i])) {
 				if(!(to_return = atomic_pxa(to_return, &free_cons[i])))
 					return;
 			}
@@ -379,15 +383,13 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 
 static bool ulpeer_what(g2_connection_t *to_con, GCC_ATTR_UNUSED_PARAM(size_t, distance))
 {
-	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE)))
-	{
+	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE))) {
 		to_con->flags.upeer = false;
 		to_con->flags.upeer_ok = true;
 		return false;
 	}
 
-	if(!strncasecmp(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE)))
-	{
+	if(!strncasecmp(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE))) {
 		to_con->flags.upeer = true;
 		to_con->flags.upeer_ok = true;
 		return false;

@@ -31,6 +31,7 @@
 # include "other.h"
 # include "G2PacketSerializerStates.h"
 # include "lib/sec_buffer.h"
+# include "lib/list.h"
 
 /*
  * This is the list of all known packet types (names)
@@ -134,26 +135,31 @@ enum g2_ptype
 
 typedef struct g2_packet
 {
+	/* official packet info */
+	uint32_t      length;	/* 4 */
+	uint8_t       length_length;	/* 5 */
+	uint8_t       type_length;	/* 6 */
+	enum g2_ptype type;	/* 7 */
+	bool          big_endian;	/* 8 */
+	bool          is_compound;	/* 9 */
+	bool          c_reserved;	/* 10 */
+
 	/* internal state */
-	size_t   length;
-	enum g2_packet_decoder_states packet_decode;
-	enum g2_packet_encoder_states packet_encode;
-	uint8_t  length_length;
-	uint8_t  type_length;
-	bool     more_bytes_needed;
-	bool     source_needs_compact;
+	enum g2_packet_decoder_states packet_decode;	/* 11 */
+	enum g2_packet_encoder_states packet_encode;	/* 12 */
+	bool          more_bytes_needed;	/* 13 */
+	bool          source_needs_compact;	/* 14 */
+	bool          is_freeable;	/* 15 */
+	bool          data_trunk_is_freeable;	/* 16 */
+	/* 1+3+8 maximum header length +4 pad/reserve */
+	char          data[16];	/* 32 */
+
+	/* everything up to data trunk gets wiped */
+	struct pointer_buff data_trunk;	/* 48/64 */
 
 	/* packet-data */
-	struct g2_packet *children;
-	size_t   num_child;
-	bool     child_is_freeable;
-	enum g2_ptype type;
-	bool     big_endian;
-	bool     is_compound;
-	bool     c_reserved;
-	bool     data_trunk_is_freeable;
-
-	struct pointer_buff data_trunk;
+	struct list_head list;	/* 56/80 */
+	struct list_head children;	/* 64/96 */
 } g2_packet_t;
 
 # ifndef _G2PACKET_C
@@ -164,13 +170,15 @@ typedef struct g2_packet
 #  define _G2PACK_EXTRNVAR(x)
 # endif /* _G2PACKET_C */
 
+_G2PACK_EXTRN(g2_packet_t *g2_packet_init(g2_packet_t *));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
-# define g2_packet_free(x) _g2_packet_free((x), true)
-_G2PACK_EXTRN(void _g2_packet_free(g2_packet_t *, int));
+_G2PACK_EXTRN(g2_packet_t *g2_packet_clone(g2_packet_t *));
+_G2PACK_EXTRN(void g2_packet_free(g2_packet_t *));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 _G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));
 _G2PACK_EXTRNVAR(const char const g2_ptype_names[PT_MAXIMUM][8]);
+_G2PACK_EXTRNVAR(const uint8_t const g2_ptype_names_length[PT_MAXIMUM]);
 
 #endif /* _G2PACKET_H */
 

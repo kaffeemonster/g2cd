@@ -4,7 +4,7 @@
  * helper-macros, which hopefully make working safe with this
  * buffers
  *
- * Copyright (c) 2004,2005 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -139,6 +139,12 @@ struct pointer_buff
  */
 #define buffer_cempty(x) \
 	!(x).pos
+
+static inline void INIT_PBUF(struct pointer_buff *p)
+{
+	p->pos = p->limit = p->capacity = 0;
+	p->data = NULL;
+}
 
 #endif // _SECBUFFER_H
 //EOF

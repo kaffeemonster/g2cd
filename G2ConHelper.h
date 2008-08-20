@@ -38,6 +38,7 @@
 
 _G2CONHELPER_EXTRN(g2_connection_t **handle_socket_abnorm(struct epoll_event *));
 _G2CONHELPER_EXTRN(bool do_read(struct epoll_event *));
+_G2CONHELPER_EXTRN(ssize_t do_writev(struct epoll_event *, int, const struct iovec [], size_t, bool));
 _G2CONHELPER_EXTRN(bool do_write(struct epoll_event *, int));
 _G2CONHELPER_EXTRN(bool
 recycle_con(

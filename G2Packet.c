@@ -177,6 +177,13 @@ const char const g2_ptype_names[][8] =
 };
 #undef ENUM_CMD
 
+#define ENUM_CMD(x, y) str_size(str_it(x))
+const uint8_t const g2_ptype_names_length[] =
+{
+	G2_PACKET_TYPES
+};
+#undef ENUM_CMD
+
 /*
  * Packet typer function
  *
@@ -710,64 +717,86 @@ static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
  * helper-funktions
  * 
  ********************************************************************/
+g2_packet_t *g2_packet_init(g2_packet_t *p)
+{
+	if(!p)
+		return p;
+
+	memset(p, 0, offsetof(g2_packet_t, data_trunk));
+	p->packet_decode = CHECK_CONTROLL_BYTE;
+	p->packet_encode = DECIDE_ENCODE;
+	INIT_LIST_HEAD(&p->list);
+	INIT_LIST_HEAD(&p->children);
+	return p;
+}
+
 g2_packet_t *g2_packet_alloc(void)
 {
-	return malloc(sizeof(g2_packet_t));
+	g2_packet_t *t = malloc(sizeof(g2_packet_t));
+	if(t)
+		t->is_freeable = true;
+	return t;
 }
 
 g2_packet_t *g2_packet_calloc(void)
 {
-	g2_packet_t *t = g2_packet_alloc();
-	if(t)
-	{
-		memset(t, 0, sizeof(*t));
-		t->packet_decode = CHECK_CONTROLL_BYTE;
+	g2_packet_t *t = g2_packet_init(g2_packet_alloc());
+	if(t) {
+		INIT_PBUF(&t->data_trunk);
+		t->is_freeable = true;
 	}
 	return t;
 }
 
-void _g2_packet_free(g2_packet_t *to_free, int is_freeable)
+g2_packet_t *g2_packet_clone(g2_packet_t *p)
 {
+	g2_packet_t *t;
+	if(!p)
+		return p;
+	t = malloc(sizeof(*t));
+	if(!t)
+		return t;
+	*t = *p;
+	t->is_freeable = true;
+	return t;
+}
+
+void g2_packet_free(g2_packet_t *to_free)
+{
+	struct list_head *e, *n;
+
 	if(!to_free)
 		return;
 
-	if(to_free->child_is_freeable && to_free->num_child)
-	{
-		size_t i = to_free->num_child;
-		g2_packet_t *tmp_ptr = to_free->children;
-
-		for(; i; i--, tmp_ptr++)
-			_g2_packet_free(tmp_ptr, false);
-
-		free(to_free->children);
+	list_for_each_safe(e, n, &to_free->children) {
+		g2_packet_t *entry = list_entry(e, g2_packet_t, children);
+		list_del(e);
+		g2_packet_free(entry);
 	}
 
 	if(to_free->data_trunk_is_freeable)
 		free(to_free->data_trunk.data);
 
-	if(is_freeable)
+	if(to_free->is_freeable)
 		free(to_free);
 }
 
 void g2_packet_clean(g2_packet_t *to_clean)
 {
 	bool tmp_info = to_clean->data_trunk_is_freeable;
+	bool tmp_free = to_clean->is_freeable;
+	struct list_head *e, *n;
 
-	if(to_clean->children && to_clean->child_is_freeable && to_clean->num_child)
-	{
-		size_t i = to_clean->num_child;
-		g2_packet_t *tmp_ptr = to_clean->children;
-
-		for(; i; i--, tmp_ptr++)
-			_g2_packet_free(tmp_ptr, false);
-
-		free(to_clean->children);
+	list_for_each_safe(e, n, &to_clean->children) {
+		g2_packet_t *entry = list_entry(e, g2_packet_t, children);
+		list_del(e);
+		g2_packet_free(entry);
 	}
-	
-	memset(to_clean, 0, offsetof(g2_packet_t, data_trunk));
-	to_clean->children = NULL;
+
+	g2_packet_init(to_clean);
 	buffer_clear(to_clean->data_trunk);
 	to_clean->data_trunk_is_freeable = tmp_info;
+	to_clean->is_freeable = tmp_free;
 }
 
 bool g2_packet_decide_spec(g2_connection_t *connec, struct norm_buff *target, g2_ptype_action_func const *work_type, g2_packet_t *packs)
