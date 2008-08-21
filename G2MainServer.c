@@ -423,7 +423,7 @@ static inline void handle_config(void)
 	server.settings.default_out_encoding = DEFAULT_ENC_OUT;
 	server.settings.max_connection_sum = DEFAULT_CON_MAX;
 	server.settings.default_max_g2_packet_length = DEFAULT_PCK_LEN_MAX;
-	server.settings.want_2_send_profile = DEFAULT_SEND_PROFILE;
+	server.settings.profile.want_2_send = DEFAULT_SEND_PROFILE;
 
 	/* set the GUID */
 	if(!(config = fopen(guid_file_name, "r")))
@@ -444,7 +444,7 @@ static inline void handle_config(void)
 	/* read the user-profile */
 	packet_uprod = NULL;
 
-	if(server.settings.want_2_send_profile)
+	if(server.settings.profile.want_2_send)
 		read_uprofile();
 	return;
 
@@ -750,6 +750,9 @@ static inline void read_uprofile(void)
 		free(packet_uprod);
 		packet_uprod = NULL;
 	}
+
+	server.settings.profile.xml    = wptr;
+	server.settings.profile.length = f_bytes;
 
 read_uprofile_end:
 	fclose(prof_file);

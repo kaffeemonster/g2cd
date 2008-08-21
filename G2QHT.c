@@ -154,7 +154,7 @@ static void *qht_zpad_alloc(void *opaque, unsigned int num, unsigned int size)
 		goto err_record;
 
 	/* mildly sanetiy check */
-	if( num > sizeof(z_pad->pad) + sizeof(z_pad->window) || 
+	if( num > sizeof(z_pad->pad) + sizeof(z_pad->window) ||
 		size > sizeof(z_pad->pad) + sizeof(z_pad->window))
 		goto err_record;
 	bsize = num * size;
@@ -185,14 +185,12 @@ retry:
 				/* if free and big enough */
 				if(tmp_zheap->length & 1)
 				{
-					if(bsize + sizeof(*zheap) <= tmp_len)
-					{
+					if(bsize + sizeof(*zheap) <= tmp_len) {
 						org_len = tmp_len;
 						zheap = tmp_zheap;
 						goto insert_in_heap;
 					}
-					else if(tmp_zheap->next && (tmp_zheap->next->length & 1))
-					{
+					else if(tmp_zheap->next && (tmp_zheap->next->length & 1)) {
 						qht_zpad_merge(tmp_zheap);
 						goto retry;
 					}
@@ -251,8 +249,7 @@ static inline void qht_zpad_merge(struct zpad_heap *zheap)
 {
 	while(zheap->next)
 	{
-		if(zheap->next->length & 1) // if next block is free
-		{
+		if(zheap->next->length & 1) { /* if next block is free */
 			zheap->length += (zheap->next->length & ~1) + sizeof(struct zpad_heap);
 			zheap->next = zheap->next->next;
 		}
@@ -269,14 +266,12 @@ static inline struct zpad *qht_get_zpad(void)
 		return z_pad;
 
 	z_pad = malloc(sizeof(*z_pad));
-	if(!z_pad)
-	{
+	if(!z_pad) {
 		logg_errno(LOGF_DEVEL, "no z_pad");
 		return NULL;
 	}
 
-	if(pthread_setspecific(key2qht_zpad, z_pad))
-	{
+	if(pthread_setspecific(key2qht_zpad, z_pad)) {
 		logg_errno(LOGF_CRIT, "qht-zpad key not initilised?");
 		free(z_pad);
 		return NULL;
@@ -326,15 +321,13 @@ static inline unsigned char *qht_get_scratch1(size_t length)
 
 	logg_develd_old("scratch: %p, %lu\n", (void *)scratch, (unsigned long)scratch);
 
-	if(!scratch)
-	{
+	if(!scratch) {
 		logg_errno(LOGF_DEVEL, "no qht scratchram");
 		return NULL;
 	}
 	scratch->length = length;
 
-	if(pthread_setspecific(key2qht_scratch1, scratch))
-	{
+	if(pthread_setspecific(key2qht_scratch1, scratch)) {
 		logg_errno(LOGF_CRIT, "qht scratch key not initilised?");
 		free(scratch);
 		return NULL;
@@ -402,11 +395,16 @@ void g2_qht_frag_clean(struct qht_fragment *to_clean)
 	memset(to_clean, 0, sizeof(*to_clean));
 }
 
+uint32_t g2_qht_global_get_ent(void)
+{
+	return global_qht->entries;
+}
+
 static inline void g2_qht_global_patch(void *pbuf, size_t plength)
 {
 // TODO: This needs full locking mumbo jumbo
 	memxor(global_qht->data, pbuf, global_qht->data_length > plength ? plength : global_qht->data_length);
-	global_qht->time_stamp = time(NULL);
+	global_qht->time_stamp = local_time_now;
 }
 
 /* funcs */
@@ -438,13 +436,12 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 			unsigned char *tmp_ptr = qht_get_scratch1(tmp_table->data_length);
 			struct zpad *zpad = qht_get_zpad();
 
-			if(!(tmp_ptr && zpad))
-			{
+			if(!(tmp_ptr && zpad)) {
 				logg_devel("patch mem failed\n");
 				break;
 			}
 
-			/* fix allocations... done, TLS rocks ;) */	
+			/* fix allocations... done, TLS rocks ;) */
 			zpad->z.next_in = frag->data;
 			zpad->z.avail_in = frag->length;
 			zpad->z.next_out = tmp_ptr;
@@ -490,42 +487,35 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 {
 	uint8_t *tmp_ptr;
 	struct qht_fragment *tablef = &ttable->fragments;
+
 	if(!ttable)
 		return -1;
 
-	if(frag->compressed != COMP_NONE && frag->compressed != COMP_DEFLATE)
-	{
+	if(frag->compressed != COMP_NONE && frag->compressed != COMP_DEFLATE) {
 		logg_develd("unknown compression %i in qht fragment\n", frag->compressed);
 		return -1;
 	}
 
 	if(tablef->data)
 	{
-		if(frag->count != tablef->count)
-		{
+		if(frag->count != tablef->count) {
 			logg_devel("fragment-count changed!\n");
 			return -1;
 		}
-
-		if(frag->compressed != tablef->compressed)
-		{
+		if(frag->compressed != tablef->compressed) {
 			logg_devel("compression changed!\n");
 			return -1;
 		}
-	
-		if(frag->nr != (tablef->nr + 1))
-		{
+		if(frag->nr != (tablef->nr + 1)) {
 			logg_devel("fragment missed\n");
 			return -1;
 		}
 	}
-	else if(1 == frag->nr)
-	{
+	else if(1 == frag->nr) {
 		tablef->compressed = frag->compressed;
 		tablef->count = frag->count;
 	}
-	else
-	{
+	else {
 		logg_devel("fragment not starting at one?\n");
 		return -1;
 	}
@@ -535,13 +525,11 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 // TODO: If the patch is compressed, we are just guessing a max length
 		if(tablef->compressed)
 			legal_length /= 2;
-
 	/*
 	 * ATM check is sane, we are checking the real sizes of the
 	 * really recieved data, not user supplied data...
 	 */
-		if((tablef->length + frag->length) > legal_length)
-		{
+		if((tablef->length + frag->length) > legal_length) {
 			logg_devel("patch to big\n");
 			return -1;
 		}
@@ -550,8 +538,7 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 	tablef->nr = frag->nr;
 
 	tmp_ptr = realloc(tablef->data, tablef->length + frag->length);
-	if(!tmp_ptr)
-	{
+	if(!tmp_ptr) {
 		logg_errno(LOGF_DEBUG, "reallocating qht-fragments");
 		return -1;
 	}
@@ -569,16 +556,14 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	size_t w_size, bits;
 	struct qhtable *tmp_table;
 
-	if(!ttable)
-	{
+	if(!ttable) {
 		logg_devel("called with NULL ttable?\n");
 		return true;
 	}
 
 	w_size = (size_t)(qht_ent / BITS_PER_CHAR);
 	w_size += (qht_ent % BITS_PER_CHAR) ? 1u : 0u;
-	if(!qht_ent || w_size > MAX_BYTES_QHT)
-	{
+	if(!qht_ent || w_size > MAX_BYTES_QHT) {
 		logg_devel("illegal number of elements\n");
 		return true;
 	}
@@ -603,13 +588,10 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 			if(atomic_read(&tmp_table->refcnt) > 1)
 				logg_develd("WARNING: reset on qht with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
 			tmp_table2 = realloc(tmp_table, sizeof(*tmp_table) + w_size);
-			if(tmp_table2)
-			{
+			if(tmp_table2) {
 				tmp_table = tmp_table2;
 				tmp_table->data_length = w_size;
-			}
-			else
-			{
+			} else {
 				logg_errno(LOGF_DEBUG, "reallocating qh-table");
 				qht_ent = tmp_table->entries;
 				/* control flow will resurect old table, only wiped */
@@ -619,8 +601,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	else
 	{
 		tmp_table = malloc(sizeof(*tmp_table) + w_size);
-		if(!tmp_table)
-		{
+		if(!tmp_table) {
 			logg_errno(LOGF_DEBUG, "allocating qh-table");
 			return true;
 		}
@@ -632,7 +613,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	_g2_qht_clean(tmp_table, true);
 	tmp_table->entries = qht_ent;
 	tmp_table->bits = bits;
-	tmp_table->time_stamp = time(NULL);
+	tmp_table->time_stamp = local_time_now;
 	/* bring back the table */
 	*ttable = tmp_table;
 // TODO: Global QHT-needs-update flag (wich would need per connection locking)

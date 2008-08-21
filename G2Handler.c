@@ -134,6 +134,7 @@ void *G2Handler(void *param)
 		{
 		/* Normally: see what has happened */
 		default:
+			local_time_now = time(NULL);
 			for(i = num_poll; i; i--, e_wptr++)
 			{
 				/* A common Socket? */
@@ -335,7 +336,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 		if(!list_empty(&(*w_entry)->packets_to_send))
 		{
 			struct iovec vec[32];
-			struct list_head *e, *head = &(*w_entry)->packets_to_send;
+			struct list_head *e, *n, *head = &(*w_entry)->packets_to_send;
 			ssize_t ret;
 			size_t vused = 0;
 
@@ -358,15 +359,34 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				}
 				vused += (size_t)ret;
 			}
+#if 0
+			if(ENC_DEFLATE == (*w_entry)->encoding_out)
+				d_target = (*w_entry)->send_u;
+			else
+				d_target = (*w_entry)->send;
+#endif
 
-			ret = do_writev(p_entry, epoll_fd, vec, vused, !buffer_cempty(*(*w_entry)->send)||vused==anum(vec));
+			ret = do_writev(p_entry, epoll_fd, vec, vused, vused==anum(vec));
 			if(-1 == ret)
 				return w_entry;
-			/* TODO: cleanup packets_to_send */
+			/* TODO: check packets_to_send */
+			list_for_each_safe(e, n, head) {
+				g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+				list_del(e);
+				g2_packet_free(entry);
+			}
 		}
-		else if(!buffer_cempty(*(*w_entry)->send)) {
-			if(!do_write(p_entry, epoll_fd))
+		else
+		{
+			/* switch off write */
+			struct epoll_event tmp_eevent = {0,{0}};
+			(*w_entry)->poll_interrests &= ~(uint32_t)EPOLLOUT;
+			tmp_eevent.events = (*w_entry)->poll_interrests;
+			tmp_eevent.data.ptr = w_entry;
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
+				logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 				return w_entry;
+			}
 		}
 	}
 
@@ -385,8 +405,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 		{
 			g2_packet_t *build_packet;
 			struct norm_buff *d_source = NULL;
-			struct norm_buff *d_target = NULL;
-			
+
 			if(ENC_DEFLATE == (*w_entry)->encoding_in)
 			{
 				logg_devel_old("--------- compressed\n");
@@ -467,12 +486,7 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				if(DECODE_FINISHED == build_packet->packet_decode ||
 					PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
-					if(ENC_DEFLATE == (*w_entry)->encoding_out)
-						d_target = (*w_entry)->send_u;
-					else
-						d_target = (*w_entry)->send;
-
-					if(g2_packet_decide_spec(*w_entry, d_target, g2_packet_dict, build_packet))
+					if(g2_packet_decide_spec(*w_entry, &(*w_entry)->packets_to_send, g2_packet_dict, build_packet))
 					{
 						struct epoll_event tmp_eevent = {0,{0}};
 

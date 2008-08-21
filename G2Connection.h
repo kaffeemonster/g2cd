@@ -28,6 +28,7 @@
 
 /* Includes if included */
 # include <stdbool.h>
+# include <time.h>
 # include <arpa/inet.h>
 # include <sys/socket.h>
 # include <sys/types.h>
@@ -84,6 +85,14 @@ typedef struct g2_connection
 	/* Internal States */
 	union combo_addr sent_addr;
 	double           time_diff;
+	struct
+	{
+		time_t        PI;
+		time_t        LNI;
+		time_t        KHL;
+		time_t        QHT;
+		time_t        UPROC;
+	} send_stamps;
 	/* flags */
 	struct
 	{
@@ -101,6 +110,9 @@ typedef struct g2_connection
 		bool          upeer_needed;
 		bool          upeer_needed_ok;
 		bool          second_header;
+		bool          firewalled;
+		bool          query_key_cache;
+		bool          qht_reset_send;
 		bool          t1;
 	} flags;
 	/* more state */

@@ -29,7 +29,6 @@
 /* System includes */
 #include <stdlib.h>
 #include <stdio.h>
-#include <ctype.h>
 /* other */
 #include "other.h"
 /* Own includes */
@@ -156,8 +155,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 	}
 /* early check packet-boundary */
 	i = target->length + target->length_length + target->type_length + 1;
-	if(unlikely(max_len < i))
-	{
+	if(unlikely(max_len < i)) {
 		logg_develd("packet too long! max: %zu tl: %zu\n", max_len, i);
 		return -1;
 	}
@@ -196,7 +194,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 		return 0;
 	}
 
-	if(target->type_length)
+	if(likely(target->type_length))
 	{
 		char *w_ptr = type_str;
 		size_t i;
@@ -207,7 +205,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	 * A *VERY* simple test if the packet-type is legal,
 	 * hopefully we can detect de-sync-ing of the stream with this
 	 */
-			if(unlikely(!isgraph((int)*w_ptr))) {
+			if(unlikely(*w_ptr < 0x20 || *w_ptr & 0x80)) {
 				logg_devel("packet with bogus/ugly type-name\n");
 				return -1;
 			}
@@ -220,7 +218,8 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 		 */
 		*w_ptr++ = '\0';
 		*w_ptr = '\0';
-	} else { /* Illegal Packet... */
+	} else {
+		/* Normaly can not happen, Illegal Packet... */
 		logg_devel("packet with 0 type-length\n");
 		return -1;
 	}
@@ -531,6 +530,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			else if(0 > func_ret_val)
 				return false;
 		case DECIDE_DECODE:
+// TODO: since we know the type now, we may want to play games with skipping
 			func_ret_val = 0;
 			stat_packet(target, func_ret_val);
 
@@ -946,7 +946,7 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 	 * It is possible to create a zero control byte (no length,
 	 * 1 char type, no options), and this is not allowed.
 	 * Set is_compound in this case, like Shareaza does and is
-	 * stated in the spec. 
+	 * stated in the spec.
 	 * I personaly don't like this, since it creates a special
 	 * case: is_compound is only valid if there is data. And you
 	 * always have to look for is_compound because a packet may
@@ -963,7 +963,7 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 	if(p->data_trunk.data == p->data)
 	{
 		size_t size_needed = p->length_length + p->type_length + 1;
-		/*OhOh, we have a Problem, data to sent stored in header space */
+		/*OhOh, we have a Problem, data to send stored in header space */
 		if((sizeof(p->data) - size_needed) < buffer_remaining(p->data_trunk)) {
 			char *tmp_ptr;
 			/* totaly fucked up, header and data to big */

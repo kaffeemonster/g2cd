@@ -143,7 +143,8 @@ OPT_FLAGS += -ffast-math
 #	gcc >= 3.x and supported for target (-march ?)
 OPT_FLAGS += -fprefetch-loop-arrays
 OPT_FLAGS += -fpeel-loops
-OPT_FLAGS += -funroll-loops
+# gcc gets really funroll...
+#OPT_FLAGS += -funroll-loops
 #	gcc >= 3.4? we want this and not the above
 #OPT_FLAGS += -fold-unroll-loops
 #	gcc >= 3.x && < 4.x together with unroll-loops usefull

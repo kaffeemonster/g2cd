@@ -30,6 +30,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/poll.h>
 #include <netinet/in.h>
@@ -43,6 +44,8 @@ static always_inline int get_act_loglevel(void);
 #include "lib/combo_addr.h"
 #include "lib/atomic.h"
 #include "lib/log_facility.h"
+
+#define OWN_VENDOR_CODE	"G2CD"
 
 #define THREAD_ACCEPTOR		0
 #define THREAD_HANDLER		1
@@ -106,7 +109,12 @@ _G2MAIN_EXTRNVAR(struct
 			size_t default_max_g2_packet_length;
 			volatile int max_connection_sum;
 			uint8_t our_guid[16];
-			bool want_2_send_profile;
+			struct
+			{
+				bool want_2_send;
+				const char *xml;
+				size_t length;
+			} profile;
 		} settings;
 		struct
 		{
@@ -117,6 +125,7 @@ _G2MAIN_EXTRNVAR(struct
 		} status;
 } server);
 
+_G2MAIN_EXTRNVAR(__thread time_t local_time_now);
 _G2MAIN_EXTRNVAR(size_t packet_uprod_length);
 _G2MAIN_EXTRNVAR(char *packet_uprod);
 

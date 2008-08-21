@@ -41,13 +41,13 @@
  * - packets get their type set to their PT_{NAME} when
  *   they pass the Packet{De}Serializer
  *
- * If you hit an unknown packet, simply add it, everything fine.
+ * If you hit an unknown packet, simply add it, everything's fine.
  *
  * These entrys are not sortet alphabeticaly, but grouped
  * by correlance (there are arrays of function pointer, we
  * want to keep the "related" packets in one cache line).
  *
- * The number behind the name is an internal detail of the packer
+ * The number behind the name is an internal detail of the packet
  * typer ATM. It's the sorting weight when packets share the same
  * prefix. A packet sortet first gets tested first everytime a
  * packet decends in this prefix!! So this should be the common packet.
@@ -64,7 +64,6 @@
 	ENUM_CMD( UNKNOWN, 0 ), /* The unknown !! ALWAYS keep at zero !! */ \
 	ENUM_CMD( CRAWLA , 1 ), \
 	ENUM_CMD( CRAWLR , 1 ), \
-	ENUM_CMD( G2CDC  , 1 ), \
 	ENUM_CMD( HAW    , 1 ), \
 	ENUM_CMD( KHL    , 1 ), \
 	ENUM_CMD( LNI    , 1 ), \
@@ -78,7 +77,10 @@
 	ENUM_CMD( QKR    , 1 ), \
 	ENUM_CMD( QKA    , 1 ), \
 	ENUM_CMD( UPROC  , 1 ), \
-	ENUM_CMD( UPROD  , 1 ), /* root packets */ \
+	ENUM_CMD( UPROD  , 1 ), \
+	ENUM_CMD( KHLR   , 1 ), /* UDP */ \
+	ENUM_CMD( KHLA   , 1 ), /* UDP */ /* root packets */ \
+	ENUM_CMD( G2CDc  , 1 ), \
 	ENUM_CMD( DN     , 1 ), \
 	ENUM_CMD( GU     , 1 ), \
 	ENUM_CMD( HS     , 1 ), \
@@ -186,12 +188,11 @@ _G2PACK_EXTRNVAR(const uint8_t const g2_ptype_names_length[PT_MAXIMUM]);
 # undef _NEED_G2_P_TYPE
 # ifndef _HAVE_G2_P_TYPE
 #  define _HAVE_G2_P_TYPE
-#  include "lib/sec_buffer.h"
 #  include "G2Connection.h"
 
-typedef bool (*g2_ptype_action_func) (g2_connection_t *, g2_packet_t *, struct norm_buff *) ;
+typedef bool (*g2_ptype_action_func) (g2_connection_t *, g2_packet_t *, struct list_head *) ;
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM]);
-_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct norm_buff *, g2_ptype_action_func const*, g2_packet_t *));
+_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct list_head *, g2_ptype_action_func const*, g2_packet_t *));
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */
 
