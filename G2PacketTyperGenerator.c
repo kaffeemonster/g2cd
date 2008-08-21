@@ -91,6 +91,9 @@ int main(int argc, char *argv[])
 {
 	int i, verbose = 0;
 
+	if(PT_MAXIMUM > 0x7F)
+		die("More than 7Bit packet types!! new trick needed");
+
 	for(i = 1; i < argc; i++)
 	{
 		if('-' == argv[i][0])
@@ -158,9 +161,9 @@ static void make_tree_hl_name_r(const char *name, struct tree_hl *t, int weight,
 	t->weight += weight;
 	if(c) {
 		if(c < 0x20)
-			die("char smaller 0x20!! Control char in packetname?? new trick needed");
-		if((c-0x20) > 0x3F)
-			die("char greater 6Bit!! new trick needed");
+			die("char smaller 0x20!! Control char in packetname?? Trick needed");
+		if((unsigned)c > 0x7F)
+			die("char greater 7Bit!! new trick needed");
 		for(i = 0; i < t->num_child; i++) {
 			if(t->child[i] && t->child[i]->c == c)
 				goto recurse;
@@ -200,9 +203,9 @@ static void make_tree_hl_name(const char *name, int weight, enum g2_ptype type)
 	if(!c)
 		return;
 	if(c < 0x20)
-		die("char smaller 0x20!! Control char in packetname?? new trick needed");
-	if((c-0x20) > 0x3F)
-		die("char greater 6Bit!! new trick needed");
+		die("char smaller 0x20!! Control char in packetname?? Trick needed");
+	if(c > 0x7F)
+		die("char greater 7Bit!! new trick needed");
 
 	if(!(t = tree_hl_first[c]))
 	{
@@ -371,6 +374,8 @@ static void tree2table_r(struct tree_hl *t)
 		if(!t->child[i]->last) {
 			table_hl[t->child[i]->line].next = table_max;
 			table_hl[t->child[i]->line].delta = table_max - t->child[i]->line;
+			if(table_hl[t->child[i]->line].delta > 0x7F)
+				die("Table delta to big!! New trick needed");
 		}
 		tree2table_r(t->child[i]);
 	}
@@ -482,20 +487,22 @@ static void print_trailer(void)
 		" *\n"
 		" */\n"
 		"#define T_END_FLAG	(1 << 7)\n"
-		"#define T_LAST_FLAG	(1 << 6)\n"
+		"#define T_LAST_FLAG	(1 << 7)\n"
 		"\n"
 		"#define T_IS_END(x)	((x) & T_END_FLAG)\n"
 		"#define T_IS_LAST(x)	((x) & T_LAST_FLAG)\n"
-		"#define T_GET_CHAR(x)	((char)((likely((x)&0x3F))?((x)&0x3F)+0x20:(x)&0x3F))\n"
+		"#define T_GET_CHAR(x)	((char)((x)&0x7F))\n"
+		"#define T_GET_TYPE(x)	((enum g2_ptype)((x)&0x7F))\n"
+		"#define T_GET_DELTA(x)	((unsigned char)((x)&0x7F))\n"
 		"\n"
 		"#define T_LEND(x, y) \\\n"
-		"	{ .c = ((x)?(x)-0x20:(x))|T_LAST_FLAG|T_END_FLAG, .u = { .t = y }}\n"
+		"	{ .c = (x)|T_LAST_FLAG, .u = { .t = y|T_END_FLAG }}\n"
 		"#define T_LAST(x, y) \\\n"
-		"	{ .c = ((x)?(x)-0x20:(x))|T_LAST_FLAG, .u = { .t = y }}\n"
+		"	{ .c = (x)|T_LAST_FLAG, .u = { .t = y }}\n"
 		"#define T_NEXT(x, y) \\\n"
-		"	{ .c = ((x)?(x)-0x20:(x)), .u = { .d = y }}\n"
+		"	{ .c = (x), .u = { .d = y }}\n"
 		"#define T_TEND(x, y) \\\n"
-		"	{ .c = ((x)?(x)-0x20:(x))|T_END_FLAG, .u = { .d = y }}\n"
+		"	{ .c = (x), .u = { .d = y|T_END_FLAG }}\n"
 		"static const struct\n"
 		"{\n"
 		"	const unsigned char c;\n"

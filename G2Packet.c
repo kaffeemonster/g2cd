@@ -208,16 +208,16 @@ void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
 		{
 			if(likely(T_IS_LAST(x))) {
 				if(likely(type_str[j+1] == '\0')) {
-					packet->type = g2_ptype_state_table[i].u.t;
+					packet->type = T_GET_TYPE(g2_ptype_state_table[i].u.t);
 					break;;
 				}
 			} else {
-				i += g2_ptype_state_table[i].u.d;
+				i += T_GET_DELTA(g2_ptype_state_table[i].u.d);
 				j++;
 				continue;
 			}
 		}
-		if(unlikely(T_IS_END(x)))
+		if(unlikely(T_IS_END(g2_ptype_state_table[i].u.d)))
 			break;
 		i++;
 	} while(j < 16);
