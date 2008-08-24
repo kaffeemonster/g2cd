@@ -32,7 +32,6 @@
 # include <arpa/inet.h>
 # include <sys/socket.h>
 # include <sys/types.h>
-# include <sys/uio.h>
 # include <zlib.h>
 
 /* Own */
@@ -127,7 +126,6 @@ typedef struct g2_connection
 	uint8_t          guid[16];
 	z_stream         z_decoder;
 	z_stream         z_encoder;
-	struct iovec     v_reserve;
 /* ----- Everthing above this gets simply wiped ------ */
 	struct norm_buff *recv;
 	struct norm_buff *send;

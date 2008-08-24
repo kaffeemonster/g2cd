@@ -468,11 +468,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	/*
 	 * Look at the packet received
 	 */
-	g_packet.packet_decode = 0;
-	g_packet.data_trunk_is_freeable = false;
-	g_packet.is_freeable = false;
-	INIT_LIST_HEAD(&g_packet.children);
-	INIT_PBUF(&g_packet.data_trunk);
+	g2_packet_init_on_stack(&g_packet);
 	if(!g2_packet_extract_from_stream(d_hold, &g_packet, buffer_remaining(*d_hold))) {
 		logg_devel("packet extract failed\n");
 		goto out;

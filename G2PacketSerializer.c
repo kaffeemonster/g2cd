@@ -2,7 +2,7 @@
  * G2PacketSerializer.c
  * Serializer for G2-packets
  *
- * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,7 +33,6 @@
 #include "other.h"
 /* Own includes */
 #define _G2PACKETSERIALIZER_C
-//#define _NEED_G2_P_TYPE
 #include "G2PacketSerializer.h"
 #include "G2Packet.h"
 #include "lib/sec_buffer.h"
@@ -791,7 +790,6 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			}
 			else return ret_val;
 			break;
-#endif
 
 ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t vlen)
 {
@@ -866,6 +864,7 @@ ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t 
 
 	return vused;
 }
+#endif
 
 static uint8_t create_control_byte(g2_packet_t *p)
 {

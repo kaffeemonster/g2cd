@@ -374,7 +374,11 @@ no_fill_before_write:
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
 		g2_packet_t tmp_packet;
-		g2_packet_t *build_packet;
+		/*
+		 * shut up gcc! this cannot be used uninitialized, look at
+		 * save_build_packet and when it is true...
+		 */
+		g2_packet_t *build_packet = NULL;
 		struct norm_buff *d_source = NULL;
 		struct norm_buff *d_target = NULL;
 		bool retry, compact_cbuff = false, save_build_packet = false;
@@ -444,8 +448,7 @@ retry_unpack:
 			build_packet = (*w_entry)->build_packet;
 			if(!build_packet) {
 				build_packet = &tmp_packet;
-				g2_packet_init(build_packet);
-				INIT_PBUF(&tmp_packet.data_trunk);
+				g2_packet_init_on_stack(build_packet);
 			}
 			else
 				logg_develd("taking %p\n", build_packet);

@@ -83,7 +83,7 @@ enum g2_packet_decoder_states
 enum g2_packet_encoder_states
 {
 	G2_PACKET_ENCODER_STATES
-} GCC_ATTR_PACK;
+} GCC_ATTR_PACKED;
 # undef ENUM_CMD
 
 #endif /* G2PACKETSERIALIZERSTATES_H */

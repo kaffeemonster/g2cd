@@ -176,11 +176,11 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	switch between profile-generation and final build
 #OPT_FLAGS += -fprofile-generate
 #CFLAGS += $(OPT_FLAGS) #-fprofile-use
-#	while debugging
-#CFLAGS += -O1
+#	while debugging, or asm gets unreadable
+#OPT_FLAGS = -O1
 #OPT_FLAGS += -ftest-coverage # needed?
 #OPT_FLAGS += -fprofile-arcs
-#CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
+CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
 #	gcc 3.? make sure the OS sees our Stack-handling since we
 #	are Multithreaded or leave it - seems buggy
 #CFLAGS += -fstack-check
@@ -707,7 +707,7 @@ data.o: sbox.bin bin2o
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
-G2UDP.o: G2UDP.h
+G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
 G2Connection.o: G2Connection.h G2QHT.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h

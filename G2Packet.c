@@ -63,6 +63,8 @@
 /*
  * Internal Prototypes
  */
+static inline bool g2_packet_steal_data_space(g2_packet_t *, size_t);
+/* packet handler */
 static bool empty_action_p(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool unimpl_action_p(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL(g2_connection_t *, g2_packet_t *, struct list_head *);
@@ -259,26 +261,6 @@ static const char packet_uproc[] = { 0x20, 'U', 'P', 'R', 'O', 'C' };
  *
  *
  */
-static bool g2_packet_steal_header_space(g2_packet_t *p, size_t bytes)
-{
-	if(sizeof(p->data) - g2_ptype_names_length[p->type] - 1 - 1 < bytes)
-		goto must_malloc;
-
-	p->data_trunk.data  = p->data;
-	p->data_trunk.limit = p->data_trunk.capacity = sizeof(p->data);
-	p->data_trunk.pos   = sizeof(p->data) - bytes;
-	p->data_trunk_is_freeable = false;
-	return true;
-must_malloc:
-	p->data_trunk.data     = malloc(bytes);
-	if(!p->data_trunk.data)
-		return false;
-	p->data_trunk.capacity = bytes;
-	buffer_clear(p->data_trunk);
-	p->data_trunk_is_freeable = true;
-	return true;
-}
-
 static bool empty_action_p(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_ATTR_UNUSED_PARAM(g2_packet_t *, source), GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
 {
 	/* packet is not useful for us */
@@ -329,7 +311,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 
 	khl->type = PT_KHL;
 	ts->type  = PT_TS;
-	if(g2_packet_steal_header_space(ts, sizeof(time_t)))
+	if(g2_packet_steal_data_space(ts, sizeof(time_t)))
 	{
 		time_t now = local_time_now;
 		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
@@ -442,7 +424,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	lni->type = PT_LNI;
 	na->type = PT_NA;
 // TODO: handle IPv6
-	if(g2_packet_steal_header_space(na, 6))
+	if(g2_packet_steal_data_space(na, 6))
 	{
 		uint16_t port = ntohs(combo_addr_port(&server.settings.bind.ip4));
 		uint32_t addr = server.settings.bind.ip4.in.sin_addr.s_addr;
@@ -473,7 +455,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	if(hs)
 	{
 		hs->type            = PT_HS;
-		if(g2_packet_steal_header_space(hs, 4))
+		if(g2_packet_steal_data_space(hs, 4))
 		{
 			uint16_t cons = (uint16_t)atomic_read(&server.status.act_connection_sum);
 			uint16_t max_cons = server.settings.max_connection_sum;
@@ -777,7 +759,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 // TODO: Send patches.
 //	if(!connec->flags.qht_reset_send)
 	{
-		if(g2_packet_steal_header_space(qht, 6))
+		if(g2_packet_steal_data_space(qht, 6))
 		{
 			uint32_t ent = (uint32_t)g2_qht_global_get_ent();
 			*buffer_start(qht->data_trunk) = 0; /* command */
@@ -942,8 +924,9 @@ g2_packet_t *g2_packet_init(g2_packet_t *p)
 		return p;
 
 	memset(p, 0, offsetof(g2_packet_t, data_trunk));
-	p->packet_decode = CHECK_CONTROLL_BYTE;
-	p->packet_encode = DECIDE_ENCODE;
+	/* ATM they are similar to zero */
+/*	p->packet_decode = CHECK_CONTROLL_BYTE;
+	p->packet_encode = DECIDE_ENCODE;*/
 	INIT_LIST_HEAD(&p->list);
 	INIT_LIST_HEAD(&p->children);
 	return p;
@@ -1017,6 +1000,28 @@ void g2_packet_clean(g2_packet_t *to_clean)
 	to_clean->data_trunk_is_freeable = tmp_info;
 	to_clean->is_freeable = tmp_free;
 }
+
+static inline bool g2_packet_steal_data_space(g2_packet_t *p, size_t bytes)
+{
+	if(sizeof(p->data) < bytes)
+		goto must_malloc;
+
+	p->data_trunk.data  = p->data;
+	p->data_trunk.limit = p->data_trunk.capacity = sizeof(p->data);
+	p->data_trunk.pos   = sizeof(p->data) - bytes;
+	p->data_trunk_is_freeable = false;
+
+	return true;
+must_malloc:
+	p->data_trunk.data = malloc(bytes);
+	if(!p->data_trunk.data)
+		return false;
+	p->data_trunk.capacity = bytes;
+	buffer_clear(p->data_trunk);
+	p->data_trunk_is_freeable = true;
+	return true;
+}
+
 
 bool g2_packet_decide_spec(g2_connection_t *connec, struct list_head *target, g2_ptype_action_func const *work_type, g2_packet_t *packs)
 {
