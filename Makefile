@@ -180,7 +180,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #CFLAGS += -O1
 #OPT_FLAGS += -ftest-coverage # needed?
 #OPT_FLAGS += -fprofile-arcs
-CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
+#CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
 #	gcc 3.? make sure the OS sees our Stack-handling since we
 #	are Multithreaded or leave it - seems buggy
 #CFLAGS += -fstack-check
@@ -651,7 +651,7 @@ arflock: arflock.c ccdrv Makefile
 bin2o: bin2o.c ccdrv Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) bin2o.c -o $@
 
-G2PacketTyperGenerator: G2PacketTyperGenerator.c ccdrv Makefile G2Packet.h
+G2PacketTyperGenerator: G2PacketTyperGenerator.c ccdrv Makefile G2Packet.h lib/list.h
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) G2PacketTyperGenerator.c -o $@
 
 .INTERMEDIATE: sbox.bin
@@ -716,9 +716,9 @@ G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
-G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h version.h
+G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h lib/list.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
-G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h
+G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
 G2QHT.h: lib/hzp.h lib/atomic.h
 timeout.h: lib/list.h

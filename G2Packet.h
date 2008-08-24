@@ -152,11 +152,10 @@ typedef struct g2_packet
 	enum g2_packet_decoder_states packet_decode;	/* 11 */
 	enum g2_packet_encoder_states packet_encode;	/* 12 */
 	bool          more_bytes_needed;	/* 13 */
-	bool          source_needs_compact;	/* 14 */
-	bool          is_freeable;	/* 15 */
-	bool          data_trunk_is_freeable;	/* 16 */
-	/* 1+3+8 maximum header length +4 pad/reserve */
-	char          data[16];	/* 32 */
+	bool          is_freeable;	/* 14 */
+	bool          data_trunk_is_freeable;	/* 15 */
+	/* 1+3+8 maximum header length +5 pad/reserve */
+	char          data[17];	/* 32 */
 
 	/* everything up to data trunk gets wiped */
 	struct pointer_buff data_trunk;	/* 48/64 */

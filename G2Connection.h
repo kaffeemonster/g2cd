@@ -110,6 +110,7 @@ typedef struct g2_connection
 		bool          upeer_needed;
 		bool          upeer_needed_ok;
 		bool          second_header;
+		bool          has_written;
 		bool          firewalled;
 		bool          query_key_cache;
 		bool          qht_reset_send;

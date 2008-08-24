@@ -268,6 +268,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	{
 	default:
 		w_entry->send->pos += result;
+		w_entry->flags.has_written = true;
 		//p_entry->events |= POLLIN;
 		if(!buffer_remaining(*w_entry->send))
 		{

@@ -454,7 +454,6 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	else
 		goto out_fail;
 
-	list_add_tail(&na->list, &lni->children);
 	if(v)
 	{
 		v->type = PT_V;

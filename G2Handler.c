@@ -331,131 +331,116 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 	}
 
 	/* write */
+	(*w_entry)->flags.has_written = false;
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
-		if(!list_empty(&(*w_entry)->packets_to_send))
-		{
-			struct iovec vec[32];
-			struct list_head *e, *n, *head = &(*w_entry)->packets_to_send;
-			ssize_t ret;
-			size_t vused = 0;
-
-			for(e = head->next;
-			    prefetch(e->next), e != head && vused < anum(vec);
-			    e = e->next)
-			{
-				g2_packet_t *p = list_entry(e, g2_packet_t, list);
-				ret = g2_packet_serialize_to_iovec(p, &vec[vused], anum(vec) - vused);
-				if(-1 == ret)
-				{
-					char addr_buf[INET6_ADDRSTRLEN];
-					logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-						"failed to encode packet-stream",
-						combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-						ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-						(*w_entry)->com_socket);
-					(*w_entry)->flags.dismissed = true;
-					return w_entry;
-				}
-				vused += (size_t)ret;
-			}
-#if 0
-			if(ENC_DEFLATE == (*w_entry)->encoding_out)
-				d_target = (*w_entry)->send_u;
-			else
-				d_target = (*w_entry)->send;
-#endif
-
-			ret = do_writev(p_entry, epoll_fd, vec, vused, vused==anum(vec));
-			if(-1 == ret)
-				return w_entry;
-			/* TODO: check packets_to_send */
-			list_for_each_safe(e, n, head) {
-				g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-				list_del(e);
-				g2_packet_free(entry);
-			}
-		}
+		struct norm_buff *d_target = NULL;
+		struct list_head *e, *n;
+		if(ENC_DEFLATE == (*w_entry)->encoding_out)
+			d_target = (*w_entry)->send_u;
 		else
+			d_target = (*w_entry)->send;
+
+		if(buffer_remaining(*d_target) < 10)
+			goto no_fill_before_write;
+
+		list_for_each_safe(e, n, &(*w_entry)->packets_to_send)
 		{
-			/* switch off write */
-			struct epoll_event tmp_eevent = {0,{0}};
-			(*w_entry)->poll_interrests &= ~(uint32_t)EPOLLOUT;
-			tmp_eevent.events = (*w_entry)->poll_interrests;
-			tmp_eevent.data.ptr = w_entry;
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
-				logg_errno(LOGF_DEBUG, "changing EPoll interrests");
+			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+			if(!g2_packet_serialize_to_buff(entry, d_target))
+			{
+				char addr_buf[INET6_ADDRSTRLEN];
+				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+					"failed to encode packet-stream",
+					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
+					(*w_entry)->com_socket);
+				(*w_entry)->flags.dismissed = true;
 				return w_entry;
 			}
+			if(ENCODE_FINISHED != entry->packet_encode)
+				break;
+			list_del(e);
+			g2_packet_free(entry);
 		}
+// TODO: handle compression
+
+no_fill_before_write:
+		if(!do_write(p_entry, epoll_fd))
+			return w_entry;
 	}
 
 	/* read */
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
 		g2_packet_t tmp_packet;
-		bool	retry;
+		g2_packet_t *build_packet;
+		struct norm_buff *d_source = NULL;
+		struct norm_buff *d_target = NULL;
+		bool retry, compact_cbuff = false, save_build_packet = false;
 
 		if(!do_read(p_entry))
 			return w_entry;
+		if(buffer_cempty(*(*w_entry)->recv))
+			goto nothing_to_read;
 
-		logg_devel_old("---------- reread\n");
-
-		do
+		if(ENC_NONE == (*w_entry)->encoding_in)
+			d_source = (*w_entry)->recv;
+		else
 		{
-			g2_packet_t *build_packet;
-			struct norm_buff *d_source = NULL;
-
-			if(ENC_DEFLATE == (*w_entry)->encoding_in)
+			buffer_flip(*(*w_entry)->recv);
+retry_unpack:
+			logg_devel_old("--------- compressed\n");
+			d_source = (*w_entry)->recv_u;
+			if(buffer_remaining(*(*w_entry)->recv))
 			{
-				logg_devel_old("--------- compressed\n");
-				d_source = (*w_entry)->recv_u;
-				buffer_flip(*(*w_entry)->recv);
-				if(buffer_remaining(*(*w_entry)->recv))
+		/*if(ENC_DEFLATE == (*w_entry)->encoding_in)*/
+				(*w_entry)->z_decoder.next_in = (Bytef *)buffer_start(*(*w_entry)->recv);
+				(*w_entry)->z_decoder.avail_in = buffer_remaining(*(*w_entry)->recv);
+				(*w_entry)->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
+				(*w_entry)->z_decoder.avail_out = buffer_remaining(*d_source);
+
+				logg_develd_old("++++ cbytes: %u\n", buffer_remaining(*(*w_entry)->recv));
+				logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
+
+				switch(inflate(&(*w_entry)->z_decoder, Z_SYNC_FLUSH))
 				{
-					(*w_entry)->z_decoder.next_in = (Bytef *)buffer_start(*(*w_entry)->recv);
-					(*w_entry)->z_decoder.avail_in = buffer_remaining(*(*w_entry)->recv);
-					(*w_entry)->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
-					(*w_entry)->z_decoder.avail_out = buffer_remaining(*d_source);
-
-					logg_develd_old("++++ bytes: %u\n", buffer_remaining(*(*w_entry)->recv));
-					logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
-
-					switch(inflate(&(*w_entry)->z_decoder, Z_SYNC_FLUSH))
-					{
-					case Z_OK:
-						(*w_entry)->recv->pos += (buffer_remaining(*(*w_entry)->recv) - (*w_entry)->z_decoder.avail_in);
-						d_source->pos += (buffer_remaining(*d_source) - (*w_entry)->z_decoder.avail_out);
-						break;
-					case Z_STREAM_END:
-						logg_devel("Z_STREAM_END\n");
-						return w_entry;
-					case Z_NEED_DICT:
-						logg_devel("Z_NEED_DICT\n");
-						return w_entry;
-					case Z_DATA_ERROR:
-						logg_devel("Z_DATA_ERROR\n");
-						return w_entry;
-					case Z_STREAM_ERROR:
-						logg_devel("Z_STREAM_ERROR\n");
-						return w_entry;
-					case Z_MEM_ERROR:
-						logg_devel("Z_MEM_ERROR\n");
-						return w_entry;
-					case Z_BUF_ERROR:
-						logg_devel("Z_BUF_ERROR\n");
-						break;
-					default:
-						logg_devel("inflate was not Z_OK\n");
-						return w_entry;
-					}
+				case Z_OK:
+					(*w_entry)->recv->pos += (buffer_remaining(*(*w_entry)->recv) - (*w_entry)->z_decoder.avail_in);
+					d_source->pos += (buffer_remaining(*d_source) - (*w_entry)->z_decoder.avail_out);
+					break;
+				case Z_STREAM_END:
+					logg_devel("Z_STREAM_END\n");
+					return w_entry;
+				case Z_NEED_DICT:
+					logg_devel("Z_NEED_DICT\n");
+					return w_entry;
+				case Z_DATA_ERROR:
+					logg_devel("Z_DATA_ERROR\n");
+					return w_entry;
+				case Z_STREAM_ERROR:
+					logg_devel("Z_STREAM_ERROR\n");
+					return w_entry;
+				case Z_MEM_ERROR:
+					logg_devel("Z_MEM_ERROR\n");
+					return w_entry;
+				case Z_BUF_ERROR:
+					logg_devel("Z_BUF_ERROR\n");
+					break;
+				default:
+					logg_devel("inflate was not Z_OK\n");
+					return w_entry;
 				}
-				buffer_compact(*(*w_entry)->recv);
 			}
-			//if(ENC_NONE == (*w_entry)->encoding_in)
-			else
-				d_source = (*w_entry)->recv;
+			compact_cbuff = true;
+		}
 
+		logg_develd_old("++++ ospace: %u\n", buffer_remaining(*(*w_entry)->recv));
+		logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
+		buffer_flip(*d_source);
+		if(buffer_remaining(*d_source)) do
+		{
+			logg_devel_old("---------- reread\n");
 			build_packet = (*w_entry)->build_packet;
 			if(!build_packet) {
 				build_packet = &tmp_packet;
@@ -465,9 +450,6 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			else
 				logg_develd("taking %p\n", build_packet);
 
-			logg_develd_old("++++ space: %u\n", buffer_remaining(*(*w_entry)->recv));
-			logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
-			buffer_flip(*d_source);
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
 
 			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length))
@@ -484,25 +466,29 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 			else
 			{
 				if(DECODE_FINISHED == build_packet->packet_decode ||
-					PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
+				   PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
+					if(ENC_DEFLATE == (*w_entry)->encoding_out)
+						d_target = (*w_entry)->send_u;
+					else
+						d_target = (*w_entry)->send;
+
 					if(g2_packet_decide_spec(*w_entry, &(*w_entry)->packets_to_send, g2_packet_dict, build_packet))
 					{
-						struct epoll_event tmp_eevent = {0,{0}};
-
-						(*w_entry)->poll_interrests |= (uint32_t)EPOLLOUT;
-						tmp_eevent.events = (*w_entry)->poll_interrests;
-						tmp_eevent.data.ptr = w_entry;
-						if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
-							logg_errno(LOGF_DEBUG, "changing EPoll interrests");
-							return w_entry;
+						if(!((*w_entry)->poll_interrests & (uint32_t)EPOLLOUT))
+						{
+							struct epoll_event tmp_eevent = {0,{0}};
+							(*w_entry)->poll_interrests |= (uint32_t)EPOLLOUT;
+							tmp_eevent.events = (*w_entry)->poll_interrests;
+							tmp_eevent.data.ptr = w_entry;
+							if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
+								logg_errno(LOGF_DEBUG, "changing EPoll interrests");
+								return w_entry;
+							}
 						}
 					}
 
 					/* !!! packet is seen as finished here !!! */
-					if(build_packet->source_needs_compact)
-						buffer_compact(*d_source);
-
 					if(build_packet->is_freeable)
 						logg_devel("freeing durable packet\n");
 					else if(build_packet->data_trunk_is_freeable)
@@ -515,31 +501,50 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 					g2_packet_free(build_packet);
 					(*w_entry)->build_packet = NULL;
 
-					retry = true;
+					if(buffer_remaining(*d_source))
+						retry = true;
+					else
+						retry = false;
 				}
 				else
 				{
-					/* 
+					/*
 					 * it is assumed that a package ending here has state to
 					 * be saved until next recv on the one hand, but does not 
 					 * contain volatile data
 					 */
 					if(build_packet->packet_decode != CHECK_CONTROLL_BYTE)
-					{
-						/* copy build packet to durable storage */
-						g2_packet_t *t = g2_packet_clone(build_packet);
-						if(!t) {
-							logg_errno(LOGF_DEBUG, "allocating durable packet");
-							return w_entry;
-						}
-						(*w_entry)->build_packet = t;
-					}
+						save_build_packet = true;
 					retry = false;
 				}
 			}
 		} while(retry);
+
+		buffer_compact(*d_source);
+
+		if(ENC_NONE != (*w_entry)->encoding_in)
+		{
+// TODO: loop till zlib says more data
+			if(buffer_remaining(*(*w_entry)->recv))
+				goto retry_unpack;
+			if(compact_cbuff)
+				buffer_compact(*(*w_entry)->recv);
+		}
+		/* after last chance to get more data, save a partial decoded packet */
+		if(save_build_packet && build_packet == &tmp_packet)
+		{
+			/* copy build packet to durable storage */
+			g2_packet_t *t = g2_packet_clone(build_packet);
+			if(!t) {
+				logg_errno(LOGF_DEBUG, "allocating durable packet");
+				return w_entry;
+			}
+			(*w_entry)->build_packet = t;
+		}
+// TODO: try to write if not already written on this connec?
 	}
 
+nothing_to_read:
 	manage_buffer_after(&(*w_entry)->recv, lrecv_buff);
 	manage_buffer_after(&(*w_entry)->send, lsend_buff);
 

@@ -503,7 +503,6 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 {
 	int func_ret_val;
 	bool ret_val = true;
-	bool compact = true;
 
 	target->more_bytes_needed = false;
 
@@ -573,8 +572,6 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 					source->pos += target->length;
 					buffer_clear(target->data_trunk);
 					target->data_trunk.pos = target->length;
-					target->source_needs_compact = true;
-					compact = false;
 					target->packet_decode = PACKET_EXTRACTION_COMPLETE;
 					break;
 				}
@@ -668,10 +665,6 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			return false;
 		}
 	}
-
-	/* remove decoded data and set buffer-position so new data gets written behind */
-	if(compact)
-		buffer_compact(*source);
 
 	return ret_val;
 }
