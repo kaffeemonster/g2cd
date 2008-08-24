@@ -258,7 +258,7 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
  * It is called from decode_from_packet to decode Child packets out from the payload.
  * The Childpacket is suited to be feed in decode_from_packet again to get childs of childs
  * (as long the Packets are consistent).
- * 
+ *
  * !! Only feed it with complete Packtes/buffers !!
  * It assumes the Packet is complete.
  *
@@ -267,7 +267,7 @@ static inline int read_type(struct norm_buff *source, g2_packet_t *target)
  * target - The (child)packet where the info is stored
  * level - the maximal recursion allowed, old parameter, once func recursed atomatically
  * 	now only used for debuging, but maybe again of use. Simply pass 0.
- * 
+ *
  * RetVal:
  *  true - everything within normal parameters, all systems go.
  *  false - unrecoverable error (or illegal data), just dump the source of this
@@ -493,7 +493,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
  * target - The packet where the info is stored
  * max_len - the maximal legal G2Packet length. If a packet above this is found,
  *   it is seen as an error condition (see RetVal).
- * 
+ *
  * RetVal:
  *  true - everything within normal parameters, all systems go.
  *  false - unrecoverable error (or illegal data), just dump the source of this
@@ -506,7 +506,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 	bool compact = true;
 
 	target->more_bytes_needed = false;
-	
+
 	while(!target->more_bytes_needed)
 	{
 		switch(target->packet_decode)
@@ -810,7 +810,9 @@ ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t 
 	{
 	case DECIDE_ENCODE:
 		p->packet_encode = PREPARE_SERIALIZATION;
+	case SERIALIZATION_PREPARED_MIN:
 	case PREPARE_SERIALIZATION:
+	case PREPARE_SERIALIZATION_MIN:
 		ret = g2_packet_serialize_prep(p);
 		if(-1 == ret)
 			return ret;
@@ -861,27 +863,241 @@ ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t 
 		}
 		p->packet_encode = IOVEC_CLEANAFTER;
 	case IOVEC_CLEANAFTER:
+		/* dummy, to clean up after send */
 	case ENCODE_FINISHED:
 		break;
+	default:
+		logg_develd("bogus enoder_state: %i\n", p->packet_encode);
+		return -1;
 	}
 
 	return vused;
 }
 
+static uint8_t create_control_byte(g2_packet_t *p)
+{
+	uint8_t control = 0;
+
+/*	control |= p->c_reserved  ? 0x01 : 0; */ /* we don't set this bit */
+	control |= p->big_endian  ? 0x02 : 0;
+	control |= p->is_compound ? 0x04 : 0;
+	control |= (p->type_length-1) << 3;
+	control |= p->length_length << 6;
+	/*
+	 * It is possible to create a zero control byte (no length,
+	 * 1 char type, no options), and this is not allowed.
+	 * Set is_compound in this case, like Shareaza does and is
+	 * stated in the spec.
+	 * I personaly don't like this, since it creates a special
+	 * case: is_compound is only valid if there is data. And you
+	 * always have to look for is_compound because a packet may
+	 * grow children.
+	 * We could also set big_endian without harm, there is no data
+	 * this can affect ;), but i think every WinApp would go belly
+	 * up on such a packet...
+	 * I don't know why they choose this special meaning for
+	 * is_compound, big_endian would have been easier.
+	 */
+	control = control ? control : 0x04;
+
+	return control;
+}
+
+#define SERIALIZE_TYPE_ON_NUM(x) \
+			if(source->type_length >= (x)) { \
+				if(!buffer_remaining(*target)) { \
+					source->more_bytes_needed = true; \
+					break; \
+				} \
+				*buffer_start(*target) = g2_ptype_names[source->type][((x)-1)]; \
+				target->pos++; \
+			} \
+			source->packet_encode++; \
+			if(8 == (x)) { \
+				if(list_empty(&source->children)) { \
+					source->packet_encode = SERIALIZE_DATA_PREP; \
+					break; \
+				} else \
+					source->packet_encode = SERIALIZE_CHILDREN; \
+			}
+
+bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
+{
+	bool ret_val = true, need_zero = false;
+
+	source->more_bytes_needed = false;
+
+	while(!source->more_bytes_needed)
+	{
+		switch(source->packet_encode)
+		{
+		case DECIDE_ENCODE:
+			source->packet_encode = PREPARE_SERIALIZATION_MIN;
+		case PREPARE_SERIALIZATION:
+		case PREPARE_SERIALIZATION_MIN:
+			{
+				ssize_t ret;
+				ret = g2_packet_serialize_prep_min(source);
+				if(-1 == ret)
+					return false;
+			}
+		case SERIALIZATION_PREPARED:
+		case SERIALIZATION_PREPARED_MIN:
+			source->packet_encode = SERIALIZE_CONTROL;
+		case SERIALIZE_CONTROL:
+			{
+				uint8_t control;
+				if(!buffer_remaining(*target)) {
+					source->more_bytes_needed = true;
+					break;
+				}
+				control = create_control_byte(source);
+				*buffer_start(*target) = (char)control;
+				target->pos++;
+				source->packet_encode++;
+			}
+		case SERIALIZE_LENGTH1:
+			if(source->length_length >= 1)
+			{
+				if(!buffer_remaining(*target)) {
+					source->more_bytes_needed = true;
+					break;
+				}
+				if(1 == source->length_length)
+					*buffer_start(*target) = (char)(source->length&0xFF);
+				else if(!source->big_endian)
+					*buffer_start(*target) = (char)(source->length&0xFF);
+				else {
+					if(2 == source->length_length)
+						*buffer_start(*target) = (char)((source->length>>8)&0xFF);
+					else
+						*buffer_start(*target) = (char)((source->length>>16)&0xFF);
+				}
+				target->pos++;
+			}
+			source->packet_encode++;
+		case SERIALIZE_LENGTH2:
+			if(source->length_length >= 2)
+			{
+				if(!buffer_remaining(*target)) {
+					source->more_bytes_needed = true;
+					break;
+				}
+				if(!source->big_endian)
+					*buffer_start(*target) = (char)((source->length>>8)&0xFF);
+				else {
+					if(2 == source->length_length)
+						*buffer_start(*target) = (char)((source->length)&0xFF);
+					else
+						*buffer_start(*target) = (char)((source->length>>8)&0xFF);
+				}
+				target->pos++;
+			}
+			source->packet_encode++;
+		case SERIALIZE_LENGTH3:
+			if(source->length_length >= 3)
+			{
+				if(!buffer_remaining(*target)) {
+					source->more_bytes_needed = true;
+					break;
+				}
+				if(!source->big_endian)
+					*buffer_start(*target) = (char)((source->length>>16)&0xFF);
+				else
+					*buffer_start(*target) = (char)((source->length)&0xFF);
+				target->pos++;
+			}
+			source->packet_encode++;
+		case SERIALIZE_TYPE1:
+			SERIALIZE_TYPE_ON_NUM(1);
+		case SERIALIZE_TYPE2:
+			SERIALIZE_TYPE_ON_NUM(2);
+		case SERIALIZE_TYPE3:
+			SERIALIZE_TYPE_ON_NUM(3);
+		case SERIALIZE_TYPE4:
+			SERIALIZE_TYPE_ON_NUM(4);
+		case SERIALIZE_TYPE5:
+			SERIALIZE_TYPE_ON_NUM(5);
+		case SERIALIZE_TYPE6:
+			SERIALIZE_TYPE_ON_NUM(6);
+		case SERIALIZE_TYPE7:
+			SERIALIZE_TYPE_ON_NUM(7);
+		case SERIALIZE_TYPE8:
+			SERIALIZE_TYPE_ON_NUM(8);
+		case SERIALIZE_CHILDREN:
+			{
+				struct list_head *e, *n;
+				/* loop over children... */
+				list_for_each_safe(e, n, &source->children)
+				{
+					g2_packet_t *child = list_entry(e, g2_packet_t, list);
+					if(ENCODE_FINISHED != child->packet_encode)
+						ret_val = g2_packet_serialize_to_buff(child, target);
+					if(ENCODE_FINISHED != child->packet_encode) {
+						source->more_bytes_needed = child->more_bytes_needed;
+						break;
+					}
+					list_del(e);
+					g2_packet_free(child);
+				}
+				source->packet_encode = BEWARE_OF_ZERO;
+			}
+		case BEWARE_OF_ZERO:
+			/* insert zero byte between child and data, only if there is data... */
+			need_zero = true;
+		case SERIALIZE_DATA_PREP:
+			if(source->data_trunk.data && buffer_remaining(source->data_trunk))
+			{
+				if(need_zero)
+				{
+					if(!buffer_remaining(*target)) {
+						source->more_bytes_needed = true;
+						break;
+					}
+					*buffer_start(*target) = '\0';
+					target->pos++;
+				}
+				source->packet_encode = SERIALIZE_DATA;
+			}
+			else {
+				source->more_bytes_needed = true;
+				source->packet_encode = ENCODE_FINISHED;
+				break;
+			}
+		case SERIALIZE_DATA:
+			{
+				size_t len = buffer_remaining(source->data_trunk);
+				len = len < buffer_remaining(*target) ? len : buffer_remaining(*target);
+				memcpy(buffer_start(*target), buffer_start(source->data_trunk), len);
+				target->pos += len;
+				source->data_trunk.pos += len;
+			}
+			if(!buffer_remaining(source->data_trunk))
+				source->packet_encode = ENCODE_FINISHED;
+		case ENCODE_FINISHED:
+				/* Yehaa, it's done! */
+			source->more_bytes_needed = true;
+			break;
+		case IOVEC_HEADER:
+		case IOVEC_CHILD:
+		case IOVEC_ZERO:
+		case IOVEC_DATA:
+		case IOVEC_CLEANAFTER:
+		case MAX_ENCODE_STATE:
+			logg_develd("bogus enoder_state: %i\n", source->packet_encode);
+			return false;
+		}
+	}
+
+	return ret_val;
+}
+#undef SERIALIZE_TYPE_ON_NUM
+
 /*
- * g2_packet_serialize_prep - prepare packet for serialization
+ * Implementaion of g2_packet_serialize_prep{min}
  *
- * p - the packet to prepare
- *
- * our job is to go over the packet (and it childs) and:
- * - gather the lengths
- * - set the fields length_length, type_length, endian, compound
- * - write out every header
- *
- * return value: REAL packet length !! with header
- *               -1 on error
  */
-ssize_t g2_packet_serialize_prep(g2_packet_t *p)
+static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_header)
 {
 	size_t size = 0, child_size = 0, i, j;
 	uint8_t control = 0;
@@ -891,7 +1107,7 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 		struct list_head *e;
 		list_for_each(e, &p->children) {
 			g2_packet_t *child = list_entry(e, g2_packet_t, list);
-			ssize_t ret = g2_packet_serialize_prep(child);
+			ssize_t ret = g2_packet_serialize_prep_internal(child, write_header);
 			if(-1 == ret)
 				return ret;
 			child_size += (size_t)ret;
@@ -937,27 +1153,12 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 	 */
 	/* p->big_endian  = host_endian ; */
 
-/*	control |= p->c_reserved  ? 0x01 : 0; */ /* we don't set this bit */
-	control |= p->big_endian  ? 0x02 : 0;
-	control |= p->is_compound ? 0x04 : 0;
-	control |= (p->type_length-1) << 3;
-	control |= p->length_length << 6;
-	/*
-	 * It is possible to create a zero control byte (no length,
-	 * 1 char type, no options), and this is not allowed.
-	 * Set is_compound in this case, like Shareaza does and is
-	 * stated in the spec.
-	 * I personaly don't like this, since it creates a special
-	 * case: is_compound is only valid if there is data. And you
-	 * always have to look for is_compound because a packet may
-	 * grow children.
-	 * We could also set big_endian without harm, there is no data
-	 * this can affect ;), but i think every WinApp would go belly
-	 * up on such a packet...
-	 * I don't know why they choose this special meaning for
-	 * is_compound, big_endian would have been easier.
-	 */
-	control = control ? control : 0x04;
+	if(!write_header) {
+		p->packet_encode = SERIALIZATION_PREPARED_MIN;
+		return size + p->length_length + p->type_length + 1;
+	}
+
+	control = create_control_byte(p);
 
 	/* check if headerspace is free */
 	if(p->data_trunk.data == p->data)
@@ -969,7 +1170,7 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 			/* totaly fucked up, header and data to big */
 			logg_develd("Packet with stuffed data! Expensive Fixup for \"%s\": %lu\n",
 				g2_ptype_names[p->type], (unsigned long)buffer_remaining(p->data_trunk));
-			if(!(tmp_ptr = malloc(16)))
+			if(!(tmp_ptr = malloc(sizeof(p->data))))
 				return -1;
 			memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
 			p->data_trunk.data = tmp_ptr;
@@ -992,7 +1193,9 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 	i = 0;
 	p->data[i++] = control;
 	/* write the inner packet length */
-	if(!p->big_endian) {
+	if(1 == p->length_length)
+		p->data[i++] = (char)size;
+	else if(!p->big_endian) {
 		uint32_t nsize = size;
 		for(j = 0; j < p->length_length; j++, nsize >>=8)
 			p->data[i++] = (char)(nsize & 0xFF);
@@ -1011,136 +1214,41 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 }
 
 /*
-#if 0
-  public boolean encode(ByteBuffer target, G2Packet source, int level)
-	{
-		source.more_bytes_needed = false;
-		
-		while(!source.more_bytes_needed)
-		{
-		// Wir mussendas Packet ruckwaerts vorwaerts zusammenfuegen
-			switch(source.packet_encode)
-			{
-			case 0:
-			// Packetinformationen zuruecksetzen und, wenn vorhanden, Payload Anfuegen
-				source.length = 0;
-				source.length_length = 0;
-				source.type_length = 0;
-				source.big_endian = false;
-				source.is_compound = false;
-				source.c_reserved = false;
-
-				if(null != source.data)
-				{
-					source.data.rewind();
-					int old_remaining = source.data.remaining();
-				// wenn wir Payload und Children haben, Nullbyte einplanen
-					if(null != source.children) old_remaining++;
-				//	if(target.remaining() < old_remaining) { source.more_bytes_needed = true; break; }
-					target.position(target.limit() - old_remaining);
-				// ggf. Nullbyte auch einfuegen
-					if(null != source.children) target.put((byte)0x00);
-					target.put(source.data).rewind();
-					target.limit(target.limit() - old_remaining);
-					source.length += old_remaining;
-				}
-				source.packet_encode++;
-			case 1:
-			// wenn vorhanden Children in den Bytestream einfuegen
-				if(null != source.children)
-				{
-					for(int i = source.children.length - 1; i >= 0; i--)
-					{
-						if((null != source.children[i]) && (ENCODE_FINISHED != source.children[i].packet_encode))
-						{
-						// Wenn es was zu tun gibt, uns selbst aufrufen mit dem puffer und dem Childpacket
-							boolean ret_val = encode(target, source.children[i], (level + 1));
-							if(ret_val && (ENCODE_FINISHED == source.children[i].packet_encode))
-							{
-								source.length += source.children[i].length + source.children[i].length_length + source.children[i].type_length + 1;
-							}
-							else
-							{
-								source.more_bytes_needed = source.children[i].more_bytes_needed;
-								return(ret_val);
-							}
-						}
-					}
-				}
-				source.packet_encode = CONCAT_HEADER;
-			case CONCAT_HEADER:
-			// die Acht moeglichen Type-Bytes einfuegen
-			//	if(target.remaining() < source.type_length) { source.more_bytes_needed = true; break; }
-				if(null != source.type)
-				{
-					ByteBuffer b_type = std_utf8.encode(source.type);
-					source.type_length = (byte)b_type.remaining();
-					if(8 < source.type_length)
-					{
-						// ?? wer hat nen Type mit mehr als 8 Buchstaben zugelassen ??
-						System.out.println("Packet mit zu langem Typ! Werde kuerzen!");
-						b_type.limit(b_type.position() + 8);
-						source.type_length = 8;
-					}
-					target.position(target.limit() - source.type_length);
-					target.put(b_type).rewind();
-					target.limit(target.limit() - source.type_length);
-				}
-				else
-				{
-					// da wollen wir uns wohl selbst ein ungueltiges Packet unterjubeln
-					System.out.println("ACHTUNG! Packet mit Nullreferenz als Typ!\nVersuche es zu droppen...");
-					return(false);
-				}
-				source.packet_encode++;
-			case CONCAT_HEADER + 1:
-			// die drei moeglichen Laengenbytes einfuegen
-				if(0 < source.length)
-				{
-					source.length_length = 1;
-					if(0 != (source.length & 0x0000FF00)) source.length_length++;
-					if(0 != (source.length & 0x00FF0000)) source.length_length++;
-					
-				//	if(target.remaining() < source.length_length) { source.more_bytes_needed = true; break; }
-					target.position(target.limit() - source.length_length);
-					for(byte i = 0; i < source.length_length; i++)
-					{
-				// Da Java ja leider unfaehig ist einem unsigned zu geben...
-						byte cast_byte = 0;
-						if(!source.big_endian) cast_byte = (byte)(source.length >> (i * 8));
-						else cast_byte = (byte)(source.length >> (source.length_length - i - 1));
-						target.put(cast_byte);
-					}
-					target.rewind();
-					target.limit(target.limit() - source.length_length);
-				}
-				source.packet_encode++;
-			case CONCAT_HEADER + 2:
-			// Controllbyte erzeugen
-				//if(target.remaining() < 1) { source.more_bytes_needed = true; break; }
-				control = 0;
-				control |= (byte)((source.length_length << 6) & 0xC0);
-				control |= (byte)(((source.type_length - 1) << 3) & 0x38);
-				if(source.c_reserved) control |= (byte)0x01;
-				if(source.big_endian) control |= (byte)0x02;
-				if(source.is_compound) control |= (byte)0x04;
-				if(0 == control) control |= (byte)0x04;
-				target.position(target.limit() - 1);
-				target.put(control).rewind();
-				target.limit(target.limit() - 1);
-				source.packet_encode = ENCODE_FINISHED;
-				//break;
-			case ENCODE_FINISHED:
-				return(true);
-			}
-		}
-
-		return(false); //wenn wir hier ankommen werden wir wohl mehr bytes brauchen im Puffer
-	}
-	// EOC
+ * g2_packet_serialize_prep_min - minimal prepare packet for serialization
+ *
+ * p - the packet to prepare
+ *
+ * our job is to go over the packet (and it childs) and:
+ * - gather the lengths
+ * - set the fields length_length, type_length, endian, compound
+ *
+ * We do NOT write out every header(see down)
+ *
+ * return value: REAL packet length !! with header
+ *               -1 on error
+ */
+ssize_t g2_packet_serialize_prep_min(g2_packet_t *p)
+{
+	return g2_packet_serialize_prep_internal(p, false);
 }
-#endif
-*/
+
+/*
+ * g2_packet_serialize_prep - prepare packet for serialization
+ *
+ * p - the packet to prepare
+ *
+ * our job is to go over the packet (and it childs) and:
+ * - gather the lengths
+ * - set the fields length_length, type_length, endian, compound
+ * - write out every header
+ *
+ * return value: REAL packet length !! with header
+ *               -1 on error
+ */
+ssize_t g2_packet_serialize_prep(g2_packet_t *p)
+{
+	return g2_packet_serialize_prep_internal(p, true);
+}
 
 static char const rcsid_ps[] GCC_ATTR_USED_VAR = "$Idi$";
 //EOF

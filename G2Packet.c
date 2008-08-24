@@ -106,6 +106,13 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] =
 	[PT_UPROD ] = handle_UPROD,
 };
 
+const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] =
+{
+	[PT_KHLR  ] = unimpl_action_p,
+	[PT_PI    ] = handle_PI,
+	[PT_JCT   ] = empty_action_p,
+};
+
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
@@ -437,7 +444,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 // TODO: handle IPv6
 	if(g2_packet_steal_header_space(na, 6))
 	{
-		uint16_t port = htons(server.settings.bind.ip4.in.sin_port);
+		uint16_t port = ntohs(combo_addr_port(&server.settings.bind.ip4));
 		uint32_t addr = server.settings.bind.ip4.in.sin_addr.s_addr;
 		put_unaligned(addr, (uint32_t *)buffer_start(na->data_trunk));
 		put_unaligned(port, (uint16_t *)(buffer_start(na->data_trunk)+4));
@@ -842,8 +849,8 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 	logg_packet_old(STDSF, "/UPROC");
 	if(server.settings.profile.want_2_send &&
 	   server.settings.profile.xml &&
-	   server.settings.profile.length &&
-	   server.settings.profile.length < server.settings.default_max_g2_packet_length - 10)
+	   server.settings.profile.xml_length &&
+	   server.settings.profile.xml_length < server.settings.default_max_g2_packet_length - 10)
 	{
 		g2_packet_t *uprod;
 		g2_packet_t *xml;
@@ -864,7 +871,7 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 		list_add(&xml->list, &uprod->children);
 		xml->type = PT_XML;
 		xml->data_trunk.data     = (void*)(intptr_t)server.settings.profile.xml;
-		xml->data_trunk.capacity = server.settings.profile.length;
+		xml->data_trunk.capacity = server.settings.profile.xml_length;
 		buffer_clear(xml->data_trunk);
 
 		list_add_tail(&uprod->list, target);

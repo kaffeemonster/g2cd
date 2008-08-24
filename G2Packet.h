@@ -79,7 +79,9 @@
 	ENUM_CMD( UPROC  , 1 ), \
 	ENUM_CMD( UPROD  , 1 ), \
 	ENUM_CMD( KHLR   , 1 ), /* UDP */ \
-	ENUM_CMD( KHLA   , 1 ), /* UDP */ /* root packets */ \
+	ENUM_CMD( KHLA   , 1 ), /* UDP */ \
+	ENUM_CMD( DIS    , 1 ), /* UDP? */ \
+	ENUM_CMD( JCT    , 1 ), /* UDP connect test */ /* root packets */ \
 	ENUM_CMD( G2CDc  , 1 ), \
 	ENUM_CMD( DN     , 1 ), \
 	ENUM_CMD( GU     , 1 ), \
@@ -192,6 +194,7 @@ _G2PACK_EXTRNVAR(const uint8_t const g2_ptype_names_length[PT_MAXIMUM]);
 
 typedef bool (*g2_ptype_action_func) (g2_connection_t *, g2_packet_t *, struct list_head *) ;
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM]);
+_G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM]);
 _G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct list_head *, g2_ptype_action_func const*, g2_packet_t *));
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */

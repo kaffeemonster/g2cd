@@ -45,7 +45,9 @@ _G2PACKSER_EXTRN(bool g2_packet_decode(struct pointer_buff *, g2_packet_t *, int
 _G2PACKSER_EXTRN(bool g2_packet_decode_from_packet(g2_packet_t *, g2_packet_t *, int));
 _G2PACKSER_EXTRN(bool g2_packet_extract_from_stream(struct norm_buff *, g2_packet_t *, size_t));
 _G2PACKSER_EXTRN(ssize_t g2_packet_serialize_prep(g2_packet_t *));
+_G2PACKSER_EXTRN(ssize_t g2_packet_serialize_prep_min(g2_packet_t *));
 _G2PACKSER_EXTRN(ssize_t g2_packet_serialize_to_iovec(g2_packet_t *, struct iovec [], size_t));
+_G2PACKSER_EXTRN(bool g2_packet_serialize_to_buff(g2_packet_t *, struct norm_buff *));
 
 #endif /* _G2PACKETSERIALIZER_H */
 /* EOF */

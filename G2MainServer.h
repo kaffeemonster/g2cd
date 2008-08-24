@@ -112,8 +112,10 @@ _G2MAIN_EXTRNVAR(struct
 			struct
 			{
 				bool want_2_send;
+				const char *packet_uprod;
+				size_t packet_uprod_length;
 				const char *xml;
-				size_t length;
+				size_t xml_length;
 			} profile;
 		} settings;
 		struct
@@ -126,8 +128,6 @@ _G2MAIN_EXTRNVAR(struct
 } server);
 
 _G2MAIN_EXTRNVAR(__thread time_t local_time_now);
-_G2MAIN_EXTRNVAR(size_t packet_uprod_length);
-_G2MAIN_EXTRNVAR(char *packet_uprod);
 
 static always_inline int get_act_loglevel(void)
 {

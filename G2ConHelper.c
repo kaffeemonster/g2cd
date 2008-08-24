@@ -280,7 +280,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 			else if(w_entry->flags.dismissed)
 			{
 				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
+				logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tFDNum: %i\n",
 					"Dismissed!",
 					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
 					ntohs(combo_addr_port(&w_entry->remote_host)),

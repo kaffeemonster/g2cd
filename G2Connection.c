@@ -92,7 +92,8 @@ static const action_string h_as13 = {NULL,            str_size(X_TRY_HUB_KEY),  
 static const action_string h_as14 = {&empty_action_c, str_size(GGEP_KEY),        GGEP_KEY};
 static const action_string h_as15 = {&empty_action_c, str_size(PONG_C_KEY),      PONG_C_KEY};
 static const action_string h_as16 = {&empty_action_c, str_size(QUERY_ROUTE_KEY), QUERY_ROUTE_KEY};
-static const action_string h_as17 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
+static const action_string h_as17 = {&empty_action_c, str_size(UPTIME_KEY),      UPTIME_KEY};
+static const action_string h_as18 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") = 
 {
@@ -114,6 +115,7 @@ const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("
 	&h_as15,
 	&h_as16,
 	&h_as17,
+	&h_as18,
 };
 
 

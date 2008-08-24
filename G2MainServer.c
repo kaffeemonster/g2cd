@@ -50,6 +50,7 @@
 #include "G2Handler.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
+#include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
@@ -82,7 +83,7 @@ static inline void fork_to_background(void);
 static inline void handle_config(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
-static inline void read_uprofile(void);
+static noinline void read_uprofile(void);
 static void sig_stop_func(int signr, siginfo_t *, void *);
 
 int main(int argc, char **args)
@@ -442,7 +443,8 @@ static inline void handle_config(void)
 	fclose(config);
 
 	/* read the user-profile */
-	packet_uprod = NULL;
+	server.settings.profile.packet_uprod = NULL;
+	server.settings.profile.xml          = NULL;
 
 	if(server.settings.profile.want_2_send)
 		read_uprofile();
@@ -634,126 +636,96 @@ static inline void setup_resources(void)
 	}	
 }
 
-static inline void read_uprofile(void)
+static void read_uprofile(void)
 {
+	struct norm_buff buff;
 	FILE *prof_file;
-	char *wptr;
-	size_t xml_length;
-	size_t uprod_length;
-	size_t i;
-	size_t f_bytes;
-	uint8_t xml_length_length;
-	uint8_t uprod_length_length;
-	uint8_t tmp_cbyte;
+	g2_packet_t *uprod, *xml;
+	char *wptr, *uprod_mem = NULL, *f_mem;
+	ssize_t ret;
+	size_t f_bytes, uprod_len;
+	bool f_mem_needed = false, uprod_mem_needed = false;
 
-	if(!(prof_file = fopen(profile_file_name, "r")))
-	{
+	if(!(prof_file = fopen(profile_file_name, "r"))) {
 		logg_errno(LOGF_NOTICE, "opening profile-file");
 		return;
 	}
 
-	if(fseek(prof_file, 0, SEEK_END))
-	{
+	if(fseek(prof_file, 0, SEEK_END)) {
 		logg_errno(LOGF_NOTICE, "determinig profile-file size");
 		goto read_uprofile_end;
 	}
 
-	if((size_t)-1 == (f_bytes = (size_t) ftell(prof_file)))
-	{
+	if((size_t)-1 == (f_bytes = (size_t) ftell(prof_file))) {
 		logg_errno(LOGF_NOTICE, "determinig profile-file size");
 		goto read_uprofile_end;
 	}
 
-	if(fseek(prof_file, 0, SEEK_SET))
-	{
+	if(fseek(prof_file, 0, SEEK_SET)) {
 		logg_errno(LOGF_NOTICE, "determinig profile-file size");
 		goto read_uprofile_end;
 	}
 
-	/* calculate inner /XML length */
-	
-	if(f_bytes <= 0x0000FFL)
-		xml_length_length = 1;
-	else if(f_bytes <= 0x00FFFFL)
-		xml_length_length = 2;
-	else if(f_bytes <= 0xFFFFFFL)
-		xml_length_length = 3;
-	else
-	{
-		logg_pos(LOGF_NOTICE, "profile-file too big\n");
-		goto read_uprofile_end;
+	uprod = g2_packet_calloc();
+	xml   = g2_packet_calloc();
+	f_mem = malloc(f_bytes);
+	if(!(uprod && xml && f_mem)) {
+		logg_errno(LOGF_WARN, "allocating mem for uprod");
+		goto read_uprofile_free;
 	}
 
-	xml_length = 1;                  /* /XML-Control-byte */
-	xml_length += xml_length_length; /* /XML-length */
-	xml_length += 3;                 /* /XML-Type-length */
-	xml_length += f_bytes;           /* /XML-Payload */
-
-	if(xml_length <= 0x0000FF)
-		uprod_length_length = 1;
-	else if(xml_length <= 0x00FFFF)
-		uprod_length_length = 2;
-	else if(xml_length <= 0xFFFFFF)
-		uprod_length_length = 3;
-	else
-	{
-		logg_pos(LOGF_NOTICE, "profile-file too big\n");
-		goto read_uprofile_end;
-	}
-
-	uprod_length = 1;                   /* /UPROD-Control-byte */
-	uprod_length += uprod_length_length;/* /UPROD-length */
-	uprod_length += 5;                  /* /UPROD-Type-length */
-	uprod_length += xml_length;         /* /UPROD-child-length */
-
-// TODO: make it send-buffer-capacity transparent
-	if(unlikely(uprod_length > NORM_BUFF_CAPACITY))
-	{
-		logg_pos(LOGF_NOTICE, "profile-file too big\n");
-		goto read_uprofile_end;
-	}
-
-	if(!(packet_uprod = calloc(1, uprod_length)))
-	{
-		logg_errno(LOGF_NOTICE, "allocating profile-packet memory");
-		goto read_uprofile_end;
-	}
-
-	packet_uprod_length = uprod_length;
-	
-	wptr = packet_uprod;
-	tmp_cbyte = 0;
-	tmp_cbyte |= (uprod_length_length << 6) & 0xFF;
-	tmp_cbyte |= (4) << 3;
-	tmp_cbyte |= 0x04;
-	*wptr++ = (char)tmp_cbyte;
-	
-	for(i = 0; i < uprod_length_length; i++, wptr++)
-		*wptr = (char)((xml_length >> (i*8)) & 0xFF);
-	
-	*wptr++ = 'U'; *wptr++ = 'P'; *wptr++ = 'R';
-	*wptr++ = 'O'; *wptr++ = 'D';
-
-	tmp_cbyte = 0;
-	tmp_cbyte |= xml_length_length << 6;
-	tmp_cbyte |= (2) << 3;
-	*wptr++ = (char)tmp_cbyte;
-	
-	for(i = 0; i < xml_length_length; i++, wptr++)
-		*wptr = (char)((f_bytes >> (i*8)) & 0xFF);
-	
-	*wptr++ = 'X'; *wptr++ = 'M'; *wptr++ = 'L';
-
-	if(f_bytes != fread(wptr, 1, f_bytes, prof_file))
-	{
+	if(f_bytes != fread(f_mem, 1, f_bytes, prof_file)) {
 		logg_errno(LOGF_NOTICE, "reading profile-file");
-		free(packet_uprod);
-		packet_uprod = NULL;
+		goto read_uprofile_free;
 	}
 
-	server.settings.profile.xml    = wptr;
-	server.settings.profile.length = f_bytes;
+	uprod->type = PT_UPROD;
+	xml->type   = PT_XML;
+	xml->data_trunk.data  = f_mem;
+	xml->data_trunk.limit = xml->data_trunk.capacity = f_bytes;
+	list_add_tail(&xml->list, &uprod->children);
+	ret = g2_packet_serialize_prep_min(uprod);
+	if(-1 == ret) {
+		logg_pos(LOGF_NOTICE, "serializing uprod");
+		goto read_uprofile_free;
+	}
 
+	uprod_mem = malloc(ret);
+	if(!uprod_mem) {
+		logg_errno(LOGF_NOTICE, "allocating mem for uprod");
+		goto read_uprofile_free;
+	}
+	uprod_len = ret;
+
+	buff.pos = 0;
+	buff.limit = buff.capacity = NORM_BUFF_CAPACITY;
+
+	wptr = uprod_mem;
+	do
+	{
+		if(!g2_packet_serialize_to_buff(uprod, &buff)) {
+			logg_pos(LOGF_NOTICE, "serializing uprod");
+			goto read_uprofile_free;
+		}
+		buffer_flip(buff);
+		memcpy(wptr, buffer_start(buff), buffer_remaining(buff));
+		wptr += buffer_remaining(buff);
+		buffer_clear(buff);
+	} while(uprod->packet_encode != ENCODE_FINISHED);
+
+	server.settings.profile.packet_uprod        = uprod_mem;
+	server.settings.profile.packet_uprod_length = uprod_len;
+	server.settings.profile.xml        = f_mem;
+	server.settings.profile.xml_length = f_bytes;
+	uprod_mem_needed = true;
+	f_mem_needed     = true;
+
+read_uprofile_free:
+	if(!uprod_mem_needed)
+		free(uprod_mem);
+	if(!f_mem_needed)
+		free(f_mem);
+	g2_packet_free(uprod);
 read_uprofile_end:
 	fclose(prof_file);
 	return;
@@ -785,8 +757,8 @@ static inline void clean_up_m(void)
 	close(accept_2_handler[0]);
 	close(accept_2_handler[1]);
 
-	if(packet_uprod)
-		free(packet_uprod);
+	free((void*)(intptr_t)server.settings.profile.packet_uprod);
+	free((void*)(intptr_t)server.settings.profile.xml);
 
 	fclose(stdin);
 	fclose(stdout); // get a sync if we output to a file

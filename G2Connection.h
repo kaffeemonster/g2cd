@@ -156,8 +156,8 @@ typedef struct
 	const char   *txt;
 } action_string;
 
-# define MAX_HEADER_LENGTH	(NORM_BUFF_CAPACITY/2)
-# define KNOWN_HEADER_FIELDS_SUM	18
+# define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
+# define KNOWN_HEADER_FIELDS_SUM  19
 
 /* Stringconstants */
 /* var */
@@ -195,6 +195,7 @@ typedef struct
 # define GGEP_KEY          "GGEP"
 # define PONG_C_KEY        "Pong-Caching"
 # define QUERY_ROUTE_KEY   "X-Query-Routing"
+# define UPTIME_KEY        "Uptime"
 # define VEND_MSG_KEY      "Vendor-Message"
 
 # ifndef _G2CONNECTION_C

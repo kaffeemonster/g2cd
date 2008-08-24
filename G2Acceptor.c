@@ -481,7 +481,7 @@ static inline bool handle_accept_in(
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
 
-		logg_posd(LOGF_DEBUG, "%s IP: %s\tPort: %hu\tFDNum: %i\n",
+		logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tFDNum: %i\n",
 		"A connection!",
 		combo_addr_print(&(*work_entry)->remote_host, addr_buf, sizeof(addr_buf)),
 		ntohs(combo_addr_port(&(*work_entry)->remote_host)),
