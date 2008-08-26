@@ -61,7 +61,11 @@
  */
 //#define HAVE_MTSAFE_STRERROR
 
-/* are we on an multi-processor-mashine
+/* do you have db.h or ndbm.h? */
+#define HAVE_DB
+
+/*
+ * are we on an multi-processor-mashine
  * (even virtual processors)
  */
 #define HAVE_SMP
@@ -78,10 +82,11 @@
 
 
 /* this is callong for trouble, but helpfull */
-//TODO: backtrace brocken ATM
+//TODO: backtrace a little bit  brocken ATM
 #define WANT_BACKTRACES
 
-/* Is __thread keyword for thread local storage available?
+/*
+ * Is __thread keyword for thread local storage available?
  * This option is unused ATM, since __thread has its share
  * of problems (no descructors, portability).
  * It only gets interresting if pthread_{get|set}_specific
@@ -94,13 +99,15 @@
  */
 //#define HAVE___THREAD
 
-/* how many bytes must be avail to switch away
+/*
+ * how many bytes must be avail to switch away
  * from byte wise working
  */
 #define SYSTEM_MIN_BYTES_WORK 128
 
 /* not needed anymore, simply hang it of sizeof(type) */
-/* It is always a bad thing[tm] to fiddle around with the
+/*
+ * It is always a bad thing[tm] to fiddle around with the
  * System-dependend allingment, but sometimes...
  * Meaning of all this:
  * We normaly let the Compiler do the dirty Stuff, it would be

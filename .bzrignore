@@ -9,6 +9,8 @@ arflock
 bin2o
 G2PacketTyperGenerator
 G2PacketTyper.h
+khl.dump
+gwc_cache.db
 calltree
 guid.txt
 version.h

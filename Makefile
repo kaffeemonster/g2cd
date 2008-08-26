@@ -201,8 +201,11 @@ LDLIBS_BASE = -ldl #-lm
 #LDLIBS_BASE += -lsocket
 #LDLIBS_BASE += -lnsl
 #LDLIBS_BASE += -lrt
-#
-#	All libs if we don't use modules 
+#	a lib providing dbm_*, berkleydb will fit, prop. also anything else
+LDLIBS_BASE += -ldb
+#	on old solaris it's in the dbm lib, part of system
+#LDLIBS_BASE += ldbm
+#	All libs if we don't use modules
 LDLIBS = $(LDLIBS_BASE) -lz
 
 #
@@ -345,6 +348,7 @@ HEADS = \
 	G2PacketSerializer.h \
 	G2PacketSerializerStates.h \
 	G2QHT.h \
+	G2KHL.h \
 	builtin_defaults.h \
 	timeout.h
 #	whith gmake all could be so simple $(wildcard *.h)
@@ -361,6 +365,7 @@ MSRCS = \
 	G2Packet.c \
 	G2PacketSerializer.c \
 	G2QHT.c \
+	G2KHL.c \
 	timeout.c
 SRCS = \
 	$(MSRCS) \
@@ -400,6 +405,7 @@ OBJS = \
 	G2Packet.o \
 	G2PacketSerializer.o \
 	G2QHT.o \
+	G2KHL.o \
 	data.o \
 	timeout.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
@@ -713,6 +719,7 @@ G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
+G2KHL.o: G2KHL.h lib/combo_addr.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h

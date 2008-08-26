@@ -37,6 +37,11 @@
 
 #define DEFAULT_BE_DAEMON		false
 #define DEFAULT_USER		"nobody"
+// #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
+#define DEFAULT_DATA_ROOT_DIR	"./"
+#define DEFAULT_GWC_BOOT	"http://grantgalitz.com/Beacon/gwc.php"
+#define DEFAULT_GWC_DB	"gwc_cache"
+#define DEFAULT_KHL_DUMP	"khl.dump"
 
 #define DEFAULT_FILE_GUID		"guid.txt"
 #define DEFAULT_FILE_PROFILE	"profile.xml"

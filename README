@@ -1,6 +1,6 @@
 	G2CD - Gnutella 2 Server Daemon
 
-	Copyright (c) 2004-2007 Jan Seiffert  ->  redbully@cc.fh-luh.de
+	Copyright (c) 2004-2007 Jan Seiffert  ->  kaffeemonster@googlemail.com
 	
 	This file is part of g2cd.
 
@@ -21,7 +21,7 @@
 0. Introduction
 ---------------
 	This is a server-only implementation for the Gnutella 2 P2P-protocol
-	(www.gnutella2.com).
+	(g2.trillinux.org).
 
 	 Gnutella and Gnutella 2 are self-organizing, "server-less" P2P-networks.
 	But, to maintain network-connectivity, some network nodes become,
@@ -51,14 +51,23 @@
 
 	What you need:
 	* A typical UNIX® system (as in IEEE Std 1003.1 (POSIX), ISO/IEC 9945)
-	* GCC as your compiler (A C99 capable C-Compiler should do, but...)
+	* GCC as your compiler (A C99 capable C-Compiler is the minimum,
+	  but some GCC extensions are unfortunately very handy)
 	* gmake (GNU-make)
 		[note: it also works with a prehistoric solaris make without any
-		       fancy extensions, I'm pretty sure it should work with a 
-		       posix compliant make, but it does not work with the FreeBSD
-		       make wich sets $@ wrong for libraries...]
+		       fancy extensions, I'm pretty sure it should work with a
+		       posix compliant make, but it does _not_ work with the FreeBSD
+		       make wich sets $@ wrong for libraries (non-POSIX conforming),
+		       so i simply recomment gmake]
 	* Your systems header files (libc etc.)
-	* The zlib (library and header-files)
+	* The zlib, library and header-files
+	* A db lib, library and header-files (Berkeley DB or something else
+	  which provides dbm_* functions commonly available by ndbm.h)
+		[note: yes, the dbm_* interface is "obsolete", but it seems to
+		       be widely available. It suits my simple needs and i found
+		       it also provided on an old solaris as system lib, with AT&T
+		       copyright in the header, last change 1996, probably to
+		       add 'extern "C"', so i would call it mature technology ;) ]
 
 	recommended:
 	* An Editor
@@ -147,9 +156,10 @@
 	- timeout-handling
 	- autoconf?
 	- lots of other things
-	- adding a BSD-kqueue wrapper to my_epoll.[c|h] (some BSD'ler around?)
+	- test the BSD-kqueue wrapper (some BSD'ler around?)
 	- finish Solaris-/dev/poll wrapper to my_epoll.[c|h]
 	- portability issues of the build (make, compiler, shell)
+	- lots of other stuff
 
 	What's needed?
 	 Programming wizards, the tooth fairy and santa claus would be nice ;)
@@ -166,7 +176,7 @@
 	 OK, maybe I'm not a talented programmer and it's presumptuous to come
 	around with such a thing, I surely have to be happy if someone decides to
 	write just a simple line of code for this, but... at sometime you come to
-	a point where you don't want to mess with ugly code anymore, at least in
+	a point where you don't want to mess with ugly code anymore, at least for
 	your own project...
 	So, lets get started:
 	 First of all some words about my develop-environment. No fancy IDE, just
@@ -204,13 +214,23 @@
 
 	 That are the main facts. You will see the other things when you look at
 	the Source (hopefully, i am getting messy...):
-	a) I like the "new-block-braces" on a line of their own with the same
+	a) Let's get to the most complicated thing: curly braces
+	   I like the "new-block-braces" on a line of their own with the same
 	   indent as the keyword above (which incorporates very fine with
-	   folding ;)
+	   folding ;). This gives the clear visual feeling of a "new block".
+	   No rule without exceptions:
+	    - one liner do not have a brace (exception from the exception:
+	      sometimes a debug statement may vanish depending on compilation
+	      options, and an "if <nothing> else <nothing>" may set up the
+	      compiler and control flow...)
+	    - two and three liner get the opening brace on the same line,
+	      this is to prevent visual clutter on short statement, mostly
+	      error handling (like logg("foo"); return false;)
 	b) I like lower-case letters (do you want to do keyboard-gymnastics with
 	   shift?) filenames are a exception (you write them only sometimes, with
 	   tab complietion), constants are all-upper-case.
-	c) I like under-scores
+	c) I like under-scores, especially because i like to build namespaces
+	   (hint: this means avoid CaMeLCaSe and how to name functions)
 	d) I like something *between* u**x-shortness (su, ls, cd) and talking
 	   names (this_is_the_most_freaqently_used_variable). Hmmm, hard to
 	   explain, sigh, you need a feeling for it.
@@ -220,14 +240,15 @@
 	f) This one gets a little bit complicated: I'm *not* going to evangelize
 	   about the 80 chars per line (even if i am now fighting with printing),
 	   on most text terminals today we have got a little more. *But* your line
-	   has to end somewhere[1]. One *exception* are comments, they have to be
-	   split at 64 chars. Why? When the source ever gets wraped at 72 chars
-	   for any reason, the compiler will still eat (word wise) split C
-	   constructs, but yell at spurious words fallen of a comments (and not in
-	   a comment any more).
+	   has to end somewhere[1]. One *exception* are comments, they should be
+	   split at 64 chars. Why? Makes a nicer read and when the source ever
+	   gets wraped at 72 chars for any reason (ex.: email over f***ed up web
+	   frontend), the compiler will still eat (word wise) split C constructs,
+	   but yell at spurious words fallen of a comments (and not in a comment
+	   any more). This can be prevented a little bit with obeying 'o' below.
 	   [1] Think of a modern worker with X and a display of 1024x768. (So,
-	   saying it fits on your dual-headed 1920*1240 workspace is not an
-	   argument)
+	   saying it fits on your dual-headed 1920*2480 workspace is not an
+	   argument...)
 	g) It's OK to be a little paranoid with parenthesis, as long as you don't
 	   build a lisp-like parenthesis-labyrinth. Try to reduce them but it's
 	   perfect to be cautious.
@@ -257,19 +278,21 @@
 	   * item must be a one liner, on a line of its own
 	     -> if you have to say a lot, simply make it longer or split it up in a
 	        brief description and a explanation
-	o) There is no decision about the official comment style now. Since C99
-	   gives you C++ like comments, which I normaly prefer, to be able to
-	   comment out big block of code with // comments inside with the /**/
-	   comment, so they are fine. But using the traditional comments give you
-	   portability at no cost for non C99 compilers (but it's a bit nonsense,
-	   since the compiler has to provide some extensions for things new to C99,
-	   and the C++ comment is the most frequent extension). Real big Comments
-	   should be made with traditional comments. Maybe incorporate a sed?
+	   Use it, it really helps a lot, drop a quick TODO while things a still
+	   "hot" in your brain cells, to get things off your back, before you
+	   forget (the details) about it.
+	o) Even if C99 provieds C++ like comments (//) and it is one of the
+	   mostly available extension to pre-C99 compiler, I _now_ like the
+	   classic /**/ comments more, I'm still trying to clean up my source.
+	   They are more visual pleasing (as in "Hello! Here! Comment!") and
+	   prevent the problem from 'f' above. Exception is the TODO thingy.
+	   The reason i liked // comments more, comment out code chunks with
+	   /**/, can be achieved with #if 0 - #endif nicely.
 	p) A little bit late, but... in C99 you can intermix code and variable
-	   defines, but: again we can get backward compatibility for now cost but
+	   defines, but: again we can get backward compatibility for no cost but
 	   writing it in the classic C90 way (at the beginning of a block). Since
-	   this cannot be fixed with a sed -> make it so. (Even with the nonsense
-	   part from above in mind)
+	   this cannot be fixed with a sed -> make it so. It also helps a little
+	   bit with the "how much variables are in here" question.
 	q) There are maybe places, where something differs from the normal layout.
 	   This is maybe an accident, i changed my mind how such a thing has to
 	   look and i didn't looked over it again, or it was my intention, since
@@ -294,8 +317,9 @@
 	  being 64 Bit)
 	* I try to avoid BadHacks[tm], especially because of the portability-thing,
 	  so should you (see the fall-back-thing below). But to be honest, I surely
-	  make a lot of mistakes doing so, until now I could think of at least
-	  three places. Thats why I also cry out loud for a portability-guru...
+	  make a lot of mistakes doing so, sometimes even deliberately ^^.
+	  Until now I could think of at least three places. Thats why I also cry
+	  out loud for a portability-guru...
 	* Don't make any presumptions about data-types, especially about the basic
 	  types (most beloved: int). Become familiar with the type system according
 	  to the C standard. Use the appropriate data-type for the task, there are
@@ -309,11 +333,15 @@
 	  platforms give you a SIGBUS (or emulate the read with a system trap 
 	  -> extra slow and not portable [Linux® on $PROCESSOR may do it, FreeBSD®
 	  on $PROCESSOR maybe not]), core dump, game over.
+	  I made {get|put}_unaligned macros similar to those from the Linux® kernel,
+	  they may be of good use in some circumstances (and they offload the whole
+	  access foo to the compiler and generate nice asm on x86), but they need
+	  porting to other compilers than GCC.
 	* Furthermore we have to deal with endianess. Some protocol-values have a
 	  fixed endianess, some have the endianess of the sending host and we have
-	  our own (at write time of code unknown) on the receiving side. (so
+	  our own (at write time of code unknown) on the receiving side. So
 	  byte-by-byte handling is ideal to also swap endianess while reading the
-	  value)
+	  value.
 	* If you want to use any tricks, you must provide a fall back anyway, so
 	  simply write it in the first round.
 

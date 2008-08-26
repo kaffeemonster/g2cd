@@ -52,6 +52,7 @@
 #include "G2Connection.h"
 #include "G2PacketSerializer.h"
 #include "timeout.h"
+#include "G2KHL.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
@@ -129,6 +130,10 @@ int main(int argc, char **args)
 
 		close(log_to_fd);
 	}
+
+	/* init khl system */
+	if(!g2_khl_init())
+		return EXIT_FAILURE;
 
 /* ANYTHING what need any priviledges should be done before */
 	/* Drop priviledges */
@@ -234,6 +239,7 @@ int main(int argc, char **args)
 			{
 				num_poll = hzp_scan(NORM_HZP_THRESHOLD);
 				logg_develd("HZP reclaimed chunks: %i\n", num_poll);
+				g2_khl_tick();
 			}
 			break;
 		/* Something bad happened */
@@ -285,6 +291,25 @@ int main(int argc, char **args)
 	pthread_join(main_threads[THREAD_ACCEPTOR], NULL);
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_UDP], NULL);
+
+	/*
+	 * cleanup khl system
+	 * This is fairly important.
+	 * All data to be written is only cached info, we could
+	 * live without it.
+	 * But not doing so may lead to:
+	 * - more load on the GWCs
+	 * - bad "perfomance" after a simple restart (info still valid)
+	 * - no connection to the Network on startup
+	 * - grief for the user because the gwc cache db may get
+	 *   corrupted and we are not able to recover from this
+	 * Things complicating our business are the typical
+	 * "IO can fail" and that we may changed the user now, so
+	 * don't have write permission. Additionaly we may have
+	 * crashed, preventing us to reach this code (no, i don't
+	 * want atexit()...)
+	 */
+	g2_khl_end();
 
 	clean_up_m();
 	fsync(STDOUT_FILENO);
@@ -408,6 +433,7 @@ static inline void handle_config(void)
 
 // TODO: read from config files
 	/* var settings */
+	server.settings.data_root_dir = DEFAULT_DATA_ROOT_DIR;
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
@@ -425,6 +451,9 @@ static inline void handle_config(void)
 	server.settings.max_connection_sum = DEFAULT_CON_MAX;
 	server.settings.default_max_g2_packet_length = DEFAULT_PCK_LEN_MAX;
 	server.settings.profile.want_2_send = DEFAULT_SEND_PROFILE;
+	server.settings.khl.gwc_boot_url = DEFAULT_GWC_BOOT;
+	server.settings.khl.gwc_cache_fname = DEFAULT_GWC_DB;
+	server.settings.khl.dump_fname = DEFAULT_KHL_DUMP;
 
 	/* set the GUID */
 	if(!(config = fopen(guid_file_name, "r")))
@@ -765,7 +794,7 @@ static inline void clean_up_m(void)
 	fclose(stderr);
 }
 
-/* 
+/*
  * hmpf, ok, we try to say the compiler to include them (if it
  * supports such an anotation), and not optimize them away,
  * while saying splint thats ok that they are unused
@@ -774,4 +803,4 @@ static inline void clean_up_m(void)
 static char const ownid[] GCC_ATTR_USED_VAR = "$Own: " DIST " built on " __DATE__ " " __TIME__ " at \"" SYSTEM_INFO "\" with \"" COMPILER_INFO "\" $";
 /*@unused@*/
 static char const rcsid_m[] GCC_ATTR_USED_VAR = "$Id: G2MainServer.c,v 1.25 2005/11/05 18:02:45 redbully Exp redbully $";
-//EOF
+/* EOF */

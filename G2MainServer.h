@@ -24,52 +24,52 @@
  */
 
 #ifndef _G2MAINSERVER_H
-#define _G2MAINSERVER_H
+# define _G2MAINSERVER_H
 
-// Includes if included
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/poll.h>
-#include <netinet/in.h>
-#include <errno.h>
+/* Includes if included */
+# include <pthread.h>
+# include <stdbool.h>
+# include <stdio.h>
+# include <time.h>
+# include <sys/types.h>
+# include <sys/poll.h>
+# include <netinet/in.h>
+# include <errno.h>
 
-// Own
-#include "other.h"
+/* Own */
+# include "other.h"
 static always_inline int get_act_loglevel(void);
-#include "G2Connection.h"
-#include "G2Packet.h"
-#include "lib/combo_addr.h"
-#include "lib/atomic.h"
-#include "lib/log_facility.h"
+# include "G2Connection.h"
+# include "G2Packet.h"
+# include "lib/combo_addr.h"
+# include "lib/atomic.h"
+# include "lib/log_facility.h"
 
-#define OWN_VENDOR_CODE	"G2CD"
+# define OWN_VENDOR_CODE    "G2CD"
 
-#define THREAD_ACCEPTOR		0
-#define THREAD_HANDLER		1
-#define THREAD_UDP		2
-#define THREAD_TIMER	3
-#define THREAD_SUM_COM	3
-#define THREAD_SUM		4
+# define THREAD_ACCEPTOR    0
+# define THREAD_HANDLER     1
+# define THREAD_UDP         2
+# define THREAD_TIMER       3
+# define THREAD_SUM_COM     3
+# define THREAD_SUM         4
 
-#define OUT   0
-#define IN    1
+# define OUT   0
+# define IN    1
 
-#define EVENT_SPACE  16
+# define EVENT_SPACE   16
 
-#define FC_CAP_END	2048 /* not used ATM*/
-#define FC_CAP_START	16
-#define FC_CAP_INC	32 /* not used ATM */
-#define FC_TRESHOLD	4
-#define FB_CAP_START	(THREAD_SUM * EVENT_SPACE * 2)
-#define FB_TRESHOLD	EVENT_SPACE
+# define FC_CAP_END    2048 /* not used ATM */
+# define FC_CAP_START  16
+# define FC_CAP_INC    32 /* not used ATM */
+# define FC_TRESHOLD   4
+# define FB_CAP_START  (THREAD_SUM * EVENT_SPACE * 2)
+# define FB_TRESHOLD   EVENT_SPACE
 
-#define PD_START_CAPACITY 128
-#define PD_CAPACITY_INCREMENT 32
-#define WC_START_CAPACITY 128
-#define WC_CAPACITY_INCREMENT 8
+# define PD_START_CAPACITY      128
+# define PD_CAPACITY_INCREMENT  32
+# define WC_START_CAPACITY      128
+# define WC_CAPACITY_INCREMENT  8
 
 struct poll_info
 {
@@ -78,19 +78,25 @@ struct poll_info
 	struct pollfd data[DYN_ARRAY_LEN];
 };
 
-#ifndef _G2MAINSERVER_C
-#define _G2MAIN_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
-#define _G2MAIN_EXTRNVAR(x) extern x GCC_ATTR_VIS("hidden")
-#else
-#define _G2MAIN_EXTRN(x) x GCC_ATTR_VIS("hidden")
-#define _G2MAIN_EXTRNVAR(x) x GCC_ATTR_VIS("hidden")
-#endif // _G2MAINSERVER_C
+# ifndef _G2MAINSERVER_C
+#  define _G2MAIN_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+#  define _G2MAIN_EXTRNVAR(x) extern x GCC_ATTR_VIS("hidden")
+# else
+#  define _G2MAIN_EXTRN(x) x GCC_ATTR_VIS("hidden")
+#  define _G2MAIN_EXTRNVAR(x) x GCC_ATTR_VIS("hidden")
+# endif /* _G2MAINSERVER_C */
 
 _G2MAIN_EXTRNVAR(struct
 {
 		struct
 		{
+			volatile int max_connection_sum;
 			pthread_attr_t t_def_attr;
+			const char *data_root_dir;
+			enum g2_connection_encodings default_in_encoding;
+			enum g2_connection_encodings default_out_encoding;
+			uint8_t our_guid[16];
+			size_t default_max_g2_packet_length;
 			struct
 			{
 				enum loglevel act_loglevel;
@@ -104,11 +110,6 @@ _G2MAIN_EXTRNVAR(struct
 				bool use_ip4;
 				bool use_ip6;
 			} bind;
-			enum g2_connection_encodings default_in_encoding;
-			enum g2_connection_encodings default_out_encoding;
-			size_t default_max_g2_packet_length;
-			volatile int max_connection_sum;
-			uint8_t our_guid[16];
 			struct
 			{
 				bool want_2_send;
@@ -117,6 +118,12 @@ _G2MAIN_EXTRNVAR(struct
 				const char *xml;
 				size_t xml_length;
 			} profile;
+			struct
+			{
+				const char *gwc_boot_url;
+				const char *gwc_cache_fname;
+				const char *dump_fname;
+			} khl;
 		} settings;
 		struct
 		{
@@ -141,5 +148,5 @@ static always_inline int get_act_loglevel(void)
 	errno = whats_wrong;
 	perror(when);
 }*/
-#endif // _G2MAINSERVER_H
-//EOF
+#endif /* _G2MAINSERVER_H */
+/* EOF */
