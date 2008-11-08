@@ -397,13 +397,6 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	if(bind(*accept_so, &our_addr->sa, sizeof(*our_addr)))
 		OUT_ERR("binding accept fd");
 
-// TODO: Find external addresses
-#if 0
-	//socklen_t len;
-	//getsockname(sock, (sockaddr *) &my_addr, &len);
-	//logg_develd_old("Port: %d\n", ntohs(my_addr.sin_port));
-#endif
-
 	if(listen(*accept_so, BACKLOG))
 		OUT_ERR("calling listen()");
 
@@ -464,10 +457,12 @@ static inline bool handle_accept_in(
 	int abort_fd,
 	struct epoll_event *poll_me)
 {
+	union combo_addr our_local_addr;
 	struct epoll_event tmp_eevent = {0,{0}};
 	socklen_t sin_size = sizeof((*work_entry)->remote_host); /* what to do with this info??? */
 	int tmp_fd;
 	int fd_flags;
+	int ret;
 
 	do
 		tmp_fd = accept(accept_so, &(*work_entry)->remote_host.sa, &sin_size);
@@ -487,7 +482,6 @@ static inline bool handle_accept_in(
 		ntohs(combo_addr_port(&(*work_entry)->remote_host)),
 		(*work_entry)->com_socket);
 	}
-
 
 	/* check if our total server connection limit is reached */
 	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum)
@@ -509,7 +503,21 @@ static inline bool handle_accept_in(
 		goto err_out_after_count;
 	}*/
 
-	
+// TODO: Find external addresses
+	sin_size = sizeof(our_local_addr);
+	ret = getsockname((*work_entry)->com_socket, &our_local_addr.sa, &sin_size);
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+
+		logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tret: %i\n",
+		"A connection!",
+		combo_addr_print(&our_local_addr, addr_buf, sizeof(addr_buf)),
+		ntohs(combo_addr_port(&our_local_addr)),
+		ret);
+	}
+
+	logg_develd_old("Port: %d\n", ntohs(my_addr.sin_port));
+
 	/* get the fd-flags and add nonblocking  */
 	/* according to POSIX manpage EINTR is only encountered when the cmd was F_SETLKW */
 	if(-1 == (fd_flags = fcntl((*work_entry)->com_socket, F_GETFL)))
@@ -523,7 +531,6 @@ static inline bool handle_accept_in(
 		goto err_out_after_count;
 	}
 
-	
 	/* No EINTR in epoll_ctl according to manpage :-/ */
 	tmp_eevent.events = (*work_entry)->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
 	tmp_eevent.data.ptr = &work_cons->data[work_cons->limit];
@@ -1021,38 +1028,61 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 				to_con->flags.dismissed = true;
 				return false;
 			}
-// TODO: what's our global address?
-#if 0
-			if(NULL == combo_addr_print(
-				AF_INET == to_con->remote_host.s_fam ? server.status.local_addr4 : server.status.local_addr6,
-				buffer_start(*to_con->send),
-				buffer_remaining(*to_con->send)))
-			{
-				logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
-				to_con->dismissed = true;
-				return(false);
-			}
-			to_con->send->pos += strnlen(buffer_start(*to_con->send), buffer_remaining(*to_con->send));
-#endif
 
-			pr_ch = (size_t)
-			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
-				"192.168.0.2:%hu\r\n"
-				REMOTE_ADR_KEY ": ",
-				ntohs(AF_INET == to_con->remote_host.s_fam ?
-					server.settings.bind.ip4.in.sin_port : server.settings.bind.ip6.in6.sin6_port)
-			);
-			if(pr_ch < buffer_remaining(*to_con->send))
-				to_con->send->pos += pr_ch;
-			else {
-				to_con->flags.dismissed = true;
-				return false;
+// TODO: add prefernce what's our global ip?
+			/*
+			 * It's totaly fine for a REAL host to be multihomed.
+			 * But the answer to the question "What's my IP?" then
+			 * depends on the one who answers ;)
+			 * This hole Listen-IP/Remote-IP was not build with
+			 * multihoming in mind, quite the contrary, to detect NAT.
+			 *
+			 * So we can only lie to the client who has connected. The
+			 * IP he reached was obviously the right one (we can exchange
+			 * packets). There is only one problem: If we are NATed...
+			 *
+			 * SO WHO EVER THINKS RUNNING THIS SERVER CODE BEHIND A NAT IS A
+			 * GOOD IDEA SHOULD DIE BY STEEL^w^w^w LIVE WITH THE CONSEQUENCES
+			 */
+			{
+				char addr_buf[INET6_ADDRSTRLEN];
+				union combo_addr local_addr;
+				socklen_t sin_size = sizeof(local_addr);
+
+				/*
+				 * get our ip the remote host connected to from
+				 * our socket handle
+				 */
+				if(getsockname(to_con->com_socket, &local_addr.sa, &sin_size)) {
+					logg_errno(LOGF_DEBUG, "getting local addr of socket");
+					local_addr = AF_INET == to_con->remote_host.s_fam ?
+						server.settings.bind.ip4 : server.settings.bind.ip6;
+				}
+				if(!combo_addr_print(&local_addr, addr_buf, sizeof(addr_buf))) {
+					/* we have a problem, that should not happen... */
+					logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
+					to_con->flags.dismissed = true;
+					return false;
+				}
+
+				pr_ch = (size_t)
+				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
+				         "%s:%hu\r\n" REMOTE_ADR_KEY ": ",
+				         addr_buf, ntohs(AF_INET == local_addr.s_fam ?
+				           local_addr.in.sin_port : local_addr.in6.sin6_port)
+				);
+				if(pr_ch < buffer_remaining(*to_con->send))
+					to_con->send->pos += pr_ch;
+				else {
+					to_con->flags.dismissed = true;
+					return false;
+				}
 			}
 
-			if(NULL == combo_addr_print(&to_con->remote_host,
-				buffer_start(*to_con->send),
-				buffer_remaining(*to_con->send)))
-			{
+			/* tell remote end from which ip we saw it comming */
+			if(!combo_addr_print(&to_con->remote_host,
+			                     buffer_start(*to_con->send),
+			                     buffer_remaining(*to_con->send))) {
 				logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
 				to_con->flags.dismissed = true;
 				return false;

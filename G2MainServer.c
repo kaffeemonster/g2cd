@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/poll.h>
+#include <sys/time.h>
 #include <sys/resource.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -85,6 +86,7 @@ static inline void handle_config(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
 static noinline void read_uprofile(void);
+static void adjust_our_niceness(int);
 static void sig_stop_func(int signr, siginfo_t *, void *);
 
 int main(int argc, char **args)
@@ -130,6 +132,12 @@ int main(int argc, char **args)
 
 		close(log_to_fd);
 	}
+
+	/*
+	 * try to lower our prio, we are a unimportatnt process in respect
+	 * to root's ssh session or other stuff
+	 */
+	adjust_our_niceness(server.settings.nice_adjust);
 
 	/* init khl system */
 	if(!g2_khl_init())
@@ -204,7 +212,6 @@ int main(int argc, char **args)
 			}
 			else
 				logg_pos(LOGF_NOTICE, "Not registering Shutdown-handler\n");
-			
 		}
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
@@ -260,7 +267,7 @@ int main(int argc, char **args)
 		if(0 > send(sock_com[i][OUT], "All lost", sizeof("All lost"), 0))
 			logg_errno(LOGF_WARN, "initiating stop");
 	}
-	
+
 	/*
 	 * wait a moment until all threads have gracefully stoped,
 	 * or exit anyway
@@ -282,6 +289,7 @@ int main(int argc, char **args)
 		else if(9 == i) {
 			logg_pos(LOGF_ERR, "not all gone down! Aborting!\n");
 			fsync(STDOUT_FILENO);
+			g2_khl_end(); /* frantic writeout! */
 			return EXIT_FAILURE;
 		}
 		sleep(1);
@@ -291,6 +299,7 @@ int main(int argc, char **args)
 	pthread_join(main_threads[THREAD_ACCEPTOR], NULL);
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_UDP], NULL);
+	/* Join THREAD_TIMER??? Hmmm, there was a reason... */
 
 	/*
 	 * cleanup khl system
@@ -434,6 +443,7 @@ static inline void handle_config(void)
 // TODO: read from config files
 	/* var settings */
 	server.settings.data_root_dir = DEFAULT_DATA_ROOT_DIR;
+	server.settings.nice_adjust = DEFAULT_NICE_ADJUST;
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
@@ -758,6 +768,21 @@ read_uprofile_free:
 read_uprofile_end:
 	fclose(prof_file);
 	return;
+}
+
+static void adjust_our_niceness(int adjustment)
+{
+	int cur_nice;
+
+	errno = 0;
+	cur_nice = getpriority(PRIO_PROCESS, 0);
+	if(-1 == cur_nice && errno != 0) {
+		logg_errno(LOGF_NOTICE, "getting niceness failed, continueing. reason");
+		return;
+	}
+
+	if(0 > setpriority(PRIO_PROCESS, 0, cur_nice + adjustment))
+		logg_errno(LOGF_NOTICE, "adjusting niceness failed, continueing, reason");
 }
 
 static inline void clean_up_m(void)

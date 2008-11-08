@@ -305,7 +305,7 @@ static void udp_writeout_packet(union combo_addr *to, int fd, g2_packet_t *p, st
 		logg_devel("serialize prepare failed\n");
 		return;
 	}
-	num_udp_packets = (result+1+(UDP_MTU-UDP_RELIABLE_LENGTH-1))/(UDP_MTU-UDP_RELIABLE_LENGTH);
+	num_udp_packets = (result+(UDP_MTU-UDP_RELIABLE_LENGTH-1))/(UDP_MTU-UDP_RELIABLE_LENGTH);
 // TODO: fancy sequence and locking
 	sequence_number = internal_sequence++;
 	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets);
@@ -317,12 +317,6 @@ static void udp_writeout_packet(union combo_addr *to, int fd, g2_packet_t *p, st
 		*num_ptr = i+1;
 
 		g2_packet_serialize_to_buff(p, d_hold);
-// TODO: remove term. zero again.
-/* Shareza still doesn't eat my UDP packets... */
-		if(i == (num_udp_packets-1)) {
-			*buffer_start(*d_hold) = '\0';
-			d_hold->pos++;
-		}
 		udp_sock_send(d_hold, to, fd);
 	}
 

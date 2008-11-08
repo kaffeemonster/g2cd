@@ -188,7 +188,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		case SEGV_ACCERR:
 			isl = "invalid permissions for mapped object"; break;
 		case 128: /* Linux only? x86 only? */
-			isl = "(unshure) priveleged instruction, probaly a SIGILL";
+			isl = "(unshure) special instruction execption"; break;
 		default:
 			isl = "Unknown SIGSEGV problem"; break;
 		}

@@ -304,6 +304,7 @@ do { \
 } while(0)
 
 # if (__BYTE_ORDER == __LITTLE_ENDIAN)
+#  define HOST_IS_BIGENDIAN	false
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \
 	if(!big_end) \
@@ -330,6 +331,7 @@ do { \
 	} \
 } while(0)
 # elif (__BYTE_ORDER == __BIG_ENDIAN)
+#  define HOST_IS_BIGENDIAN	true
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \
 	if(big_end) \

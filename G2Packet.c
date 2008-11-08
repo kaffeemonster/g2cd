@@ -69,6 +69,7 @@ static bool empty_action_p(g2_connection_t *, g2_packet_t *, struct list_head *)
 static bool unimpl_action_p(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL_TS(g2_connection_t *, g2_packet_t *, struct list_head *);
+static bool handle_KHL_CH(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_LNI(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_LNI_FW(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_LNI_HS(g2_connection_t *, g2_packet_t *, struct list_head *);
@@ -132,7 +133,7 @@ static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 {
 	[PT_TS] = handle_KHL_TS,
 	[PT_NH] = unimpl_action_p,
-	[PT_CH] = unimpl_action_p,
+	[PT_CH] = handle_KHL_CH,
 };
 
 /* Q2-childs */
@@ -315,7 +316,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 	{
 		time_t now = local_time_now;
 		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
-// TODO: set host endianes
+		ts->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&ts->list, &khl->children);
 	}
 	else
@@ -360,10 +361,12 @@ static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 				else
 				{
 					logg_packet(STDLF, "/KHL", "TS with 8 byte! Ola, a 64-bit OS?");
-					/* Lets try too cludge it together, if we also have a 64-bit OS,
+					/*
+					 * Lets try too cludge it together, if we also have a 64-bit OS,
 					 * everything will be fine, if not, we hopefully get the lower 32 bit,
 					 * and if we don't test at the moment of overflow in 2013 (or when ever)
-					 * it should work */
+					 * it should work
+					 */
 					shift = 56;
 				}
 			}
@@ -383,6 +386,26 @@ static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		logg_packet(STDLF, "/KHL/TS", "TS not 4 or 8 byte");
 
 	connec->time_diff = difftime(foreign_time, local_time);
+	return false;
+}
+
+static bool handle_KHL_CH(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
+{
+	/*
+	 * who thought of that shit???
+	 * "Hey, lets cram all kind of binary numbers which will /never/ change
+	 * their size into one blob" yeah, maybe on winblow... IPv6? 64bit time_t?
+	 *
+	 *	IP	Port	TS
+	 *	4	2	4	= 10 winblow
+	 *	16	2	4	= 20 IPv6
+	 *	16	2	8	= 24 IPv6 + 64bit time_t
+	 *	4	2	8	= 14 64bit time_t
+	 */
+	logg_packet("/KHL/CH\tC: %s len: %d\n", source->is_compound ? "true" : "false",
+	            buffer_remaining(source->data_trunk));
+//	if(10 == buffer_remaining(source->data_trunk))
+//	 INET6_ADDRLEN
 	return false;
 }
 
@@ -426,11 +449,18 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 // TODO: handle IPv6
 	if(g2_packet_steal_data_space(na, 6))
 	{
-		uint16_t port = ntohs(combo_addr_port(&server.settings.bind.ip4));
-		uint32_t addr = server.settings.bind.ip4.in.sin_addr.s_addr;
+		uint16_t port;
+		uint32_t addr;
+		union combo_addr local_addr;
+		socklen_t sin_size = sizeof(local_addr);
+
+		if(getsockname(connec->com_socket, &local_addr.sa, &sin_size))
+			goto out_fail;
+		addr = local_addr.in.sin_addr.s_addr;
+		port = combo_addr_port(&local_addr);
 		put_unaligned(addr, (uint32_t *)buffer_start(na->data_trunk));
 		put_unaligned(port, (uint16_t *)(buffer_start(na->data_trunk)+4));
-// TODO: set host endianes
+		na->big_endian = true; /* always send data in net byte order */
 		list_add_tail(&na->list, &lni->children);
 	}
 	else
@@ -461,7 +491,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 			uint16_t max_cons = server.settings.max_connection_sum;
 			put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
 			put_unaligned(max_cons, (uint16_t *)(buffer_start(hs->data_trunk)+2));
-// TODO: set host endianes
+			hs->big_endian = HOST_IS_BIGENDIAN;
 			list_add_tail(&hs->list, &lni->children);
 		}
 		else
@@ -530,7 +560,7 @@ static bool handle_LNI_QK(g2_connection_t *connec, GCC_ATTR_UNUSED_PARAM(g2_pack
 static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
 {
 	size_t rem = buffer_remaining(source->data_trunk);
-	uint16_t	tmp_port;
+	uint16_t	tmp_port, *cpy_port;
 
 	if(6 != rem && 18 != rem)
 	{
@@ -546,7 +576,7 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		 * result should be in network byteorder again.
 		 */
 		get_unaligned(connec->sent_addr.in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
-
+		cpy_port = &connec->sent_addr.in.sin_port;
 		source->data_trunk.pos += 4;
 	}
 	else
@@ -556,13 +586,13 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		 * Assume network byte order
 		 */
 		memcpy(&connec->sent_addr.in6.sin6_addr.s6_addr,buffer_start(source->data_trunk), INET6_ADDRLEN);
-
+		cpy_port = &connec->sent_addr.in6.sin6_port;
 		source->data_trunk.pos += INET6_ADDRLEN;
 	}
 
 	/* load port and fix it for those, who sent it wrong way round */
 	get_unaligned_endian(tmp_port, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
-	connec->sent_addr.in.sin_port = tmp_port;
+	*cpy_port = tmp_port;
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_packet("/LNI/NA:\t%s:%hu\n", combo_addr_print(&connec->sent_addr,
@@ -765,7 +795,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 			*buffer_start(qht->data_trunk) = 0; /* command */
 			put_unaligned(ent, (uint32_t*)(buffer_start(qht->data_trunk)+1));
 			*(buffer_start(qht->data_trunk)+5) = 1; /* infinity */
-// TODO: set endianes
+			qht->big_endian = HOST_IS_BIGENDIAN;
 			connec->flags.qht_reset_send = true;
 		}
 		else
@@ -901,6 +931,7 @@ static bool handle_G2CDC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 		return false;
 
 	t->type = PT_G2CDc;
+	t->big_endian = HOST_IS_BIGENDIAN;
 	t->data_trunk.data = (void*)(intptr_t)s_data->data;
 	t->data_trunk.capacity = s_data->len;
 	buffer_clear(t->data_trunk);

@@ -38,6 +38,13 @@ enum cpu_vendor
 	X86_VENDOR_OTHER,
 	X86_VENDOR_INTEL,
 	X86_VENDOR_AMD,
+	X86_VENDOR_CENTAUR, /* today better known as VIA (C3, C7) */
+	X86_VENDOR_TRANSMETA,
+	X86_VENDOR_SIS,
+	X86_VENDOR_NSC,
+	X86_VENDOR_CYRIX,
+	X86_VENDOR_NEXGEN,
+	X86_VENDOR_UMC,
 };
 
 struct cpuinfo
@@ -145,23 +152,32 @@ static always_inline void cpuids(struct cpuid_regs *regs, uint32_t func)
 /*
  * funcs
  */
-static inline bool has_cpuid(void)
+static inline bool toggle_eflags_test(const size_t mask)
 {
-	const size_t id_mask = (1 << 21);
 	size_t f;
 
 	f = read_flags();
-	write_flags(f | id_mask);
-	f = read_flags() & id_mask;
+	write_flags(f | mask);
+	f = read_flags() & mask;
 	if (!f)
 		return false;
-	f = read_flags() & ~id_mask;
+	f = read_flags() & ~mask;
 	write_flags(f);
-	f = read_flags() & id_mask;
+	f = read_flags() & mask;
 	if (f)
 		return false;
 
 	return true;
+}
+
+static inline bool has_cpuid(void)
+{
+	return toggle_eflags_test(1 << 21);
+}
+
+static inline bool is_486(void)
+{
+	return toggle_eflags_test(1 << 18);
 }
 
 static void identify_cpu(void)
@@ -172,16 +188,29 @@ static void identify_cpu(void)
 	if(our_cpu.init_done)
 		return;
 
+	/* set the cpu count to a default value, we must have at least one ;) */
+	our_cpu.count = 1;
+
+	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid())) {
-		/* distinguish 386 from 486, same trick for EFLAGS bit 18 */
-		strcpy(our_cpu.vendor_str.s, "{3|4}86??");
-		our_cpu.count = 1;
-		our_cpu.family = 4;
+		/*
+		 * No? *cough* Ok, maybe rare/exotic chip like Geode
+		 * which can switch of cpuid in firmware...
+		 */
+		 /* distinguish 386 from 486, same trick for EFLAGS bit 18 */
+		if(is_486()) {
+			strcpy(our_cpu.vendor_str.s, "486?");
+			our_cpu.family = 4;
+		} else {
+			strcpy(our_cpu.vendor_str.s, "386??");
+			our_cpu.family = 3;
+		}
 		our_cpu.init_done = true;
 		logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
 		return;
 	}
 
+	/* get vendor string */
 	cpuids(&a, 0x00000000);
 	our_cpu.max_basic = a.eax;
 	our_cpu.vendor_str.r[0] = a.ebx;
@@ -190,6 +219,7 @@ static void identify_cpu(void)
 	our_cpu.vendor_str.s[12] = '\0';
 	identify_vendor(&our_cpu);
 
+	/* get family/model/stepping stuff */
 	if(our_cpu.max_basic >= 0x00000001)
 	{
 		cpuids(&a, 0x00000001);
@@ -223,6 +253,7 @@ static void identify_cpu(void)
 	if(our_cpu.family == 0x0F)
 		our_cpu.family += CPUID_XFAMILY(a.eax);
 
+	/* and finaly: get the features */
 	for(i = 0; i < 32; i++) {
 		if(a.edx & (1 << i))
 			our_cpu.features[i] = true;
@@ -255,7 +286,7 @@ static void identify_cpu(void)
 		}
 	}
 
-	/* Hmmm, do we have extended model strings? */
+	/* Hmmm, do we have a extended model string? */
 	if(our_cpu.max_ext >= 0x80000004)
 	{
 		char *p, *q;
@@ -282,13 +313,17 @@ static void identify_cpu(void)
 		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
 		our_cpu.stepping, our_cpu.model_str.s);
 
-	/* set the cpu count to a default value, we must have at least one ;) */
-	our_cpu.count = 1;
-
+	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	our_cpu.init_done = true;
+	/* ... except it is an AMD Opteron */
 	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)
 		return;
 
+	/*
+	 * Gosh, some weeks after the fact and you look mystified
+	 * at your code...
+	 * This is only a problem if we are on multicore chips???
+	 */
 	if(our_cpu.max_ext >= 0x80000008) {
 		cpuids(&a, 0x80000008);
 		our_cpu.num_cores = (a.ecx & 0xFF) + 1;
@@ -298,22 +333,24 @@ static void identify_cpu(void)
 	}
 	else
 	{
+		/* no core info, estimate... */
 #ifdef __linux__
 #  define S_STR "\nprocessor"
 #  define S_SIZE (sizeof(S_STR)-1)
 	{
 		FILE *f;
-
+		/* parsing something in /proc is always bad... */
 		f = fopen("/proc/cpuinfo", "r");
-		/* if we couldn't read it, simply check*/
 		if(f)
 		{
-			char read_buf[4096];
+			char read_buf[4096]; /* should be enough to find more than 1 cpu */
 			char *w_ptr;
 			size_t ret;
 
+			our_cpu.count = 0;
 			read_buf[0] = '\n';
 			ret = fread(read_buf + 1, 1, sizeof(read_buf) - 2, f);
+			/* if we couldn't read it, simply check */
 			read_buf[ret + 1] = '\0';
 			w_ptr = read_buf;
 			while((w_ptr = strstr(w_ptr, S_STR))) {
@@ -321,6 +358,8 @@ static void identify_cpu(void)
 				w_ptr += S_SIZE;
 			}
 			fclose(f);
+			if(0 == our_cpu.count) /* something went wrong... */
+				our_cpu.count = 1;
 			/* if we only have 1 CPU, no problem */
 			if(1 == our_cpu.count)
 				return;
@@ -328,27 +367,33 @@ static void identify_cpu(void)
 	}
 #endif
 	}
-	/* 
+	/*
 	 * early AMD Opterons and everything remotely derived from them
-	 * seem to drop the ball on read-modify-write instructions after a
-	 * locked instruction (missing internal lfence, they say). Ok, you
-	 * also need > 1 Processor.
+	 * seem to drop the ball on read-modify-write instructions _directly
+	 * after_ a locked instruction ("lock foo; bla reg, mem", missing
+	 * internal lfence, they say). Ok, you also need > 1 Processor.
 	 * This is unfortunatly all wild speculation, no (visible) Errata,
 	 * no info, but:
 	 * Google speaks of Opteron Rev. E Model 32..63 in their perftools stuff
 	 * MySQL seem to hit it on 64Bit
 	 * Slowlaris trys to detect it, marks everything affected < Model 0x40
-	 *  (but since they don't build mashines with every avail. AMD
+	 *  (but since they don't build machines with every avail. AMD
 	 *  processor (only Servers with Opterons...), this smells like a
 	 *  sledgehammer)
+	 *
+	 * I don't know if we are affected (depends on code gererated by
+	 * compiler...) and how to fix it sanely to not add an if() or always
+	 * an lfence (self modifing code anyone?) at least warn that something
+	 * may be amies, 'til we know what to do or if we even hit this prob.
 	 */
 	if(our_cpu.vendor == X86_VENDOR_AMD &&
 	   our_cpu.family == 0x0F &&
 		our_cpu.model  >= 32 &&
-		our_cpu.model  <= 63) {
+		our_cpu.model  <= 63)
+	{
 		int ologlevel = server.settings.logging.act_loglevel;
 		server.settings.logging.act_loglevel = LOGF_WARN;
-		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences.\nThis may leed to errors or crashes. But there is a chance i frobnicatet it myself;-)\n");
+		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, they say.\nThis may leed to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
 		server.settings.logging.act_loglevel = ologlevel;
 	}
 	return;
@@ -356,10 +401,27 @@ static void identify_cpu(void)
 
 static void identify_vendor(struct cpuinfo *cpu)
 {
-	if(!strcmp(cpu->vendor_str.s, "GenuineIntel"))
+	char *s = cpu->vendor_str.s;
+	if(!strcmp(s, "GenuineIntel"))
 		cpu->vendor = X86_VENDOR_INTEL;
-	else if(!strcmp(cpu->vendor_str.s, "AuthenticAMD"))
+	else if(!strcmp(s, "AuthenticAMD"))
 		cpu->vendor = X86_VENDOR_AMD;
+	else if(!strcmp(s, "CentaurHauls"))
+		cpu->vendor = X86_VENDOR_CENTAUR;
+	else if(!strcmp(s, "GenuineTMx86"))
+		cpu->vendor = X86_VENDOR_TRANSMETA;
+	else if(!strcmp(s, "TransmetaCPU"))
+		cpu->vendor = X86_VENDOR_TRANSMETA;
+	else if(!strcmp(s, "CyrixInstead"))
+		cpu->vendor = X86_VENDOR_CYRIX;
+	else if(!strcmp(s, "SiS SiS SiS "))
+		cpu->vendor = X86_VENDOR_SIS;
+	else if(!strcmp(s, "Geode by NSC"))
+		cpu->vendor = X86_VENDOR_NSC;
+	else if(!strcmp(s, "NexGenDriven"))
+		cpu->vendor = X86_VENDOR_NEXGEN;
+	else if(!strcmp(s, "UMC UMC UMC"))
+		cpu->vendor = X86_VENDOR_UMC;
 	else
 		cpu->vendor = X86_VENDOR_OTHER;
 }
@@ -402,13 +464,13 @@ static void identify_vendor(struct cpuinfo *cpu)
  *
  * This space is exposed to userspace in the sigaction signal
  * handlers (u-context and friends). And the stuff xsave and
- * esp. xrstore (a needed header) demand is very ABI-incompatible.
+ * esp. xrstore (a needed header) demand is /very/ ABI-incompatible.
  *
  * And at this point, even hating those super-stable enterprise
  * distros: booom, for every user, also on bleeding edge distros.
  * The same problem as with the 32bit->64bit switch and 32bit
  * only browser plugins.
- * (to recap: plugin only avail as 32bit, browser has to be 32bit
+ * (to recap: plugin only avail as 32bit, browser has to be 32bit,
  * all supporting libs needed as 32bit + 32bit emul in kernel)
  *
  * Now only a minority of apps fiddle with the u-context in their
@@ -452,7 +514,7 @@ static void identify_vendor(struct cpuinfo *cpu)
  * one, not how it should look like, only platform libs
  * pondering with it). The register sets of all general
  * purpose processors always shown itself quite stable
- * for the last 30 years.
+ * for the last 30 years...
  *
  * This seems to change now.
  *
@@ -464,15 +526,16 @@ static void identify_vendor(struct cpuinfo *cpu)
  * Other extensions may find their way into HW now that
  * frequency doesn't scale, more cores start to stop scaling
  * (or non super-specialised software having problems to adapt,
- * those software capable to adapt prop. suported clusters
+ * those software capable to adapt prop. supported clusters
  * before...), the new buzz seems to be special instructions
  * for everything (finaly!), all piggypacked on the SSE/AVX
- * registers or something totaly new, thanks to xsave no problem.
+ * registers or something totaly new.
+ * Thanks to xsave no problem.
  * Somehow nice to see CPU-manufactures "learn" again to spend
  * transistors on functional units which "do work" and not on
  * bling bling (cache, bus, buffers).
  * On the other hand back to 386: is there a co-pro (for my needs)?
- * But with Intels wild west style to include new instructions and
+ * With Intels wild west style to include new instructions and
  * not thinking about regularity of the instruction set but "need",
  * and whining how expensive something is while integrating MByte
  * of cache and other transitor eater, someone is lost in hoping

@@ -37,6 +37,7 @@
 
 #define DEFAULT_BE_DAEMON		false
 #define DEFAULT_USER		"nobody"
+#define DEFAULT_NICE_ADJUST	3
 // #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
 #define DEFAULT_DATA_ROOT_DIR	"./"
 #define DEFAULT_GWC_BOOT	"http://grantgalitz.com/Beacon/gwc.php"
