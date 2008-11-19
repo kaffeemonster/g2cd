@@ -467,8 +467,7 @@ static inline bool handle_accept_in(
 	do
 		tmp_fd = accept(accept_so, &(*work_entry)->remote_host.sa, &sin_size);
 	while(0 > tmp_fd && EINTR == errno);
-	if(-1 == tmp_fd)
-	{
+	if(-1 == tmp_fd) {
 		logg_errno(LOGF_NOTICE, "accepting");
 		return false;
 	}
@@ -476,7 +475,7 @@ static inline bool handle_accept_in(
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
 
-		logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tFDNum: %i\n",
+		logg_posd(LOGF_DEBUG, "%s\t From IP: %s\tPort: %hu\tFDNum: %i\n",
 		"A connection!",
 		combo_addr_print(&(*work_entry)->remote_host, addr_buf, sizeof(addr_buf)),
 		ntohs(combo_addr_port(&(*work_entry)->remote_host)),
@@ -484,9 +483,8 @@ static inline bool handle_accept_in(
 	}
 
 	/* check if our total server connection limit is reached */
-	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum)
-	{
-		logg_pos(LOGF_INFO, "too many connections\n");
+	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
+		logg_pos(LOGF_DEBUG, "too many connections\n");
 		while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
 		return false;
 	}
@@ -509,24 +507,20 @@ static inline bool handle_accept_in(
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
 
-		logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tret: %i\n",
+		logg_posd(LOGF_DEBUG, "%s\t To IP: %s\tPort: %hu\tret: %i\n",
 		"A connection!",
 		combo_addr_print(&our_local_addr, addr_buf, sizeof(addr_buf)),
 		ntohs(combo_addr_port(&our_local_addr)),
 		ret);
 	}
 
-	logg_develd_old("Port: %d\n", ntohs(my_addr.sin_port));
-
 	/* get the fd-flags and add nonblocking  */
 	/* according to POSIX manpage EINTR is only encountered when the cmd was F_SETLKW */
-	if(-1 == (fd_flags = fcntl((*work_entry)->com_socket, F_GETFL)))
-	{
+	if(-1 == (fd_flags = fcntl((*work_entry)->com_socket, F_GETFL))) {
 		logg_errno(LOGF_NOTICE, "getting socket fd-flags");
 		goto err_out_after_count;
 	}
-	if(fcntl((*work_entry)->com_socket, F_SETFL, fd_flags | O_NONBLOCK))
-	{
+	if(fcntl((*work_entry)->com_socket, F_SETFL, fd_flags | O_NONBLOCK)) {
 		logg_errno(LOGF_NOTICE, "setting socket non-blocking");
 		goto err_out_after_count;
 	}
@@ -534,8 +528,7 @@ static inline bool handle_accept_in(
 	/* No EINTR in epoll_ctl according to manpage :-/ */
 	tmp_eevent.events = (*work_entry)->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
 	tmp_eevent.data.ptr = &work_cons->data[work_cons->limit];
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, (*work_entry)->com_socket, &tmp_eevent))
-	{
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, (*work_entry)->com_socket, &tmp_eevent)) {
 		logg_errno(LOGF_NOTICE, "adding new socket to EPoll");
 		goto err_out_after_count;
 	}
@@ -543,8 +536,7 @@ static inline bool handle_accept_in(
 	work_cons->data[work_cons->limit] = *work_entry;
 	work_cons->limit++;
 	*work_entry = g2_con_get_free();
-	if(!*work_entry)
-	{
+	if(!*work_entry) {
 		clean_up_a(poll_me, work_cons, NULL, NULL, epoll_fd, abort_fd);
 		pthread_exit(NULL);
 	}
@@ -1068,8 +1060,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 				pr_ch = (size_t)
 				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
 				         "%s:%hu\r\n" REMOTE_ADR_KEY ": ",
-				         addr_buf, ntohs(AF_INET == local_addr.s_fam ?
-				           local_addr.in.sin_port : local_addr.in6.sin6_port)
+				         addr_buf, ntohs(combo_addr_port(&local_addr))
 				);
 				if(pr_ch < buffer_remaining(*to_con->send))
 					to_con->send->pos += pr_ch;

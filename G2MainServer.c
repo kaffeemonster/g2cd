@@ -66,7 +66,7 @@
 static pthread_t main_threads[THREAD_SUM];
 static int sock_com[THREAD_SUM_COM][2];
 static int accept_2_handler[2];
-static struct pollfd sock_poll[THREAD_SUM_COM];
+static struct pollfd sock_poll[THREAD_SUM_COM + 1];
 static volatile sig_atomic_t server_running = true;
 
 /* helper vars */
@@ -92,6 +92,8 @@ static void sig_stop_func(int signr, siginfo_t *, void *);
 int main(int argc, char **args)
 {
 	size_t i, j;
+	int extra_fd = -1;
+	bool long_poll = true;
 
 	/*
 	 * we have to shourtcut this a little bit, else we would see 
@@ -220,14 +222,19 @@ int main(int argc, char **args)
 	/* main server wait loop */
 	while(server_running)
 	{
-		int num_poll = poll(sock_poll, THREAD_SUM_COM, 110000);
+		int num_poll = poll(sock_poll,
+				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
+				long_poll ? 110000 : 1100);
 		switch(num_poll)
 		{
 		/* Normally: see what has happened */
 		default:
-			logg_pos(LOGF_INFO, "bytes at the pipes\n");
-			server_running = false;
-			break;
+			if(!sock_poll[THREAD_SUM_COM].revents) {
+				logg_pos(LOGF_INFO, "bytes at the pipes\n");
+				server_running = false;
+				break;
+			}
+			/* fall through to g2_khl_tick */
 		/* Nothing happened (or just the Timeout) */
 		case 0:
 			/* all abord? */
@@ -235,8 +242,7 @@ int main(int argc, char **args)
 			{
 				logg_develd_old("Up is thread num %lu: %s\n", (unsigned long) i,
 						(server.status.all_abord[i]) ? "true" : "false");
-				if(!server.status.all_abord[i])
-				{
+				if(!server.status.all_abord[i]) {
 					server_running = false;
 					logg_pos(LOGF_ERR, "We've lost someone! Going down!\n");
  				}
@@ -244,9 +250,13 @@ int main(int argc, char **args)
 			/* service our memleak ;) */
 			if(server_running) /* not when someone lost, maybe deadlock */
 			{
+				extra_fd = -1;
 				num_poll = hzp_scan(NORM_HZP_THRESHOLD);
 				logg_develd("HZP reclaimed chunks: %i\n", num_poll);
-				g2_khl_tick();
+				long_poll = g2_khl_tick(&extra_fd);
+				sock_poll[THREAD_SUM_COM].fd = extra_fd;
+				sock_poll[THREAD_SUM_COM].events = POLLIN|POLLERR|POLLHUP;
+				sock_poll[THREAD_SUM_COM].revents = 0;
 			}
 			break;
 		/* Something bad happened */

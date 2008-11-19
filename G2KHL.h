@@ -27,6 +27,8 @@
 # define _G2KHL_H
 
 # include <stdbool.h>
+# include <time.h>
+# include "lib/combo_addr.h"
 
 # ifndef _G2KHL_C
 #  define _G2KHL_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
@@ -34,8 +36,9 @@
 #  define _G2KHL_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif
 
+_G2KHL_EXTRN(void g2_khl_add(union combo_addr *, time_t));
 _G2KHL_EXTRN(bool g2_khl_init(void));
-_G2KHL_EXTRN(bool g2_khl_tick(void));
+_G2KHL_EXTRN(bool g2_khl_tick(int *));
 _G2KHL_EXTRN(void g2_khl_end(void));
 
 #endif

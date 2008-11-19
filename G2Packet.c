@@ -560,7 +560,7 @@ static bool handle_LNI_QK(g2_connection_t *connec, GCC_ATTR_UNUSED_PARAM(g2_pack
 static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
 {
 	size_t rem = buffer_remaining(source->data_trunk);
-	uint16_t	tmp_port, *cpy_port;
+	uint16_t	tmp_port;
 
 	if(6 != rem && 18 != rem)
 	{
@@ -576,7 +576,6 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		 * result should be in network byteorder again.
 		 */
 		get_unaligned(connec->sent_addr.in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
-		cpy_port = &connec->sent_addr.in.sin_port;
 		source->data_trunk.pos += 4;
 	}
 	else
@@ -586,13 +585,14 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		 * Assume network byte order
 		 */
 		memcpy(&connec->sent_addr.in6.sin6_addr.s6_addr,buffer_start(source->data_trunk), INET6_ADDRLEN);
-		cpy_port = &connec->sent_addr.in6.sin6_port;
 		source->data_trunk.pos += INET6_ADDRLEN;
 	}
 
-	/* load port and fix it for those, who sent it wrong way round */
-	get_unaligned_endian(tmp_port, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
-	*cpy_port = tmp_port;
+	/* load port and fix it for those, who sent it the wrong way round */
+	get_unaligned(tmp_port, (uint16_t *) buffer_start(source->data_trunk));
+	if(!source->big_endian)
+		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
+	combo_addr_set_port(&connec->sent_addr, tmp_port);
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_packet("/LNI/NA:\t%s:%hu\n", combo_addr_print(&connec->sent_addr,

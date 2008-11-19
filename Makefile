@@ -98,17 +98,31 @@ CFLAGS += $(WARN_FLAGS)
 #
 # !! mashine-dependent !! non-x86 please see here
 #
+# choose your cpu
 ARCH = athlon64
 #ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
 #ARCH = G4
 #ARCH = ultrasparc
+#ARCH = niagara
+# set the march
+ARCH_FLAGS += -march=$(ARCH)
+#ARCH_FLAGS += -mcpu=$(ARCH)
+# mtune on newer gcc
+#ARCH_FLAGS += -mtune=$(ARCH)
+# x86
 ARCH_FLAGS += -momit-leaf-frame-pointer
 ARCH_FLAGS += -minline-all-stringops
 ARCH_FLAGS += -maccumulate-outgoing-args
-ARCH_FLAGS += -march=$(ARCH)
-#ARCH_FLAGS = -mcpu=$(ARCH)
+# ! SHIT !
+# gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
+# specified, it does not "know" special registers (MMX/SSE) which
+# are not in this CPU, if you give them on inline assembly -> compile error
+# generic archs (i686) do not help
+# always force mmx/sse - PPC: force altivec?
+ARCH_FLAGS += -mmmx
+ARCH_FLAGS += -msse
 CFLAGS += $(ARCH_FLAGS)
 
 #
@@ -131,59 +145,58 @@ CFLAGS += -g3 -pg
 #
 #	burn it baby (needed for inlining on older gcc)
 OPT_FLAGS = -O3
-#  at least O should be selected, or ugly things will happen...
-#OPT_FLAGS = -O
-#	we are not doing any fancy Math, but...
+# 	at least O2 should be selected, or ugly things will happen...
+#OPT_FLAGS = -O2
+#	we are not doing any fancy Math, no need for ieee full blown foo
 OPT_FLAGS += -ffast-math
 #	needed on x86 (and other) even when O3 is and -g is not
 #	specified for max perf.
 #OPT_FLAGS += -fomit-frame-pointers
-# did they strip the 's' in 4.x??? And now they error out its incompatible with -pg
+#	did they strip the 's' in 4.x??? And now they error out its incompatible with -pg
 #OPT_FLAGS += -fomit-frame-pointer
-#	gcc >= 3.x and supported for target (-march ?)
+# gcc >= 3.x and supported for target (-march ?)
 OPT_FLAGS += -fprefetch-loop-arrays
 OPT_FLAGS += -fpeel-loops
-# gcc gets really funroll...
+# gcc gets really fun-roll, do not enable
 #OPT_FLAGS += -funroll-loops
-#	gcc >= 3.4? we want this and not the above
-#OPT_FLAGS += -fold-unroll-loops
-#	gcc >= 3.x && < 4.x together with unroll-loops usefull
+# gcc >= 3.x && < 4.x together with unroll-loops usefull
 #OPT_FLAGS += -fmove-all-movables
-#	gcc >= 3.4
+# gcc >= 3.4
+#	needed for inlining on newer gcc if -O is not high enough
 OPT_FLAGS += -funit-at-a-time
-#OPT_FLAGS += -fweb
-#	gcc >= 3.? *warning* experimental options
-#OPT_FLAGS += -ftracer
-# gcc < 4.x only, they dumped it...
-#OPT_FLAGS += -fnew-ra
+OPT_FLAGS += -fweb
+# gcc >= 3.?
+OPT_FLAGS += -ftracer
 OPT_FLAGS += -funswitch-loops
-# gcc > 4.x
-#OPT_FLAGS += -funsafe-loop-optimizations
-#OPT_FLAGS += -ftree-loop-linear
-#OPT_FLAGS += -ftree-loop-im
-#OPT_FLAGS += -ftree-loop-ivcanon
-#OPT_FLAGS += -fivopts
-# hmmm, breaks in memxor...
-OPT_FLAGS += -ftree-vectorize
+# gcc > 4.1??
+#	hmmm, breaks in memxor, seems better with gcc ==4.3.2
+OPT_FLAGS += -ftree-loop-linear
+OPT_FLAGS += -ftree-loop-im
+OPT_FLAGS += -ftree-loop-ivcanon
+OPT_FLAGS += -fivopts
 OPT_FLAGS += -freorder-blocks-and-partition
-#OPT_FLAGS += -fmove-loop-invariants
+OPT_FLAGS += -fmove-loop-invariants
 OPT_FLAGS += -fbranch-target-load-optimize
+#	better not autovectorize, for some functions we already did this our self,
+#	this would only double the code...
+#OPT_FLAGS += -ftree-vectorize
 #	gcc >= 3.5 or 3.4 with orig. path applied, and backtraces
 #	don't look nice anymore
 #OPT_FLAGS += -fvisibility=hidden
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
-#	switch between profile-generation and final build
+#	minimum while debugging, or asm gets unreadable
+#OPT_FLAGS = -O1 -funit-at-a-time
+CFLAGS += $(OPT_FLAGS)
+# switch between profile-generation and final build
+#	this whole profile stuff is ugly, espec. they changed the
+#	option name all the time.
+#	need to build little app which hammers the packet code to generate
+#	profile data, if not cross compiling. Rest of code not so important.
+#OPT_FLAGS += -fprofile-use
+#OPT_FLAGS += -fbranch-probabilities
 #OPT_FLAGS += -fprofile-generate
-#CFLAGS += $(OPT_FLAGS) #-fprofile-use
-#	while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1
-#OPT_FLAGS += -ftest-coverage # needed?
 #OPT_FLAGS += -fprofile-arcs
-CFLAGS += $(OPT_FLAGS) #-fbranch-probabilities
-#	gcc 3.? make sure the OS sees our Stack-handling since we
-#	are Multithreaded or leave it - seems buggy
-#CFLAGS += -fstack-check
 
 #
 # Libs
@@ -691,6 +704,7 @@ version.h: Makefile
 	$(PORT_PR)	"\n" >> $@; \
 	$(PORT_PR)	"#define DIST\t\"$(DISTNAME)\"\n" >> $@; \
 	$(PORT_PR)	"#define OUR_UA\t\"$(LONGNAME)\"\n" >> $@; \
+	$(PORT_PR)	"#define OUR_VERSION\t\"$(VERSION)\"\n" >> $@; \
 	$(PORT_PR)	"#define SYSTEM_INFO\t\"" >> $@; \
 	uname -a | tr -d "\n" >> $@; \
 	$(PORT_PR)	"\"\n" >> $@; \

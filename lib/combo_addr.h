@@ -74,4 +74,12 @@ static inline in_port_t combo_addr_port(const union combo_addr *addr)
 	return AF_INET == addr->s_fam ? addr->in.sin_port : addr->in6.sin6_port;
 }
 
+static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
+{
+	if(AF_INET == addr->s_fam)
+		addr->in.sin_port = port;
+	else
+		addr->in6.sin6_port = port;
+}
+
 #endif /* COMBO_ADDR_H */

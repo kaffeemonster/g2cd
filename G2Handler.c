@@ -86,7 +86,7 @@ void *G2Handler(void *param)
 	bool keep_going = true;
 
 	sock2main = *((int *)param);
-	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
+	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
 	/* getting memory for our FD's and everything else */
 	if(!init_memory_h(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))

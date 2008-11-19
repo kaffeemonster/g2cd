@@ -217,7 +217,7 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 	else
 		list_add(&new_timeout->l, &twheel[i].slot);
 
-	if(pthread_mutex_unlock(&twheel[i].mutex))
+	if(unlikely(pthread_mutex_unlock(&twheel[i].mutex)))
 		diedie("ahhhh, timer wheel stuck!");
 
 	return true;

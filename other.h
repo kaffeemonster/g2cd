@@ -146,7 +146,7 @@
 #else
 # define likely(x)	(x)
 # define unlikely(x)	(x)
-#endif 
+#endif
 
 #if _GNUC_PREREQ (3,1)
 # define always_inline inline GCC_ATTRIB(__always_inline__)
