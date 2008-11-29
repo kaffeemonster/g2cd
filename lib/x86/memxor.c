@@ -26,6 +26,7 @@
 #include "../../other.h"
 #include "x86_features.h"
 
+#undef HAVE_3DNOW
 #undef HAVE_MMX
 #undef HAVE_SSE
 #undef HAVE_SSE2
@@ -40,6 +41,13 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 # define ARCH_NAME_SUFFIX _MMX
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 # include "memxor_tmpl.c"
+
+# define HAVE_3DNOW
+# undef ARCH_NAME_SUFFIX
+# define ARCH_NAME_SUFFIX _MMX_3DNOW
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+# include "memxor_tmpl.c"
+#undef HAVE_3DNOW
 #endif
 
 #define HAVE_SSE
@@ -48,17 +56,38 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 #include "memxor_tmpl.c"
 
+#define HAVE_3DNOW
+#undef ARCH_NAME_SUFFIX
+#define ARCH_NAME_SUFFIX _SSE_3DNOW
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#include "memxor_tmpl.c"
+#undef HAVE_3DNOW
+
 #define HAVE_SSE2
 #undef ARCH_NAME_SUFFIX
 #define ARCH_NAME_SUFFIX _SSE2
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 #include "memxor_tmpl.c"
 
+#define HAVE_3DNOW
+#undef ARCH_NAME_SUFFIX
+#define ARCH_NAME_SUFFIX _SSE2_3DNOW
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#include "memxor_tmpl.c"
+#undef HAVE_3DNOW
+
 #define HAVE_SSE3
 #undef ARCH_NAME_SUFFIX
 #define ARCH_NAME_SUFFIX _SSE3
 static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
 #include "memxor_tmpl.c"
+
+#define HAVE_3DNOW
+#undef ARCH_NAME_SUFFIX
+#define ARCH_NAME_SUFFIX _SSE3_3DNOW
+static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#include "memxor_tmpl.c"
+#undef HAVE_3DNOW
 
 #if HAVE_BINUTILS >= 219
 # define HAVE_AVX
@@ -78,10 +107,14 @@ static void memxor_select(void)
 #if HAVE_BINUTILS >= 219
 		{.func = (void (*)(void))memxor_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
 #endif
+		{.func = (void (*)(void))memxor_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
 		{.func = (void (*)(void))memxor_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+		{.func = (void (*)(void))memxor_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
 		{.func = (void (*)(void))memxor_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+		{.func = (void (*)(void))memxor_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
 		{.func = (void (*)(void))memxor_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
 #ifndef __x86_64__
+		{.func = (void (*)(void))memxor_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
 		{.func = (void (*)(void))memxor_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
 #endif
 		{.func = (void (*)(void))memxor_x86, .flags_needed = -1, .callback = NULL},

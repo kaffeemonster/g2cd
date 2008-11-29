@@ -242,7 +242,7 @@ void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
 	} while(j < 16);
 
 out:
-	if(PT_UNKNOWN == packet->type)
+	if(unlikely(PT_UNKNOWN == packet->type))
 		logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\"\tC: %s\n", type_str, packet->is_compound ? "true" : "false");
 }
 
@@ -293,7 +293,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 			connec->flags.dismissed = true;
 			break;
 		}
-		if(child_p.packet_decode == DECODE_FINISHED)
+		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec(connec, target, KHL_packet_dict, &child_p);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
@@ -425,13 +425,13 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 			connec->flags.dismissed = true;
 			break;
 		}
-		if(child_p.packet_decode == DECODE_FINISHED)
+		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec(connec, target, LNI_packet_dict, &child_p);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
-	if(local_time_now < (connec->send_stamps.LNI + (LNI_TIMEOUT)))
+	if(unlikely(local_time_now < (connec->send_stamps.LNI + (LNI_TIMEOUT))))
 		return ret_val;
 
 	/* build package */
@@ -439,7 +439,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	na  = g2_packet_calloc();
 	gu  = g2_packet_calloc();
 	v   = g2_packet_calloc();
-	hs  = server.status.our_server_upeer ? g2_packet_calloc() : NULL;
+	hs  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
 
 	if(!(lni && na))
 		goto out_fail;
@@ -676,22 +676,19 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	int ret_val;
 	const char *patch_txt;
 
-	if(!connec->qht)
-	{
+	if(unlikely(!connec->qht)) {
 		logg_packet(STDLF, "/QHT-patch", "initial patch without initial reset");
 		connec->flags.dismissed = true;
 		return false;
 	}
 
-	if(5 > buffer_remaining(source->data_trunk))
-	{
+	if(unlikely(5 > buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT-patch", "to short");
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
 	}
 
-	if(1 != *(buffer_start(source->data_trunk)+3))
-	{
+	if(unlikely(1 != *(buffer_start(source->data_trunk)+3))) {
 		logg_packet(STDLF, "/QHT-patch", "illegal bit-number");
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
@@ -703,21 +700,17 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	frag.data       = (uint8_t *)buffer_start(source->data_trunk)+4;
 	frag.length     = buffer_remaining(source->data_trunk) - 4;
 
-	if(!connec->flags.dismissed)
+	if(unlikely(!connec->flags.dismissed))
 		ret_val = g2_qht_add_frag(connec->qht, &frag);
-	else
-	{
+	else {
 		logg_packet(STDLF, "/QHT-patch", "connection dissmissed");
 		ret_val = -1;
 	}
 
-	if(0 == ret_val) /* patch io, but need more*/
-	{
+	if(likely(0 == ret_val)) { /* patch io, but need more */
 		logg_packet(STDLF, "/QHT-patch", "patch recieved");
 		return false;	
-	}
-	else if(0 > ret_val) /* patch nio */
-	{
+	} else if(0 > ret_val) { /* patch nio */
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
 	}
@@ -733,15 +726,13 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 {
 	uint32_t qht_ent;
 
-	if(5 != buffer_remaining(source->data_trunk))
-	{
+	if(unlikely(5 != buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT-reset", "to short");
 		connec->flags.dismissed = true;
 		return false;
 	}
 	
-	if(1 != *(buffer_start(source->data_trunk)+4))
-	{
+	if(unlikely(1 != *(buffer_start(source->data_trunk)+4))) {
 		logg_packet(STDLF, "/QHT-reset", "illegal infinity");
 		connec->flags.dismissed = true;
 		return false;
@@ -762,8 +753,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 	bool ret_val = false;
 	g2_packet_t *qht;
 
-	if(!buffer_remaining(source->data_trunk))
-	{
+	if(unlikely(!buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT", "without data?");
 		return false;
 	}
@@ -778,7 +768,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 	else
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
-	if(ret_val || local_time_now < (connec->send_stamps.QHT + (QHT_TIMEOUT)))
+	if(unlikely(ret_val || local_time_now < (connec->send_stamps.QHT + (QHT_TIMEOUT))))
 		return ret_val;
 
 	qht = g2_packet_calloc();
@@ -819,8 +809,7 @@ static bool handle_HAW(g2_connection_t *connec, g2_packet_t *source, struct list
 		child_p.more_bytes_needed = false;
 		child_p.packet_decode = CHECK_CONTROLL_BYTE;
 		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
-		if(!keep_decoding)
-		{
+		if(!keep_decoding) {
 			logg_packet(STDLF, "HAW", "broken child");
 			connec->flags.dismissed = true;
 			break;
@@ -858,10 +847,10 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 	 * answer, do it.
 	 */
 	logg_packet_old(STDSF, "/UPROC");
-	if(server.settings.profile.want_2_send &&
+	if(likely(server.settings.profile.want_2_send &&
 	   server.settings.profile.xml &&
 	   server.settings.profile.xml_length &&
-	   server.settings.profile.xml_length < server.settings.default_max_g2_packet_length - 10)
+	   server.settings.profile.xml_length < server.settings.default_max_g2_packet_length - 10))
 	{
 		g2_packet_t *uprod;
 		g2_packet_t *xml;
@@ -1056,6 +1045,7 @@ must_malloc:
 
 bool g2_packet_decide_spec(g2_connection_t *connec, struct list_head *target, g2_ptype_action_func const *work_type, g2_packet_t *packs)
 {
+	prefetch(&work_type[packs->type]);
 	if(unlikely(PT_MAXIMUM <= packs->type)) {
 		logg_develd("packet with broken type: %u\n", (unsigned)packs->type);
 		return false;
@@ -1063,7 +1053,8 @@ bool g2_packet_decide_spec(g2_connection_t *connec, struct list_head *target, g2
 
 	if(work_type[packs->type])
 	{
-		if(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type])
+		prefetch(*work_type[packs->type]);
+		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]))
 			logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 		return work_type[packs->type](connec, packs, target);
 	}

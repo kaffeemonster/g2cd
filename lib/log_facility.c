@@ -44,7 +44,7 @@
 
 #define LOG_TIME_MAXLEN 128
 #define logg_int_pos(x, y) \
-	do_logging(x, "%s:%s()@%u: " y, __FILE__, __func__, __LINE__)
+	do_logging_int(x, "%s:%s()@%u: " y, __FILE__, __func__, __LINE__)
 
 /*
  * Work with a TLS-buffer to preprint the msg.
@@ -65,7 +65,8 @@ static int logg_tls_ready;
 static void logg_init(void) GCC_ATTR_CONSTRUCT;
 static void logg_deinit(void) GCC_ATTR_DESTRUCT;
 static inline int do_vlogging(const enum loglevel, const char *, va_list);
-static inline int do_logging(const enum loglevel, const char *, ...);
+static inline int do_logging(const enum loglevel, const char *);
+static inline int do_logging_int(const enum loglevel, const char *, ...);
 
 static void logg_init(void)
 {
@@ -89,8 +90,7 @@ static void logg_deinit(void)
 	if(unlikely(!logg_tls_ready))
 		return;
 
-	if((tmp_buf = pthread_getspecific(key2logg)))
-	{
+	if((tmp_buf = pthread_getspecific(key2logg))) {
 		free(tmp_buf);
 		pthread_setspecific(key2logg, NULL);
 	}
@@ -123,8 +123,7 @@ static struct big_buff *logg_get_buf(void)
 		server.settings.logging.act_loglevel = LOGF_ERR;
 	}
 
-	if(!ret_buf)
-	{
+	if(!ret_buf) {
 		/* we cannot logg with our self */
 		logg_int_pos(LOGF_WARN, "no logg buffer\n");
 		return NULL;
@@ -144,8 +143,7 @@ static void logg_ret_buf(struct big_buff *ret_buf)
 	if(logg_tls_ready)
 	{
 		buffer_clear(*ret_buf);
-		if(pthread_setspecific(key2logg, ret_buf))
-		{
+		if(pthread_setspecific(key2logg, ret_buf)) {
 			logg_int_pos(LOGF_EMERG, "adding logg buff back failed\n");
 			free(ret_buf);
 			exit(EXIT_FAILURE);
@@ -163,7 +161,15 @@ static inline int do_vlogging(const enum loglevel level, const char *fmt, va_lis
 	return vfprintf(log_where, fmt, args);
 }
 
-static inline int do_logging(const enum loglevel level, const char *fmt, ...)
+static inline int do_logging(const enum loglevel level, const char *string)
+{
+	FILE *log_where = level >= LOG_NOTICE ? stdout : stderr;
+
+// TODO: properly distribute logmsg to all logging services.
+	return fputs(string, log_where);
+}
+
+static inline int do_logging_int(const enum loglevel level, const char *fmt, ...)
 {
 	va_list args;
 	int ret_val;
@@ -176,28 +182,29 @@ static inline int do_logging(const enum loglevel level, const char *fmt, ...)
 
 static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max_len)
 {
+	const char *tfmt;
 	struct tm time_now;
 	time_t time_now_val = time(NULL);
 	buffer[0] = '\0';
 
-	if(!localtime_r(&time_now_val, &time_now))
-	{
+	if(!localtime_r(&time_now_val, &time_now)) {
 		strcpy(buffer, "<Error breaking down time> ");
 		return str_size("<Error breaking down time> ");
 	}
 
-	if(strftime(buffer, max_len, server.settings.logging.time_date_format ? server.settings.logging.time_date_format : "%b %d %H:%M:%S ", &time_now))
+	tfmt = server.settings.logging.time_date_format ?
+	       server.settings.logging.time_date_format :
+	       "%b %d %H:%M:%S ";
+	if(strftime(buffer, max_len, tfmt, &time_now))
 		return strnlen(buffer, max_len);
 
-	/* 
+	/*
 	 * now we have a problem, there could be an error or there
 	 * where just no characters to write acording to format,
 	 * try to guess...
 	 */
 	/* Not a NUL byte at beginning? then it must be an error */
-	if('\0' != buffer[0])
-	{
-		buffer[0] = '\0';
+	if('\0' != buffer[0]) {
 		strcpy(buffer, "<Error stringifying date> ");
 		return str_size("<Error stringifying date> ");
 	}
@@ -205,22 +212,26 @@ static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max
 	return 0;
 }
 
+static void strreverse(char *begin, char *end)
+{
+	char tchar;
+
+	while(end > begin)
+		tchar = *end, *end-- = *begin, *begin++ = tchar;
+}
+
 #define STRERROR_R_SIZE 512
-static int logg_internal(
-		const enum loglevel level,
-		const char *file,
-		const char *func,
-		const unsigned int line,
-		int log_errno,
-		const char *fmt,
-		va_list args 
-	)
+static int logg_internal(const enum loglevel level,
+                         const char *file,
+                         const char *func,
+                         const unsigned int line,
+                         int log_errno,
+                         const char *fmt,
+                         va_list args
+                        )
 {
 	struct big_buff *logg_buff;
 	int ret_val, old_errno, retry_cnt;
-
-//	if(level > server.settings.logging.act_loglevel)
-//		return 0;
 
 	old_errno  = errno;
 
@@ -241,41 +252,73 @@ static int logg_internal(
 	/* put out the "extra" stuff, if there */
 	if(file)
 	{
-		ret_val = 0; retry_cnt = 0;
+		retry_cnt = 0;
+		prefetch(file);
+		prefetch(func);
+		/*
+		 * calling snprintf for 2 * strcpy + an itoa is "nice"
+		 * but goes round the full stdio bloat:
+		 * snprintf->vsnprintf->vfprintf-> myriads of funcs to print
+		 */
 		do
 		{
-			size_t len = logg_buff->capacity;
-			if(ret_val < 0)
+			const char *wptr;
+			char *sptr, *stmp, *rstart;
+			size_t remaining;
+			unsigned tline;
+
+			stmp = sptr = buffer_start(*logg_buff);
+			remaining = buffer_remaining(*logg_buff);
+			for(wptr = file; remaining && *wptr; sptr++, wptr++, remaining--)
+				*sptr = *wptr;
+			if(unlikely(*wptr || remaining < 7))
+				goto realloc;
+
+			*sptr++ = ':';
+			remaining--;
+			for(wptr = func; remaining && *wptr; sptr++, wptr++, remaining--)
+				*sptr = *wptr;
+			if(unlikely(*wptr || remaining < 7))
+				goto realloc;
+
+			*sptr++ = '(';
+			*sptr++ = ')';
+			*sptr++ = '@';
+			remaining -= 3;
+			tline = line;
+			rstart = sptr;
+			do {
+				*sptr++ = (tline % 10) + '0';
+				tline /= 10;
+			} while(--remaining && tline);
+
+			if(unlikely(remaining < 2 || tline))
+				goto realloc;
+
+			strreverse(rstart, sptr - 1);
+			*sptr++ = ':';
+			*sptr++ = ' ';
+			logg_buff->pos = sptr - stmp;
+			break;
+realloc:
+			/* now we are in a slow path, no need to hurry */
 			{
-				len *= 2;
-				if(++retry_cnt > 4)
-				{
-					ret_val = 0;
-					break;
-				}
-			}
-			else if((size_t)ret_val > buffer_remaining(*logg_buff))
-				len = (((size_t)ret_val * 2) + 1023) & ~((size_t) 1023);
-			if(unlikely(len != logg_buff->capacity))
-			{
-				struct big_buff *tmp_buf = realloc(logg_buff, sizeof(*logg_buff) + len);
-				if(tmp_buf)
-				{
-					logg_buff = tmp_buf;
+				struct big_buff *tmp_buff;
+				size_t len = strlen(file) + strlen(func) + 6 + 30 + strlen(fmt) * 2;
+				len = (((len * 2) + 2047) & ~((size_t) 2047)) + logg_buff->capacity;
+				tmp_buff = realloc(logg_buff, sizeof(*logg_buff) + len);
+				if(tmp_buff) {
+					logg_buff = tmp_buff;
 					logg_buff->limit = logg_buff->capacity = len;
-				}
-				else
-				{
-					ret_val = buffer_remaining(*logg_buff);
+				} else
 					break;
-				}
+				retry_cnt++;
 			}
-			ret_val = snprintf(buffer_start(*logg_buff), buffer_remaining(*logg_buff), "%s:%s()@%u: ", file, func, line);
-		} while(unlikely(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff)));
-		logg_buff->pos += (size_t)ret_val;
+		} while(retry_cnt < 4);
 	}
 
 	ret_val = 0; retry_cnt = 0;
+	/* format the message in tls */
 	do
 	{
 		size_t len = logg_buff->capacity;
@@ -283,8 +326,7 @@ static int logg_internal(
 		if(ret_val < 0)
 		{
 			len *= 2;
-			if(++retry_cnt > 4)
-			{
+			if(++retry_cnt > 4) {
 				ret_val = 0;
 				break;
 			}
@@ -294,13 +336,10 @@ static int logg_internal(
 		if(unlikely(len != logg_buff->capacity))
 		{
 			struct big_buff *tmp_buf = realloc(logg_buff, sizeof(*logg_buff) + len);
-			if(tmp_buf)
-			{
+			if(tmp_buf) {
 				logg_buff = tmp_buf;
 				logg_buff->limit = logg_buff->capacity = len;
-			}
-			else
-			{
+			} else {
 				ret_val = buffer_remaining(*logg_buff);
 				break;
 			}
@@ -312,17 +351,18 @@ static int logg_internal(
 		/* error? repeat */
 	} while(unlikely(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff)));
 	logg_buff->pos += (size_t)ret_val;
-	
-	
+
+	/* add errno string if wanted */
 	if(log_errno)
 	{
 		if(buffer_remaining(*logg_buff) < STRERROR_R_SIZE + 4)
 		{
-			struct big_buff *tmp_buff = realloc(logg_buff, sizeof(*logg_buff) + logg_buff->capacity * 2);
+			size_t len = logg_buff->capacity * 2;
+			struct big_buff *tmp_buff = realloc(logg_buff, sizeof(*logg_buff) + len);
 			if(!tmp_buff)
 				goto no_errno;
 			logg_buff = tmp_buff;
-			logg_buff->limit = logg_buff->capacity += 1024;
+			logg_buff->limit = logg_buff->capacity += len;
 		}
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
@@ -362,13 +402,12 @@ static int logg_internal(
 				logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
 			else
 			{
-				if(EINVAL == errno) {
+				if(EINVAL == errno)
 					strcpy(buffer_start(*logg_buff), "Unknown errno value!"); logg_buff->pos += str_size("Unknown errno value!");
-				} else if(ERANGE == errno) {
+				else if(ERANGE == errno)
 					strcpy(buffer_start(*logg_buff), "errno msg to long for buffer!"); logg_buff->pos += str_size("errno msg to long for buffer!"); 
-				} else {
+				else
 					strcpy(buffer_start(*logg_buff), "failure while retrieving errno msg!"); logg_buff->pos += str_size("failure while retrieving errno msg!");
-				}
 			}
 #endif
 		}
@@ -377,9 +416,9 @@ static int logg_internal(
 	}
 no_errno:
 
+	/* output that stuff */
 	buffer_flip(*logg_buff);
-	// Feed temp. in old func
-	ret_val = do_logging(level, "%s", buffer_start(*logg_buff));
+	ret_val = do_logging(level, buffer_start(*logg_buff));
 	logg_ret_buf(logg_buff);
 	return ret_val;
 }
@@ -399,15 +438,14 @@ int logg_ent(const enum loglevel level, const char *fmt, ...)
 	return ret_val;
 }
 
-int logg_more_ent(
-		const enum loglevel level,
-		const char *file,
-		const char *func,
-		const unsigned int line,
-		int log_errno,
-		const char *fmt,
-		...
-	)
+int logg_more_ent(const enum loglevel level,
+                  const char *file,
+                  const char *func,
+                  const unsigned int line,
+                  int log_errno,
+                  const char *fmt,
+                  ...
+                 )
 {
 	va_list args;
 	int ret_val;

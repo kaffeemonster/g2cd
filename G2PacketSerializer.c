@@ -38,20 +38,25 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 
-
+// #define PS_CHECK_STATES
 /********************************************************************
  * 
  * local vars
  *
  ********************************************************************/
-#define ENUM_CMD(x) str_it(x)
-
-static const char *g2_packet_decoder_states_txt[] = 
+#ifdef DEBUG_DEVEL
+# define ENUM_CMD(x) str_it(x)
+static const char *g2_packet_decoder_states_txt[] =
 {
 	G2_PACKET_DECODER_STATES
 };
-#undef ENUM_CMD
 
+static const char *g2_packet_encoder_states_txt[] =
+{
+	G2_PACKET_ENCODER_STATES
+};
+# undef ENUM_CMD
+#endif
 
 // #define DEBUG_SERIALIZER
 #ifdef DEBUG_SERIALIZER
@@ -94,14 +99,14 @@ static inline int check_control_byte_p(struct pointer_buff *source, g2_packet_t 
 	uint8_t control;
 
 	/* get and interpret the control-byte of a packet */
-	if(1 > buffer_remaining(*source)) {
+	if(unlikely(1 > buffer_remaining(*source))) {
 		target->more_bytes_needed = true;
 		return 0;
 	}
 			
 	control = *buffer_start(*source);
 	source->pos++;
-	if(!control) {
+	if(unlikely(!control)) {
 		logg_devel("stream terminated '\\0'\n");
 		return -1;
 	}
@@ -136,7 +141,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 	size_t i;
 
 	/* get the up to three length-bytes */
-	if(target->length_length > buffer_remaining(*source))
+	if(unlikely(target->length_length > buffer_remaining(*source)))
 	{
 		target->more_bytes_needed = true;
 		return 0;
@@ -160,7 +165,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 	}
 
 /* seems to be allowed to send a packet with compound flag and no data.. */
-	if(!target->length)
+	if(unlikely(!target->length))
 		target->is_compound = false;
 	
 	target->packet_decode++;
@@ -278,8 +283,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 	bool ret_val = true;
 
 	target->more_bytes_needed = false;
-	
-	while(!target->more_bytes_needed)
+	while(likely(!target->more_bytes_needed))
 	{
 		switch(target->packet_decode)
 		{
@@ -312,7 +316,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 			target->data_trunk.pos      = 0;
 			target->data_trunk.data     = NULL;
 
-			if(0 < target->length)
+			if(likely(0 < target->length))
 				target->packet_decode = GET_PACKET_DATA;
 			else
 			{
@@ -339,22 +343,27 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 			break;
 		case START_EXTRACT_PACKET_FROM_STREAM:
 		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
+		case PACKET_EXTRACTION_COMPLETE:
 		case EXTRACT_PACKET_FROM_STREAM:
 		case EXTRACT_PACKET_DATA:
 		case FINISH_PACKET_DATA:
+		case GET_CHILD_PACKETS:
+		case MAX_DECODER_STATE:
 			/* these Packets should not arrive here */
-			logg_develd("wrong packet in extraction: %i %s\n", target->packet_decode,
+			logg_develd("wrong packet in decode: %i %s\n", target->packet_decode,
 				g2_packet_decoder_states_txt[target->packet_decode]);
 			return false;
+#ifndef PS_CHECK_STATES
 		default:
 			logg_develd("bogus decoder_state: %i\n", target->packet_decode);
 			return false;
+#endif
 		}
 	}
 
 	if(target->more_bytes_needed)
 		return false;
-	
+
 	return ret_val;
 }
 
@@ -384,9 +393,9 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 	bool ret_val = true;
 	size_t remaining_length;
 
-	while(!target->more_bytes_needed)
+	while(likely(!target->more_bytes_needed))
 	{
-		switch(source->packet_decode)	
+		switch(source->packet_decode)
 		{
 		case PACKET_EXTRACTION_COMPLETE:
 			source->packet_decode = DECIDE_DECODE;
@@ -400,8 +409,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 				else
 					source->packet_decode = GET_PACKET_DATA;
 			}
-			else
-			{
+			else {
 				/* Packet has no length -> DirectAction */
 				source->packet_decode = DECODE_FINISHED;
 				return true;
@@ -410,8 +418,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 		case GET_CHILD_PACKETS:
 			remaining_length = buffer_remaining(source->data_trunk);
 			/* nothing left? */
-			if(0 == remaining_length)
-			{
+			if(0 == remaining_length) {
 				/* thats it (there don't have to be an '\0' if no data after childs) */
 				source->packet_decode = DECODE_FINISHED;
 				return true;
@@ -435,8 +442,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 				else
 				{
 					/* at least 2 bytes left ? */
-					if(1 < remaining_length)
-					{
+					if(likely(1 < remaining_length)) {
 						ret_val = g2_packet_decode(&source->data_trunk, target, level + 1);
 						/* break after a decode, so caller can handle it */
 						return ret_val;
@@ -468,13 +474,16 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 		case GET_PACKET_DATA:
 		case EXTRACT_PACKET_DATA:
 		case FINISH_PACKET_DATA:
+		case MAX_DECODER_STATE:
 			/* these Packets should not arrive here */
 			logg_develd("wrong packet in extraction: %i %s\n", source->packet_decode,
 				g2_packet_decoder_states_txt[source->packet_decode]);
 			return false;
+#ifndef PS_CHECK_STATES
 		default:
 			logg_develd("bogus decoder_state: %i\n", source->packet_decode);
 			return false;
+#endif
 		}
 	}
 
@@ -504,35 +513,37 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 	bool ret_val = true;
 
 	target->more_bytes_needed = false;
-
-	while(!target->more_bytes_needed)
+	while(likely(!target->more_bytes_needed))
 	{
 		switch(target->packet_decode)
 		{
 		case CHECK_CONTROLL_BYTE:
 		/* get and interpret the control-byte of a packet */
-			if(!(func_ret_val = check_control_byte(source, target)))
+			func_ret_val = check_control_byte(source, target);
+			if(unlikely(0 == func_ret_val))
 				break;
-			else if(0 > func_ret_val)
+			else if(unlikely(0 > func_ret_val))
 				return false;
 		case READ_LENGTH:
 		/* get the up to three length-bytes */
-			if(!(func_ret_val = read_length(source, target, max_len)))
+			func_ret_val = read_length(source, target, max_len);
+			if(unlikely(0 == func_ret_val))
 				break;
-			else if(0 > func_ret_val)
+			else if(unlikely(0 > func_ret_val))
 				return false;
 		case READ_TYPE:
 		/* fetch the up to eigth type-bytes */
-		 	if(!(func_ret_val = read_type(source, target)))
+		 	func_ret_val = read_type(source, target);
+		 	if(unlikely(0 == func_ret_val))
 				break;
-			else if(0 > func_ret_val)
+			else if(unlikely(0 > func_ret_val))
 				return false;
 		case DECIDE_DECODE:
 // TODO: since we know the type now, we may want to play games with skipping
 			func_ret_val = 0;
 			stat_packet(target, func_ret_val);
 
-			if(0 < target->length)
+			if(likely(0 < target->length))
 				target->packet_decode = START_EXTRACT_PACKET_FROM_STREAM;
 			else
 			{
@@ -648,6 +659,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 		case EXTRACT_PACKET_DATA:
 		case FINISH_PACKET_DATA:
 		case GET_CHILD_PACKETS:
+		case MAX_DECODER_STATE:
 		/*
 		 * if we have this states in this funktion, someone filled us with a
 		 * packet, wich should be filled in the real decoder function
@@ -659,9 +671,11 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 		/* Yehaa, it's done! */
 			target->more_bytes_needed = true;
 			break;
+#ifndef PS_CHECK_STATES
 		default:
 			logg_develd("bogus decoder_state: %i\n", target->packet_decode);
 			return false;
+#endif
 		}
 	}
 
@@ -881,9 +895,9 @@ static uint8_t create_control_byte(g2_packet_t *p)
 	 * Set is_compound in this case, like Shareaza does and is
 	 * stated in the spec.
 	 * I personaly don't like this, since it creates a special
-	 * case: is_compound is only valid if there is data. And you
-	 * always have to look for is_compound because a packet may
-	 * grow children.
+	 * case: now is_compound is only valid if there is data.
+	 * And you always have to look for is_compound because a
+	 * packet may grow children.
 	 * We could also set big_endian without harm, there is no data
 	 * this can affect ;), but i think every WinApp would go belly
 	 * up on such a packet...
@@ -895,9 +909,9 @@ static uint8_t create_control_byte(g2_packet_t *p)
 	return control;
 }
 
-#define SERIALIZE_TYPE_ON_NUM(x) \
-			if(source->type_length >= (x)) { \
-				if(!buffer_remaining(*target)) { \
+#define SERIALIZE_TYPE_ON_NUM(x, prop) \
+			if(prop(source->type_length >= (x))) { \
+				if(unlikely(!buffer_remaining(*target))) { \
 					source->more_bytes_needed = true; \
 					break; \
 				} \
@@ -905,21 +919,13 @@ static uint8_t create_control_byte(g2_packet_t *p)
 				target->pos++; \
 			} \
 			source->packet_encode++; \
-			if(8 == (x)) { \
-				if(list_empty(&source->children)) { \
-					source->packet_encode = SERIALIZE_DATA_PREP; \
-					break; \
-				} else \
-					source->packet_encode = SERIALIZE_CHILDREN; \
-			}
 
 bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 {
 	bool ret_val = true, need_zero = false;
 
 	source->more_bytes_needed = false;
-
-	while(!source->more_bytes_needed)
+	while(likely(!source->more_bytes_needed))
 	{
 		switch(source->packet_encode)
 		{
@@ -930,7 +936,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 			{
 				ssize_t ret;
 				ret = g2_packet_serialize_prep_min(source);
-				if(-1 == ret)
+				if(unlikely(-1 == ret))
 					return false;
 			}
 		case SERIALIZATION_PREPARED:
@@ -939,7 +945,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 		case SERIALIZE_CONTROL:
 			{
 				uint8_t control;
-				if(!buffer_remaining(*target)) {
+				if(unlikely(!buffer_remaining(*target))) {
 					source->more_bytes_needed = true;
 					break;
 				}
@@ -949,36 +955,40 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 				source->packet_encode++;
 			}
 		case SERIALIZE_LENGTH1:
-			if(source->length_length >= 1)
+			if(likely(source->length_length >= 1))
 			{
-				if(!buffer_remaining(*target)) {
+				if(unlikely(!buffer_remaining(*target))) {
 					source->more_bytes_needed = true;
 					break;
 				}
-				if(1 == source->length_length)
+				if(likely(1 == source->length_length))
 					*buffer_start(*target) = (char)(source->length&0xFF);
-				else if(!source->big_endian)
-					*buffer_start(*target) = (char)(source->length&0xFF);
-				else {
-					if(2 == source->length_length)
-						*buffer_start(*target) = (char)((source->length>>8)&0xFF);
-					else
-						*buffer_start(*target) = (char)((source->length>>16)&0xFF);
+				else
+				{
+					if(likely(!source->big_endian))
+						*buffer_start(*target) = (char)(source->length&0xFF);
+					else {
+						if(likely(2 == source->length_length))
+							*buffer_start(*target) = (char)((source->length>>8)&0xFF);
+						else
+							*buffer_start(*target) = (char)((source->length>>16)&0xFF);
+					}
 				}
 				target->pos++;
 			}
 			source->packet_encode++;
+			prefetch(&g2_ptype_names[source->type]);
 		case SERIALIZE_LENGTH2:
-			if(source->length_length >= 2)
+			if(unlikely(source->length_length >= 2))
 			{
-				if(!buffer_remaining(*target)) {
+				if(unlikely(!buffer_remaining(*target))) {
 					source->more_bytes_needed = true;
 					break;
 				}
-				if(!source->big_endian)
+				if(likely(!source->big_endian))
 					*buffer_start(*target) = (char)((source->length>>8)&0xFF);
 				else {
-					if(2 == source->length_length)
+					if(likely(2 == source->length_length))
 						*buffer_start(*target) = (char)((source->length)&0xFF);
 					else
 						*buffer_start(*target) = (char)((source->length>>8)&0xFF);
@@ -987,13 +997,13 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 			}
 			source->packet_encode++;
 		case SERIALIZE_LENGTH3:
-			if(source->length_length >= 3)
+			if(unlikely(source->length_length >= 3))
 			{
-				if(!buffer_remaining(*target)) {
+				if(unlikely(!buffer_remaining(*target))) {
 					source->more_bytes_needed = true;
 					break;
 				}
-				if(!source->big_endian)
+				if(likely(!source->big_endian))
 					*buffer_start(*target) = (char)((source->length>>16)&0xFF);
 				else
 					*buffer_start(*target) = (char)((source->length)&0xFF);
@@ -1001,21 +1011,27 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 			}
 			source->packet_encode++;
 		case SERIALIZE_TYPE1:
-			SERIALIZE_TYPE_ON_NUM(1);
+			SERIALIZE_TYPE_ON_NUM(1, likely);
 		case SERIALIZE_TYPE2:
-			SERIALIZE_TYPE_ON_NUM(2);
+			SERIALIZE_TYPE_ON_NUM(2, likely);
 		case SERIALIZE_TYPE3:
-			SERIALIZE_TYPE_ON_NUM(3);
+			SERIALIZE_TYPE_ON_NUM(3, likely);
 		case SERIALIZE_TYPE4:
-			SERIALIZE_TYPE_ON_NUM(4);
+			SERIALIZE_TYPE_ON_NUM(4, unlikely);
 		case SERIALIZE_TYPE5:
-			SERIALIZE_TYPE_ON_NUM(5);
+			SERIALIZE_TYPE_ON_NUM(5, unlikely);
 		case SERIALIZE_TYPE6:
-			SERIALIZE_TYPE_ON_NUM(6);
+			SERIALIZE_TYPE_ON_NUM(6, unlikely);
 		case SERIALIZE_TYPE7:
-			SERIALIZE_TYPE_ON_NUM(7);
+			SERIALIZE_TYPE_ON_NUM(7, unlikely);
 		case SERIALIZE_TYPE8:
-			SERIALIZE_TYPE_ON_NUM(8);
+			SERIALIZE_TYPE_ON_NUM(8, unlikely);
+			/* How to continue ? */
+			if(list_empty(&source->children)) {
+				source->packet_encode = SERIALIZE_DATA_PREP;
+				break;
+			} else
+				source->packet_encode = SERIALIZE_CHILDREN;
 		case SERIALIZE_CHILDREN:
 			{
 				struct list_head *e, *n;
@@ -1023,9 +1039,9 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 				list_for_each_safe(e, n, &source->children)
 				{
 					g2_packet_t *child = list_entry(e, g2_packet_t, list);
-					if(ENCODE_FINISHED != child->packet_encode)
+					if(likely(ENCODE_FINISHED != child->packet_encode))
 						ret_val = g2_packet_serialize_to_buff(child, target);
-					if(ENCODE_FINISHED != child->packet_encode) {
+					if(unlikely(ENCODE_FINISHED != child->packet_encode)) {
 						source->more_bytes_needed = child->more_bytes_needed;
 						break;
 					}
@@ -1042,7 +1058,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 			{
 				if(need_zero)
 				{
-					if(!buffer_remaining(*target)) {
+					if(unlikely(!buffer_remaining(*target))) {
 						source->more_bytes_needed = true;
 						break;
 					}
@@ -1075,9 +1091,15 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 		case IOVEC_ZERO:
 		case IOVEC_DATA:
 		case IOVEC_CLEANAFTER:
-		case MAX_ENCODE_STATE:
-			logg_develd("bogus enoder_state: %i\n", source->packet_encode);
+		case MAX_ENCODER_STATE:
+			logg_develd("wrong packet in enoder: %i %s\n", source->packet_encode,
+				g2_packet_encoder_states_txt[source->packet_encode]);
 			return false;
+#ifndef PS_CHECK_STATES
+		default:
+			logg_develd("bogus encoder_state: %i\n", source->packet_encode);
+			return false;
+#endif
 		}
 	}
 
@@ -1095,7 +1117,7 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	uint8_t control = 0;
 
 	/* calculate the inner packet length */
-	if(!list_empty(&p->children)) {
+	if(likely(!list_empty(&p->children))) {
 		struct list_head *e;
 		list_for_each(e, &p->children) {
 			g2_packet_t *child = list_entry(e, g2_packet_t, list);
@@ -1109,7 +1131,7 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	} else
 		p->is_compound = false;
 
-	if(p->data_trunk.data && buffer_remaining(p->data_trunk)) {
+	if(likely(p->data_trunk.data && buffer_remaining(p->data_trunk))) {
 		size += size ? 1 : 0; /* child terminator */
 		size += buffer_remaining(p->data_trunk);
 	}
@@ -1119,9 +1141,9 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 		p->length_length = 0;
 	else if(size <= 0xFF)
 		p->length_length = 1;
-	else if(size <= 0xFFFF)
+	else if(unlikely(size <= 0xFFFF))
 		p->length_length = 2;
-	else if(size <= 0xFFFFFF)
+	else if(unlikely(size <= 0xFFFFFF))
 		p->length_length = 3;
 	else {
 		size_t difference;

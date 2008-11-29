@@ -161,9 +161,15 @@
 #endif
 
 #if _GNUC_PREREQ (3,1)
-# define prefetch(x) __builtin_prefetch(x)
+# define prefetch(x)	__builtin_prefetch(x)
+# define prefetchw(x)	__builtin_prefetch(x, 1)
+# define prefetch_nt(x)	__builtin_prefetch(x, 0, 0)
+# define prefetchw_nt(x)	__builtin_prefetch(x, 1, 0)
 #else
-# define prefetch(x) do { } while(0)
+# define prefetch(x)	do { } while(0)
+# define prefetchw(x)	do { } while(0)
+# define prefetch_nt(x)	do { } while(0)
+# define prefetchw_nt(x)	do { } while(0)
 #endif
 
 /* 

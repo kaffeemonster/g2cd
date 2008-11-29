@@ -37,7 +37,20 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 	if(!dst || !src)
 		return dst;
 
-	if(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*2) > len)
+		/* we will access the arrays, fetch them */
+	__asm__ __volatile__(
+		PREFETCH(  (%0))
+		PREFETCH(32(%0))
+		PREFETCH(64(%0))
+		PREFETCH(96(%0))
+		PREFETCHW(  (%1))
+		PREFETCHW(32(%1))
+		PREFETCHW(64(%1))
+		PREFETCHW(96(%1))
+		"" : /* no out */ : "r" (src), "r" (dst)
+	);
+
+	if(unlikely(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*2) > len))
 		goto no_alignment_wanted;
 	else
 	{
@@ -67,6 +80,8 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 			goto alignment_16;
 		/* fall throuh */
 		goto alignment_32;
+		/* make label used */
+		goto handle_remaining;
 	}
 
 	/* fall throuh if alignment fails */
@@ -92,17 +107,19 @@ alignment_8:
 
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
-			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%2))
 			"test	%0,%0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(64(%1))
-			SSE_PREFETCH(64(%2))
 			SSE_PREFETCH(128(%1))
-			SSE_PREFETCH(128(%2))
+			SSE_PREFETCH(196(%1))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(128(%2))
+			SSE_PREFETCHW(196(%2))
 			".p2align 3\n"
 			"1:\n\t"
-			SSE_PREFETCH(196(%1))
-			SSE_PREFETCH(196(%2))
+			SSE_PREFETCH(256(%1))
+			SSE_PREFETCHW(256(%2))
 			AVX_MOVE(   (%2), %%ymm0)
 			AVX_MOVE( 32(%2), %%ymm1)
 			AVX_XOR(    (%1), %%ymm0, %%ymm2)
@@ -116,7 +133,7 @@ alignment_8:
 			/* loop done, handle trailer */
 			"2:\n\t"
 			"test	$32, %4\n\t"
-			"jne	3f\n\t"
+			"je	3f\n\t"
 			AVX_MOVE(   (%2), %%ymm0)
 			AVX_XOR(    (%1), %%ymm0, %%ymm2)
 			"add	$32, %1\n\t"
@@ -124,7 +141,7 @@ alignment_8:
 			"add	$32, %2\n"
 			"3:\n\t"
 			"test	$16, %4\n\t"
-			"jne	4f\n\t"
+			"je	4f\n\t"
 			AVX_MOVE(   (%2), %%xmm0)
 			AVX_XOR(    (%1), %%xmm0, %%xmm2)
 			"add	$16, %1\n\t"
@@ -135,17 +152,20 @@ alignment_8:
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/64), "r" (len%64)
-			: "cc", "memory",
-#ifdef __avx__
-			  "ymm0", "ymm1", "ymm2", "ymm3"
-#else
+			: "cc",
+# ifdef __SSE__
+#  ifdef __avx__
+			  "ymm0", "ymm1", "ymm2", "ymm3",
+#  else
 			  /*
 			   * since these registers overlap, the compiler does not
 			   * need to know where exactly the party is hapening, when
 			   * he does not understand what ymm is
 			   */
-			  "xmm0", "xmm1", "xmm2", "xmm3"
-#endif
+			  "xmm0", "xmm1", "xmm2", "xmm3",
+#  endif
+# endif
+			  "memory"
 		);
 		len %= 16;
 		goto handle_remaining;
@@ -163,15 +183,19 @@ alignment_16:
 
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
-			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%2))
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(32(%1))
-			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCHW(32(%2))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(96(%2))
 			".p2align 3\n"
 			"1:\n\t"
-			SSE_PREFETCH(64(%1))
-			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCHW(128(%2))
 			SSE_MOVE(   (%1), %%xmm0)
 			SSE_MOVE( 16(%1), %%xmm1)
 			"add	$32, %1\n\t"
@@ -185,7 +209,7 @@ alignment_16:
 			/* loop done, handle trailer */
 			"2:\n\t"
 			"test	$16, %4\n\t"
-			"jne	3f\n"
+			"je	3f\n"
 			SSE_MOVE(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
@@ -196,7 +220,11 @@ alignment_16:
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/32), "r" (len%32)
-			: "cc", "xmm0", "xmm1", "memory"
+			: "cc",
+#  ifdef __SSE__
+			  "xmm0", "xmm1",
+#  endif
+			  "memory"
 		);
 		len %= 16;
 		goto handle_remaining;
@@ -209,15 +237,19 @@ alignment_8:
 
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
-			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%2))
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(32(%1))
-			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCHW(32(%2))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(96(%2))
 			".p2align 3\n"
 			"1:\n\t"
-			SSE_PREFETCH(64(%1))
-			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCHW(128(%2))
 			SSE_LOAD(   (%1), %%xmm0)
 			SSE_LOAD( 16(%1), %%xmm1)
 			"add	$32, %1\n\t"
@@ -231,7 +263,7 @@ alignment_8:
 			/* loop done, handle trailer */
 			"2:\n\t"
 			"test	$16, %4\n\t"
-			"jne	3f\n\t"
+			"je	3f\n\t"
 			SSE_LOAD(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
@@ -242,7 +274,11 @@ alignment_8:
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/32), "r" (len%32)
-			: "cc", "xmm0", "xmm1", "memory"
+			: "cc",
+#  ifdef __SSE__
+			  "xmm0", "xmm1",
+#  endif
+			  "memory"
 		);
 		len %= 16;
 		goto handle_remaining;
@@ -257,15 +293,19 @@ alignment_8:
 
 		__asm__ __volatile__ (
 			MMX_PREFETCH(  (%1))
-			MMX_PREFETCH(  (%2))
+			MMX_PREFETCHW(  (%2))
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			MMX_PREFETCH(32(%1))
-			MMX_PREFETCH(32(%2))
+			MMX_PREFETCH(64(%1))
+			MMX_PREFETCH(96(%1))
+			MMX_PREFETCHW(32(%2))
+			MMX_PREFETCHW(64(%2))
+			MMX_PREFETCHW(96(%2))
 			".p2align 3\n"
 			"1:\n\t"
-			MMX_PREFETCH(64(%1))
-			MMX_PREFETCH(64(%2))
+			MMX_PREFETCH(128(%1))
+			MMX_PREFETCHW(128(%2))
 			"movq	  (%1), %%mm0\n\t"
 			"movq	 8(%1), %%mm1\n\t"
 			"movq	16(%1), %%mm2\n\t"
@@ -285,7 +325,7 @@ alignment_8:
 			/* loop done, handle trailer */
 			"2:\n\t"
 			"test	$16, %4\n\t"
-			"jne	3f\n\t"
+			"je	3f\n\t"
 			"movq	  (%1), %%mm0\n\t"
 			"movq	 8(%1), %%mm1\n\t"
 			"add	$16, %1\n\t"
@@ -296,7 +336,7 @@ alignment_8:
 			"add	$16, %2\n"
 			"3:\n\t"
 			"test	$8, %4\n\t"
-			"jne	4f\n\t"
+			"je	4f\n\t"
 			"movq	  (%1), %%mm0\n\t"
 			"add	$8, %1\n\t"
 			"pxor	  (%2), %%mm0\n\t"
@@ -307,7 +347,11 @@ alignment_8:
 			MMX_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
 			: "0" (len/32), "r" (len%32)
-			: "cc", "mm0", "mm1", "mm2", "mm3", "memory"
+			: "cc",
+#  ifdef __MMX__
+			  "mm0", "mm1", "mm2", "mm3",
+#  endif
+			  "memory"
 		);
 		len %= 8;
 		goto handle_remaining;
@@ -323,41 +367,77 @@ alignment_8:
 	 * don't know...
 	 * to be honest, no great speedup
 	 */
+handle_remaining:
 alignment_size_t:
-	if(len/SOST)
 	{
-		register size_t tmp, cnt;
+		size_t tmp1, tmp2, cnt1, cnt2, rem = len%(SOST*4);
 
 		__asm__ __volatile__(
-			PREFETCH(  (%2))
-			PREFETCH(  (%3))
+			PREFETCH(  (%4))
+			PREFETCHW(  (%5))
+			"test	%3, %3\n\t"
+			"jz	2f\n\t"
+			PREFETCH(32(%4))
+			PREFETCH(64(%4))
+			PREFETCH(96(%4))
+			PREFETCHW(32(%5))
+			PREFETCHW(64(%5))
+			PREFETCHW(96(%5))
+			/* fuck -fpic */
+			"mov	%2, %0\n\t"
+			"mov	%%ebx, %2\n\t"
+			"mov	%0, %%ebx\n\t"
 			".p2align 3\n"
 			"1:\n\t"
-			"mov	(%2,%1," str_it(SIZE_T_BYTE) "), %0\n\t"
-			"xor	%0, (%3,%1," str_it(SIZE_T_BYTE) ")\n\t"
+			PREFETCH(128(%4,%%ebx,1))
+			PREFETCHW(128(%5,%%ebx,1))
+			"mov	"str_it(SIZE_T_BYTE)"*0(%4,%%ebx,1), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*1(%4,%%ebx,1), %1\n\t"
+			"xor	%0,"str_it(SIZE_T_BYTE)"*0(%5,%%ebx,1)\n\t"
+			"xor	%1,"str_it(SIZE_T_BYTE)"*1(%5,%%ebx,1)\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*2(%4,%%ebx,1), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*3(%4,%%ebx,1), %1\n\t"
+			"xor	%0,"str_it(SIZE_T_BYTE)"*2(%5,%%ebx,1)\n\t"
+			"xor	%1,"str_it(SIZE_T_BYTE)"*3(%5,%%ebx,1)\n\t"
+			"add	$"str_it(SIZE_T_BYTE)"*4,%%ebx\n\t"
+			"dec	%3\n\t"
+			"jnz	1b\n\t"
+			"lea	(%4,%%ebx,1), %4\n\t"
+			"lea	(%5,%%ebx,1), %5\n\t"
+			"mov	%2, %%ebx\n"
+			"2:\n\t"
+			"mov	%9, %3\n\t"
+			"shr	$"str_it(SIZE_T_SHIFT)", %3\n\t"
+			"test	%3, %3\n\t"
+			"jz	4f\n\t"
+			"xor	%1, %1\n"
+			"3:\n\t"
+			"mov	(%4,%1,"str_it(SIZE_T_BYTE)"), %0\n\t"
+			"xor	%0,(%5,%1,"str_it(SIZE_T_BYTE)")\n\t"
 			"inc	%1\n\t"
-			"cmp	%5,%1\n\t"
-			"jne	1b\n\t"
-			"lea	0x0(,%5," str_it(SIZE_T_BYTE) "), %0\n\t"
-			"lea	(%2,%0,1), %2\n\t"
-			"lea	(%3,%0,1), %3\n"
-			: /* %0 */ "=&r" (tmp),
-			  /* %1 */ "=&r" (cnt),
-			  /* %2 */ "+&r" (dst_char),
-			  /* %3 */ "+&r" (src_char),
-			  /* %4 */ "=m" (dst_char)
-			: /* %5 */ "r" (len/SOST),
-			  /* %6 */ "m" (src_char),
-			  /* %7 */ "1" (0)
+			"dec	%3\n"
+			"jnz	3b\n\t"
+			"lea	(%4,%1,"str_it(SIZE_T_BYTE)"), %4\n\t"
+			"lea	(%5,%1,"str_it(SIZE_T_BYTE)"), %5\n"
+			"4:\n"
+			: /* %0 */ "=&a" (tmp1),
+			  /* %1 */ "=&d" (tmp2),
+			  /* %2 */ "=&rm" (cnt1),
+			  /* %3 */ "=&c" (cnt2),
+			  /* %4 */ "+&D" (src_char),
+			  /* %5 */ "+&S" (dst_char),
+			  /* %6 */ "=m" (dst_char)
+			: /* %7 */ "3" (len/(SOST*4)),
+			  /* %8 */ "2" (0),
+			  /* %9 */ "m" (rem),
+			  /* %10 */ "m" (src_char)
 			: "cc"
 		);
 		len %= SOST;
-		goto handle_remaining;
 	}
 
 no_alignment_wanted:
 no_alignment_possible:
-handle_remaining:
 	/* xor whats left to do from alignment and other datatype */
 	while(len--)
 		*dst_char++ ^= *src_char++;

@@ -77,7 +77,7 @@ enum g2_packet_decoder_states
 	ENUM_CMD( SERIALIZE_DATA_PREP ), \
 	ENUM_CMD( SERIALIZE_DATA ), \
 	ENUM_CMD( ENCODE_FINISHED ), \
-	ENUM_CMD( MAX_ENCODE_STATE ) /* keep this entry the last */
+	ENUM_CMD( MAX_ENCODER_STATE ) /* keep this entry the last */
 
 # define ENUM_CMD(x) x
 enum g2_packet_encoder_states

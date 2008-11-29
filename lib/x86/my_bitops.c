@@ -427,6 +427,14 @@ static void identify_vendor(struct cpuinfo *cpu)
 }
 
 /*
+ * Callback test if we have 3dNow
+ */
+int test_cpu_feature_3dnow_callback(void)
+{
+	return our_cpu.features[CFEATURE_3DNOW];
+}
+
+/*
  * Callback test if AVX can be used
  *
  * Unfortunatly Intel *always* fucks it up...
