@@ -340,7 +340,7 @@ LONGNAME = Go2CHub $(VERSION) programming Experiment
 #
 MY_STD_DEPS_HEADS = \
 	G2MainServer.h \
-	other.h \
+	lib/other.h \
 	config.h
 #
 #	together with this files

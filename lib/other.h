@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -27,7 +27,7 @@
 #define _OTHER_H
 
 #ifdef HAVE_CONFIG_H
-# include "config.h"
+# include "../config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifndef HAVE_C99
@@ -180,13 +180,13 @@
 
 #ifndef HAVE_INET6_ADDRSTRLEN
 /*
- * This buffersize is needed, but we not have it everywere, even on Systems
- * that claims to be IPv6 capable...
+ * This buffersize is needed, but we don't have it everywere, even on Systems
+ * that claim to be IPv6 capable...
  */
 # define INET6_ADDRSTRLEN 46
 #endif /* HAVE_INET6_ADDRSTRLEN */
 
-#ifndef	HAVE_INET_NTOP
+#ifndef HAVE_INET_NTOP
 /*
  * const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
  * for cygwin & 5.7 solaris
@@ -231,7 +231,7 @@ static __inline__ int inet_pton(int af, const char *src, void *dest)
  * According to man-page a GNU-Extension, mumbel mumbel...
  * They are right, not on 5.7 Solaris
  */
-#include "lib/my_bitops.h"
+# include "lib/my_bitops.h"
 #endif /* HAVE_STRNLEN */
 
 /* 
@@ -286,11 +286,11 @@ typedef void (*sighandler_t)(int);
 
 /* compiler LART */
 #ifdef __GNUC__
-#define barrier()	asm volatile ("")
-#define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
+# define barrier()	asm volatile ("")
+# define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
 #else
-#define barrier()	do { } while (0)
-#define mem_barrier(x)	do {} while (0)
+# define barrier()	do { } while (0)
+# define mem_barrier(x)	do {} while (0)
 #endif
 
 /* unaligned access */

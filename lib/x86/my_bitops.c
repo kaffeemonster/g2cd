@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include "../../other.h"
+#include "../other.h"
 #include "../log_facility.h"
 #include "x86_features.h"
 

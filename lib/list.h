@@ -1,7 +1,7 @@
 /*
  * list.h
  * Header for a double link list
- * 
+ *
  * blatantly ripped of linux/list.h
  * unfortunatly, it does not contain a copyright
  *
@@ -10,12 +10,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -25,20 +25,20 @@
  */
 
 #ifndef LIB_LIST_H
-#define LIB_LIST_H
+# define LIB_LIST_H
 
-#include "../other.h"
-#define LIST_POISON1	((void *)0xAAAAAAAA)
-#define LIST_POISON2 ((void *)0x55555555)
+# include "other.h"
+# define LIST_POISON1	((void *)0xAAAAAAAA)
+# define LIST_POISON2	((void *)0x55555555)
 
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
 };
 
-#define LIST_HEAD_INIT(name) { &(name), &(name) }
+# define LIST_HEAD_INIT(name) { &(name), &(name) }
 
-#define LIST_HEAD(name) \
+# define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
 static inline void INIT_LIST_HEAD(struct list_head *list)
@@ -169,7 +169,7 @@ static inline int list_empty(const struct list_head *head)
  * @type:	the type of the struct this is embedded in.
  * @member:	the name of the list_struct within the struct.
  */
-#define list_entry(ptr, type, member) \
+# define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)
 
 /**
@@ -177,9 +177,9 @@ static inline int list_empty(const struct list_head *head)
  * @pos:	the &struct list_head to use as a loop cursor.
  * @head:	the head for your list.
  */
-#define list_for_each(pos, head) \
-	for (pos = (head)->next; prefetch(pos->next), pos != (head); \
-        	pos = pos->next)
+# define list_for_each(pos, head) \
+	for(pos = (head)->next; prefetch(pos->next), pos != (head); \
+	    pos = pos->next)
 
 /**
  * list_for_each_safe - iterate over a list safe against removal of list entry
@@ -187,8 +187,32 @@ static inline int list_empty(const struct list_head *head)
  * @n:		another &struct list_head to use as temporary storage
  * @head:	the head for your list.
  */
-#define list_for_each_safe(pos, n, head) \
-	for (pos = (head)->next, n = pos->next; pos != (head); \
-		pos = n, n = pos->next)
+# define list_for_each_safe(pos, n, head) \
+	for(pos = (head)->next, n = pos->next; pos != (head); \
+	    pos = n, n = pos->next)
+
+/**
+ * list_for_each_entry	-	iterate over list of given type
+ * @pos:	the type * to use as a loop cursor.
+ * @head:	the head for your list.
+ * @member:	the name of the list_struct within the struct.
+ */
+# define list_for_each_entry(pos, head, member) \
+	for(pos = list_entry((head)->next, typeof(*pos), member); \
+	    prefetch(pos->member.next), &pos->member != (head); \
+	    pos = list_entry(pos->member.next, typeof(*pos), member))
+
+/**
+ * list_for_each_entry_safe - iterate over list of given type safe against removal of list entry
+ * @pos:	the type * to use as a loop cursor.
+ * @n:		another type * to use as temporary storage
+ * @head:	the head for your list.
+ * @member:	the name of the list_struct within the struct.
+ */
+# define list_for_each_entry_safe(pos, n, head, member) \
+	for(pos = list_entry((head)->next, typeof(*pos), member), \
+	    n = list_entry(pos->member.next, typeof(*pos), member); \
+	    &pos->member != (head);  \
+	    pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
 #endif

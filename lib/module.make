@@ -27,6 +27,7 @@ LIB_STD_DEPS = \
 
 # all header
 LIBHEADS = \
+	$(MPL)/other.h \
 	$(MPL)/my_bitops.h \
 	$(MPL)/my_bitopsm.h \
 	$(MPL)/my_epoll.h \
@@ -37,6 +38,8 @@ LIBHEADS = \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
 	$(MPL)/list.h \
+	$(MPL)/hlist.h \
+	$(MPL)/hthash.h \
 	$(MPL)/backtrace.h \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h
@@ -167,11 +170,11 @@ $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)
-$(MPL)/my_bitops.h: other.h
+$(MPL)/my_bitops.h: $(MPL)/other.h
 $(MPL)/my_bitops.o: $(MPL)/my_bitops.h $(MY_BITOPSSRC)
-$(MPL)/my_bitopsm.h: other.h config.h
+$(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
-$(MPL)/my_epoll.h: other.h config.h
+$(MPL)/my_epoll.h: $(MPL)/other.h config.h
 $(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
 $(MPL)/x86/memxor.c: $(MPL)/x86/memxor_tmpl.c

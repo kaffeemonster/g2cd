@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -23,8 +23,8 @@
  * $Id: my_epoll.h,v 1.9 2005/11/05 10:31:43 redbully Exp redbully $
  */
 
-#ifndef _MY_EPOLL_H
-#define _MY_EPOLL_H
+#ifndef LIB_MY_EPOLL_H
+#define LIB_MY_EPOLL_H
 
 #ifdef HAVE_CONFIG_H
 # include "../config.h"
@@ -44,7 +44,7 @@
  * all Compat-layers
  */
 
-# include "../other.h"
+# include "other.h"
 
 /* how many concurrent epfds will be needed? */
 # define EPOLL_QUEUES 3
@@ -67,7 +67,7 @@ typedef union epoll_data
 #  define MY_EPOLL_PACKED GCC_ATTR_PACKED
 # else
 #  define MY_EPOLL_PACKED
-#endif /* HAVE_KEPOLL && __x86_64__ */
+# endif /* HAVE_KEPOLL && __x86_64__ */
 
 struct epoll_event
 {
@@ -112,5 +112,5 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 #  define EPOLLET	(1 << 31)
 # endif /* HAVE_POLL || HAVE_KEPOLL || HAVE_DEVPOLL */
 
-#endif /* _NEED_EPOLL_COMPAT */
-#endif /* _MY_EPOLL_H */
+#endif /* NEED_EPOLL_COMPAT */
+#endif /* LIB_MY_EPOLL_H */

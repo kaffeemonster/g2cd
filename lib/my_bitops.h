@@ -28,7 +28,7 @@
 #define LIB_MY_BITOPS_H
 
 # include <sys/types.h>
-# include "../other.h"
+# include "other.h"
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # if defined(I_LIKE_ASM) && (defined(__i386__) || defined(__x86_64__))

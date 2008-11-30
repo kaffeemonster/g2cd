@@ -36,7 +36,7 @@
 #  define _G2KHL_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif
 
-_G2KHL_EXTRN(void g2_khl_add(union combo_addr *, time_t));
+_G2KHL_EXTRN(void g2_khl_add(const union combo_addr *, time_t));
 _G2KHL_EXTRN(bool g2_khl_init(void));
 _G2KHL_EXTRN(bool g2_khl_tick(int *));
 _G2KHL_EXTRN(void g2_khl_end(void));

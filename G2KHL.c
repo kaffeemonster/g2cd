@@ -9,17 +9,17 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
- * 
+ *
  * $Id:$
  */
 
@@ -29,6 +29,7 @@
 /* System */
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 #ifdef HAVE_ALLOCA_H
@@ -49,13 +50,16 @@
 #include <netdb.h>
 /* Own */
 #define _G2KHL_C
-#include "other.h"
+#include "lib/other.h"
 #include "G2KHL.h"
 #include "G2MainServer.h"
 #include "lib/log_facility.h"
 #include "lib/combo_addr.h"
+#include "lib/hlist.h"
+#include "lib/hthash.h"
 
-#define KHL_CACHE_SIZE 128
+#define KHL_CACHE_SIZE 256
+#define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
 #define KHL_CACHE_FILL 8
 
 #define KHL_DUMP_IDENT "G2CDKHLDUMP\n"
@@ -111,6 +115,13 @@ struct khl_entry
 	time_t when;
 };
 
+struct khl_cache_entry
+{
+	struct hlist_node node;
+	struct khl_entry e;
+	bool used;
+};
+
 /* Vars */
 static DBM *gwc_db;
 static struct {
@@ -126,8 +137,10 @@ static struct {
 static struct {
 	pthread_mutex_t lock;
 	int num;
-	int insert;
-	struct khl_entry entrys[KHL_CACHE_SIZE];
+	uint32_t ht_seed;
+	struct khl_cache_entry *next_free;
+	struct hlist_head ht[KHL_CACHE_HTSIZE];
+	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
 } cache;
 #define ENUM_CMD(x) str_it(KHL_##x)
 static const char khl_mnmt_states_names[][12] =
@@ -144,6 +157,7 @@ static const char *gwc_res_http_names[] =
 };
 # undef ENUM_CMD
 #endif
+
 
 /*
  * Functs
@@ -219,6 +233,7 @@ init_next:
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
 	}
+	cache.ht_seed = (uint32_t) time(NULL);
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;
@@ -269,8 +284,14 @@ init_next:
 	}
 
 	/* we don't care if we read 0 or 1 or KHL_CACHE_SIZE elements */
-	cache.num = fread(cache.entrys, sizeof(cache.entrys[0]), KHL_CACHE_SIZE, khl_dump);
-	cache.insert = cache.num % KHL_CACHE_SIZE;
+	do
+	{
+		struct khl_entry *e = (void *) buff;
+		name_len = fread(e, sizeof(*e), 1, khl_dump);
+		if(name_len)
+			g2_khl_add(&e->na, e->when);
+	} while(name_len);
+
 out:
 	fclose(khl_dump);
 	return true;
@@ -966,7 +987,7 @@ void g2_khl_end(void)
 	uint32_t signature[3];
 	const char *data_root_dir;
 	char *name;
-	size_t name_len;
+	size_t name_len, i;
 
 	if(gwc_db)
 		dbm_close(gwc_db);
@@ -1001,21 +1022,146 @@ void g2_khl_end(void)
 
 	fwrite(signature, sizeof(signature[0]), 3, khl_dump);
 
-	fwrite(cache.entrys, sizeof(cache.entrys[0]), cache.num, khl_dump);
+	for(i = 0; i < KHL_CACHE_SIZE; i++) {
+		if(cache.entrys[i].used)
+			fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, khl_dump);
+	}
 	if(act_gwc.data.url)
 		free((void *)(intptr_t)act_gwc.data.url);
 }
 
 
-void g2_khl_add(union combo_addr *addr, time_t when)
+static struct khl_cache_entry *khl_cache_entry_alloc(void)
 {
+	struct khl_cache_entry *e;
+	unsigned i;
+
+	if(KHL_CACHE_SIZE <= cache.num)
+		return NULL;
+
+	if(cache.next_free)
+	{
+		e = cache.next_free;
+		cache.next_free = NULL;
+		if(likely(!e->used))
+			goto check_next_free;
+	}
+
+	for(i = 0, e = NULL; i < KHL_CACHE_SIZE; i++)
+	{
+		if(!cache.entrys[i].used) {
+			e = &cache.entrys[i];
+			break;
+		}
+	}
+
+	if(e)
+	{
+check_next_free:
+		e->used = true;
+		cache.num++;
+		if(e < &cache.entrys[KHL_CACHE_SIZE-1]) {
+			if(!e[1].used)
+				cache.next_free = &e[1];
+		}
+	}
+	return e;
+}
+
+static void khl_cache_entry_free(struct khl_cache_entry *e)
+{
+	memset(e, 0, sizeof(*e));
+	if(!cache.next_free)
+		cache.next_free = e;
+	cache.num--;
+}
+
+static uint32_t cache_ht_hash(const union combo_addr *addr)
+{
+	uint32_t h;
+
+	if(addr->s_fam == AF_INET)
+		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, cache.ht_seed);
+	else
+		h = hthash_3words(addr->in6.sin6_addr.s6_addr32[0], addr->in6.sin6_addr.s6_addr32[3],
+		                  addr->in6.sin6_port, cache.ht_seed);
+	return h;
+}
+
+static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
+{
+	uint32_t h = cache_ht_hash(addr);
+	struct hlist_node *n;
+	struct khl_cache_entry *e;
+
+// TODO: check for mapped ip addr?
+	if(addr->s_fam == AF_INET)
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & (KHL_CACHE_HTSIZE-1)], node)
+		{
+			if(e->e.na.s_fam != AF_INET)
+				continue;
+			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
+			   e->e.na.in.sin_port == addr->in.sin_port)
+				return e;
+		}
+	}
+	else
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & (KHL_CACHE_HTSIZE-1)], node)
+		{
+			if(e->e.na.s_fam != AF_INET6)
+				continue;
+			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
+			   e->e.na.in.sin_port == addr->in.sin_port)
+				return e;
+		}
+	}
+
+	return NULL;
+}
+
+static void cache_ht_add(struct khl_cache_entry *e)
+{
+	uint32_t h = cache_ht_hash(&e->e.na);
+	hlist_add_head(&e->node, &cache.ht[h & (KHL_CACHE_HTSIZE-1)]);
+}
+
+void g2_khl_add(const union combo_addr *addr, time_t when)
+{
+	struct khl_cache_entry *e;
+
+	/* check for bogus addresses */
+	if(unlikely(!combo_addr_is_public(addr)))
+		return;
+
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;
-	cache.entrys[cache.insert].na = *addr;
-	cache.entrys[cache.insert].when = when;
-	if(cache.num < KHL_CACHE_SIZE)
-		cache.num++;
-	cache.insert = (cache.insert + 1) % KHL_CACHE_SIZE;
+
+	/* already in the cache? */
+	e = cache_ht_lookup(addr);
+	if(e)
+	{
+		/* entry newer? */
+		if(e->e.when > when)
+			goto out_unlock;
+// TODO: resort entry
+		e->e.when = when;
+		goto out_unlock;
+	}
+
+// TODO: find oldest entry
+
+	e = khl_cache_entry_alloc();
+	if(!e)
+		goto out_unlock;
+
+	e->e.na = *addr;
+	e->e.when = when;
+
+	cache_ht_add(e);
+
+out_unlock:
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))
 		diedie("gnarf, KHL cache lock stuck, bye!");
 }

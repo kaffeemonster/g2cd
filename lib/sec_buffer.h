@@ -11,12 +11,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -25,14 +25,14 @@
  * $Id: sec_buffer.h,v 1.9 2005/11/05 10:48:17 redbully Exp redbully $
  */
 
-#ifndef _SECBUFFER_H
-#define _SECBUFFER_H
+#ifndef LIB_SECBUFFER_H
+# define LIB_SECBUFFER_H
 
-#include <string.h>
-#include "../other.h"
-#include "../builtin_defaults.h"
+# include <string.h>
+# include "other.h"
+# include "../builtin_defaults.h"
 
-/* ! ! WARNING ! !
+/*       - - - * * * ! ! WARNING ! ! * * * - - -
  * struct norm_buff and struct big_buff are cast-compatible, as
  * long as they are cleanly handled with the informations (pos,
  * limit, capacity) obtained along with the buffer (the define
@@ -49,11 +49,12 @@
  * C-reference and doublecheck you fully understand the nature
  * of pointers and arrays in C (only good references describe
  * it in _full_ detail, so you may have problems with
- * "C in X days") and learn about the subtile little
+ * "C in X days", and you better take some time till you really
+ * "groked it down") and learn about the subtile little
  * differences between them.
- * 
+ *
  * Shortly spoken: They are NOT the same thing, they only
- * _behave_ mostly the same, but not allways.
+ * _behave_ mostly the same, but not in every context.
  * This is such a case.
  */
 
@@ -81,45 +82,45 @@ struct pointer_buff
 	char *data;
 };
 
-#ifndef ASSERT_BUFFERS
-# define buffer_start(x) ((x).data + (x).pos)
-# define buffer_remaining(x) ((x).limit - (x).pos)
-#else
-# define buffer_start(x) ( \
+# ifndef ASSERT_BUFFERS
+#  define buffer_start(x) ((x).data + (x).pos)
+#  define buffer_remaining(x) ((x).limit - (x).pos)
+# else
+#  define buffer_start(x) ( \
 	(unlikely((x).pos > (x).capacity)) ? \
 	logg_posd(LOGF_EMERG, \
 		"buffer pos of by %ld\n", \
 		(long) (x).pos - (x).capacity), \
 	(x).data + (x).pos : \
 	(x).data + (x).pos)
-# define buffer_remaining(x) ( \
+#  define buffer_remaining(x) ( \
 	(unlikely((x).pos > (x).limit)) ? \
 	logg_posd(LOGF_EMERG, \
 		"buffer wrap around by %ld\n", \
 		(long) (x).pos - (x).limit), \
 	(x).limit - (x).pos : \
 	(x).limit - (x).pos)
-#endif
+# endif
 
-#define buffer_clear(x) \
+# define buffer_clear(x) \
 	do { \
 		(x).pos = 0; \
 		(x).limit = (x).capacity; \
 	} while(0)
 
-#define buffer_flip(x) \
+# define buffer_flip(x) \
 	do { \
 		(x).limit = (x).pos; \
 		(x).pos = 0; \
 	} while(0)
 
-#define buffer_unflip(x) \
+# define buffer_unflip(x) \
 	do { \
 		(x).pos = buffer_remaining(x); \
 		(x).limit = (x).capacity; \
 	} while(0)
 
-#define buffer_compact(x) \
+# define buffer_compact(x) \
 	do { \
 		if(buffer_remaining(x)) \
 			if((x).pos) memmove((x).data, \
@@ -128,21 +129,21 @@ struct pointer_buff
 		buffer_unflip(x); \
 	} while(0)
 
-#define buffer_skip(x) \
+# define buffer_skip(x) \
 	do { \
 		(x).pos = (x).limit; \
 	} while(0)
 
-#define buffer_headroom(x) \
+# define buffer_headroom(x) \
 	((x).capacity - (x).limit)
 
-#define buffer_possible_remaining(x) \
+# define buffer_possible_remaining(x) \
 	((x).capacity - (x).pos)
 
 /*
  * only valid after a compact
  */
-#define buffer_cempty(x) \
+# define buffer_cempty(x) \
 	!(x).pos
 
 static inline void INIT_PBUF(struct pointer_buff *p)
@@ -151,5 +152,5 @@ static inline void INIT_PBUF(struct pointer_buff *p)
 	p->data = NULL;
 }
 
-#endif // _SECBUFFER_H
-//EOF
+#endif /* LIB_SECBUFFER_H */
+/* EOF */

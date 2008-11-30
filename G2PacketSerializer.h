@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -23,10 +23,10 @@
  * $Id: G2PacketSerializer.h,v 1.2 2004/12/18 18:06:13 redbully Exp redbully $
  */
 
-#ifndef _G2PACKETSERIALIZER_H
-# define _G2PACKETSERIALIZER_H
+#ifndef G2PACKETSERIALIZER_H
+# define G2PACKETSERIALIZER_H
 
-# include "other.h"
+# include "lib/other.h"
 # include "lib/sec_buffer.h"
 # include "G2PacketSerializerStates.h"
 
@@ -47,5 +47,5 @@ _G2PACKSER_EXTRN(ssize_t g2_packet_serialize_prep(g2_packet_t *));
 _G2PACKSER_EXTRN(ssize_t g2_packet_serialize_prep_min(g2_packet_t *));
 _G2PACKSER_EXTRN(bool g2_packet_serialize_to_buff(g2_packet_t *, struct norm_buff *));
 
-#endif /* _G2PACKETSERIALIZER_H */
+#endif /* G2PACKETSERIALIZER_H */
 /* EOF */

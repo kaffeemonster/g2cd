@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,9 +24,9 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -34,15 +34,15 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
-// debug file
+/* debug file */
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <zlib.h>
-// other
-#include "other.h"
-// Own includes
+/* other */
+#include "lib/other.h"
+/* Own includes */
 #define _G2QHT_C
 #include "G2QHT.h"
 // #include "G2MainServer.h"
@@ -52,12 +52,11 @@
 #include "lib/my_bitopsm.h"
 #include "lib/hzp.h"
 #include "lib/atomic.h"
-#include "other.h"
 
 struct zpad_heap
 {
 	struct zpad_heap *next;
-	/* 
+	/*
 	 * length should be aligned to sizeof(void *)
 	 * so at least the LSB cann be used as a flag
 	 */

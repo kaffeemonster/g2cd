@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,9 +24,9 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -34,14 +34,14 @@
 #include <strings.h>
 #include <errno.h>
 #include <unistd.h>
-// System net-includes
+/* System net-includes */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-// other
-#include "other.h"
-// Own includes
+/* other */
+#include "lib/other.h"
+/* Own includes */
 #define _G2CONHELPER_C
 #include "G2ConHelper.h"
 #include "G2MainServer.h"
@@ -61,7 +61,7 @@ g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 		msg = "error in connection!";
 	if(p_entry->events & (uint32_t)EPOLLHUP)
 		msg = "HUP in connection";
-/* 
+/*
  * grmpf... EPoll removes NVal-fd automagicly...
  * if(p_entry->events & (uint32_t)POLLNVAL)
  * 	msg = "NVal Socket-FD in poll_data!";

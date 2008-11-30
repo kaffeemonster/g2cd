@@ -86,6 +86,12 @@
 #define WANT_BACKTRACES
 
 /*
+ * Is unaligned access on this machine ok
+ * If this is wrongly set, you may find a SIGBUS
+ */
+#define UNALIGNED_OK 1
+
+/*
  * Is __thread keyword for thread local storage available?
  * This option is unused ATM, since __thread has its share
  * of problems (no descructors, portability).

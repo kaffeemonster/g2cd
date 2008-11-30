@@ -14,7 +14,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,18 +24,18 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-// System Includes
+/* System Includes */
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <errno.h>
-// Own Includes
+/* Own Includes */
 #define _TIMEOUT_C
-#include "other.h"
+#include "lib/other.h"
 #include "timeout.h"
 #include "lib/log_facility.h"
 

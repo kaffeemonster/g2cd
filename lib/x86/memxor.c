@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-#include "../../other.h"
+#include "../other.h"
 #include "x86_features.h"
 
 #undef HAVE_3DNOW

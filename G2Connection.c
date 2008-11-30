@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,17 +24,17 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <strings.h>
 #include <zlib.h>
-// other
-#include "other.h"
-// Own includes
+/* other */
+#include "lib/other.h"
+/* Own includes */
 #include "G2MainServer.h"
 #define _G2CONNECTION_C
 #include "G2Connection.h"

@@ -37,7 +37,7 @@
 # include <errno.h>
 
 /* Own */
-# include "other.h"
+# include "lib/other.h"
 static always_inline int get_act_loglevel(void);
 # include "G2Connection.h"
 # include "G2Packet.h"

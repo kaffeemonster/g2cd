@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -23,8 +23,8 @@
  * $Id:$
  */
 
-#ifndef _G2QHT_H
-# define _G2QHT_H
+#ifndef G2QHT_H
+# define G2QHT_H
 
 /* Includes if included */
 # include <stdbool.h>
@@ -85,5 +85,5 @@ _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable **, struct qht_fragment *))
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
 _G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
 
-#endif // _G2QHT_H
-//EOF
+#endif /* G2QHT_H */
+/* EOF */

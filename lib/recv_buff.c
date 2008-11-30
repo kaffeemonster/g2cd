@@ -28,7 +28,7 @@
 
 #include "log_facility.h"
 #include "recv_buff.h"
-#include "../other.h"
+#include "other.h"
 
 
 struct local_buffer_org

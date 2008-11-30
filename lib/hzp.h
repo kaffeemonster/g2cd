@@ -1,7 +1,7 @@
 /*
  * hzp.c
  * Header for the hzp interface.
- * 
+ *
  * Copyright (c) 2006 Jan Seiffert
  *
  * This file is part of g2cd.
@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,11 +24,11 @@
  */
 
 #ifndef LIB_HZP_H
-#define LIB_HZP_H
+# define LIB_HZP_H
 
-#include <stdbool.h>
-#include "../other.h"
-#include "atomic.h"
+# include <stdbool.h>
+# include "other.h"
+# include "atomic.h"
 
 # define LIB_HZP_EXTRN(x) x GCC_ATTR_VIS("hidden")
 

@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -24,9 +24,9 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
-// System includes
+/* System includes */
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -36,16 +36,16 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <zlib.h>
-// System net-includes
+/* System net-includes */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-// other
-#include "other.h"
-// Own includes
+/* other */
+#include "lib/other.h"
+/* Own includes */
 #define _G2ACCEPTOR_C
 #include "G2Acceptor.h"
 #include "G2MainServer.h"
@@ -60,31 +60,34 @@
 #undef EVENT_SPACE
 #define EVENT_SPACE 8
 
-//internal prototypes
+/* internal prototypes */
 static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool init_con_a(int *, union combo_addr *);
 static inline bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static inline bool initiate_g2(g2_connection_t *);
-// do not inline, we take a pointer of it, and when its called, performance doesn't matter
+/*
+ * do not inline, we take a pointer of it, and when its called,
+ * performance doesn't matter
+ */
 static void clean_up_a(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Accept(void *param)
 {
-	//data-structures
+	/* data-structures */
 	struct g2_con_info *work_cons = NULL;
 	g2_connection_t *work_entry = NULL;
 	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
-	//sock-things
+	/* sock-things */
 	int accept_so4 = -1;
 	int accept_so6 = -1;
 	int to_handler = -1;
 	int epoll_fd = -1;
 	int sock2main;
 
-	//other variables
+	/* other variables */
 	struct epoll_event *eevents = NULL;
 	struct epoll_event *e_wptr = NULL;
 	size_t i = 0;
