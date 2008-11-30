@@ -286,9 +286,9 @@ CFLAGS += -DHELGRIND_ME
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
 CFLAGS += -D_GNU_SOURCE
-#	on recent glibc-system this brings performance at
-#	cost of size
-CFLAGS += -D__USE_STRING_INLINES
+#	on glibc-system this brings performance at the cost
+#	of size if your compiler is not smart enough
+#CFLAGS += -D__USE_STRING_INLINES
 #	on solaris this may be needed for some non std-things
 #CFLAGS += -D__EXTENSIONS__
 
@@ -733,7 +733,7 @@ G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
-G2KHL.o: G2KHL.h lib/combo_addr.h
+G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h

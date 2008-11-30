@@ -82,15 +82,17 @@ static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 		addr->in6.sin6_port = port;
 }
 
-# define SLASH04 0xF0000000
-# define SLASH08 0xFF000000
-# define SLASH16 0xFFFF0000
-# define SLASH32 0xFFFFFFFF
+# define SLASH04 htonl(0xF0000000)
+# define SLASH08 htonl(0xFF000000)
+# define SLASH16 htonl(0xFFFF0000)
+# define SLASH32 htonl(0xFFFFFFFF)
+# define IP_CMP(a, b, m) (htonl(b) == ((a) & (m)))
 static inline int combo_addr_is_public(const union combo_addr *addr)
 {
 	in_addr_t a;
 
-	if(AF_INET6 == addr->s_fam)
+// TODO: when IPv6 is common, change it
+	if(unlikely(AF_INET6 == addr->s_fam))
 	{
 		const struct in6_addr *a6 = &addr->in6.sin6_addr;
 		if(IN6_IS_ADDR_UNSPECIFIED(a6))
@@ -113,21 +115,21 @@ static inline int combo_addr_is_public(const union combo_addr *addr)
 	else
 		a = addr->in.sin_addr.s_addr;
 
-	if(0xFFFFFFFF == (a & SLASH32)) /* 255.255.255.255/32  Broadcast */
+	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return 0;
-	if(0x00000000 == (a & SLASH08)) /* 000.000.000.000/8 */
+	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8 */
 		return 0;
-	if(0xA0000000 == (a & SLASH08)) /* 010.000.000.000/8 */
+	if(IP_CMP(a, 0xA0000000, SLASH08)) /* 010.000.000.000/8 */
 		return 0;
-	if(0x7F000000 == (a & SLASH08)) /* 127.000.000.000/8 */
+	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8 */
 		return 0;
-	if(0xA9FE0000 == (a & SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
+	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
 		return 0;
-	if(0xAC100000 == (a & SLASH16)) /* 172.016.000.000/16 */
+	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16 */
 		return 0;
-	if(0xC0A80000 == (a & SLASH16)) /* 192.168.000.000/16 */
+	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16 */
 		return 0;
-	if(0xE0000000 == (a & SLASH04)) /* 224.000.000.000/4   Multicast */
+	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return 0;
 out:
 	return 1;
@@ -136,6 +138,6 @@ out:
 # undef SLASH08
 # undef SLASH16
 # undef SLASH32
-
+# undef IP_CMP
 
 #endif /* COMBO_ADDR_H */

@@ -57,6 +57,7 @@
 #include "lib/combo_addr.h"
 #include "lib/hlist.h"
 #include "lib/hthash.h"
+#include "lib/rbtree.h"
 
 #define KHL_CACHE_SIZE 256
 #define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
@@ -117,9 +118,10 @@ struct khl_entry
 
 struct khl_cache_entry
 {
+	struct rbnode rb; /* keep first */
+	bool used; /* fill possible hole */
 	struct hlist_node node;
 	struct khl_entry e;
-	bool used;
 };
 
 /* Vars */
@@ -139,6 +141,7 @@ static struct {
 	int num;
 	uint32_t ht_seed;
 	struct khl_cache_entry *next_free;
+	struct rbtree tree;
 	struct hlist_head ht[KHL_CACHE_HTSIZE];
 	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
 } cache;
@@ -902,6 +905,12 @@ static int gwc_receive(void)
 			ret_val = -1;
 	}
 	buffer_compact(*buff);
+	if(!buffer_remaining(*buff)) {
+		/* We made no forward progress? Trxy to fix it... */
+		buffer_flip(*buff);
+		buffer_skip(*buff);
+		buffer_compact(*buff);
+	}
 	return ret_val;
 }
 
@@ -1080,7 +1089,8 @@ static uint32_t cache_ht_hash(const union combo_addr *addr)
 {
 	uint32_t h;
 
-	if(addr->s_fam == AF_INET)
+// TODO: when IPv6 is common, change it
+	if(likely(addr->s_fam == AF_INET))
 		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, cache.ht_seed);
 	else
 		h = hthash_3words(addr->in6.sin6_addr.s6_addr32[0], addr->in6.sin6_addr.s6_addr32[3],
@@ -1095,7 +1105,8 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 	struct khl_cache_entry *e;
 
 // TODO: check for mapped ip addr?
-	if(addr->s_fam == AF_INET)
+// TODO: when IPv6 is common, change it
+	if(likely(addr->s_fam == AF_INET))
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & (KHL_CACHE_HTSIZE-1)], node)
 		{
@@ -1127,13 +1138,96 @@ static void cache_ht_add(struct khl_cache_entry *e)
 	hlist_add_head(&e->node, &cache.ht[h & (KHL_CACHE_HTSIZE-1)]);
 }
 
+static void cache_ht_del(struct khl_cache_entry *e)
+{
+	hlist_del(&e->node);
+}
+
+static inline int rbnode_cache_eq(struct khl_cache_entry *a, struct khl_cache_entry *b)
+{
+	int ret = a->e.when == b->e.when && a->e.na.s_fam == a->e.na.s_fam;
+	if(!ret)
+		return ret;
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->e.na.s_fam)) {
+		return a->e.na.in.sin_addr.s_addr == b->e.na.in.sin_addr.s_addr &&
+		       a->e.na.in.sin_port == b->e.na.in.sin_port;
+	} else {
+		return !!IN6_ARE_ADDR_EQUAL(&a->e.na.in6.sin6_addr, &b->e.na.in6.sin6_addr) &&
+		       a->e.na.in6.sin6_port == b->e.na.in6.sin6_port;
+	}
+}
+
+static inline int rbnode_cache_lt(struct khl_cache_entry *a, struct khl_cache_entry *b)
+{
+	int ret = a->e.when < b->e.when;
+	if(ret)
+		return ret;
+	ret = a->e.when > b->e.when;
+	if(ret)
+		return !ret;
+	ret = a->e.na.s_fam < b->e.na.s_fam;
+	if(ret)
+		return ret;
+	ret = a->e.na.s_fam > b->e.na.s_fam;
+	if(ret)
+		return !ret;
+
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->e.na.s_fam))
+	{
+		ret = a->e.na.in.sin_addr.s_addr < b->e.na.in.sin_addr.s_addr;
+		if(ret)
+			return ret;
+		ret = a->e.na.in.sin_addr.s_addr > b->e.na.in.sin_addr.s_addr;
+		if(ret)
+			return !ret;
+		return a->e.na.in.sin_port < b->e.na.in.sin_port;
+	}
+	else
+	{
+		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] < b->e.na.in6.sin6_addr.s6_addr32[0] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[1] < b->e.na.in6.sin6_addr.s6_addr32[1] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[2] < b->e.na.in6.sin6_addr.s6_addr32[2] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[3] < b->e.na.in6.sin6_addr.s6_addr32[3];
+		if(ret)
+			return ret;
+		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] > b->e.na.in6.sin6_addr.s6_addr32[0] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[1] > b->e.na.in6.sin6_addr.s6_addr32[1] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[2] > b->e.na.in6.sin6_addr.s6_addr32[2] ||
+		       a->e.na.in6.sin6_addr.s6_addr32[3] > b->e.na.in6.sin6_addr.s6_addr32[3];
+		if(ret)
+			return !ret;
+		return a->e.na.in6.sin6_port < b->e.na.in6.sin6_port;
+	}
+}
+
+static inline void rbnode_cache_cp(struct khl_cache_entry *dest, struct khl_cache_entry *src)
+{
+	memcpy(&dest->used, &src->used,
+	       sizeof(struct khl_cache_entry) - offsetof(struct khl_cache_entry, used));
+}
+
+RBTREE_MAKE_FUNCS(cache, struct khl_cache_entry, rb);
+
 void g2_khl_add(const union combo_addr *addr, time_t when)
 {
-	struct khl_cache_entry *e;
+	struct khl_cache_entry *e, *t;
 
 	/* check for bogus addresses */
 	if(unlikely(!combo_addr_is_public(addr)))
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+		logg_develd("addr %s is privat, not added\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)));
 		return;
+	}
+
+#if 0
+	{
+		char addr_buf[INET6_ADDRSTRLEN];
+		logg_develd("adding: %s, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)), (unsigned)when);
+	}
+#endif
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;
@@ -1142,23 +1236,47 @@ void g2_khl_add(const union combo_addr *addr, time_t when)
 	e = cache_ht_lookup(addr);
 	if(e)
 	{
+		logg_devel("found entry in ht\n");
 		/* entry newer? */
-		if(e->e.when > when)
+		if(e->e.when >= when)
 			goto out_unlock;
-// TODO: resort entry
+		if(!(e = rbtree_cache_remove(&cache.tree, e))) {
+			logg_devel("remove failed\n");
+			goto life_tree_error; /* something went wrong... */
+		}
 		e->e.when = when;
+		if(!rbtree_cache_insert(&cache.tree, e)) {
+			logg_devel("insert failed\n");
+			goto life_tree_error;
+		}
+		goto out_unlock;
+life_tree_error:
+		cache_ht_del(e);
+		khl_cache_entry_free(e);
 		goto out_unlock;
 	}
 
-// TODO: find oldest entry
-
-	e = khl_cache_entry_alloc();
+	t = rbtree_cache_lowest(&cache.tree);
+	if(t && t->e.when < when && KHL_CACHE_SIZE <= cache.num)
+	{
+		logg_devel("found older entry\n");
+		if(!(t = rbtree_cache_remove(&cache.tree, t)))
+			goto out_unlock; /* the tree is amies? */
+		cache_ht_del(t);
+		e = t;
+	}
+	else
+		e = khl_cache_entry_alloc();
 	if(!e)
 		goto out_unlock;
 
 	e->e.na = *addr;
 	e->e.when = when;
 
+	if(!rbtree_cache_insert(&cache.tree, e)) {
+		khl_cache_entry_free(e);
+		goto out_unlock;
+	}
 	cache_ht_add(e);
 
 out_unlock:
