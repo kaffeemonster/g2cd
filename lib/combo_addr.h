@@ -30,6 +30,7 @@
 # include <netinet/in.h>
 # include <arpa/inet.h>
 # include "other.h"
+# include "hthash.h"
 
 /*
  * Comboaddress to represent IPv4 & IPv6
@@ -49,7 +50,7 @@ union combo_addr
 static inline const char *combo_addr_print(const union combo_addr *src, char *dst, socklen_t cnt)
 {
 	return inet_ntop(src->s_fam,
-		AF_INET == src->s_fam ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
+		likely(AF_INET == src->s_fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
 		dst, cnt);
 }
 
@@ -71,12 +72,14 @@ static inline int combo_addr_read(const char *src, union combo_addr *dst)
 
 static inline in_port_t combo_addr_port(const union combo_addr *addr)
 {
-	return AF_INET == addr->s_fam ? addr->in.sin_port : addr->in6.sin6_port;
+// TODO: when IPv6 is common, change it
+	return likely(AF_INET == addr->s_fam) ? addr->in.sin_port : addr->in6.sin6_port;
 }
 
 static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 {
-	if(AF_INET == addr->s_fam)
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == addr->s_fam))
 		addr->in.sin_port = port;
 	else
 		addr->in6.sin6_port = port;
@@ -139,5 +142,20 @@ out:
 # undef SLASH16
 # undef SLASH32
 # undef IP_CMP
+
+static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed)
+{
+	uint32_t h;
+
+// TODO: when IPv6 is common, change it
+	if(likely(addr->s_fam == AF_INET))
+		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, seed);
+	else
+		h = hthash_3words(addr->in6.sin6_addr.s6_addr32[0], addr->in6.sin6_addr.s6_addr32[3],
+		                  addr->in6.sin6_port, seed);
+	return h;
+}
+
+
 
 #endif /* COMBO_ADDR_H */

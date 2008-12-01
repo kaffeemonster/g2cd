@@ -43,6 +43,7 @@
 #include "G2Packet.h"
 #include "G2PacketSerializer.h"
 #include "G2QHT.h"
+#include "G2KHL.h"
 #include "G2MainServer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
@@ -69,6 +70,7 @@ static bool empty_action_p(g2_connection_t *, g2_packet_t *, struct list_head *)
 static bool unimpl_action_p(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL_TS(g2_connection_t *, g2_packet_t *, struct list_head *);
+static bool handle_KHL_NH(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_KHL_CH(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_LNI(g2_connection_t *, g2_packet_t *, struct list_head *);
 static bool handle_LNI_FW(g2_connection_t *, g2_packet_t *, struct list_head *);
@@ -132,7 +134,7 @@ static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 {
 	[PT_TS] = handle_KHL_TS,
-	[PT_NH] = unimpl_action_p,
+	[PT_NH] = handle_KHL_NH,
 	[PT_CH] = handle_KHL_CH,
 };
 
@@ -287,8 +289,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 		child_p.more_bytes_needed = false;
 		child_p.packet_decode = CHECK_CONTROLL_BYTE;
 		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
-		if(!keep_decoding)
-		{
+		if(!keep_decoding) {
 			logg_packet(STDLF, "KHL", "broken child");
 			connec->flags.dismissed = true;
 			break;
@@ -336,61 +337,90 @@ static bool handle_KHL_TS(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 	time_t local_time;
 	foreign_time = local_time = local_time_now;
 
-	if(4 == buffer_remaining(source->data_trunk) || 8 == buffer_remaining(source->data_trunk))
+	if(unlikely(4 != buffer_remaining(source->data_trunk) &&
+	            8 != buffer_remaining(source->data_trunk))) {
+		logg_packet(STDLF, "/KHL/TS", "TS not 4 or 8 byte");
+		goto out;
+	}
+
+	/* fill the upper bit of time_t if we need more than the recvd 32 bit */
+	if(8 == sizeof(time_t))
+		foreign_time &= (time_t)0xFFFFFFFF00000000;
+	else
+		foreign_time = 0;
+
+	/* the most commen case 32-bit time_t and little endian (all the Win-Clients) */
+	if(likely(4 == buffer_remaining(source->data_trunk)))
 	{
-		/* fill the upper bit of time_t if we need more than the recvd 32 bit */
-		if(8 == sizeof(time_t) && 4 == buffer_remaining(source->data_trunk))
-			foreign_time &= (time_t)0xFFFFFFFF00000000;
-		else
-			foreign_time = 0;
-
-		/* the most commen case 32-bit time_t and little endian (all the Win-Clients) */
-		if(4 == buffer_remaining(source->data_trunk) && !source->big_endian)
-			foreign_time |= ((time_t)*buffer_start(source->data_trunk) & 0xFFu) |
-				((((time_t)*(buffer_start(source->data_trunk)+1)) & 0xFFu) << 8) |
-				((((time_t)*(buffer_start(source->data_trunk)+2)) & 0xFFu) << 16) |
-				((((time_t)*(buffer_start(source->data_trunk)+3)) & 0xFFu) << 24);
-		else
-		{
-			size_t shift = 0;
-
-			if(source->big_endian)
-			{
-				if(4 == buffer_remaining(source->data_trunk))
-					shift = 24;
-				else
-				{
-					logg_packet(STDLF, "/KHL", "TS with 8 byte! Ola, a 64-bit OS?");
-					/*
-					 * Lets try too cludge it together, if we also have a 64-bit OS,
-					 * everything will be fine, if not, we hopefully get the lower 32 bit,
-					 * and if we don't test at the moment of overflow in 2013 (or when ever)
-					 * it should work
-					 */
-					shift = 56;
-				}
-			}
-	
-			for(; buffer_remaining(source->data_trunk); source->data_trunk.pos++)
-			{
-				foreign_time |= ((((time_t)*buffer_start(source->data_trunk)) & 0xFFu) << shift);
-				if(!source->big_endian)
-					shift += 8;
-				else
-					shift -= 8;
-			}
-		}
-		logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
+		uint32_t t;
+		get_unaligned_endian(t, (uint32_t *)buffer_start(source->data_trunk),
+		                     source->big_endian);
+		foreign_time |= (time_t)t;
 	}
 	else
-		logg_packet(STDLF, "/KHL/TS", "TS not 4 or 8 byte");
+	{
+		uint64_t t;
+		logg_packet(STDLF, "/KHL", "TS with 8 byte! Ola, a 64-bit OS?");
+		/*
+		 * Lets try too cludge it together, if we also have a 64-bit OS,
+		 * everything will be fine, if not, we hopefully get the lower 32 bit,
+		 * and if we don't test at the moment of overflow in 2013 (or when ever)
+		 * it should work
+		 */
+		get_unaligned_endian(t, (uint64_t *)buffer_start(source->data_trunk),
+		                     source->big_endian);
+		foreign_time = (time_t)t;
+	}
+	logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
 
-	connec->time_diff = difftime(foreign_time, local_time);
+out:
+	connec->time_diff = (long)local_time - (long)foreign_time;
 	return false;
 }
 
-static bool handle_KHL_CH(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
+static bool handle_KHL_NH(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
 {
+	union combo_addr addr;
+	size_t rem = buffer_remaining(source->data_trunk);
+	uint16_t tmp_port;
+
+	if(6 != rem && 18 != rem) {
+		logg_packet(STDLF, "/KHL/NH", "NH not with IPv4 or IPv6 address");
+		return false;
+	}
+
+	if(source->is_compound)
+		logg_packet("/KHL/NH\twith child! len: %d\n", rem);
+
+	memset(&addr, 0, sizeof(addr));
+	/* we Assume network byte order for the IP */
+	if(6 == rem) {
+		addr.s_fam = AF_INET;
+		get_unaligned(addr.in.sin_addr.s_addr, (uint32_t *)buffer_start(source->data_trunk));
+		source->data_trunk.pos += sizeof(uint32_t);
+	} else {
+		addr.s_fam = AF_INET6;
+		memcpy(&addr.in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
+		source->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	/* load port and fix it for those, who sent it the wrong way round */
+	get_unaligned(tmp_port, (uint16_t *)buffer_start(source->data_trunk));
+	if(!source->big_endian)
+		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
+	combo_addr_set_port(&addr, tmp_port);
+	g2_khl_add(&addr, local_time_now, true);
+	return false;
+}
+
+static bool handle_KHL_CH(g2_connection_t * connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
+{
+	char *src = buffer_start(source->data_trunk);
+	size_t remaining = buffer_remaining(source->data_trunk);
+	union combo_addr addr;
+	time_t when;
+	uint16_t tmp_port;
+
 	/*
 	 * who thought of that shit???
 	 * "Hey, lets cram all kind of binary numbers which will /never/ change
@@ -401,11 +431,69 @@ static bool handle_KHL_CH(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), g2_p
 	 *	16	2	4	= 20 IPv6
 	 *	16	2	8	= 24 IPv6 + 64bit time_t
 	 *	4	2	8	= 14 64bit time_t
+	 *
+	 * and the docs say nothing about endianess...
+	 * looks like ip in net byte order, rest in host byte order
 	 */
-	logg_packet("/KHL/CH\tC: %s len: %d\n", source->is_compound ? "true" : "false",
-	            buffer_remaining(source->data_trunk));
-//	if(10 == buffer_remaining(source->data_trunk))
-//	 INET6_ADDRLEN
+	if(source->is_compound)
+		logg_packet("/KHL/CH\twith child! len: %d\n", remaining);
+
+	memset(&addr, 0, sizeof(addr));
+	if(8 == sizeof(time_t))
+		when = local_time_now & (time_t)0xFFFFFFFF00000000;
+	else
+		when = 0;
+	if(likely(10 == remaining))
+	{
+		uint32_t t;
+		addr.s_fam = AF_INET;
+		get_unaligned(addr.in.sin_addr.s_addr, (uint32_t *) src);
+		src += sizeof(uint32_t);
+		get_unaligned(tmp_port, (uint16_t *) src);
+		src += sizeof(uint16_t);
+		get_unaligned_endian(t, (uint32_t *) src, source->big_endian);
+		when |= (time_t)(t + connec->time_diff);
+	}
+	else if(20 == remaining)
+	{
+		uint32_t t;
+		addr.s_fam = AF_INET6;
+		memcpy(&addr.in6.sin6_addr.s6_addr, src, INET6_ADDRLEN);
+		src += INET6_ADDRLEN;
+		get_unaligned(tmp_port, (uint16_t *) src);
+		src += sizeof(uint16_t);
+		get_unaligned_endian(t, (uint32_t *) src, source->big_endian);
+		when |= (time_t)(t + connec->time_diff);
+	}
+	else if(24 == remaining)
+	{
+		uint64_t t;
+		addr.s_fam = AF_INET6;
+		memcpy(&addr.in6.sin6_addr.s6_addr, src, INET6_ADDRLEN);
+		src += INET6_ADDRLEN;
+		get_unaligned(tmp_port, (uint16_t *) src);
+		src += sizeof(uint16_t);
+		get_unaligned_endian(t, (uint64_t *) src, source->big_endian);
+		when = (time_t)(t + connec->time_diff);
+	}
+	else if(14 == remaining)
+	{
+		uint64_t t;
+		addr.s_fam = AF_INET;
+		get_unaligned(addr.in.sin_addr.s_addr, (uint32_t *) src);
+		src += sizeof(uint32_t);
+		get_unaligned(tmp_port, (uint16_t *) src);
+		src += sizeof(uint16_t);
+		get_unaligned_endian(t, (uint64_t *) src, source->big_endian);
+		when = (time_t)(t + connec->time_diff);
+	} else
+		goto out;
+
+	if(likely(!source->big_endian))
+		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
+	combo_addr_set_port(&addr, tmp_port);
+	g2_khl_add(&addr, when, false);
+out:
 	return false;
 }
 
@@ -560,30 +648,20 @@ static bool handle_LNI_QK(g2_connection_t *connec, GCC_ATTR_UNUSED_PARAM(g2_pack
 static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR_UNUSED_PARAM(struct list_head *, target))
 {
 	size_t rem = buffer_remaining(source->data_trunk);
-	uint16_t	tmp_port;
+	uint16_t tmp_port;
 
-	if(6 != rem && 18 != rem)
-	{
+	if(6 != rem && 18 != rem) {
 		logg_packet(STDLF, "/LNI/NA", "NA not an IPv4 or IPv6 address");
 		return false;
 	}
 
-	if(6 == rem)
-	{
+	/* We Assume network byte order for the IP */
+	if(6 == rem) {
 		connec->sent_addr.s_fam = AF_INET;
-		/* 
-		 * the addr comes in network byteorder over the wire, when we only load and store it,
-		 * result should be in network byteorder again.
-		 */
 		get_unaligned(connec->sent_addr.in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
-		source->data_trunk.pos += 4;
-	}
-	else
-	{
+		source->data_trunk.pos += sizeof(uint32_t);
+	} else {
 		connec->sent_addr.s_fam = AF_INET6;
-		/*
-		 * Assume network byte order
-		 */
 		memcpy(&connec->sent_addr.in6.sin6_addr.s6_addr,buffer_start(source->data_trunk), INET6_ADDRLEN);
 		source->data_trunk.pos += INET6_ADDRLEN;
 	}
@@ -598,7 +676,7 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, GCC_ATTR
 		logg_packet("/LNI/NA:\t%s:%hu\n", combo_addr_print(&connec->sent_addr,
 			addr_buf, sizeof(addr_buf)), ntohs(combo_addr_port(&connec->sent_addr)));
 	}
-	
+
 	return false;
 }
 
@@ -1069,4 +1147,4 @@ bool g2_packet_decide_spec(g2_connection_t *connec, struct list_head *target, g2
 }*/
 
 static char const rcsid_p[] GCC_ATTR_USED_VAR = "$Id: G2Packet.c,v 1.12 2004/12/18 18:06:13 redbully Exp redbully $";
-// EOF
+/* EOF */

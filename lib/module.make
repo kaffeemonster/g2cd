@@ -175,6 +175,7 @@ $(MPL)/my_bitops.o: $(MPL)/my_bitops.h $(MY_BITOPSSRC)
 $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h
+$(MPL)/combo_addr.h: $(MPL)/other.h $(MPL)/hthash.h
 $(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
 $(MPL)/x86/memxor.c: $(MPL)/x86/memxor_tmpl.c

@@ -83,7 +83,7 @@ typedef struct g2_connection
 
 	/* Internal States */
 	union combo_addr sent_addr;
-	double           time_diff;
+	long             time_diff;
 	struct
 	{
 		time_t        PI;

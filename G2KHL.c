@@ -56,7 +56,6 @@
 #include "lib/log_facility.h"
 #include "lib/combo_addr.h"
 #include "lib/hlist.h"
-#include "lib/hthash.h"
 #include "lib/rbtree.h"
 
 #define KHL_CACHE_SIZE 256
@@ -120,6 +119,7 @@ struct khl_cache_entry
 {
 	struct rbnode rb; /* keep first */
 	bool used; /* fill possible hole */
+	bool cluster;
 	struct hlist_node node;
 	struct khl_entry e;
 };
@@ -292,7 +292,7 @@ init_next:
 		struct khl_entry *e = (void *) buff;
 		name_len = fread(e, sizeof(*e), 1, khl_dump);
 		if(name_len)
-			g2_khl_add(&e->na, e->when);
+			g2_khl_add(&e->na, e->when, false);
 	} while(name_len);
 
 out:
@@ -663,7 +663,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 			 * this host is in the gwc cache since 'since' senconds.
 			 * Since hosts are short lived, we turn the wheel back in time.
 			 */
-			g2_khl_add(&a, lnow - since);
+			g2_khl_add(&a, lnow - since, false);
 		}
 		break;
 	case 'U':
@@ -1085,22 +1085,9 @@ static void khl_cache_entry_free(struct khl_cache_entry *e)
 	cache.num--;
 }
 
-static uint32_t cache_ht_hash(const union combo_addr *addr)
-{
-	uint32_t h;
-
-// TODO: when IPv6 is common, change it
-	if(likely(addr->s_fam == AF_INET))
-		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, cache.ht_seed);
-	else
-		h = hthash_3words(addr->in6.sin6_addr.s6_addr32[0], addr->in6.sin6_addr.s6_addr32[3],
-		                  addr->in6.sin6_port, cache.ht_seed);
-	return h;
-}
-
 static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 {
-	uint32_t h = cache_ht_hash(addr);
+	uint32_t h = combo_addr_hash(addr, cache.ht_seed);
 	struct hlist_node *n;
 	struct khl_cache_entry *e;
 
@@ -1134,7 +1121,7 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 
 static void cache_ht_add(struct khl_cache_entry *e)
 {
-	uint32_t h = cache_ht_hash(&e->e.na);
+	uint32_t h = combo_addr_hash(&e->e.na, cache.ht_seed);
 	hlist_add_head(&e->node, &cache.ht[h & (KHL_CACHE_HTSIZE-1)]);
 }
 
@@ -1210,7 +1197,7 @@ static inline void rbnode_cache_cp(struct khl_cache_entry *dest, struct khl_cach
 
 RBTREE_MAKE_FUNCS(cache, struct khl_cache_entry, rb);
 
-void g2_khl_add(const union combo_addr *addr, time_t when)
+void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 {
 	struct khl_cache_entry *e, *t;
 
@@ -1222,10 +1209,11 @@ void g2_khl_add(const union combo_addr *addr, time_t when)
 		return;
 	}
 
-#if 0
+#if 1
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
-		logg_develd("adding: %s, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)), (unsigned)when);
+		logg_develd("adding: %s:%u, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)),
+		            (unsigned)ntohs(combo_addr_port(addr)), (unsigned)when);
 	}
 #endif
 
@@ -1272,6 +1260,7 @@ life_tree_error:
 
 	e->e.na = *addr;
 	e->e.when = when;
+	e->cluster = cluster;
 
 	if(!rbtree_cache_insert(&cache.tree, e)) {
 		khl_cache_entry_free(e);
