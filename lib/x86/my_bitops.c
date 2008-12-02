@@ -28,6 +28,7 @@
 #include <string.h>
 #include "../other.h"
 #include "../log_facility.h"
+#include "../my_bitops.h"
 #include "x86_features.h"
 
 /*
@@ -199,10 +200,10 @@ static void identify_cpu(void)
 		 */
 		 /* distinguish 386 from 486, same trick for EFLAGS bit 18 */
 		if(is_486()) {
-			strcpy(our_cpu.vendor_str.s, "486?");
+			strlitcpy(our_cpu.vendor_str.s, "486?");
 			our_cpu.family = 4;
 		} else {
-			strcpy(our_cpu.vendor_str.s, "386??");
+			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
 		our_cpu.init_done = true;

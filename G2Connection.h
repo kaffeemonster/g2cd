@@ -175,6 +175,7 @@ typedef struct
 # define ENC_NONE_S        "none"
 # define ENC_DEFLATE_S     "deflate"
 # define ENC_LZO_S         "lzo"
+# define ENC_MAX_S           ENC_DEFLATE_S
 
 /* headerfields */
 # define ACCEPT_KEY        "Accept"

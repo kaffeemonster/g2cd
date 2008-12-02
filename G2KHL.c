@@ -57,6 +57,7 @@
 #include "lib/combo_addr.h"
 #include "lib/hlist.h"
 #include "lib/rbtree.h"
+#include "lib/my_bitops.h"
 
 #define KHL_CACHE_SIZE 256
 #define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
@@ -190,9 +191,9 @@ bool g2_khl_init(void)
 
 	name = alloca(name_len + 2);
 
-	strcpy(name, data_root_dir);
-	strcat(name, "/");
-	strcat(name, gwc_cache_fname);
+	buff = strpcpy(name, data_root_dir);
+	*buff++ = '/';
+	strpcpy(buff, gwc_cache_fname);
 
 	gwc_db = dbm_open(name, O_RDWR|O_CREAT, 00666);
 	if(!gwc_db)
@@ -329,7 +330,7 @@ static void gwc_clean(void)
 	act_gwc.addrinfo = NULL;
 	act_gwc.next_addrinfo = NULL;
 
-	if(0 > act_gwc.socket)
+	if(-1 != act_gwc.socket)
 		close(act_gwc.socket);
 	act_gwc.socket = -1;
 
@@ -408,15 +409,6 @@ retry:
 
 static bool gwc_resolv(void)
 {
-	static const char request_format[] =
-		"GET /%s?get=1&hostfile=1&net=gnutella2&client=" OWN_VENDOR_CODE "&version=" OUR_VERSION "&ping=1 HTTP/1.1\r\n"
-		"Connection: close\r\n"
-		"User-Agent: " OUR_UA "\r\n"
-		"Cache-control: no-cache\r\n"
-		"Accept: text/plain\r\n"
-		"Host: %s\r\n"
-		"\r\n";
-//		"Accept-Encoding: identity\r\n"
 	char *url, *node, *service, *path, *wptr;
 	struct addrinfo *res_res;
 	int ret_val;
@@ -469,13 +461,37 @@ static bool gwc_resolv(void)
 	}
 	act_gwc.next_addrinfo = act_gwc.addrinfo = res_res;
 
+#define HTTP_REQ_START \
+	"GET /"
+#define HTTP_REQ_MID \
+	"?get=1&hostfile=1&net=gnutella2&client=" OWN_VENDOR_CODE "&version=" OUR_VERSION "&ping=1 HTTP/1.1\r\n" \
+	"Connection: close\r\n" \
+	"User-Agent: " OUR_UA "\r\n" \
+	"Cache-control: no-cache\r\n" \
+	"Accept: text/plain\r\n" \
+	"Host: "
+#define HTTP_REQ_END \
+	"\r\n" \
+	"\r\n"
+//		"Accept-Encoding: identity\r\n"
 	/* because we have already extracted the foo, build request string */
 	act_gwc.request_string =
-		malloc(strlen(request_format) + 2 * strlen(node) + strlen(path) + 1);
+		malloc(str_size(HTTP_REQ_START) + str_size(HTTP_REQ_MID) +
+		       str_size(HTTP_REQ_END) + 2 * strlen(node) + strlen(path) + 1);
 	if(act_gwc.request_string)
-		sprintf(act_gwc.request_string, request_format, path, node);
-	else
+	{
+		char *cp_ret;
+		cp_ret = strplitcpy(act_gwc.request_string, HTTP_REQ_START);
+		cp_ret = strpcpy(cp_ret, path);
+		cp_ret = strplitcpy(cp_ret, HTTP_REQ_MID);
+		cp_ret = strpcpy(cp_ret, node);
+		cp_ret = strplitcpy(cp_ret, HTTP_REQ_END);
+		*cp_ret = '\0';
+	} else
 		ret_val = true; /* malloc fail qualifies as transient... */
+#undef HTTP_REQ_START
+#undef HTTP_REQ_MID
+#undef HHTP_REQ_END
 
 	free(url);
 	return !ret_val;
@@ -516,6 +532,8 @@ static int gwc_connect(void)
 	/* make sure address family is copied to the struct sockaddr field */
 	addr->s_fam = tai->ai_family;
 	combo_addr_set_port(addr, htons(act_gwc.port));
+
+	logg(LOGF_INFO, "Connecting to GWC \"%s\" for Hubs\n", act_gwc.data.url);
 
 	do {
 		errno = 0;
@@ -651,6 +669,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(!(*port && isdigit(*port)))
 				port = NULL;
 
+			memset(&a, 0, sizeof(a));
 			if(0 >= combo_addr_read(wptr, &a))
 				break; /* nothing to read */
 
@@ -919,7 +938,8 @@ bool g2_khl_tick(int *fd)
 	static enum khl_mnmt_states state = KHL_BOOT;
 	bool long_poll = false;
 
-	logg_develd("state: %s\n", khl_mnmt_states_names[state]);
+	if(KHL_IDLE != state)
+		logg_develd("state: %s\n", khl_mnmt_states_names[state]);
 
 	switch(state)
 	{
@@ -1023,7 +1043,7 @@ void g2_khl_end(void)
 		return;
 	}
 
-	fprintf(khl_dump, "%s", KHL_DUMP_IDENT);
+	fputs(KHL_DUMP_IDENT, khl_dump);
 
 	signature[0] = KHL_DUMP_ENDIAN_MARKER;
 	signature[1] = sizeof(struct khl_entry);
@@ -1035,6 +1055,8 @@ void g2_khl_end(void)
 		if(cache.entrys[i].used)
 			fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, khl_dump);
 	}
+	fclose(khl_dump);
+
 	if(act_gwc.data.url)
 		free((void *)(intptr_t)act_gwc.data.url);
 }
@@ -1209,11 +1231,11 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 		return;
 	}
 
-#if 1
+#ifdef DEBUG_DEVEL_OLD
 	{
 		char addr_buf[INET6_ADDRSTRLEN];
-		logg_develd("adding: %s:%u, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)),
-		            (unsigned)ntohs(combo_addr_port(addr)), (unsigned)when);
+		logg_develd_old("adding: %s:%u, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)),
+		                (unsigned)ntohs(combo_addr_port(addr)), (unsigned)when);
 	}
 #endif
 

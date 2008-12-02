@@ -28,24 +28,45 @@
 #define LIB_MY_BITOPS_H
 
 # include <sys/types.h>
+# include <string.h>
 # include "other.h"
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
-# if defined(I_LIKE_ASM) && (defined(__i386__) || defined(__x86_64__))
+# if defined(I_LIKE_ASM)
 #  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) extern x (*y) z GCC_ATTR_VIS("hidden")
 # else
 #  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) x y z GCC_ATTR_VIS("hidden")
 # endif
+# ifdef ADLER32_C
+LIB_MY_BITOPS_EXTRN(uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len));
+# endif
+LIB_MY_BITOPS_EXTRN_P(size_t, popcountst, (size_t n) GCC_ATTR_CONST);
+LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
 
 LIB_MY_BITOPS_EXTRN_P(void *, memxor, (void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN_P(void *, memand, (void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN_P(void *, memneg, (void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN_P(size_t, popcountst, (size_t n) GCC_ATTR_CONST);
-LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
-#ifndef HAVE_STRNLEN
+# ifndef HAVE_MEMPCPY
+LIB_MY_BITOPS_EXTRN(void *mempcpy(void *restrict dst, const void *restrict src, size_t len));
+#  define MEMPCPY_DEFINED
+# endif
+LIB_MY_BITOPS_EXTRN(char *strpcpy(char *restrict dst, const char *restrict src));
+LIB_MY_BITOPS_EXTRN(char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen));
+# ifndef HAVE_STRNLEN
 LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
-#define STRNLEN_DEFINED
-#endif
+#  define STRNLEN_DEFINED
+# endif
+
+# define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))
+# define strplitcpy(x, y)	(mempcpy((x), (y), str_size(y)))
+
+static inline void strreverse(char *begin, char *end)
+{
+	char tchar;
+
+	while(end > begin)
+		tchar = *end, *end-- = *begin, *begin++ = tchar;
+}
 
 struct test_cpu_feature
 {

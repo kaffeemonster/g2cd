@@ -54,6 +54,7 @@
 
 /* are we on a GNU/nonGNU-sys */
 #define HAVE_STRNLEN
+#define HAVE_MEMPCPY
 /* only select one or none of the following */
 #define HAVE_GNU_STRERROR_R
 /* Old Solaris does not have strerror_r, instaed strerror

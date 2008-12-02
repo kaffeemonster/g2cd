@@ -37,6 +37,7 @@
 # else
 #  define DYN_ARRAY_LEN 1
 # endif	/* __GNUC__ */
+# define restrict
 #else
 # define DYN_ARRAY_LEN
 #endif /* HAVE_C99 */
@@ -226,15 +227,15 @@ static __inline__ int inet_pton(int af, const char *src, void *dest)
 # endif /* HAVE_INET_ATON */
 #endif /* HAVE_INET_PTON */
 
-#ifndef HAVE_STRNLEN
+#if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
 /*
  * According to man-page a GNU-Extension, mumbel mumbel...
  * They are right, not on 5.7 Solaris
  */
 # include "lib/my_bitops.h"
-#endif /* HAVE_STRNLEN */
+#endif /* HAVE_STRNLEN || HAVE_MEMPCPY */
 
-/* 
+/*
  * if we are on a SMP-System (also HT) take a spinlock for
  * short locks, else a mutex, since our only Processor shouldn't
  * active spin-wait for itself

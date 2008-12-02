@@ -56,6 +56,7 @@
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
+#include "lib/itoa.h"
 
 #undef EVENT_SPACE
 #define EVENT_SPACE 8
@@ -66,7 +67,7 @@ static inline bool init_con_a(int *, union combo_addr *);
 static inline bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
-static inline bool initiate_g2(g2_connection_t *);
+static noinline bool initiate_g2(g2_connection_t *);
 /*
  * do not inline, we take a pointer of it, and when its called,
  * performance doesn't matter
@@ -668,12 +669,10 @@ static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_con
 /*
  * Helper for initiate_g2
  */
-#define my_mempcpy(x, y)	(memcpy((x), (y), str_size(y)))
-
 static inline bool abort_g2_500(g2_connection_t *to_con)
 {
 	if(str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n") < buffer_remaining(*to_con->send)) {
-		my_mempcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
+		strlitcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
 		to_con->send->pos += str_size(GNUTELLA_STRING " " STATUS_500 "\r\n\r\n");
 	}
 	to_con->flags.dismissed = true;
@@ -683,7 +682,7 @@ static inline bool abort_g2_500(g2_connection_t *to_con)
 static inline bool abort_g2_501(g2_connection_t *to_con)
 {
 	if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(*to_con->send)) {
-		my_mempcpy(buffer_start(*to_con->send), STATUS_501 "\r\n\r\n");
+		strlitcpy(buffer_start(*to_con->send), STATUS_501 "\r\n\r\n");
 		to_con->send->pos += str_size(STATUS_501 "\r\n\r\n");
 	}
 	to_con->flags.dismissed = true;
@@ -693,7 +692,7 @@ static inline bool abort_g2_501(g2_connection_t *to_con)
 static inline bool abort_g2_400(g2_connection_t *to_con)
 {
 	if(str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n") < buffer_remaining(*to_con->send)) {
-		my_mempcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
+		strlitcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
 		to_con->send->pos += str_size(GNUTELLA_STRING " " STATUS_400 "\r\n\r\n");
 	}
 	to_con->flags.dismissed = true;
@@ -717,7 +716,7 @@ static inline bool abort_g2_400(g2_connection_t *to_con)
  * moment, there is a good chance for major changes, thats why all this
  * is in such a shape, but at least, it works.
  */
-static inline bool initiate_g2(g2_connection_t *to_con)
+static noinline bool initiate_g2(g2_connection_t *to_con)
 {
 	size_t found = 0;
 	size_t old_pos = 0;
@@ -725,7 +724,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 	size_t search_state = 0;
 	size_t distance = 0;
 	size_t field_num = 0;
-	size_t pr_ch = 0;
+	char *cp_ret = NULL;
 	bool ret_val = false;
 	bool more_bytes_needed = false;
 	bool field_found = false;
@@ -784,7 +783,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 					logg_devel("\t------------------ Initiator\n");
 					logg_develd_old("\"%.*s\"\n", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
 					to_con->connect_state++;
-					break;					
+					break;
 				}
 				else if(!buffer_remaining(*to_con->recv)) /* End of Buffer? */
 				{
@@ -982,8 +981,8 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 				return abort_g2_400(to_con);
 		case BUILD_ANSWER:
 			/*
-			 * it should be our first comunication, and if someone set capacity right
-			 * everything will be fine
+			 * it should be our first comunication, and if someone
+			 * set capacity right everything will be fine
 			 */
 			buffer_clear(*to_con->send);
 #if 0
@@ -1016,7 +1015,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 // TODO: finer granularity of stepping for smaller sendbuffer?
 			/* could we place it all in our sendbuffer? */
 			if(str_size(HED_2_PART_1) < buffer_remaining(*to_con->send)) {
-				my_mempcpy(buffer_start(*to_con->send), HED_2_PART_1);
+				strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
 				to_con->send->pos += str_size(HED_2_PART_1);
 			} else {
 				/* if not there must be something very wrong -> go home */
@@ -1040,7 +1039,6 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			 * GOOD IDEA SHOULD DIE BY STEEL^w^w^w LIVE WITH THE CONSEQUENCES
 			 */
 			{
-				char addr_buf[INET6_ADDRSTRLEN];
 				union combo_addr local_addr;
 				socklen_t sin_size = sizeof(local_addr);
 
@@ -1053,24 +1051,29 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 					local_addr = AF_INET == to_con->remote_host.s_fam ?
 						server.settings.bind.ip4 : server.settings.bind.ip6;
 				}
-				if(!combo_addr_print(&local_addr, addr_buf, sizeof(addr_buf))) {
+				cp_ret =
+					combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
+					                   buffer_remaining(*to_con->send));
+				if(!cp_ret) {
 					/* we have a problem, that should not happen... */
 					logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
 					to_con->flags.dismissed = true;
 					return false;
 				}
+				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
-				pr_ch = (size_t)
-				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
-				         "%s:%hu\r\n" REMOTE_ADR_KEY ": ",
-				         addr_buf, ntohs(combo_addr_port(&local_addr))
-				);
-				if(pr_ch < buffer_remaining(*to_con->send))
-					to_con->send->pos += pr_ch;
-				else {
+				if(6 + str_size("\r\n" REMOTE_ADR_KEY ": ") >=
+				   buffer_remaining(*to_con->send)) {
+					/* no space for port and foo? */
 					to_con->flags.dismissed = true;
 					return false;
 				}
+
+				cp_ret = buffer_start(*to_con->send);
+				*cp_ret++ = ':';
+				cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&local_addr)));
+				cp_ret = strplitcpy(cp_ret,"\r\n" REMOTE_ADR_KEY ": ");
+				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			}
 
 			/* tell remote end from which ip we saw it comming */
@@ -1084,7 +1087,7 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			to_con->send->pos += strnlen(buffer_start(*to_con->send), buffer_remaining(*to_con->send));
 
 			if(str_size(HED_2_PART_3) < buffer_remaining(*to_con->send)) {
-				my_mempcpy(buffer_start(*to_con->send), HED_2_PART_3);
+				strlitcpy(buffer_start(*to_con->send), HED_2_PART_3);
 				to_con->send->pos += str_size(HED_2_PART_3);
 			} else {
 				to_con->flags.dismissed = true;
@@ -1094,51 +1097,57 @@ static inline bool initiate_g2(g2_connection_t *to_con)
 			/* if we have encoding, put in the keys */
 			if(ENC_NONE != to_con->encoding_out)
 			{
-				pr_ch = (size_t)
-				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
-					CONTENT_ENC_KEY ": %s\r\n",
-					KNOWN_ENCODINGS[to_con->encoding_out]->txt
-				);
-				if(pr_ch < buffer_remaining(*to_con->send))
-					to_con->send->pos += pr_ch;
-				else {
+				if((str_size(CONTENT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
+				   buffer_remaining(*to_con->send))
+				{
+					cp_ret = strplitcpy(buffer_start(*to_con->send), CONTENT_ENC_KEY ": ");
+					cp_ret = strpcpy(cp_ret, KNOWN_ENCODINGS[to_con->encoding_out]->txt);
+					*cp_ret++ = '\r'; *cp_ret++ = '\n';
+					to_con->send->pos += cp_ret - buffer_start(*to_con->send);
+				} else {
 					to_con->flags.dismissed = true;
 					return false;
 				}
 			}
 			if(ENC_NONE != to_con->encoding_in)
 			{
-				pr_ch = (size_t)
-				snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
-					ACCEPT_ENC_KEY ": %s\r\n",
-					KNOWN_ENCODINGS[to_con->encoding_in]->txt
-				);
-				if(pr_ch < buffer_remaining(*to_con->send))
-					to_con->send->pos += pr_ch;
-				else {
+				if((str_size(ACCEPT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
+				   buffer_remaining(*to_con->send))
+				{
+					cp_ret = strplitcpy(buffer_start(*to_con->send), ACCEPT_ENC_KEY ": ");
+					cp_ret = strpcpy(cp_ret, KNOWN_ENCODINGS[to_con->encoding_in]->txt);
+					*cp_ret++ = '\r'; *cp_ret++ = '\n';
+					to_con->send->pos += cp_ret - buffer_start(*to_con->send);
+				} else {
 					to_con->flags.dismissed = true;
 					return false;
 				}
 			}
 
 			/* and the rest of the header */
-			pr_ch = (size_t)
-			snprintf(buffer_start(*to_con->send), buffer_remaining(*to_con->send),
-				UPEER_KEY ": %s\r\n"
-				UPEER_NEEDED_KEY ": %s\r\n"
-				HUB_KEY ": %s\r\n"
-				HUB_NEEDED_KEY ": %s\r\n\r\n",
-				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
-				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE,
-				(server.status.our_server_upeer) ? G2_TRUE : G2_FALSE,
-				(server.status.our_server_upeer_needed) ? G2_TRUE : G2_FALSE
-			);
-			if(pr_ch < buffer_remaining(*to_con->send))
-				to_con->send->pos += pr_ch;
-			else {
+			if((str_size(UPEER_KEY) + str_size(UPEER_NEEDED_KEY) +
+			    str_size(HUB_KEY) + str_size(HUB_NEEDED_KEY) + 4 * 9 + 2) <=
+			   buffer_remaining(*to_con->send))
+			{
+				cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": ");;
+				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
+				                    G2_TRUE : G2_FALSE);
+				cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": ");
+				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer_needed ?
+				                    G2_TRUE : G2_FALSE);
+				cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": ");
+				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
+				                    G2_TRUE : G2_FALSE);
+				cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": ");
+				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer_needed ?
+				                    G2_TRUE : G2_FALSE);
+				*cp_ret++ = '\r'; *cp_ret++ = '\n';
+				*cp_ret++ = '\r'; *cp_ret++ = '\n';
+				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
+			} else {
 				to_con->flags.dismissed = true;
 				return false;
-			}	
+			}
 
 			logg_devel("\t------------------ Response\n");
 #if 0

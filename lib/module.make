@@ -123,26 +123,37 @@ LIBSRCS = \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
 	$(MPL)/strnlen.c \
+	$(MPL)/mempcpy.c \
+	$(MPL)/strpcpy.c \
+	$(MPL)/strnpcpy.c \
+	$(MPL)/adler32.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/hzp.c \
 	$(MPL)/backtrace.c \
 	$(MPL)/atomic.c
 
-# base objectfiles
-LIBOBJS = \
+BITOPOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/memxor.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
+	$(MPL)/strnlen.o \
+	$(MPL)/mempcpy.o \
+	$(MPL)/strpcpy.o \
+	$(MPL)/strnpcpy.o \
+	$(MPL)/adler32.o \
+	$(MPL)/my_bitops.o
+
+# base objectfiles
+LIBOBJS = \
+	$(BITOPOBJS) \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/hzp.o \
 	$(MPL)/backtrace.o \
-	$(MPL)/atomic.o \
-	$(MPL)/strnlen.o \
-	$(MPL)/my_bitops.o
+	$(MPL)/atomic.o
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a
@@ -157,21 +168,21 @@ $(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 $(LIBCOMMON)($(LIBOBJS)): arflock
 
 # Dependencies
-$(MPL)/flsst.o $(MPL)/popcountst.o $(MPL)/memxor.o $(MPL)/memand.o $(MPL)/memneg.o $(MPL)/strnlen.o: $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
+$(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
-$(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h G2MainServer.h
+$(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
-$(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h config.h
+$(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)
 $(MPL)/my_bitops.h: $(MPL)/other.h
-$(MPL)/my_bitops.o: $(MPL)/my_bitops.h $(MY_BITOPSSRC)
+$(MPL)/my_bitops.o: $(MY_BITOPSSRC)
 $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h

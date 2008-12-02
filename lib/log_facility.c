@@ -41,6 +41,7 @@
 #include "../G2MainServer.h"
 #include "log_facility.h"
 #include "sec_buffer.h"
+#include "itoa.h"
 
 #define LOG_TIME_MAXLEN 128
 #define logg_int_pos(x, y) \
@@ -188,7 +189,7 @@ static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max
 	buffer[0] = '\0';
 
 	if(!localtime_r(&time_now_val, &time_now)) {
-		strcpy(buffer, "<Error breaking down time> ");
+		strlitcpy(buffer, "<Error breaking down time> ");
 		return str_size("<Error breaking down time> ");
 	}
 
@@ -205,19 +206,11 @@ static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max
 	 */
 	/* Not a NUL byte at beginning? then it must be an error */
 	if('\0' != buffer[0]) {
-		strcpy(buffer, "<Error stringifying date> ");
+		strlitcpy(buffer, "<Error stringifying date> ");
 		return str_size("<Error stringifying date> ");
 	}
 
 	return 0;
-}
-
-static void strreverse(char *begin, char *end)
-{
-	char tchar;
-
-	while(end > begin)
-		tchar = *end, *end-- = *begin, *begin++ = tchar;
 }
 
 #define STRERROR_R_SIZE 512
@@ -262,40 +255,36 @@ static int logg_internal(const enum loglevel level,
 		 */
 		do
 		{
-			const char *wptr;
 			char *sptr, *stmp, *rstart;
 			size_t remaining;
-			unsigned tline;
 
 			stmp = sptr = buffer_start(*logg_buff);
 			remaining = buffer_remaining(*logg_buff);
-			for(wptr = file; remaining && *wptr; sptr++, wptr++, remaining--)
-				*sptr = *wptr;
-			if(unlikely(*wptr || remaining < 7))
+			rstart = strnpcpy(sptr, file, remaining);
+			remaining -= rstart - sptr;
+			if(unlikely(remaining < 7))
 				goto realloc;
+			sptr = rstart;
 
 			*sptr++ = ':';
 			remaining--;
-			for(wptr = func; remaining && *wptr; sptr++, wptr++, remaining--)
-				*sptr = *wptr;
-			if(unlikely(*wptr || remaining < 7))
+			rstart = strnpcpy(sptr, func, remaining);
+			remaining -= rstart - sptr;
+			if(unlikely(remaining < 7))
 				goto realloc;
+			sptr = rstart;
 
 			*sptr++ = '(';
 			*sptr++ = ')';
 			*sptr++ = '@';
 			remaining -= 3;
-			tline = line;
-			rstart = sptr;
-			do {
-				*sptr++ = (tline % 10) + '0';
-				tline /= 10;
-			} while(--remaining && tline);
-
-			if(unlikely(remaining < 2 || tline))
+			rstart = untoa(sptr, remaining, line);
+			if(unlikely(!rstart))
 				goto realloc;
-
-			strreverse(rstart, sptr - 1);
+			remaining -= rstart - sptr;
+			if(unlikely(remaining < 2))
+				goto realloc;
+			sptr = rstart;
 			*sptr++ = ':';
 			*sptr++ = ' ';
 			logg_buff->pos = sptr - stmp;
@@ -402,12 +391,17 @@ realloc:
 				logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
 			else
 			{
-				if(EINVAL == errno)
-					strcpy(buffer_start(*logg_buff), "Unknown errno value!"); logg_buff->pos += str_size("Unknown errno value!");
-				else if(ERANGE == errno)
-					strcpy(buffer_start(*logg_buff), "errno msg to long for buffer!"); logg_buff->pos += str_size("errno msg to long for buffer!"); 
-				else
-					strcpy(buffer_start(*logg_buff), "failure while retrieving errno msg!"); logg_buff->pos += str_size("failure while retrieving errno msg!");
+				char *bs = buffer_start(*logg_buff);
+				if(EINVAL == errno) {
+					strlitcpy(bs, "Unknown errno value!");
+					logg_buff->pos += str_size("Unknown errno value!");
+				} else if(ERANGE == errno) {
+					strlitcpy(bs, "errno msg to long for buffer!");
+					logg_buff->pos += str_size("errno msg to long for buffer!");
+				} else {
+					strlitcpy(bs, "failure while retrieving errno msg!");
+					logg_buff->pos += str_size("failure while retrieving errno msg!");
+				}
 			}
 #endif
 		}

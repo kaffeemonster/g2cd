@@ -138,7 +138,7 @@ CFLAGS += $(ARCH_FLAGS)
 #	this hopefully makes compilation faster, gcc-specific?
 CFLAGS += -pipe
 #CFLAGS += -save-temps
-CFLAGS += -g3 -pg
+CFLAGS += -g3 # -pg
 
 #
 # Optimisation
@@ -186,7 +186,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1 -funit-at-a-time
+#OPT_FLAGS = -O2
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -225,7 +225,7 @@ LDLIBS = $(LDLIBS_BASE) -lz
 #	Linking-Flags
 #
 #	Hopefully the linker knows somehting about this
-LDFLAGS = -g -pg
+LDFLAGS = -g # -pg
 LDFLAGS += -Wl,-O1
 LDFLAGS += -Wl,--sort-common
 LDFLAGS += -Wl,--enable-new-dtags
@@ -725,7 +725,7 @@ data.o: sbox.bin bin2o
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
 G2Connection.o: G2Connection.h G2QHT.h lib/recv_buff.h lib/atomic.h lib/hzp.h
@@ -733,7 +733,7 @@ G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
-G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h
+G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h

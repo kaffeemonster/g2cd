@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -90,6 +90,7 @@ void backtrace_init(void)
 # endif
 /* Own */
 # include "log_facility.h"
+# include "itoa.h"
 
 static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 {
@@ -101,12 +102,15 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 	{
 		int j;
 
-		buf += sprintf(buf, "%p:  ", addr);
+		buf = ptoa(buf, addr);
+		*buf++ = ':'; *buf++ = ' ';
 		for(j = 0; j < 2; j++)
 		{
 			int k = 0;
-			for(; k < 8; k++)
-				buf += sprintf(buf, "%02X ", (unsigned int)addr[k] & 0xFF);
+			for(; k < 8; k++) {
+				buf = utoXa_0fix(buf, (unsigned int)addr[k] & 0xFF, 2);
+				*buf++ = ' ';
+			}
 			*buf++ = ' ';
 		}
 		*buf++ = '\t';
@@ -156,10 +160,10 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 We crashed hard!!! Please fasten your seat belts...\n\
 We will now try scary things to aid debuging the situation.\n\
 (you may see unrelated program output spilling out of buffers)\n"
+
 	write(stderrfd, DEATHSTR_1, str_size(DEATHSTR_1));
 	/* lock out the other threads, if another one apears, simply deadlock */
-	if(SIGSEGV == signr && critical)
-	{
+	if(SIGSEGV == signr && critical) {
 		/* maybe we caught a sigsegv in our own sighandler, try to resume */
 		siglongjmp(catch_sigsegv, 666);
 	}
@@ -259,46 +263,60 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		pthread_mutex_unlock(&bt_mutex);
 		return;
 	}
-	ret_val = sprintf(path, "\n\n[%u:%u]\n%s\nWhy: %s (%i)\n",
-			(unsigned) getpid(),
+	wptr = utoa(strplitcpy(path, "\n\n["), (unsigned)getpid());
+	*wptr++ = ':';
+	wptr = utoa(wptr,
 # ifdef __linux__
-			(unsigned) syscall(__NR_gettid),
+	            (unsigned) syscall(__NR_gettid)
 # else
-			0,
+	             0
 # endif
-			osl, isl, si->si_code);
-	write(stderrfd, path, ret_val);
+	);
+	*wptr++ = ']'; *wptr++ = '\n';
+	wptr = strpcpy(strplitcpy(strpcpy(wptr, osl), "\nWhy: "), isl);
+	*wptr++ = ' '; *wptr++ = '(';
+	wptr = itoa(wptr, si->si_code);
+	*wptr++ = ')'; *wptr++ = '\n';
+	write(stderrfd, path, wptr - path);
 	/* errno set? */
-	if(si->si_errno)
-	{
-		ret_val = sprintf(path, "Errno: %i\n", si->si_errno);
-		write(stderrfd, path, ret_val);
+	if(si->si_errno) {
+		wptr = itoa(strplitcpy(path, "Errno: "), si->si_errno);
+		*wptr++ = '\n';
+		write(stderrfd, path, wptr - path);
 	}
 
 	/* Dump registers, a better dump would be plattformspecific */
-	wptr = path + sprintf(path, "\nRegisters:\n");
+	wptr = strplitcpy(path, "\nRegisters:\n");
 	for(i = 0; i < NGREG; i++)
+	{
+		*wptr++ = '[';
+		wptr = strplitcpy(itoa_sfix(wptr, i, 3), "]: 0x");
 # if defined __powerpc__ || defined __powerpc64__
 /* whoever made the powerpc-linux-gnu header...
  * I mean, an old sun an a new Linux i386 have it in sync, afaik only ppc, gnarf
  */
 #  if __WORDSIZE == 32
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.uc_regs->gregs[i]);
+		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.uc_regs->gregs[i], 16);
 #  else
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.gp_regs[i]);
-# endif
+		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.gp_regs[i], 16);
+#  endif
 # else
-		wptr += sprintf(wptr, "[% 3i]: 0x%016lX\n", i, (unsigned long)uc->uc_mcontext.gregs[i]);
+		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.gregs[i], 16);
 # endif
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
-	
+		*wptr++ = '\n';
+	}
+	write(stderrfd, path, wptr - path);
+
 	/* Stackinfo */
-	ret_val = sprintf(path, "Stack ref:\t0x%016lX\tsize: %lu\tflags: %i\n",
-			(unsigned long) uc->uc_stack.ss_sp,
-			(unsigned long) uc->uc_stack.ss_size,
-			uc->uc_stack.ss_flags);
-	write(stderrfd, path, ret_val);
+	wptr = strplitcpy(path, "Stack ref:\t0x");
+	wptr = ultoXa_0fix(wptr, (unsigned long) uc->uc_stack.ss_sp, 16);
+	wptr = strplitcpy(wptr, "\tsize: ");
+	wptr = ultoa(wptr, (unsigned long)uc->uc_stack.ss_size);
+	wptr = strplitcpy(wptr, "\tflags: ");
+	wptr = itoa(wptr, uc->uc_stack.ss_flags);
+	*wptr++ = '\n';
+	write(stderrfd, path, wptr - path);
+
 	wptr = path;
 	if(SIGSEGV != signr && uc->uc_stack.ss_sp)
 	{
@@ -312,18 +330,18 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		critical = 0; 
 	}
 	*wptr++= '\n'; *wptr++ = '\0';
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
+	write(stderrfd, path, wptr - path);
 	
 	/* whats at the memref */
-	ret_val = sprintf(path, "Memory ref:\t0x%016lX\n", (unsigned long)si->si_addr);
-	write(stderrfd, path, ret_val);
+	wptr = ultoXa_0fix(strplitcpy(path, "Memory ref:\t0x"), (unsigned long)si->si_addr, 16);
+	*wptr++ = '\n';
+	write(stderrfd, path, wptr - path);
+
 	wptr = path;
 	if(SIGSEGV != signr && si->si_addr)
 	{
 		/* blaerch, catch a sigsegv in our own signalhandler, memref can be bogus */
-		if(!sigsetjmp(catch_sigsegv, 0))
-		{
+		if(!sigsetjmp(catch_sigsegv, 0)) {
 			wptr = path;
 			critical = 1;
 			wptr = my_crashdump(wptr, (unsigned char *)si->si_addr, 8);
@@ -331,51 +349,39 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		critical = 0;
 	}
 	*wptr++= '\n'; *wptr++ = '\0';
-	ret_val = wptr - path;
-	write(stderrfd, path, ret_val);
+	write(stderrfd, path, wptr - path);
 
 	fflush(NULL);
 
 	/* Now get the real bt */
 # define DEATHSTR_31 "\ntrying to get backtrace...\n"
 	write(stderrfd, DEATHSTR_31, str_size(DEATHSTR_31));
-	strcpy(path, DEBUG_CMD);
+	wptr = strplitcpy(path, DEBUG_CMD);
+	ret_val = 0;
+# ifndef __sun__
+	ret_val = readlink("/proc/self/exe", wptr, path + (sizeof(path)-1) - wptr);
+# endif
+	if(-1 != ret_val)
 	{
-		wptr = path + str_size(DEBUG_CMD);
-		ret_val = 0;
+		wptr += ret_val;
+		*wptr++ = ' ';
+		wptr = itoa(wptr, (int)getpid());
 # ifndef __sun__
-		ret_val = readlink("/proc/self/exe", wptr, path + (sizeof(path)-1) - wptr);
-# endif
-		if(-1 != ret_val)
-		{
-			wptr += ret_val;
-			ret_val = snprintf(wptr, path + (sizeof(path)-1) - wptr,
-# ifndef __sun__
-					" %d ",
+		*wptr++ = ' ';
 # else
-					" %d\n",
+		*wptr++ = '\n';
 # endif
-					(int)getpid());
-
-			if(ret_val < path + (sizeof(path)-1) - wptr)
-			{
-				wptr += ret_val;
 # ifndef __sun__
-				ret_val = snprintf(wptr, path + (sizeof(path)-1) - wptr,
-						"<<EOF\n%sEOF\n", DEBUG_CMDS);
-				if(ret_val < path + (sizeof(path)-1) - wptr)
-					wptr += ret_val;
-				else
-					ret_val = -1;
+		if(str_size("<<EOF\n"DEBUG_CMDS"EOF\n") <=
+		   (unsigned)(path + (sizeof(path)-1) - wptr))
+			wptr = strplitcpy(wptr, "<<EOF\n" DEBUG_CMDS "EOF\n");
+		else
+			ret_val = -1;
 # endif
-			}
-			else
-				ret_val = -1;
-		}
-		*wptr = '\0';
 	}
+	*wptr = '\0';
 
-	write(stderrfd, path, strlen(path));
+	write(stderrfd, path, wptr - path);
 #define DEATHSTR_32 \
 	"-------------- start of backtrace --------------\n"
 	write(stderrfd, DEATHSTR_32, str_size(DEATHSTR_32));

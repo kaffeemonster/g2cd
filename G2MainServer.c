@@ -224,7 +224,7 @@ int main(int argc, char **args)
 	{
 		int num_poll = poll(sock_poll,
 				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
-				long_poll ? 11000 : 1100);
+				long_poll ? 60300 : 1100);
 		switch(num_poll)
 		{
 		/* Normally: see what has happened */
@@ -252,7 +252,7 @@ int main(int argc, char **args)
 			{
 				extra_fd = -1;
 				num_poll = hzp_scan(NORM_HZP_THRESHOLD);
-				logg_develd("HZP reclaimed chunks: %i\n", num_poll);
+				logg_develd_old("HZP reclaimed chunks: %i\n", num_poll);
 				long_poll = g2_khl_tick(&extra_fd);
 				sock_poll[THREAD_SUM_COM].fd = extra_fd;
 				sock_poll[THREAD_SUM_COM].events = POLLIN|POLLERR|POLLHUP;

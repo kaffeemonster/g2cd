@@ -26,6 +26,8 @@
 
 #ifndef LIB_COMBO_ADDR_H
 # define LIB_COMBO_ADDR_H
+# include <stdbool.h>
+# include <string.h>
 # include <sys/socket.h>
 # include <netinet/in.h>
 # include <arpa/inet.h>
@@ -52,6 +54,17 @@ static inline const char *combo_addr_print(const union combo_addr *src, char *ds
 	return inet_ntop(src->s_fam,
 		likely(AF_INET == src->s_fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
 		dst, cnt);
+}
+
+static inline char *combo_addr_print_c(const union combo_addr *src, char *dst, socklen_t cnt)
+{
+	const char *wptr;
+	wptr = inet_ntop(src->s_fam,
+		likely(AF_INET == src->s_fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
+		dst, cnt);
+	if(wptr)
+		return dst + strnlen(wptr, cnt);
+	return NULL;
 }
 
 static inline int combo_addr_read(const char *src, union combo_addr *dst)
@@ -90,7 +103,7 @@ static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 # define SLASH16 htonl(0xFFFF0000)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (htonl(b) == ((a) & (m)))
-static inline int combo_addr_is_public(const union combo_addr *addr)
+static inline bool combo_addr_is_public(const union combo_addr *addr)
 {
 	in_addr_t a;
 
@@ -99,15 +112,15 @@ static inline int combo_addr_is_public(const union combo_addr *addr)
 	{
 		const struct in6_addr *a6 = &addr->in6.sin6_addr;
 		if(IN6_IS_ADDR_UNSPECIFIED(a6))
-			return 0;
+			return false;
 		if(IN6_IS_ADDR_LOOPBACK(a6))
-			return 0;
+			return false;
 		if(IN6_IS_ADDR_MULTICAST(a6))
-			return 0;
+			return false;
 		if(IN6_IS_ADDR_LINKLOCAL(a6))
-			return 0;
+			return false;
 		if(IN6_IS_ADDR_SITELOCAL(a6))
-			return 0;
+			return false;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
 		   IN6_IS_ADDR_V4COMPAT(a6))
@@ -119,23 +132,23 @@ static inline int combo_addr_is_public(const union combo_addr *addr)
 		a = addr->in.sin_addr.s_addr;
 
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8 */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0xA0000000, SLASH08)) /* 010.000.000.000/8 */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8 */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
-		return 0;
+		return false;
 	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16 */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16 */
-		return 0;
+		return false;
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
-		return 0;
+		return false;
 out:
-	return 1;
+	return true;
 }
 # undef SLASH04
 # undef SLASH08
