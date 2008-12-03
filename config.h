@@ -29,7 +29,11 @@
 /* can we have dyn arrays? */
 #define HAVE_C99
 
-/* do we have IPv6 */
+/* do we have IPv6 and other net stuff */
+#define HAVE_SA_FAMILY_T
+#define HAVE_IN_PORT_T
+#define HAVE_SOCKLEN_T
+#define HAVE_IPV6
 #define HAVE_INET6_ADDRSTRLEN
 #define HAVE_INET_NTOP
 #define HAVE_INET_PTON

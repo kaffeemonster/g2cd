@@ -739,24 +739,24 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 		{
 	/* at this point we need at least the first line */
 		case UNCONNECTED:
-			if((str_size(GNUTELLA_CONNECT_STRING) + 2) > buffer_remaining(*to_con->recv)) {
+			if(unlikely((str_size(GNUTELLA_CONNECT_STRING) + 2) > buffer_remaining(*to_con->recv))) {
 				more_bytes_needed = true;
 				break;
 			}
 			/* let's see if we got the right string */
-			if(!strncmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING, str_size(GNUTELLA_CONNECT_STRING)))
+			if(likely(!strncmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING, str_size(GNUTELLA_CONNECT_STRING))))
 				to_con->recv->pos += str_size(GNUTELLA_CONNECT_STRING);
 			else
 				return abort_g2_501(to_con);
 
 			/* CR? */
-			if('\r' == *buffer_start(*to_con->recv))
+			if(likely('\r' == *buffer_start(*to_con->recv)))
 				to_con->recv->pos++;
 			else
 				return abort_g2_501(to_con);
 
 			/* LF? */
-			if('\n' == *buffer_start(*to_con->recv)) {
+			if(likely('\n' == *buffer_start(*to_con->recv))) {
 				to_con->recv->pos++;
 				to_con->connect_state++;
 			} else
@@ -764,7 +764,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 // TODO: Use more std.-func.(strcspn, strchr, strstr), but problem: we are not working with propper strings, foreign input!
 	/* wait till we got the whole header */
 		case HAS_CONNECT_STRING:
-			if(!buffer_remaining(*to_con->recv)) {
+			if(unlikely(!buffer_remaining(*to_con->recv))) {
 				more_bytes_needed = true;
 				break;
 			}
@@ -785,7 +785,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					to_con->connect_state++;
 					break;
 				}
-				else if(!buffer_remaining(*to_con->recv)) /* End of Buffer? */
+				else if(unlikely(!buffer_remaining(*to_con->recv))) /* End of Buffer? */
 				{
 					/* Header not to long (someone DoS us?) */
 					if(MAX_HEADER_LENGTH > (to_con->recv->limit - old_pos))
@@ -803,7 +803,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	/* Now the header is complete, we can search it */
 		case SEARCH_CAPS:
 			old_pos = to_con->recv->pos;
-			while(buffer_remaining(*to_con->recv))
+			while(likely(buffer_remaining(*to_con->recv)))
 			{
 				switch(search_state)
 				{
@@ -857,11 +857,11 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 							}
 						}
 
-						if(!field_found) {
+						if(unlikely(!field_found)) {
 							logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
 								(int) real_distance, buffer_start(*to_con->recv));
 						} else {
-							if(NULL == KNOWN_HEADER_FIELDS[field_num]->action) {
+							if(unlikely(NULL == KNOWN_HEADER_FIELDS[field_num]->action)) {
 								logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
 									(int) real_distance, buffer_start(*to_con->recv));
 							} else {

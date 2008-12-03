@@ -173,60 +173,6 @@
 # define prefetchw_nt(x)	do { } while(0)
 #endif
 
-/* 
- * since IPv6 is in "heavy deployment", they should not suddenly
- * change the addr len...
- */
-#define INET6_ADDRLEN 16
-
-#ifndef HAVE_INET6_ADDRSTRLEN
-/*
- * This buffersize is needed, but we don't have it everywere, even on Systems
- * that claim to be IPv6 capable...
- */
-# define INET6_ADDRSTRLEN 46
-#endif /* HAVE_INET6_ADDRSTRLEN */
-
-#ifndef HAVE_INET_NTOP
-/*
- * const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
- * for cygwin & 5.7 solaris
- * Wuerg-Around
- */
-# include <sys/socket.h>
-# include <netinet/in.h>
-# include <arpa/inet.h>
-# include <string.h>
-# define inet_ntop(a, b, c, d) strncpy(c, inet_ntoa((*(b))), d)
-#endif /* HAVE_INET_NTOP */
-
-#ifndef HAVE_INET_PTON
-/*
- * static __inline__ int inet_pton(int af, const char *src, void *dst);
- * more Wuerg-Around
- */
-# include <sys/socket.h>
-# include <netinet/in.h>
-# include <arpa/inet.h>
-# ifndef	HAVE_INET_ATON	/* for really stupid systems */
-static __inline__ int inet_pton(int af, const char *src, void *dest)
-{
-	unsigned long result = inet_addr(src);
-	af = af; /* to make compiler happy */
-
-	if((unsigned long)-1 == result)
-		return -1;
-	
-	if(dest)
-		((struct in_addr *)dest)->s_addr = result;
-
-	return 1;
-}
-# else	/* for cygwin and solaris */
-#  define inet_pton(a, b, c) inet_aton(b, c)
-# endif /* HAVE_INET_ATON */
-#endif /* HAVE_INET_PTON */
-
 #if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
 /*
  * According to man-page a GNU-Extension, mumbel mumbel...
@@ -262,7 +208,7 @@ typedef void (*sighandler_t)(int);
 # endif
 #endif
 
-#ifdef HAVE_STDINT_H
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || defined(HAVE_STDINT_H)
 # include <stdint.h>
 #else
 # include <inttypes.h>

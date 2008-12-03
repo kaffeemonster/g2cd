@@ -1246,7 +1246,6 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 	e = cache_ht_lookup(addr);
 	if(e)
 	{
-		logg_devel("found entry in ht\n");
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
