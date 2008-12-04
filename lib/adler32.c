@@ -6,6 +6,12 @@
 
 /* @(#) $Id$ */
 
+/*
+ * This is not the original adler32.c from the zlib distribution,
+ * but a slightly modified version. If you are looking for the
+ * original, please go to zlib.net.
+ */
+
 #define ADLER32_C
 #include "../config.h"
 #include "other.h"

@@ -135,7 +135,15 @@ _G2MAIN_EXTRNVAR(struct
 		} status;
 } server);
 
+#ifdef HAVE___THREAD
 _G2MAIN_EXTRNVAR(__thread time_t local_time_now);
+#else
+/*
+ * no tls? let the threads race against each other,
+ * nothing spectacular should happen.
+ */
+_G2MAIN_EXTRNVAR(time_t local_time_now);
+#endif
 
 static always_inline int get_act_loglevel(void)
 {

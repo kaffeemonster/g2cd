@@ -28,7 +28,8 @@
 # include "my_bitops.h"
 # include "other.h"
 
-# define HEXC_STRING "0123456789ABCDEFGHIJKL"
+# define HEXUC_STRING "0123456789ABCDEFGHIJKL"
+# define HEXLC_STRING "0123456789abcdefghijkl"
 
 # define SIGNED_KERNEL(buff, wptr, n) \
 	if(n < 0) \
@@ -55,9 +56,16 @@
 	wptr = buff; \
 	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(--rem && n)
 
-# define HEX_KERNEL(buff, wptr, n) \
+# define HEXU_KERNEL(buff, wptr, n) \
 	do { \
-		static const char hexchar[] = HEXC_STRING; \
+		static const char hexchar[] = HEXUC_STRING; \
+		wptr = buff; \
+		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
+	} while(0)
+
+# define HEXL_KERNEL(buff, wptr, n) \
+	do { \
+		static const char hexchar[] = HEXLC_STRING; \
 		wptr = buff; \
 		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
 	} while(0)
@@ -110,29 +118,50 @@
 # define MAKE_UFUNC(prfx, type) MAKE_FUNC(prfx, type, UNSIGNED_KERNEL)
 
 MAKE_SFUNC(       c,   signed char)
+MAKE_SFUNC_N(     c,   signed char)
+MAKE_SFUNC_SFIX(  c,   signed char)
+MAKE_SFUNC_0FIX(  c,   signed char)
 MAKE_UFUNC(      uc, unsigned char)
 MAKE_UFUNC_N(    uc, unsigned char)
+MAKE_UFUNC_SFIX( uc, unsigned char)
+MAKE_UFUNC_0FIX( uc, unsigned char)
 MAKE_SFUNC(       s,   signed short)
+MAKE_SFUNC_N(     s,   signed short)
+MAKE_SFUNC_SFIX(  s,   signed short)
+MAKE_SFUNC_0FIX(  s,   signed short)
 MAKE_UFUNC(      us, unsigned short)
+MAKE_UFUNC_N(    us, unsigned short)
+MAKE_UFUNC_SFIX( us, unsigned short)
+MAKE_UFUNC_0FIX( us, unsigned short)
 MAKE_SFUNC(       i,   signed int)
-MAKE_SFUNC_SFIX(  i,   signed int)
 MAKE_SFUNC_N(     i,   signed int)
+MAKE_SFUNC_SFIX(  i,   signed int)
+MAKE_SFUNC_0FIX(  i,   signed int)
 MAKE_UFUNC(       u, unsigned int)
-MAKE_UFUNC_SFIX(  u, unsigned int)
 MAKE_UFUNC_N(     u, unsigned int)
+MAKE_UFUNC_SFIX(  u, unsigned int)
+MAKE_UFUNC_0FIX(  u, unsigned int)
 MAKE_SFUNC(       l,   signed long)
-MAKE_SFUNC_SFIX(  l,   signed long)
 MAKE_SFUNC_N(     l,   signed long)
+MAKE_SFUNC_SFIX(  l,   signed long)
+MAKE_SFUNC_0FIX(  l,   signed long)
 MAKE_UFUNC(      ul, unsigned long)
-MAKE_UFUNC_SFIX( ul, unsigned long)
 MAKE_UFUNC_N(    ul, unsigned long)
+MAKE_UFUNC_SFIX( ul, unsigned long)
+MAKE_UFUNC_0FIX( ul, unsigned long)
 MAKE_SFUNC(      ll,   signed long long)
+MAKE_SFUNC_N(    ll,   signed long long)
+MAKE_SFUNC_SFIX( ll,   signed long long)
+MAKE_SFUNC_0FIX( ll,   signed long long)
 MAKE_UFUNC(     ull, unsigned long long)
+MAKE_UFUNC_N(   ull, unsigned long long)
+MAKE_UFUNC_SFIX(ull, unsigned long long)
+MAKE_UFUNC_0FIX(ull, unsigned long long)
 
 
-static inline char *ptoa(char *buff, const void *ptr)
+static inline char *addrtoa(char *buff, const void *ptr)
 {
-	static const char hexchar[] = HEXC_STRING;
+	static const char hexchar[] = HEXUC_STRING;
 	char *wptr = buff + (sizeof(ptr) * 2);
 	uintptr_t p = (uintptr_t)ptr;
 	unsigned i;
@@ -145,17 +174,30 @@ static inline char *ptoa(char *buff, const void *ptr)
 	return buff + (sizeof(ptr) * 2);
 }
 
+static inline char *ptoa(char *buff, const void *ptr)
+{
+	static const char hexchar[] = HEXLC_STRING;
+	char *wptr;
+	uintptr_t p = (uintptr_t)ptr;
+	unsigned i;
+
+	buff[0] = '0';
+	buff[1] = 'x';
+	wptr = &buff[2] + (sizeof(ptr) * 2);
+	for(i = 0; i < sizeof(ptr); i++) {
+		*wptr-- = hexchar[(p >> (   i  * 4)) & 0x0F];
+		*wptr-- = hexchar[(p >> ((1+i) * 4)) & 0x0F];
+	}
+
+	return buff + (sizeof(ptr) * 2) + 2;
+}
+
 static inline char *ustoxa(char *buff, const unsigned short num)
 {
-	static const char hexchar[] = "0123456789abcdefghjkl";
 	char *wptr;
 	unsigned n = num;
 
-	wptr = buff;
-	do {
-		*wptr++ = hexchar[n % 16];
-		n /= 16;
-	} while(n);
+	HEXL_KERNEL(buff, wptr, n);
 	strreverse(buff, wptr - 1);
 	return wptr;
 }
@@ -169,7 +211,7 @@ static inline char *utoXa_0fix(char *buff, const unsigned num, unsigned fix)
 	for(wptr0 = buff, i = fix; i--;)
 		*wptr0++ = '0';
 
-	HEX_KERNEL(buff, wptr1, n);
+	HEXU_KERNEL(buff, wptr1, n);
 	wptr0 = wptr0 >= wptr1 ? wptr0 : wptr1;
 	strreverse(buff, wptr0 - 1);
 
@@ -185,7 +227,7 @@ static inline char *ultoXa_0fix(char *buff, const unsigned long num, unsigned fi
 	for(wptr0 = buff, i = fix; i--;)
 		*wptr0++ = '0';
 
-	HEX_KERNEL(buff, wptr1, n);
+	HEXU_KERNEL(buff, wptr1, n);
 	wptr0 = wptr0 >= wptr1 ? wptr0 : wptr1;
 	strreverse(buff, wptr0 - 1);
 
@@ -196,7 +238,7 @@ static inline char *ultoXa_0fix(char *buff, const unsigned long num, unsigned fi
 #undef SIGNED_KERNEL
 #undef UNSIGNED_KERNEL
 #undef UNSIGNED_KERNEL_N
-#undef HEX_KERNEL
+#undef HEXU_KERNEL
 #undef MAKE_FUNC
 #undef MAKE_FUNC_N
 #undef MAKE_FUNC_FIX

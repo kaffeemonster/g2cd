@@ -202,7 +202,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	{
 		char *w_ptr = type_str;
 		size_t i;
-		for(i = target->type_length; i; i--, w_ptr++, source->pos++)
+		for(i = target->type_length; likely(i); i--, w_ptr++, source->pos++)
 		{
 			*w_ptr = *buffer_start(*source);
 	/*

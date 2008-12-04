@@ -371,6 +371,7 @@ static inline int rbtree_##fname##_insert(struct rbtree *tree, type *data) \
 				t = g; \
 			g = p, p = q; \
 			q = q->child[dir]; \
+			prefetch(q); \
 		} \
 		tree->root = head.child[RB_RIGHT]; 	/* Update root */ \
 	} \

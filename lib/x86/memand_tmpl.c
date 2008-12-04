@@ -60,7 +60,8 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		for(; i; i--)
 			*dst_char++ &= *src_char++;
 
-		i = (((intptr_t)dst_char)&((ALIGNMENT_WANTED*2)-1))^(((intptr_t)src_char)&((ALIGNMENT_WANTED*2)-1));
+		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1)) ^
+		    (((intptr_t)src_char) & ((ALIGNMENT_WANTED * 2) - 1));
 
 		/*
 		 * x86 special:

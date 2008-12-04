@@ -57,7 +57,7 @@ static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 		len -= i;
 		for(; i; i--, dst_char++)
 			*dst_char = ~(*dst_char);
-		i = (((intptr_t)dst_char)&((ALIGNMENT_WANTED*2)-1));
+		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1));
 		/*
 		 * x86 special:
 		 * x86 handles misalignment in hardware for ordinary ops.

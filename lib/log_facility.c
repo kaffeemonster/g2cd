@@ -28,16 +28,17 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #include <errno.h>
 #include <pthread.h>
 #include <syslog.h>
-// other
+/* other */
 #include "other.h"
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #endif
-// Own includes
+/* Own includes */
 #include "../G2MainServer.h"
 #include "log_facility.h"
 #include "sec_buffer.h"
@@ -46,6 +47,10 @@
 #define LOG_TIME_MAXLEN 128
 #define logg_int_pos(x, y) \
 	do_logging_int(x, "%s:%s()@%u: " y, __FILE__, __func__, __LINE__)
+
+static inline int do_vlogging(const enum loglevel, const char *, va_list);
+static inline int do_logging(const enum loglevel, const char *);
+static inline int do_logging_int(const enum loglevel, const char *, ...);
 
 /*
  * Work with a TLS-buffer to preprint the msg.
@@ -59,15 +64,13 @@
  *    its small default thread stacks...)
  * so we print it our self, and finaly pass down the finished string/buffer
  */
+#ifndef HAVE___THREAD
 static pthread_key_t key2logg;
 static int logg_tls_ready;
 /* protos */
 	/* you better not kill this prot, our it won't work ;) */
 static void logg_init(void) GCC_ATTR_CONSTRUCT;
 static void logg_deinit(void) GCC_ATTR_DESTRUCT;
-static inline int do_vlogging(const enum loglevel, const char *, va_list);
-static inline int do_logging(const enum loglevel, const char *);
-static inline int do_logging_int(const enum loglevel, const char *, ...);
 
 static void logg_init(void)
 {
@@ -98,20 +101,29 @@ static void logg_deinit(void)
 	pthread_key_delete(key2logg);
 	logg_tls_ready = false;
 }
+#else
+static __thread struct big_buff *local_logg_buffer;
+#endif
 
 static struct big_buff *logg_get_buf(void)
 {
 	struct big_buff *ret_buf;
-	
+#ifndef HAVE___THREAD
 	/* for the rare case we are called from another constructor and are not ready */
 	if(likely(logg_tls_ready)) {
 		ret_buf = pthread_getspecific(key2logg);
 		if(likely(ret_buf))
 			return ret_buf;
 	}
+#else
+	ret_buf = local_logg_buffer;
+	if(likely(ret_buf))
+		return ret_buf;
+#endif
 
 	ret_buf = malloc(sizeof(*ret_buf) + (NORM_BUFF_CAPACITY / 4));
 
+#ifndef HAVE___THREAD
 	/* Gnarf, when we we are called from another constuctor, log_level is still 0 */
 	/* !!! but we won't get here, loglevel is now tested at the call site... !!! */
 	if(!logg_tls_ready) {
@@ -123,6 +135,7 @@ static struct big_buff *logg_get_buf(void)
 		barrier();
 		server.settings.logging.act_loglevel = LOGF_ERR;
 	}
+#endif
 
 	if(!ret_buf) {
 		/* we cannot logg with our self */
@@ -132,18 +145,23 @@ static struct big_buff *logg_get_buf(void)
 	ret_buf->capacity = NORM_BUFF_CAPACITY / 4;
 	buffer_clear(*ret_buf);
 
+#ifndef HAVE___THREAD
 	if(logg_tls_ready)
 		pthread_setspecific(key2logg, ret_buf);
+#else
+	local_logg_buffer = ret_buf;
+#endif
 
 	return ret_buf;
 }
 
 static void logg_ret_buf(struct big_buff *ret_buf)
 {
+	buffer_clear(*ret_buf);
+#ifndef HAVE___THREAD
 	/* for the rare case a constructor screams */
 	if(logg_tls_ready)
 	{
-		buffer_clear(*ret_buf);
 		if(pthread_setspecific(key2logg, ret_buf)) {
 			logg_int_pos(LOGF_EMERG, "adding logg buff back failed\n");
 			free(ret_buf);
@@ -152,6 +170,9 @@ static void logg_ret_buf(struct big_buff *ret_buf)
 	}
 	else
 		free(ret_buf);
+#else
+	local_logg_buffer = ret_buf;
+#endif
 }
 
 static inline int do_vlogging(const enum loglevel level, const char *fmt, va_list args)
@@ -213,6 +234,9 @@ static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max
 	return 0;
 }
 
+/*
+ *
+ */
 #define STRERROR_R_SIZE 512
 static int logg_internal(const enum loglevel level,
                          const char *file,
@@ -246,6 +270,7 @@ static int logg_internal(const enum loglevel level,
 	if(file)
 	{
 		retry_cnt = 0;
+		prefetch(strnpcpy);
 		prefetch(file);
 		prefetch(func);
 		/*
@@ -368,7 +393,7 @@ realloc:
 			 */
 			const char *s = strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)-2);
 # else
-			/* 
+			/*
 			 * Ol Solaris seems to have a static msgtable, so
 			 * strerror is threadsafe and we don't have a
 			 * _r version

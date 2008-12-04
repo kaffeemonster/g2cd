@@ -113,7 +113,10 @@ ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
 ARCH_FLAGS += -momit-leaf-frame-pointer
-ARCH_FLAGS += -minline-all-stringops
+# x86 stringops are in modern processors
+# unfortunatly second class citizians
+#ARCH_FLAGS += -minline-all-stringops
+ARCH_FLAGS += -minline-stringops-dynamically
 ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
@@ -186,7 +189,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -O1
+#OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

@@ -28,6 +28,8 @@
 
 /* can we have dyn arrays? */
 #define HAVE_C99
+/* to we have compiler level TLS? */
+#define HAVE___THREAD
 
 /* do we have IPv6 and other net stuff */
 #define HAVE_SA_FAMILY_T

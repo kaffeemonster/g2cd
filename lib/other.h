@@ -74,6 +74,12 @@
 #endif /* _GNUC_PREREQ (3,3) */
 
 #if _GNUC_PREREQ (3,1)
+# define GCC_ATTRIB_UNUSED GCC_ATTRIB(__unused__)
+#else
+# define GCC_ATTRUB_UNUSED
+#endif /* _GNUC_PREREQ (3,1) */
+
+#if _GNUC_PREREQ (3,1)
 # define GCC_ATTR_UNUSED_PARAM(type, name) type name GCC_ATTRIB(__unused__)
 #else
 /* hopefully all compiler know that foo(int) means a unused var, no, seems to be a SUN-Spezial */

@@ -102,7 +102,7 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 	{
 		int j;
 
-		buf = ptoa(buf, addr);
+		buf = addrtoa(buf, addr);
 		*buf++ = ':'; *buf++ = ' ';
 		for(j = 0; j < 2; j++)
 		{
