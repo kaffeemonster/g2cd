@@ -62,7 +62,7 @@
 /* internal prototypes */
 static inline ssize_t udp_sock_send(struct norm_buff *, union combo_addr *, int);
 static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, union combo_addr *);
-static inline void handle_udp_packet(struct norm_buff *, union combo_addr *, int);
+static noinline void handle_udp_packet(struct norm_buff *, union combo_addr *, int);
 //static inline bool init_memory();
 static inline bool init_con_u(int *, union combo_addr *);
 static inline void clean_up_u(int, struct pollfd[2]);

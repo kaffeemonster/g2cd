@@ -238,6 +238,7 @@ init_next:
 		return false;
 	}
 	cache.ht_seed = (uint32_t) time(NULL);
+	srand(cache.ht_seed);
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;
@@ -366,17 +367,22 @@ static void gwc_kick(struct gwc *gwc)
 static bool gwc_switch(void)
 {
 	int retry_count = 0;
+	unsigned cycling;
 	char *url;
 	datum key, value;
 
 retry:
 	retry_count++;
-	key = dbm_nextkey(gwc_db);
-	if(!key.dptr)
-		key = dbm_firstkey(gwc_db);
-	if(!key.dptr) {
-		/* uhm, no key? this should not happen */
-		return false;
+	cycling = (unsigned)(((((unsigned long long)rand())+1)*8)/((unsigned long long)RAND_MAX));
+	for(; cycling--;)
+	{
+		key = dbm_nextkey(gwc_db);
+		if(!key.dptr)
+			key = dbm_firstkey(gwc_db);
+		if(!key.dptr) {
+			/* uhm, no key? this should not happen */
+			return false;
+		}
 	}
 
 	value = dbm_fetch(gwc_db, key);
