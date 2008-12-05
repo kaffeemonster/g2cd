@@ -300,7 +300,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
-	if(local_time_now < (connec->send_stamps.KHL + (KHL_TIMEOUT)))
+	if(local_time_now < (connec->u.send_stamps.KHL + (KHL_TIMEOUT)))
 		return ret_val;
 
 	/* build package */
@@ -323,7 +323,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 	else
 		goto out_fail;
 	list_add_tail(&khl->list, target);
-	connec->send_stamps.KHL = local_time_now;
+	connec->u.send_stamps.KHL = local_time_now;
 	return true;
 out_fail:
 	g2_packet_free(ts);
@@ -519,7 +519,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
-	if(unlikely(local_time_now < (connec->send_stamps.LNI + (LNI_TIMEOUT))))
+	if(unlikely(local_time_now < (connec->u.send_stamps.LNI + (LNI_TIMEOUT))))
 		return ret_val;
 
 	/* build package */
@@ -586,7 +586,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 			g2_packet_free(hs);
 	}
 	list_add_tail(&lni->list, target);
-	connec->send_stamps.LNI = local_time_now;
+	connec->u.send_stamps.LNI = local_time_now;
 
 	return true;
 out_fail:
@@ -705,7 +705,7 @@ static bool handle_PI(g2_connection_t *connec, g2_packet_t *source, struct list_
 
 	/* time to send a packet again? */
 	if(connec) {
-		if(local_time_now < (connec->send_stamps.PI + (PI_TIMEOUT)))
+		if(local_time_now < (connec->u.send_stamps.PI + (PI_TIMEOUT)))
 			return false;
 	}
 
@@ -717,7 +717,7 @@ static bool handle_PI(g2_connection_t *connec, g2_packet_t *source, struct list_
 	po->type = PT_PO;
 	list_add_tail(&po->list, target);
 	if(connec)
-		connec->send_stamps.PI = local_time_now;
+		connec->u.send_stamps.PI = local_time_now;
 	logg_packet_old(STDSF, "\t/PI");
 
 	return true;
@@ -846,7 +846,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 	else
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
-	if(unlikely(ret_val || local_time_now < (connec->send_stamps.QHT + (QHT_TIMEOUT))))
+	if(unlikely(ret_val || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT))))
 		return ret_val;
 
 	qht = g2_packet_calloc();
@@ -870,7 +870,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 			goto out_fail;
 	}
 	list_add_tail(&qht->list, target);
-	connec->send_stamps.QHT = local_time_now;
+	connec->u.send_stamps.QHT = local_time_now;
 	return true;
 out_fail:
 	g2_packet_free(qht);
@@ -934,7 +934,7 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 		g2_packet_t *xml;
 
 		/* time to send a packet again? */
-		if(local_time_now < (connec->send_stamps.UPROC + (UPROC_TIMEOUT)))
+		if(local_time_now < (connec->u.send_stamps.UPROC + (UPROC_TIMEOUT)))
 			return false;
 
 		uprod = g2_packet_calloc();
@@ -953,7 +953,7 @@ static bool handle_UPROC(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GCC_A
 		buffer_clear(xml->data_trunk);
 
 		list_add_tail(&uprod->list, target);
-		connec->send_stamps.UPROC = local_time_now;
+		connec->u.send_stamps.UPROC = local_time_now;
 		return true;
 	}
 

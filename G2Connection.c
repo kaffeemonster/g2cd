@@ -366,7 +366,7 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 	/* actionstring-functions */
 static bool content_what(g2_connection_t *to_con, size_t distance)
 {
-	to_con->flags.content_ok = true;
+	to_con->u.accept.flags.content_ok = true;
 
 	if(likely(str_size(ACCEPT_G2) <= distance))
 	{
@@ -374,12 +374,12 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 		{
 		//found!!
 			logg_develd_old("found for Content:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
-			to_con->flags.content_g2 = true;
+			to_con->u.accept.flags.content_g2 = true;
 			return false;
 		}
 	}
 
-	to_con->flags.content_g2 = false;
+	to_con->u.accept.flags.content_g2 = false;
 	return true;
 }
 
@@ -387,18 +387,18 @@ static bool ulpeer_what(g2_connection_t *to_con, GCC_ATTR_UNUSED_PARAM(size_t, d
 {
 	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE))) {
 		to_con->flags.upeer = false;
-		to_con->flags.upeer_ok = true;
+		to_con->u.accept.flags.upeer_ok = true;
 		return false;
 	}
 
 	if(!strncasecmp(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE))) {
 		to_con->flags.upeer = true;
-		to_con->flags.upeer_ok = true;
+		to_con->u.accept.flags.upeer_ok = true;
 		return false;
 	}
 
 	to_con->flags.upeer = false;
-	to_con->flags.upeer_ok = false;
+	to_con->u.accept.flags.upeer_ok = false;
 	return true;
 }
 
@@ -407,7 +407,7 @@ static bool uagent_what(g2_connection_t *to_con, size_t distance)
 	size_t n = (distance < (sizeof(to_con->uagent) - 1))? distance : sizeof(to_con->uagent) - 1;
 	strncpy(to_con->uagent, buffer_start(*to_con->recv), n);
 	to_con->uagent[n] = '\0';
-	to_con->flags.uagent_ok = true;
+	to_con->u.accept.flags.uagent_ok = true;
 	logg_develd_old("found for User-Agent:\t\"%s\"\n", to_con->uagent);
 	return false;
 }
@@ -416,7 +416,7 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 {
 	size_t i;
 
-	if(to_con->flags.second_header)
+	if(to_con->u.accept.flags.second_header)
 		return false;
 
 	for(i = 0; i < sizeof(KNOWN_ENCODINGS)  / sizeof(action_string *); i++)
@@ -428,13 +428,13 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 		{
 		//found!!
 			to_con->encoding_out = i;
-			to_con->flags.enc_out_ok = true;
+			to_con->u.accept.flags.enc_out_ok = true;
 			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
 			return false;
 		}
 	}
 
-	to_con->flags.enc_out_ok = false;
+	to_con->u.accept.flags.enc_out_ok = false;
 	return true;
 }
 
@@ -442,7 +442,7 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 {
 	size_t i;
 
-	if(!to_con->flags.second_header)
+	if(!to_con->u.accept.flags.second_header)
 		return false;
 
 	for(i = 0; i < sizeof(KNOWN_ENCODINGS)  / sizeof(action_string *); i++)
@@ -452,25 +452,26 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 
 		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
-		//found!!
+		/* found!! */
 			to_con->encoding_in = i;
-			to_con->flags.enc_in_ok = true;
+			to_con->u.accept.flags.enc_in_ok = true;
 			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
 			return false;
 		}
 	}
 
-	to_con->flags.enc_in_ok = false;
+	to_con->u.accept.flags.enc_in_ok = false;
 	return true;
 }
 
 static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 {
-	char buffer[distance+1];
+	char buffer[INET6_ADDRSTRLEN+1];
+	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
 	int ret_val = 0;
 
-	strncpy(buffer, buffer_start(*to_con->recv), distance);
-	buffer[distance] = '\0';
+	strncpy(buffer, buffer_start(*to_con->recv), len);
+	buffer[len] = '\0';
 
 	ret_val = combo_addr_read(buffer, &to_con->sent_addr);
 	
@@ -478,12 +479,12 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	{
 		logg_develd_old("found for Remote-IP:\t%s\n", combo_addr_print(&to_con->sent_addr,
 			char addr_buf[INET6_ADDRSTRLEN], sizeof(addr_buf)));
-		to_con->flags.addr_ok = true;
+		to_con->u.accept.flags.addr_ok = true;
 		return false;
 	}
 	else
 	{
-		to_con->flags.addr_ok = false;
+		to_con->u.accept.flags.addr_ok = false;
 		if(0 == ret_val)
 		{
 			char addr_buf[INET6_ADDRSTRLEN];
@@ -505,10 +506,10 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 {
 	char *w_ptr = buffer_start(*to_con->recv);
 
-	if(to_con->flags.second_header)
+	if(to_con->u.accept.flags.second_header)
 		return false;
 
-	to_con->flags.accept_ok = true;
+	to_con->u.accept.flags.accept_ok = true;
 
 	while(distance)
 	{
@@ -517,15 +518,15 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 
 		if(!strncasecmp(w_ptr, ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
-		//found!!
+		/* found!! */
 			logg_develd_old("found for Accept:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
-			to_con->flags.accept_g2 = true;
+			to_con->u.accept.flags.accept_g2 = true;
 			return false;
 		}
 		else
 		{
-// TODO: Does this work?
-		//search a ','
+// TODO: Does this work? No, needs to be written
+		/* search a ',' */
 			while(distance)
 			{
 				w_ptr++;
@@ -536,7 +537,7 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 		}
 	}
 
-	to_con->flags.accept_g2 = false;
+	to_con->u.accept.flags.accept_g2 = false;
 	return true;
 }
 

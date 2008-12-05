@@ -120,12 +120,13 @@ LIBSRCS = \
 	$(MPL)/memxor.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
-	$(MPL)/my_epoll.c \
-	$(MPL)/log_facility.c \
-	$(MPL)/strnlen.c \
 	$(MPL)/mempcpy.c \
+	$(MPL)/mem_searchrn.c \
+	$(MPL)/strnlen.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
+	$(MPL)/my_epoll.c \
+	$(MPL)/log_facility.c \
 	$(MPL)/adler32.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/inet_ntop.c \
@@ -139,8 +140,9 @@ BITOPOBJS = \
 	$(MPL)/memxor.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
-	$(MPL)/strnlen.o \
 	$(MPL)/mempcpy.o \
+	$(MPL)/mem_searchrn.o \
+	$(MPL)/strnlen.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
 	$(MPL)/adler32.o \

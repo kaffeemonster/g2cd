@@ -41,7 +41,6 @@ enum g2_connection_states
 {
 	UNCONNECTED,
 	HAS_CONNECT_STRING,
-	SEARCH_CAPS,
 	CHECK_ACCEPT,
 	CHECK_ADDR,
 	CHECK_ENC_OUT,
@@ -84,37 +83,47 @@ typedef struct g2_connection
 	/* Internal States */
 	union combo_addr sent_addr;
 	long             time_diff;
-	struct
-	{
-		time_t        PI;
-		time_t        LNI;
-		time_t        KHL;
-		time_t        QHT;
-		time_t        UPROC;
-	} send_stamps;
 	/* flags */
 	struct
 	{
 		bool          dismissed;
-		bool          accept_ok;
-		bool          accept_g2;
-		bool          content_ok;
-		bool          content_g2;
-		bool          addr_ok;
-		bool          enc_in_ok;
-		bool          enc_out_ok;
-		bool          uagent_ok;
 		bool          upeer;
-		bool          upeer_ok;
 		bool          upeer_needed;
-		bool          upeer_needed_ok;
-		bool          second_header;
 		bool          has_written;
 		bool          firewalled;
 		bool          query_key_cache;
 		bool          qht_reset_send;
 		bool          t1;
 	} flags;
+	union
+	{
+		struct
+		{
+			time_t        PI;
+			time_t        LNI;
+			time_t        KHL;
+			time_t        QHT;
+			time_t        UPROC;
+		} send_stamps;
+		struct
+		{
+			size_t     header_bytes_recv;
+			struct
+			{
+				bool    accept_ok;
+				bool    accept_g2;
+				bool    content_ok;
+				bool    content_g2;
+				bool    addr_ok;
+				bool    enc_in_ok;
+				bool    enc_out_ok;
+				bool    uagent_ok;
+				bool    upeer_ok;
+				bool    upeer_needed_ok;
+				bool    second_header;
+			} flags;
+		} accept;
+	} u;
 	/* more state */
 	enum g2_connection_states     connect_state;
 	enum g2_connection_encodings  encoding_in;

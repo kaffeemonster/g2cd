@@ -373,8 +373,8 @@ static bool gwc_switch(void)
 
 retry:
 	retry_count++;
-	cycling = (unsigned)(((((unsigned long long)rand())+1)*8)/((unsigned long long)RAND_MAX));
-	for(; cycling--;)
+	cycling = (unsigned)((((unsigned long long)rand())*8)/((unsigned long long)RAND_MAX));
+	do
 	{
 		key = dbm_nextkey(gwc_db);
 		if(!key.dptr)
@@ -383,7 +383,7 @@ retry:
 			/* uhm, no key? this should not happen */
 			return false;
 		}
-	}
+	} while(cycling--);
 
 	value = dbm_fetch(gwc_db, key);
 	if(!value.dptr) { /* huh? key but no data? */

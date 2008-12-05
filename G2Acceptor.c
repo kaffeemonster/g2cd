@@ -699,6 +699,87 @@ static inline bool abort_g2_400(g2_connection_t *to_con)
 	return true;
 }
 
+static noinline void header_handle_line(g2_connection_t *to_con, char *line, size_t len)
+{
+	char *ret_val, *f_start, *f_end, *c_start;
+	size_t i, f_num = 0;
+	ssize_t f_dist, c_dist;
+	bool f_found;
+
+	ret_val = memchr(line, ':', len);
+	if(unlikely(!ret_val)) /* no ':' on line? */
+		goto out_fixup;
+
+	/* filter leading garbage */
+	for(f_start = line; f_start < ret_val && !isalnum(*f_start);)
+		f_start++;
+	if(unlikely(1 >= ret_val - f_start)) /* nothing left? */
+		goto out_fixup;
+
+	/* filter trailing garbage */
+	for(f_end = ret_val - 1; f_end >= f_start && !isgraph(*f_end);)
+		f_end--;
+	f_dist = (f_end + 1) - f_start;
+	if(unlikely(1 > f_dist)) /* something left? */
+		goto out_fixup;
+
+	for(i = 0, f_found = false; i < KNOWN_HEADER_FIELDS_SUM; i++)
+	{
+		if((size_t)f_dist != KNOWN_HEADER_FIELDS[i]->length)
+			continue;
+		if(!strncasecmp(f_start, KNOWN_HEADER_FIELDS[i]->txt,
+		                KNOWN_HEADER_FIELDS[i]->length)) {
+			f_num = i;
+			f_found = true;
+			break;
+		}
+	}
+
+	if(unlikely(!f_found)) {
+		logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
+		            (int) (ret_val - line), line);
+	} else {
+		if(unlikely(NULL == KNOWN_HEADER_FIELDS[f_num]->action)) {
+			logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
+			            (int) f_dist, f_start);
+		} else {
+			logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
+			            (int) f_dist, f_start);
+		}
+	}
+
+	/* after this, move buffer forward */
+	to_con->recv->pos += ret_val - line + 1;
+	/* chars left for field content? */
+	c_start = ret_val + 1;
+	c_dist = (line + len) - c_start;
+
+	/* remove leading white-spaces in field-data */
+	for(; c_dist > 0 && isspace(*c_start); c_dist--)
+		c_start++, to_con->recv->pos++;
+
+	/* now call the associated action for this field */
+	if(likely(c_dist > 0))
+	{
+		if(f_found && NULL != KNOWN_HEADER_FIELDS[f_num]->action) {
+			logg_develd_old("\"%.*s\"\n", (int) c_dist, c_start);
+			KNOWN_HEADER_FIELDS[f_num]->action(to_con, c_dist);
+		} else {
+			logg_develd("\"%.*s\"\n", (int) c_dist, c_start);
+		}
+		to_con->recv->pos += c_dist;
+	} else {
+		logg_devel("Field with no data recieved!\n");
+	}
+
+	return;
+
+out_fixup:
+	/* skip this bullshit */
+	to_con->recv->pos += len;
+	return;
+}
+
 /*
  * This function handshakes a G2Connection from data in the recv-buffer
  * supplied by a g2_connect_t.
@@ -708,26 +789,21 @@ static inline bool abort_g2_400(g2_connection_t *to_con)
  *
  * for information about the success (or failure) of this function, watch
  * the g2_connection_t-fields:
- * 
+ *
  * to_con->flags.dismissed (true indicates a failure)
  * to_con->connect_state (G2CONNECTED indicates finished)
- * 
+ *
  * gnarf, all this needs a rework/cleanup (sub-functioning), but at the
  * moment, there is a good chance for major changes, thats why all this
  * is in such a shape, but at least, it works.
  */
 static noinline bool initiate_g2(g2_connection_t *to_con)
 {
-	size_t found = 0;
-	size_t old_pos = 0;
-	size_t old_limit = 0;
-	size_t search_state = 0;
-	size_t distance = 0;
-	size_t field_num = 0;
-	char *cp_ret = NULL;
+	size_t dist;
+	char *cp_ret = NULL, *start, *next;
 	bool ret_val = false;
 	bool more_bytes_needed = false;
-	bool field_found = false;
+	bool header_end = false;
 
 	buffer_flip(*to_con->recv);
 	logg_develd_old("Act. content:\n\"%.*s\"", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
@@ -759,175 +835,62 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			if(likely('\n' == *buffer_start(*to_con->recv))) {
 				to_con->recv->pos++;
 				to_con->connect_state++;
+				to_con->u.accept.header_bytes_recv = str_size(GNUTELLA_CONNECT_STRING) + 2;
 			} else
 				return abort_g2_501(to_con);
-// TODO: Use more std.-func.(strcspn, strchr, strstr), but problem: we are not working with propper strings, foreign input!
-	/* wait till we got the whole header */
+	/* gravel over the header field as they arrive */
 		case HAS_CONNECT_STRING:
 			if(unlikely(!buffer_remaining(*to_con->recv))) {
 				more_bytes_needed = true;
 				break;
 			}
-			old_pos = to_con->recv->pos;
-			while(true)
+
+			do
 			{
-				/* CR 0x0D  LF 0x0A */
-// TODO: Check for a proper CR LF CR LF Sequence
-				found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
-				to_con->recv->pos++;
-				/* there was CRLF 2 times */
-				if(4 == found)
-				{
-					to_con->recv->limit = to_con->recv->pos;
-					to_con->recv->pos = old_pos;
-					logg_devel("\t------------------ Initiator\n");
-					logg_develd_old("\"%.*s\"\n", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
-					to_con->connect_state++;
+				start = buffer_start(*to_con->recv);
+				next  = mem_searchrn(start, buffer_remaining(*to_con->recv));
+				if(!next)
+					break;
+				dist = next - start;
+				logg_develd_old("line: \"%.*s\"\n", dist, start);
+				header_handle_line(to_con, start, dist);
+				to_con->recv->pos += 2;
+				to_con->u.accept.header_bytes_recv += dist + 2;
+				if(0 == dist) {
+					header_end = true;
 					break;
 				}
-				else if(unlikely(!buffer_remaining(*to_con->recv))) /* End of Buffer? */
+			} while(buffer_remaining(*to_con->recv));
+
+			if(likely(header_end)) {
+				buffer_skip(*to_con->recv);
+				logg_devel("\t------------------ Initiator\n");
+				to_con->connect_state++;
+			}
+			else
+			{
+				/* swamping my in? */
+				if(MAX_HEADER_LENGTH > to_con->u.accept.header_bytes_recv)
 				{
-					/* Header not to long (someone DoS us?) */
-					if(MAX_HEADER_LENGTH > (to_con->recv->limit - old_pos))
-					{
+					/* buffer full and no end? */
+					if(to_con->recv->capacity - buffer_remaining(*to_con->recv)) {
 						/* we need more bytes */
-						to_con->recv->pos = old_pos;
 						more_bytes_needed = true;
 						break;
 					}
-					else /* or go home */
-						return abort_g2_400(to_con);
-				}
-			}
-			break;
-	/* Now the header is complete, we can search it */
-		case SEARCH_CAPS:
-			old_pos = to_con->recv->pos;
-			while(likely(buffer_remaining(*to_con->recv)))
-			{
-				switch(search_state)
-				{
-			/* search for fieldseparator ':' */
-				case 0:
-					if(':' == *buffer_start(*to_con->recv))
-					{
-						size_t k;
-						size_t real_distance = 0;
-
-						/* back to start of field */
-						distance = to_con->recv->pos - old_pos;
-						to_con->recv->pos = old_pos;
-						
-// TODO: use isalnum & isgraph?? They are locale-dependent. hopefully none sends multibyte & non-ascii field-names.
-						/* filter bogus beginning (skip leading space) */
-						while(distance && !isalnum((int)(*buffer_start(*to_con->recv)))) {
-							to_con->recv->pos++;
-							distance--;
-						}
-						
-						/*
-						 * lets see what we can filter to find the "real" end
-						 * of the field (skip trailing space)
-						 */
-						old_pos = to_con->recv->pos;
-						while(distance && isgraph((int)(*buffer_start(*to_con->recv))))
-						{
-							to_con->recv->pos++;
-							distance--;
-							real_distance++;
-						}
-						to_con->recv->pos = old_pos;
-
-						/*
-						 * even if we may have filtered all, we are continueing,
-						 * we could only sync again at a "\r\n" (the field-data may contain ':').
-						 * Maybe this "\r\n" is the last (it must be send, see above),
-						 * Ok, then handshaking fails. Not my fault if someone sends such nonsense.
-						 */
-						for(k = 0; k < KNOWN_HEADER_FIELDS_SUM; k++)
-						{
-							if(real_distance != KNOWN_HEADER_FIELDS[k]->length)
-								continue;
-						
-							if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
-							{
-								field_num = k;
-								field_found = true;
-								break;
-							}
-						}
-
-						if(unlikely(!field_found)) {
-							logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
-								(int) real_distance, buffer_start(*to_con->recv));
-						} else {
-							if(unlikely(NULL == KNOWN_HEADER_FIELDS[field_num]->action)) {
-								logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
-									(int) real_distance, buffer_start(*to_con->recv));
-							} else {
-								logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
-									(int) real_distance, buffer_start(*to_con->recv));
-							}
-						}
-
-						/*
-						 * since we may have shortened the string due to filtering,
-						 * we have to use all lengths, to get behind the ':'
-						 */
-						to_con->recv->pos += real_distance + distance + 1;
-						old_pos = to_con->recv->pos;
-						search_state++;
-					}
-					break;
-			/* find end of line*/
-				case 1:
-					if('\r' == *buffer_start(*to_con->recv))
-						search_state++;
-					break;
-				case 2:
-					if('\n' == *buffer_start(*to_con->recv))
-					{
-						/* Field-data complete, back to start of field-data */
-						distance = to_con->recv->pos - old_pos - 1;
-						to_con->recv->pos = old_pos;
-
-						/* remove leading white-spaces in field-data */
-						while(distance && isspace((int)(*buffer_start(*to_con->recv)))) {
-							to_con->recv->pos++;
-							distance--;
-						}
-
-						/* now call the associated action for this field */
-						if(distance && field_found && NULL != KNOWN_HEADER_FIELDS[field_num]->action)
-							KNOWN_HEADER_FIELDS[field_num]->action(to_con, distance);
-						else
-						{
-							if(distance) {
-								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(*to_con->recv));
-							} else {
-								logg_devel("Field with no data recieved!\n");
-							}
-						}
-						search_state = 0;
-						to_con->recv->pos += distance + 2;
-						old_pos = to_con->recv->pos;
-						field_found = false;
-					}
 					else
-						search_state--;
-					break;
+						return abort_g2_400(to_con); /* go home */
 				}
-				to_con->recv->pos++;
+				else
+					return abort_g2_400(to_con); /* go home */
 			}
-
-			to_con->connect_state++;
 	/* what's up with the accept-field? */
 		case CHECK_ACCEPT:
 			/* do we have one? */
-			if(to_con->flags.accept_ok)
+			if(likely(to_con->u.accept.flags.accept_ok))
 			{
 				/* and is it G2? */
-				if(to_con->flags.accept_g2)
+				if(likely(to_con->u.accept.flags.accept_g2))
 					to_con->connect_state++;
 				else
 					return abort_g2_501(to_con);
@@ -937,7 +900,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	/* and the remote_ip field? */
 		case CHECK_ADDR:
 			/* do we have one and there was a valid address inside? */
-			if(to_con->flags.addr_ok)
+			if(likely(to_con->u.accept.flags.addr_ok))
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
@@ -947,7 +910,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			 * if nothing was send, default to no encoding (Shareaza tries to
 			 * save space in the header, so no failure if absent)
 			 */
-			if(!to_con->flags.enc_out_ok)
+			if(!to_con->u.accept.flags.enc_out_ok)
 				to_con->encoding_out = ENC_NONE;
 			else
 			{
@@ -969,13 +932,13 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	/* how about the user-agent */
 		case CHECK_UAGENT:
 			/* even if it's empty, the field should be send */
-			if(to_con->flags.uagent_ok)
+			if(likely(to_con->u.accept.flags.uagent_ok))
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
 	/* last 'must-have' field: X-UltraPeer */
 		case CHECK_UPEER:
-			if(to_con->flags.upeer_ok)
+			if(likely(to_con->u.accept.flags.upeer_ok))
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
@@ -1014,7 +977,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* copy start of header */
 // TODO: finer granularity of stepping for smaller sendbuffer?
 			/* could we place it all in our sendbuffer? */
-			if(str_size(HED_2_PART_1) < buffer_remaining(*to_con->send)) {
+			if(likely(str_size(HED_2_PART_1) < buffer_remaining(*to_con->send))) {
 				strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
 				to_con->send->pos += str_size(HED_2_PART_1);
 			} else {
@@ -1046,15 +1009,14 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				 * get our ip the remote host connected to from
 				 * our socket handle
 				 */
-				if(getsockname(to_con->com_socket, &local_addr.sa, &sin_size)) {
+				if(unlikely(getsockname(to_con->com_socket, &local_addr.sa, &sin_size))) {
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
 					local_addr = AF_INET == to_con->remote_host.s_fam ?
 						server.settings.bind.ip4 : server.settings.bind.ip6;
 				}
-				cp_ret =
-					combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
-					                   buffer_remaining(*to_con->send));
-				if(!cp_ret) {
+				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
+					                         buffer_remaining(*to_con->send));
+				if(unlikely(!cp_ret)) {
 					/* we have a problem, that should not happen... */
 					logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
 					to_con->flags.dismissed = true;
@@ -1062,8 +1024,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				}
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
-				if(6 + str_size("\r\n" REMOTE_ADR_KEY ": ") >=
-				   buffer_remaining(*to_con->send)) {
+				if(unlikely(6 + str_size("\r\n" REMOTE_ADR_KEY ": ") >=
+				            buffer_remaining(*to_con->send))) {
 					/* no space for port and foo? */
 					to_con->flags.dismissed = true;
 					return false;
@@ -1077,9 +1039,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 
 			/* tell remote end from which ip we saw it comming */
-			if(!combo_addr_print(&to_con->remote_host,
-			                     buffer_start(*to_con->send),
-			                     buffer_remaining(*to_con->send))) {
+			if(unlikely(!combo_addr_print(&to_con->remote_host,
+			                              buffer_start(*to_con->send),
+			                              buffer_remaining(*to_con->send)))) {
 				logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
 				to_con->flags.dismissed = true;
 				return false;
@@ -1097,8 +1059,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* if we have encoding, put in the keys */
 			if(ENC_NONE != to_con->encoding_out)
 			{
-				if((str_size(CONTENT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
-				   buffer_remaining(*to_con->send))
+				if(likely((str_size(CONTENT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
+				          buffer_remaining(*to_con->send)))
 				{
 					cp_ret = strplitcpy(buffer_start(*to_con->send), CONTENT_ENC_KEY ": ");
 					cp_ret = strpcpy(cp_ret, KNOWN_ENCODINGS[to_con->encoding_out]->txt);
@@ -1111,8 +1073,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 			if(ENC_NONE != to_con->encoding_in)
 			{
-				if((str_size(ACCEPT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
-				   buffer_remaining(*to_con->send))
+				if(likely((str_size(ACCEPT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
+				          buffer_remaining(*to_con->send)))
 				{
 					cp_ret = strplitcpy(buffer_start(*to_con->send), ACCEPT_ENC_KEY ": ");
 					cp_ret = strpcpy(cp_ret, KNOWN_ENCODINGS[to_con->encoding_in]->txt);
@@ -1125,9 +1087,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 
 			/* and the rest of the header */
-			if((str_size(UPEER_KEY) + str_size(UPEER_NEEDED_KEY) +
-			    str_size(HUB_KEY) + str_size(HUB_NEEDED_KEY) + 4 * 9 + 2) <=
-			   buffer_remaining(*to_con->send))
+			if(likely((str_size(UPEER_KEY) + str_size(UPEER_NEEDED_KEY) +
+			           str_size(HUB_KEY) + str_size(HUB_NEEDED_KEY) + 4 * 9 + 2) <=
+			          buffer_remaining(*to_con->send)))
 			{
 				cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": ");;
 				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
@@ -1164,204 +1126,106 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			break;
 	/* Waiting for an answer */
 		case HEADER_2:
-			if(str_size(GNUTELLA_STRING " 200") > buffer_remaining(*to_con->recv)) {
+			if(unlikely(str_size(GNUTELLA_STRING " 200") > buffer_remaining(*to_con->recv))) {
 				more_bytes_needed = true;
 				break;
 			}
 
 			/* did the other end like it */
-			if(!strncmp(buffer_start(*to_con->recv), GNUTELLA_STRING " 200", str_size(GNUTELLA_STRING " 200")))
-				to_con->recv->pos += str_size(GNUTELLA_STRING " 200");
-			else { /* if not: no deal */
+			if(unlikely(strncmp(buffer_start(*to_con->recv), GNUTELLA_STRING " 200", str_size(GNUTELLA_STRING " 200")))) {
+				/* if not: no deal */
 				to_con->flags.dismissed = true;
 				return false;
 			}
-
+			to_con->recv->pos += str_size(GNUTELLA_STRING " 200");
+			to_con->u.accept.flags.second_header = true;
+			to_con->u.accept.header_bytes_recv = str_size(GNUTELLA_STRING " 200");
 			to_con->connect_state++;
-	/* wait till we have the hole 2.nd header */
+	/* search first CRLF (maybe someone sends something like 'Welcome' behind the 200) and skip it */
 		case ANSWER_200:
-			if(!buffer_remaining(*to_con->recv)) {
+			if(unlikely(!buffer_remaining(*to_con->recv))) {
 				more_bytes_needed = true;
 				break;
 			}
-			old_pos = to_con->recv->pos;
-			while(true)
+
+			start = buffer_start(*to_con->recv);
+			next  = mem_searchrn(start, buffer_remaining(*to_con->recv));
+			if(unlikely(!next))
 			{
-				/* CR 0x0D  LF 0x0A */
-// TODO: Check for a proper CR LF CR LF Sequence
-				found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
-				to_con->recv->pos++;
-				/* there was CRLF 2 times */
-				if(4 == found)
+				to_con->u.accept.header_bytes_recv += buffer_remaining(*to_con->recv)-1;
+				/* swamping my in? */
+				if(MAX_HEADER_LENGTH > to_con->u.accept.header_bytes_recv)
 				{
-					old_limit = to_con->recv->limit;
-					to_con->recv->limit = to_con->recv->pos;
-					to_con->recv->pos = old_pos;
-					logg_devel("\t------------------ Initiator\n");
-					logg_develd_old("\"%.*s\"\n", buffer_remaining(*to_con->recv), buffer_start(*to_con->recv));
-					to_con->connect_state++;
+					/* we need more bytes */
+					/* skip between 200 and \r\n, but keep one char, it may be the \r */
+					to_con->recv->pos = to_con->recv->limit - 1;
+					more_bytes_needed = true;
 					break;
 				}
-				else if(!buffer_remaining(*to_con->recv)) /* End of Buffer? */
+				else
+					return abort_g2_400(to_con); /* go home */
+			}
+			dist = next - start;
+			to_con->recv->pos += dist + 2;
+			to_con->u.accept.header_bytes_recv += dist + 2;
+			to_con->connect_state++;
+	/* again fidel around with the header */
+		case SEARCH_CAPS_2:
+			if(unlikely(!buffer_remaining(*to_con->recv))) {
+				more_bytes_needed = true;
+				break;
+			}
+
+			do
+			{
+				start = buffer_start(*to_con->recv);
+				next  = mem_searchrn(start, buffer_remaining(*to_con->recv));
+				if(!next)
+					break;
+				dist = next - start;
+				logg_develd_old("line: \"%.*s\"\n", dist, start);
+				header_handle_line(to_con, start, dist);
+				to_con->recv->pos += 2;
+				to_con->u.accept.header_bytes_recv += dist + 2;
+				if(0 == dist) {
+					header_end = true;
+					break;
+				}
+			} while(buffer_remaining(*to_con->recv));
+
+			if(likely(header_end))
+			{
+			/*
+			 * retain data delivered directly behind the header if there is some
+			 * trust me, this is needed, so no skipping
+			 */
+				logg_devel("\t------------------ Initiator\n");
+				to_con->connect_state++;
+			}
+			else
+			{
+				/* swamping my in? */
+				if(MAX_HEADER_LENGTH > to_con->u.accept.header_bytes_recv)
 				{
-					/* Header not to long (someone DoS us?) */
-					if(MAX_HEADER_LENGTH > (to_con->recv->limit - old_pos))
-					{
+					/* buffer full and no end? */
+					if(to_con->recv->capacity - buffer_remaining(*to_con->recv)) {
 						/* we need more bytes */
-						to_con->recv->pos = old_pos;
 						more_bytes_needed = true;
 						break;
 					}
-					else /* or go home */
-						return abort_g2_400(to_con);
-				}
-			}
-			break;
-	/* again fidel around with the list */
-		case SEARCH_CAPS_2:
-			old_pos = to_con->recv->pos;
-			found = 0;
-			to_con->flags.second_header = true;
-			while(buffer_remaining(*to_con->recv))
-			{
-				switch(search_state)
-				{
-			/* search first CRLF (maybe someone sends something like 'Welcome' behind the 200) and skip it */
-				case 0:
-					found = ('\r' != *(buffer_start(*to_con->recv)) && '\n'!= *(buffer_start(*to_con->recv))) ? 0: found + 1;
-					/* there was a CRLF */
-					if(2 == found)
-						search_state++;
-					break;
-				case 1:
-					old_pos = to_con->recv->pos;
-					search_state++;
-			/* search for fieldseparator ':' */
-				case 2:
-					if(':' == *buffer_start(*to_con->recv))
-					{
-						size_t k;
-						size_t real_distance = 0;
-
-						/* back to start of field */
-						distance = to_con->recv->pos - old_pos;
-						to_con->recv->pos = old_pos;
-						
-// TODO: use isalnum & isgraph?? They are locale-dependent.
-/* 	hopefully none sends multibyte & non-ascii field-names. */
-						/* filter bogus beginning (skip leading space) */
-						while(distance && !isalnum((int)(*buffer_start(*to_con->recv)))) {
-							to_con->recv->pos++;
-							distance--;
-						}
-						
-						/*
-						 * lets see what we can filter to find the "real" end
-						 * of the field (skip trailing space)
-						 */
-						old_pos = to_con->recv->pos;
-						while(distance && isgraph((int)(*buffer_start(*to_con->recv))))
-						{
-							to_con->recv->pos++;
-							distance--;
-							real_distance++;
-						}
-						to_con->recv->pos = old_pos;
-
-						/*
-						 * even if we may have filtered all, we are continueing,
-						 * we could only sync again at a "\r\n" (the field-data may contain ':').
-						 * Maybe this "\r\n" is the last (it must be send, see above),
-						 * Ok, then handshaking fails. Not my fault if someone sends such nonsense.
-						 */
-						for(k = 0; k < KNOWN_HEADER_FIELDS_SUM; k++)
-						{
-							if(real_distance != KNOWN_HEADER_FIELDS[k]->length)
-								continue;
-						
-							if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_HEADER_FIELDS[k]->txt, KNOWN_HEADER_FIELDS[k]->length))
-							{
-								field_num = k;
-								field_found = true;
-								break;
-							}
-						}
-
-						if(!field_found) {
-							logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
-								(int) real_distance, buffer_start(*to_con->recv));
-						}
-						else
-						{
-							if(NULL == KNOWN_HEADER_FIELDS[field_num]->action) {
-								logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
-									(int) real_distance, buffer_start(*to_con->recv));
-							} else {
-								logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
-									(int) real_distance, buffer_start(*to_con->recv));
-							}
-						}
-
-						/*
-						 * since we may have shortened the string due to filtering,
-						 * we have to use all lengths, to get behind the ':'
-						 */
-						to_con->recv->pos += real_distance + distance + 1;
-						old_pos = to_con->recv->pos;
-						search_state++;
-					}
-					break;
-			/* find end of line */
-				case 3:
-					if('\r' == *buffer_start(*to_con->recv))
-						search_state++;
-					break;
-				case 4:
-					if('\n' == *buffer_start(*to_con->recv))
-					{
-						/* Field-data complete, back to start of field-data */
-						distance = to_con->recv->pos - old_pos - 1;
-						to_con->recv->pos = old_pos;
-
-						/* remove leading white-spaces in field-data */
-						while(distance && isspace((int)(*buffer_start(*to_con->recv)))) {
-							to_con->recv->pos++;
-							distance--;
-						}
-
-						/* now call the associated action for this field */
-// TODO: Better save information gained in first header from being
-// overwritten in second (Bad guys are always doing bad things)
-						if(distance && field_found && NULL != KNOWN_HEADER_FIELDS[field_num]->action)
-							KNOWN_HEADER_FIELDS[field_num]->action(to_con, distance);
-						else
-						{
-							if(distance) {
-								logg_develd("\"%.*s\"\n", (int) distance, buffer_start(*to_con->recv));
-							} else {
-								logg_devel("Field with no data recieved!\n");
-							}
-						}
-						search_state = 2;
-						to_con->recv->pos += distance + 2;
-						old_pos = to_con->recv->pos;
-						field_found = false;
-					}
 					else
-						search_state--;
-					break;
+						return abort_g2_400(to_con); /* go home */
 				}
-				to_con->recv->pos++;
+				else
+					return abort_g2_400(to_con); /* go home */
 			}
-
-			to_con->connect_state++;
 	/* Content-Key? */
 		case CHECK_CONTENT:
 			/* do we have one? */
-			if(to_con->flags.content_ok)
+			if(likely(to_con->u.accept.flags.content_ok))
 			{
 				/* and is it G2? */
-				if(to_con->flags.content_g2)
+				if(likely(to_con->u.accept.flags.content_g2))
 					to_con->connect_state++;
 				else
 					return abort_g2_501(to_con);
@@ -1374,7 +1238,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			 * if nothing was send, default to no encoding (Shareaza tries to
 			 * save space in the header, so no failure if absent)
 			 */
-			if(!to_con->flags.enc_in_ok)
+			if(!to_con->u.accept.flags.enc_in_ok)
 				to_con->encoding_in = ENC_NONE;
 			else
 			{
@@ -1382,8 +1246,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				if(to_con->encoding_in != server.settings.default_in_encoding)
 					return abort_g2_400(to_con);
 
-				if((ENC_NONE != to_con->encoding_in) && (!to_con->recv_u))
-				{
+				if((ENC_NONE != to_con->encoding_in) && (!to_con->recv_u)) {
 					to_con->recv_u = recv_buff_alloc();
 					if(!to_con->recv_u)
 						return abort_g2_501(to_con);
@@ -1391,8 +1254,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 				if(ENC_DEFLATE == to_con->encoding_in)
 				{
-					if(Z_OK != inflateInit(&to_con->z_decoder))
-					{
+					if(Z_OK != inflateInit(&to_con->z_decoder)) {
 						if(to_con->z_decoder.msg)
 							logg_posd(LOGF_DEBUG, "%s\n", to_con->z_decoder.msg);
 						return abort_g2_500(to_con);
@@ -1402,11 +1264,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->connect_state++;
 	/* make everything ready for business */
 		case FINISH_CONNECTION:
-			/*
-			 * reclaim data delivered directly behind the header if there is some
-			 * trust me, this is needed
-			 */
-			to_con->recv->limit = old_limit;
+			/* wipe out the shared space again */
+			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
 			to_con->connect_state = G2CONNECTED;
 			logg_devel("Connect succesfull\n");
 			more_bytes_needed = true;
@@ -1419,7 +1278,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 	buffer_compact(*to_con->recv);
 
-	logg_develd_old("%p pos: %u lim: %u ol: %u\n", (void*)buffer_start(*to_con->recv), to_con->recv->pos, to_con->recv->limit, old_limit);
+	logg_develd_old("%p pos: %u lim: %u\n", (void*)buffer_start(*to_con->recv), to_con->recv->pos, to_con->recv->limit);
 	return ret_val;
 }
 

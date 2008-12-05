@@ -189,7 +189,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1
+OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

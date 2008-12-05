@@ -46,6 +46,7 @@ LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
 LIB_MY_BITOPS_EXTRN_P(void *, memxor, (void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN_P(void *, memand, (void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN_P(void *, memneg, (void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 # ifndef HAVE_MEMPCPY
 LIB_MY_BITOPS_EXTRN(void *mempcpy(void *restrict dst, const void *restrict src, size_t len));
 #  define MEMPCPY_DEFINED
