@@ -64,7 +64,7 @@
 /* internal prototypes */
 static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool init_con_a(int *, union combo_addr *);
-static inline bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
+static bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static noinline bool initiate_g2(g2_connection_t *);
@@ -414,7 +414,7 @@ out_err:
 	*accept_so = -1;
 	return false;
 }
-
+#undef OUT_ERR
 
 static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_info **work_cons,
 		struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff, int *epoll_fd)
@@ -426,8 +426,7 @@ static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_inf
 	}
 
 	*work_cons = calloc(1, sizeof(struct g2_con_info) + (WC_START_CAPACITY * sizeof(g2_connection_t *)));
-	if(!*work_cons)
-	{
+	if(!*work_cons) {
 		logg_errno(LOGF_ERR, "work_cons[] memory");
 		free(*poll_me);
 		return false;
@@ -453,7 +452,26 @@ static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_inf
 	return true;
 }
 
-static inline bool handle_accept_in(
+static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum loglevel l, const char *msg)
+{
+	if(l <= get_act_loglevel())
+	{
+		union combo_addr our_local_addr;
+		char addr_buf1[INET6_ADDRSTRLEN], addr_buf2[INET6_ADDRSTRLEN];
+		socklen_t sin_size = sizeof(our_local_addr);
+
+		getsockname(work_entry->com_socket, &our_local_addr.sa, &sin_size);
+		logg(LOGF_DEBUG, "Connection\tFrom: %s:%hu\tTo: %s:%hu\tFDNum: %i -> %s\n",
+		     combo_addr_print(&work_entry->remote_host, addr_buf1, sizeof(addr_buf1)),
+		     ntohs(combo_addr_port(&work_entry->remote_host)),
+		     combo_addr_print(&our_local_addr, addr_buf2, sizeof(addr_buf2)),
+		     ntohs(combo_addr_port(&our_local_addr)),
+		     work_entry->com_socket,
+		     msg);
+	}
+}
+
+static bool handle_accept_in(
 	int accept_so,
 	struct g2_con_info *work_cons,
 	g2_connection_t **work_entry,
@@ -461,62 +479,40 @@ static inline bool handle_accept_in(
 	int abort_fd,
 	struct epoll_event *poll_me)
 {
-	union combo_addr our_local_addr;
 	struct epoll_event tmp_eevent = {0,{0}};
 	socklen_t sin_size = sizeof((*work_entry)->remote_host); /* what to do with this info??? */
 	int tmp_fd;
 	int fd_flags;
-	int ret;
 
-	do
+	do {
 		tmp_fd = accept(accept_so, &(*work_entry)->remote_host.sa, &sin_size);
-	while(0 > tmp_fd && EINTR == errno);
+	} while(0 > tmp_fd && EINTR == errno);
 	if(-1 == tmp_fd) {
 		logg_errno(LOGF_NOTICE, "accepting");
 		return false;
 	}
 	(*work_entry)->com_socket = tmp_fd;
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-
-		logg_posd(LOGF_DEBUG, "%s\t From IP: %s\tPort: %hu\tFDNum: %i\n",
-		"A connection!",
-		combo_addr_print(&(*work_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-		ntohs(combo_addr_port(&(*work_entry)->remote_host)),
-		(*work_entry)->com_socket);
-	}
 
 	/* check if our total server connection limit is reached */
 	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
-		logg_pos(LOGF_DEBUG, "too many connections\n");
 		while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
+		handle_accept_give_msg(*work_entry, LOGF_DEBUG, "too many connections");
 		return false;
 	}
+
 // TODO: Little race, but its only the connection limit
 	/* increase our total server connection sum */
 	atomic_inc(&server.status.act_connection_sum);
 
 	/* room for another connection? */
 	/* originaly ment to be reallocated */
-	if(work_cons->limit == work_cons->capacity){
+	if(unlikely(work_cons->limit == work_cons->capacity)){
 		goto err_out_after_count;
 	}
 /*	if(poll_me->limit == poll_me->capacity) {
 		goto err_out_after_count;
 	}*/
-
 // TODO: Find external addresses
-	sin_size = sizeof(our_local_addr);
-	ret = getsockname((*work_entry)->com_socket, &our_local_addr.sa, &sin_size);
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-
-		logg_posd(LOGF_DEBUG, "%s\t To IP: %s\tPort: %hu\tret: %i\n",
-		"A connection!",
-		combo_addr_print(&our_local_addr, addr_buf, sizeof(addr_buf)),
-		ntohs(combo_addr_port(&our_local_addr)),
-		ret);
-	}
 
 	/* get the fd-flags and add nonblocking  */
 	/* according to POSIX manpage EINTR is only encountered when the cmd was F_SETLKW */
@@ -537,6 +533,8 @@ static inline bool handle_accept_in(
 		goto err_out_after_count;
 	}
 
+	handle_accept_give_msg(*work_entry, LOGF_DEVEL, "going to handshake");
+
 	work_cons->data[work_cons->limit] = *work_entry;
 	work_cons->limit++;
 	*work_entry = g2_con_get_free();
@@ -550,8 +548,8 @@ static inline bool handle_accept_in(
 err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
 	atomic_dec(&server.status.act_connection_sum);
-	
 	while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
+	handle_accept_give_msg(*work_entry, LOGF_DEBUG, "problems adding it!");
 	return false;
 }
 
@@ -853,7 +851,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					break;
 				dist = next - start;
 				logg_develd_old("line: \"%.*s\"\n", dist, start);
-				header_handle_line(to_con, start, dist);
+				if(likely(dist))
+					header_handle_line(to_con, start, dist);
 				to_con->recv->pos += 2;
 				to_con->u.accept.header_bytes_recv += dist + 2;
 				if(0 == dist) {
@@ -864,7 +863,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 			if(likely(header_end)) {
 				buffer_skip(*to_con->recv);
-				logg_devel("\t------------------ Initiator\n");
+				logg_devel_old("\t------------------ Initiator\n");
 				to_con->connect_state++;
 			}
 			else
@@ -1015,7 +1014,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 						server.settings.bind.ip4 : server.settings.bind.ip6;
 				}
 				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
-					                         buffer_remaining(*to_con->send));
+				                            buffer_remaining(*to_con->send));
 				if(unlikely(!cp_ret)) {
 					/* we have a problem, that should not happen... */
 					logg_errno(LOGF_DEBUG, "writing Listen-Ip-field");
@@ -1039,14 +1038,14 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 
 			/* tell remote end from which ip we saw it comming */
-			if(unlikely(!combo_addr_print(&to_con->remote_host,
-			                              buffer_start(*to_con->send),
-			                              buffer_remaining(*to_con->send)))) {
+			cp_ret = combo_addr_print_c(&to_con->remote_host, buffer_start(*to_con->send),
+			                            buffer_remaining(*to_con->send));
+			if(unlikely(!cp_ret)) {
 				logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
 				to_con->flags.dismissed = true;
 				return false;
 			}
-			to_con->send->pos += strnlen(buffer_start(*to_con->send), buffer_remaining(*to_con->send));
+			to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
 			if(str_size(HED_2_PART_3) < buffer_remaining(*to_con->send)) {
 				strlitcpy(buffer_start(*to_con->send), HED_2_PART_3);
@@ -1111,7 +1110,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				return false;
 			}
 
-			logg_devel("\t------------------ Response\n");
+			logg_devel_old("\t------------------ Response\n");
 #if 0
 			buffer_flip(*to_con->send);
 			logg_develd("\"%.*s\"\nlength: %i\n",
@@ -1184,7 +1183,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					break;
 				dist = next - start;
 				logg_develd_old("line: \"%.*s\"\n", dist, start);
-				header_handle_line(to_con, start, dist);
+				if(likely(dist))
+					header_handle_line(to_con, start, dist);
 				to_con->recv->pos += 2;
 				to_con->u.accept.header_bytes_recv += dist + 2;
 				if(0 == dist) {
@@ -1199,7 +1199,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			 * retain data delivered directly behind the header if there is some
 			 * trust me, this is needed, so no skipping
 			 */
-				logg_devel("\t------------------ Initiator\n");
+				logg_devel_old("\t------------------ Initiator\n");
 				to_con->connect_state++;
 			}
 			else
@@ -1267,7 +1267,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* wipe out the shared space again */
 			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
 			to_con->connect_state = G2CONNECTED;
-			logg_devel("Connect succesfull\n");
+			handle_accept_give_msg(to_con, LOGF_DEBUG, "accepted");
 			more_bytes_needed = true;
 			break;
 		case G2CONNECTED:

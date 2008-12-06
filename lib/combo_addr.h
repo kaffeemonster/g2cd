@@ -192,7 +192,7 @@ static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 # define SLASH08 htonl(0xFF000000)
 # define SLASH16 htonl(0xFFFF0000)
 # define SLASH32 htonl(0xFFFFFFFF)
-# define IP_CMP(a, b, m) (htonl(b) == ((a) & (m)))
+# define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
 static inline bool combo_addr_is_public(const union combo_addr *addr)
 {
 	in_addr_t a;
@@ -201,15 +201,15 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 	if(unlikely(AF_INET6 == addr->s_fam))
 	{
 		const struct in6_addr *a6 = &addr->in6.sin6_addr;
-		if(IN6_IS_ADDR_UNSPECIFIED(a6))
+		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
 			return false;
-		if(IN6_IS_ADDR_LOOPBACK(a6))
+		if(unlikely(IN6_IS_ADDR_LOOPBACK(a6)))
 			return false;
-		if(IN6_IS_ADDR_MULTICAST(a6))
+		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
 			return false;
-		if(IN6_IS_ADDR_LINKLOCAL(a6))
+		if(unlikely(IN6_IS_ADDR_LINKLOCAL(a6)))
 			return false;
-		if(IN6_IS_ADDR_SITELOCAL(a6))
+		if(unlikely(IN6_IS_ADDR_SITELOCAL(a6)))
 			return false;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||

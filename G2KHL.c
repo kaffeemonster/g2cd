@@ -1272,7 +1272,7 @@ life_tree_error:
 	}
 
 	t = rbtree_cache_lowest(&cache.tree);
-	if(t && t->e.when < when && KHL_CACHE_SIZE <= cache.num)
+	if(likely(t) && t->e.when < when && KHL_CACHE_SIZE <= cache.num)
 	{
 		logg_devel("found older entry\n");
 		if(!(t = rbtree_cache_remove(&cache.tree, t)))

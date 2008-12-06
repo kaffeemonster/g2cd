@@ -59,7 +59,7 @@ LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
 # endif
 
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))
-# define strplitcpy(x, y)	(mempcpy((x), (y), str_size(y)))
+# define strplitcpy(x, y)	((char *)memcpy((x), (y), str_size(y)) + str_size(y))
 
 static inline void strreverse(char *begin, char *end)
 {
