@@ -259,6 +259,34 @@ static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t se
 	return h;
 }
 
+static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
+{
+	bool ret = a->s_fam == a->s_fam;
+	if(!ret)
+		return ret;
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->s_fam)) {
+		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr &&
+		       a->in.sin_port == b->in.sin_port;
+	} else {
+		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr) &&
+		       a->in6.sin6_port == b->in6.sin6_port;
+	}
+}
+
+static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo_addr *b)
+{
+	bool ret = a->s_fam == a->s_fam;
+	if(!ret)
+		return ret;
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->s_fam)) {
+		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr;
+	} else {
+		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
+	}
+}
+
 # ifndef HAVE_INET_PTON
 /*
  * more Wuerg-Around

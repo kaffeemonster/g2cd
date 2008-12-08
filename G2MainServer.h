@@ -68,8 +68,6 @@ static always_inline int get_act_loglevel(void);
 
 # define PD_START_CAPACITY      128
 # define PD_CAPACITY_INCREMENT  32
-# define WC_START_CAPACITY      128
-# define WC_CAPACITY_INCREMENT  8
 
 struct poll_info
 {

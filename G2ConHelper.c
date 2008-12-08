@@ -46,15 +46,16 @@
 #include "G2ConHelper.h"
 #include "G2MainServer.h"
 #include "G2Connection.h"
+#include "G2ConRegistry.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
 
-g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
+g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 {
-	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	const char *msg = NULL;
 
 	if(p_entry->events & (uint32_t)EPOLLERR)
@@ -74,9 +75,9 @@ g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 		char addr_buf[INET6_ADDRSTRLEN];
 		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 			msg,
-			combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-			ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-			(*w_entry)->com_socket);
+			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+			ntohs(combo_addr_port(&w_entry->remote_host)),
+			w_entry->com_socket);
 /*
  * Under Linux get errno out off ERRQUEUE and print/log it
  *			#define ERR_BUFF_SIZE 4096
@@ -92,7 +93,7 @@ g2_connection_t **handle_socket_abnorm(struct epoll_event *p_entry)
 
 bool do_read(struct epoll_event *p_entry)
 {
-	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	ssize_t result = 0;
 	bool ret_val = true;
 #ifdef DEBUG_DEVEL
@@ -160,7 +161,7 @@ static size_t iovec_len(const struct iovec vec[], size_t cnt)
 
 ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec vec[], size_t cnt, bool more)
 {
-	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	ssize_t result = 0;
 
 	if(!cnt)
@@ -241,7 +242,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 
 bool do_write(struct epoll_event *p_entry, int epoll_fd)
 {
-	g2_connection_t *w_entry = *((g2_connection_t **)p_entry->data.ptr);
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	bool ret_val = true;
 	ssize_t result = 0;
 #ifdef DEBUG_DEVEL
@@ -340,28 +341,14 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	return ret_val;
 }
 
-bool recycle_con(
-	g2_connection_t **w_entry,
-	struct g2_con_info *work_cons,
-	int epoll_fd,
-	int keep_it
-	)
+bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 {
 	struct epoll_event tmp_eevent;
-	g2_connection_t **w_last = &work_cons->data[work_cons->limit-1];
-	g2_connection_t *tmp_con = *w_entry;
-
-	/* remove from WorkCons */
-	if(w_entry < w_last)
-		memmove(w_entry, (w_entry + 1), (w_last - w_entry) * sizeof(*w_entry));
-
-	*w_last = NULL;
-	work_cons->limit--;
 
 	tmp_eevent.events = 0;
 	tmp_eevent.data.u64 = 0;
 	/* remove from EPoll */
-	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, tmp_con->com_socket, &tmp_eevent))
+	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent))
 		logg_errno(LOGF_ERR, "removing bad socket from EPoll");
 
 	if(!keep_it)
@@ -369,16 +356,17 @@ bool recycle_con(
 		int ret_val;
 		/* free the fd */
 		do {
-			ret_val = close(tmp_con->com_socket);
+			ret_val = close(w_entry->com_socket);
 		} while(ret_val && EINTR == errno);
 		if(ret_val)
 			logg_errno(LOGF_DEBUG, "closing bad socket");
 
 		atomic_dec(&server.status.act_connection_sum);
+		g2_conreg_remove(w_entry);
 
 		/* return datastructure to FreeCons */
-		g2_con_clear(tmp_con);
-		g2_con_ret_free(tmp_con);
+		g2_con_clear(w_entry);
+		g2_con_ret_free(w_entry);
 	}
 
 	logg_develd("%s\n", (keep_it) ? "connection removed" : "connection recyled");

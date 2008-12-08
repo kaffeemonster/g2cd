@@ -52,6 +52,7 @@
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2ConHelper.h"
+#include "G2ConRegistry.h"
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
 #include "G2PacketSerializer.h"
@@ -61,16 +62,15 @@
 #include "lib/my_epoll.h"
 
 /* internal prototypes */
-static inline bool init_memory_h(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
-static inline bool handle_from_accept(struct g2_con_info **, int, int);
-static inline g2_connection_t **handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
+static inline bool init_memory_h(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
+static inline bool handle_from_accept(int, int);
+static inline g2_connection_t *handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
 /* do not inline, we take a pointer of it, and when its called, performance doesn't matter */
-static void clean_up_h(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
+static void clean_up_h(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Handler(void *param)
 {
 	/* data-structures */
-	struct g2_con_info *work_cons = NULL;
 	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
 	/* sock-things */
@@ -89,7 +89,7 @@ void *G2Handler(void *param)
 	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
 	/* getting memory for our FD's and everything else */
-	if(!init_memory_h(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))
+	if(!init_memory_h(&eevents, &lrecv_buff, &lsend_buff, &epoll_fd))
 	{ 
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
 			diedie("initiating stop"); // hate doing this, but now it's to late
@@ -101,7 +101,7 @@ void *G2Handler(void *param)
 
 	if(sizeof(from_accept) != recv(sock2main, &from_accept, sizeof(from_accept), 0)) {
 		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_h(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	logg(LOGF_DEBUG, "Handler:\tfrom_accept -> %i\n", from_accept);
@@ -112,13 +112,13 @@ void *G2Handler(void *param)
 	eevents->data.ptr = (void *)1;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, from_accept, eevents)) {
 		logg_errno(LOGF_ERR, "adding acceptor-pipe to epoll");
-		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_h(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 	eevents->data.ptr = (void *)0;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents)) {
 		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
-		clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_h(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		pthread_exit(NULL);
 	}
 
@@ -148,9 +148,9 @@ void *G2Handler(void *param)
 						// Any invalid FD's remained in PollData?
 						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT)))
 						{
-							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
+							g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
 							if(tmp_con_holder)
-								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
+								recycle_con(tmp_con_holder, epoll_fd, false);
 							else {
 								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
 								keep_going = false;
@@ -160,18 +160,18 @@ void *G2Handler(void *param)
 						{
 							// Some FD's ready to be filled?
 							// Some data ready to be read in?
-							g2_connection_t **tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd, &lrecv_buff, &lsend_buff);
+							g2_connection_t *tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd, &lrecv_buff, &lsend_buff);
 							if(tmp_con_holder)
 							{
-								if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff) {
-									(*tmp_con_holder)->recv = NULL;
+								if(lrecv_buff && tmp_con_holder->recv == lrecv_buff) {
+									tmp_con_holder->recv = NULL;
 									buffer_clear(*lrecv_buff);
 								}
-								if(lsend_buff && (*tmp_con_holder)->send == lsend_buff) {
-									(*tmp_con_holder)->send = NULL;
+								if(lsend_buff && tmp_con_holder->send == lsend_buff) {
+									tmp_con_holder->send = NULL;
 									buffer_clear(*lsend_buff);
 								}
-								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
+								recycle_con(tmp_con_holder, epoll_fd, false);
 							}
 						}
 					}
@@ -179,7 +179,7 @@ void *G2Handler(void *param)
 					else
 					{
 						if(e_wptr->events & (uint32_t) EPOLLIN)
-							handle_from_accept(&work_cons, from_accept, epoll_fd);
+							handle_from_accept(from_accept, epoll_fd);
 						/* if there is no read-interrest, we're blown up */
 						else
 						{
@@ -225,13 +225,13 @@ void *G2Handler(void *param)
 		}
 	}
 
-	clean_up_h(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+	clean_up_h(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 	pthread_exit(NULL);
 	return NULL; /* to avoid warning about reaching end of non-void funktion */
 }
 
-static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_info **work_cons,
-		struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff, int *epoll_fd)
+static inline bool init_memory_h(struct epoll_event **poll_me, struct norm_buff **lrecv_buff,
+                                 struct norm_buff **lsend_buff, int *epoll_fd)
 {
 	*poll_me = calloc(EVENT_SPACE, sizeof(**poll_me));
 	if(NULL == *poll_me)
@@ -240,22 +240,12 @@ static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_inf
 		return false;
 	}
 
-	*work_cons = calloc(1, sizeof(struct g2_con_info) + (WC_START_CAPACITY * sizeof(g2_connection_t *)));
-	if(NULL == *work_cons)
-	{
-		logg_errno(LOGF_ERR, "work_cons[] memory");
-		free(*poll_me);
-		return false;
-	}
-	(*work_cons)->capacity = WC_START_CAPACITY;
-
 	*lrecv_buff = recv_buff_local_get();
 	*lsend_buff = recv_buff_local_get();
 	if(!(*lrecv_buff && *lsend_buff))
 	{
 		logg_errno(LOGF_ERR, "allocating local buffer");
 		free(*poll_me);
-		free(*work_cons);
 		return false;
 	}
 
@@ -269,46 +259,29 @@ static inline bool init_memory_h(struct epoll_event **poll_me, struct g2_con_inf
 	return true;
 }
 
-static inline bool handle_from_accept(struct g2_con_info **work_cons, int from_acceptor, int epoll_fd)
+static inline bool handle_from_accept(int from_acceptor, int epoll_fd)
 {
 	struct epoll_event tmp_eevent = {0,{0}};
 	g2_connection_t *recvd_con = NULL;
 	ssize_t ret_val;
 
-	do
-	{
+	do {
 		ret_val = read(from_acceptor, &recvd_con, sizeof(recvd_con));
 	} while(-1 == ret_val && EINTR == errno);
-	if(sizeof(recvd_con) != ret_val)
-	{
+	if(sizeof(recvd_con) != ret_val) {
 		logg_errno(LOGF_INFO, "recieving new Connection");
 		return false;
 	}
 
-	if((*work_cons)->limit == (*work_cons)->capacity)
-	{
-		struct g2_con_info *tmp_pointer = realloc(*work_cons, sizeof(struct g2_con_info) + (((*work_cons)->capacity + WC_CAPACITY_INCREMENT) * sizeof(g2_connection_t *)));
-		if(NULL == tmp_pointer)
-		{
-			logg_errno(LOGF_DEBUG, "reallocing work_con[]");
-			goto clean_up;
-		}
-		*work_cons = tmp_pointer;
-		(*work_cons)->capacity += WC_CAPACITY_INCREMENT;
-		logg_devel("work_con[] reallocated\n");
-	}
-
 	tmp_eevent.events = recvd_con->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
-	tmp_eevent.data.ptr = &(*work_cons)->data[(*work_cons)->limit];
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, recvd_con->com_socket, &tmp_eevent))
-	{
+	tmp_eevent.data.ptr = recvd_con;
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, recvd_con->com_socket, &tmp_eevent)) {
 		logg_errno(LOGF_DEBUG, "adding new socket to EPoll");
 		goto clean_up;
 	}
 
-	(*work_cons)->data[(*work_cons)->limit] = recvd_con;
-	(*work_cons)->limit++;	
 	return true;
+
 clean_up:
 	while(-1 == close(recvd_con->com_socket) && EINTR == errno);
 	g2_con_clear(recvd_con);
@@ -316,35 +289,35 @@ clean_up:
 	return false;
 }
 
-static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
+static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
 {
-	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 
 	/* get buffer */
-	if(!manage_buffer_before(&(*w_entry)->recv, lrecv_buff)) {
-		(*w_entry)->flags.dismissed = true;
+	if(!manage_buffer_before(&w_entry->recv, lrecv_buff)) {
+		w_entry->flags.dismissed = true;
 		return w_entry;
 	}
-	if(!manage_buffer_before(&(*w_entry)->send, lsend_buff)) {
-		(*w_entry)->flags.dismissed = true;
+	if(!manage_buffer_before(&w_entry->send, lsend_buff)) {
+		w_entry->flags.dismissed = true;
 		return w_entry;
 	}
 
 	/* write */
-	(*w_entry)->flags.has_written = false;
+	w_entry->flags.has_written = false;
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
 		struct norm_buff *d_target = NULL;
 		struct list_head *e, *n;
-		if(ENC_DEFLATE == (*w_entry)->encoding_out)
-			d_target = (*w_entry)->send_u;
+		if(ENC_DEFLATE == w_entry->encoding_out)
+			d_target = w_entry->send_u;
 		else
-			d_target = (*w_entry)->send;
+			d_target = w_entry->send;
 
 		if(buffer_remaining(*d_target) < 10)
 			goto no_fill_before_write;
 
-		list_for_each_safe(e, n, &(*w_entry)->packets_to_send)
+		list_for_each_safe(e, n, &w_entry->packets_to_send)
 		{
 			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
 			if(!g2_packet_serialize_to_buff(entry, d_target))
@@ -352,10 +325,10 @@ static inline g2_connection_t **handle_socket_io_h(struct epoll_event *p_entry, 
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"failed to encode packet-stream",
-					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-					(*w_entry)->com_socket);
-				(*w_entry)->flags.dismissed = true;
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
+				w_entry->flags.dismissed = true;
 				return w_entry;
 			}
 			if(ENCODE_FINISHED != entry->packet_encode)
@@ -385,33 +358,33 @@ no_fill_before_write:
 
 		if(!do_read(p_entry))
 			return w_entry;
-		if(buffer_cempty(*(*w_entry)->recv))
+		if(buffer_cempty(*w_entry->recv))
 			goto nothing_to_read;
 
-		if(ENC_NONE == (*w_entry)->encoding_in)
-			d_source = (*w_entry)->recv;
+		if(ENC_NONE == w_entry->encoding_in)
+			d_source = w_entry->recv;
 		else
 		{
-			buffer_flip(*(*w_entry)->recv);
+			buffer_flip(*w_entry->recv);
 retry_unpack:
 			logg_devel_old("--------- compressed\n");
-			d_source = (*w_entry)->recv_u;
-			if(buffer_remaining(*(*w_entry)->recv))
+			d_source = w_entry->recv_u;
+			if(buffer_remaining(*w_entry->recv))
 			{
 		/*if(ENC_DEFLATE == (*w_entry)->encoding_in)*/
-				(*w_entry)->z_decoder.next_in = (Bytef *)buffer_start(*(*w_entry)->recv);
-				(*w_entry)->z_decoder.avail_in = buffer_remaining(*(*w_entry)->recv);
-				(*w_entry)->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
-				(*w_entry)->z_decoder.avail_out = buffer_remaining(*d_source);
+				w_entry->z_decoder.next_in = (Bytef *)buffer_start(*w_entry->recv);
+				w_entry->z_decoder.avail_in = buffer_remaining(*w_entry->recv);
+				w_entry->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
+				w_entry->z_decoder.avail_out = buffer_remaining(*d_source);
 
-				logg_develd_old("++++ cbytes: %u\n", buffer_remaining(*(*w_entry)->recv));
+				logg_develd_old("++++ cbytes: %u\n", buffer_remaining(*w_entry->recv));
 				logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 
-				switch(inflate(&(*w_entry)->z_decoder, Z_SYNC_FLUSH))
+				switch(inflate(&w_entry->z_decoder, Z_SYNC_FLUSH))
 				{
 				case Z_OK:
-					(*w_entry)->recv->pos += (buffer_remaining(*(*w_entry)->recv) - (*w_entry)->z_decoder.avail_in);
-					d_source->pos += (buffer_remaining(*d_source) - (*w_entry)->z_decoder.avail_out);
+					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder.avail_in);
+					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder.avail_out);
 					break;
 				case Z_STREAM_END:
 					logg_devel("Z_STREAM_END\n");
@@ -439,13 +412,13 @@ retry_unpack:
 			compact_cbuff = true;
 		}
 
-		logg_develd_old("++++ ospace: %u\n", buffer_remaining(*(*w_entry)->recv));
+		logg_develd_old("++++ ospace: %u\n", buffer_remaining(*w_entry->recv));
 		logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 		buffer_flip(*d_source);
 		if(buffer_remaining(*d_source)) do
 		{
 			logg_devel_old("---------- reread\n");
-			build_packet = (*w_entry)->build_packet;
+			build_packet = w_entry->build_packet;
 			if(!build_packet) {
 				build_packet = &tmp_packet;
 				g2_packet_init_on_stack(build_packet);
@@ -460,10 +433,10 @@ retry_unpack:
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"failed to decode packet-stream",
-					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-					(*w_entry)->com_socket);
-				(*w_entry)->flags.dismissed = true;
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
+				w_entry->flags.dismissed = true;
 				return w_entry;
 			}
 			else
@@ -471,20 +444,20 @@ retry_unpack:
 				if(DECODE_FINISHED == build_packet->packet_decode ||
 				   PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
-					if(ENC_DEFLATE == (*w_entry)->encoding_out)
-						d_target = (*w_entry)->send_u;
+					if(ENC_DEFLATE == w_entry->encoding_out)
+						d_target = w_entry->send_u;
 					else
-						d_target = (*w_entry)->send;
+						d_target = w_entry->send;
 
-					if(g2_packet_decide_spec(*w_entry, &(*w_entry)->packets_to_send, g2_packet_dict, build_packet))
+					if(g2_packet_decide_spec(w_entry, &w_entry->packets_to_send, g2_packet_dict, build_packet))
 					{
-						if(!((*w_entry)->poll_interrests & (uint32_t)EPOLLOUT))
+						if(!(w_entry->poll_interrests & (uint32_t)EPOLLOUT))
 						{
 							struct epoll_event tmp_eevent = {0,{0}};
-							(*w_entry)->poll_interrests |= (uint32_t)EPOLLOUT;
-							tmp_eevent.events = (*w_entry)->poll_interrests;
+							w_entry->poll_interrests |= (uint32_t)EPOLLOUT;
+							tmp_eevent.events = w_entry->poll_interrests;
 							tmp_eevent.data.ptr = w_entry;
-							if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, &tmp_eevent)) {
+							if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &tmp_eevent)) {
 								logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 								return w_entry;
 							}
@@ -497,12 +470,12 @@ retry_unpack:
 					else if(build_packet->data_trunk_is_freeable)
 						logg_devel("datatrunk freed\n");
 
-					if((*w_entry)->build_packet &&
-					   (*w_entry)->build_packet != build_packet)
+					if(w_entry->build_packet &&
+					   w_entry->build_packet != build_packet)
 						logg_devel("w_entrys packet is not the same???");
 
 					g2_packet_free(build_packet);
-					(*w_entry)->build_packet = NULL;
+					w_entry->build_packet = NULL;
 
 					if(buffer_remaining(*d_source))
 						retry = true;
@@ -525,13 +498,13 @@ retry_unpack:
 
 		buffer_compact(*d_source);
 
-		if(ENC_NONE != (*w_entry)->encoding_in)
+		if(ENC_NONE != w_entry->encoding_in)
 		{
 // TODO: loop till zlib says more data
-			if(buffer_remaining(*(*w_entry)->recv))
+			if(buffer_remaining(*w_entry->recv))
 				goto retry_unpack;
 			if(compact_cbuff)
-				buffer_compact(*(*w_entry)->recv);
+				buffer_compact(*w_entry->recv);
 		}
 		/* after last chance to get more data, save a partial decoded packet */
 		if(save_build_packet && build_packet == &tmp_packet)
@@ -542,36 +515,26 @@ retry_unpack:
 				logg_errno(LOGF_DEBUG, "allocating durable packet");
 				return w_entry;
 			}
-			(*w_entry)->build_packet = t;
+			w_entry->build_packet = t;
 		}
 // TODO: try to write if not already written on this connec?
 	}
 
 nothing_to_read:
-	manage_buffer_after(&(*w_entry)->recv, lrecv_buff);
-	manage_buffer_after(&(*w_entry)->send, lsend_buff);
+	manage_buffer_after(&w_entry->recv, lrecv_buff);
+	manage_buffer_after(&w_entry->send, lsend_buff);
 
 	return NULL;
 }
 
-static void clean_up_h(struct epoll_event *poll_me, struct g2_con_info *work_cons,
-		struct norm_buff *lrecv_buff, struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
+static void clean_up_h(struct epoll_event *poll_me, struct norm_buff *lrecv_buff,
+                       struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
 {
-	size_t i;
-
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); // hate doing this, but now it's to late
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
 	free(poll_me);
-
-	for(i = 0; i < work_cons->limit; i++)
-	{
-		close(work_cons->data[i]->com_socket);
-		g2_con_free(work_cons->data[i]);
-	}
-	
-	free(work_cons);
 
 	recv_buff_local_ret(lrecv_buff);
 	recv_buff_local_ret(lsend_buff);

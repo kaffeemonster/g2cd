@@ -1160,17 +1160,7 @@ static void cache_ht_del(struct khl_cache_entry *e)
 
 static inline int rbnode_cache_eq(struct khl_cache_entry *a, struct khl_cache_entry *b)
 {
-	int ret = a->e.when == b->e.when && a->e.na.s_fam == a->e.na.s_fam;
-	if(!ret)
-		return ret;
-// TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->e.na.s_fam)) {
-		return a->e.na.in.sin_addr.s_addr == b->e.na.in.sin_addr.s_addr &&
-		       a->e.na.in.sin_port == b->e.na.in.sin_port;
-	} else {
-		return !!IN6_ARE_ADDR_EQUAL(&a->e.na.in6.sin6_addr, &b->e.na.in6.sin6_addr) &&
-		       a->e.na.in6.sin6_port == b->e.na.in6.sin6_port;
-	}
+	return a->e.when == b->e.when && combo_addr_eq(&a->e.na, &b->e.na);
 }
 
 static inline int rbnode_cache_lt(struct khl_cache_entry *a, struct khl_cache_entry *b)

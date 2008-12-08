@@ -38,6 +38,7 @@
 #include "G2MainServer.h"
 #define _G2CONNECTION_C
 #include "G2Connection.h"
+#include "G2ConRegistry.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
 #include "lib/atomic.h"
@@ -85,10 +86,10 @@ static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY),
 static const action_string h_as07 = {&ulpeer_what,    str_size(UPEER_KEY),       UPEER_KEY};
 static const action_string h_as08 = {&ulpeer_what,    str_size(HUB_KEY),         HUB_KEY};
 static const action_string h_as09 = {NULL,            str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
-static const action_string h_as10 = {NULL,            str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
+static const action_string h_as10 = {&empty_action_c, str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
 static const action_string h_as11 = {NULL,            str_size(X_REQUERIES_KEY), X_REQUERIES_KEY};
 static const action_string h_as12 = {NULL,            str_size(X_TRY_UPEER_KEY), X_TRY_UPEER_KEY};
-static const action_string h_as13 = {NULL,            str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
+static const action_string h_as13 = {&empty_action_c, str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
 static const action_string h_as14 = {&empty_action_c, str_size(GGEP_KEY),        GGEP_KEY};
 static const action_string h_as15 = {&empty_action_c, str_size(PONG_C_KEY),      PONG_C_KEY};
 static const action_string h_as16 = {&empty_action_c, str_size(QUERY_ROUTE_KEY), QUERY_ROUTE_KEY};
@@ -245,6 +246,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	{
 		struct list_head *e, *n;
 
+		g2_conreg_remove(work_entry);
+
 		if(work_entry->recv)
 			recv_buff_free(work_entry->recv);
 		if(work_entry->send)
@@ -265,8 +268,10 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 			g2_packet_free(entry);
 		}
 	}
-	else
+	else {
+		INIT_HLIST_NODE(&work_entry->registry);
 		work_entry->qht = NULL;
+	}
 
 	work_entry->recv = NULL;
 	work_entry->send = NULL;

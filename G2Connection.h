@@ -71,10 +71,12 @@ enum g2_connection_encodings
 # include "lib/log_facility.h"
 # include "lib/hzp.h"
 # include "lib/list.h"
+# include "lib/hlist.h"
 
 typedef struct g2_connection
 {
 	struct hzp_free  hzp;
+	struct hlist_node registry;
 	/* System Com-Things */
 	union combo_addr remote_host;
 	uint32_t         poll_interrests;
@@ -149,13 +151,6 @@ typedef struct g2_connection
 	g2_packet_t      *build_packet;
 	struct list_head packets_to_send;
 } g2_connection_t;
-
-struct g2_con_info
-{
-	size_t limit;
-	size_t capacity;
-	g2_connection_t *data[DYN_ARRAY_LEN];
-};
 
 typedef struct
 {

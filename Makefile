@@ -189,7 +189,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -O1
+#OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -359,6 +359,7 @@ HEADS = \
 	G2UDP.h \
 	G2Connection.h \
 	G2ConHelper.h \
+	G2ConRegistry.h \
 	G2Packet.h \
 	G2PacketTyper.h \
 	G2PacketSerializer.h \
@@ -378,6 +379,7 @@ MSRCS = \
 	G2UDP.c \
 	G2Connection.c \
 	G2ConHelper.c \
+	G2ConRegistry.c \
 	G2Packet.c \
 	G2PacketSerializer.c \
 	G2QHT.c \
@@ -418,6 +420,7 @@ OBJS = \
 	G2UDP.o \
 	G2Connection.o \
 	G2ConHelper.o \
+	G2ConRegistry.o \
 	G2Packet.o \
 	G2PacketSerializer.o \
 	G2QHT.o \
@@ -727,12 +730,13 @@ data.o: sbox.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
-G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h lib/itoa.h
-G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
+G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h lib/itoa.h
+G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
-G2Connection.o: G2Connection.h G2QHT.h lib/recv_buff.h lib/atomic.h lib/hzp.h
-G2ConHelper.o: G2ConHelper.h G2Connection.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
+G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h lib/recv_buff.h lib/atomic.h lib/hzp.h
+G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
+G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
@@ -742,6 +746,7 @@ timeout.o: timeout.h
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
 G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h lib/list.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
+G2ConRegistry.h: G2Connection.h lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
 G2QHT.h: lib/hzp.h lib/atomic.h

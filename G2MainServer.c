@@ -51,6 +51,7 @@
 #include "G2Handler.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
+#include "G2ConRegistry.h"
 #include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "G2KHL.h"
@@ -329,6 +330,7 @@ int main(int argc, char **args)
 	 * want atexit()...)
 	 */
 	g2_khl_end();
+	g2_conreg_cleanup();
 
 	clean_up_m();
 	fsync(STDOUT_FILENO);

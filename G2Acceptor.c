@@ -51,6 +51,7 @@
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2ConHelper.h"
+#include "G2ConRegistry.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
@@ -62,22 +63,21 @@
 #define EVENT_SPACE 8
 
 /* internal prototypes */
-static inline bool init_memory_a(struct epoll_event **, struct g2_con_info **, struct norm_buff **, struct norm_buff **, int *);
+static inline bool init_memory_a(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool init_con_a(int *, union combo_addr *);
-static bool handle_accept_in(int, struct g2_con_info *, g2_connection_t **, int, int, struct epoll_event *);
+static bool handle_accept_in(int, g2_connection_t *, int);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
-static inline g2_connection_t **handle_socket_io_a(struct epoll_event *, int epoll_fd);
+static inline g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static noinline bool initiate_g2(g2_connection_t *);
 /*
  * do not inline, we take a pointer of it, and when its called,
  * performance doesn't matter
  */
-static void clean_up_a(struct epoll_event *, struct g2_con_info *, struct norm_buff *, struct norm_buff *, int, int);
+static void clean_up_a(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
 void *G2Accept(void *param)
 {
 	/* data-structures */
-	struct g2_con_info *work_cons = NULL;
 	g2_connection_t *work_entry = NULL;
 	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
 
@@ -136,7 +136,7 @@ void *G2Accept(void *param)
 		}
 	}
 	/* getting memory for our FD's and everything else */
-	if(!init_memory_a(&eevents, &work_cons, &lrecv_buff, &lsend_buff, &epoll_fd))
+	if(!init_memory_a(&eevents, &lrecv_buff, &lsend_buff, &epoll_fd))
 	{
 		close(accept_so4);
 		close(accept_so6);
@@ -151,7 +151,7 @@ void *G2Accept(void *param)
 	if(sizeof(to_handler) != recv(sock2main, &to_handler, sizeof(to_handler), 0))
 	{
 		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so4);
 		close(accept_so6);
 		pthread_exit(NULL);
@@ -175,7 +175,7 @@ void *G2Accept(void *param)
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_so4, eevents))
 		{
 			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
-			clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+			clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 			close(accept_so4);
 			close(accept_so6);
 			pthread_exit(NULL);
@@ -188,7 +188,7 @@ void *G2Accept(void *param)
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_so6, eevents))
 		{
 			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
-			clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+			clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 			close(accept_so4);
 			close(accept_so6);
 			pthread_exit(NULL);
@@ -199,7 +199,7 @@ void *G2Accept(void *param)
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock2main, eevents))
 	{
 		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
-		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so4);
 		close(accept_so6);
 		pthread_exit(NULL);
@@ -208,7 +208,7 @@ void *G2Accept(void *param)
 	/* Getting the first Connections to work with */
 	if(!(work_entry = g2_con_get_free()))
 	{
-		clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+		clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 		close(accept_so4);
 		close(accept_so6);
 		pthread_exit(NULL);
@@ -244,7 +244,7 @@ void *G2Accept(void *param)
 				if(e_wptr->data.ptr)
 				{
 					/* Please, don't look... */
-					if((uintptr_t)e_wptr->data.ptr > (uintptr_t)0x00FF)
+					if((uintptr_t)e_wptr->data.ptr >= (uintptr_t)0x00FF) /* first 4 k should be zero page */
 					{
 						logg_develd_old(" Events: 0x%0X\t  PTR: %p\n", e_wptr->events, (void *) e_wptr->data.ptr);
 						logg_develd_old("Revents: 0x%0X\tFDNum: %i\n", p_wptr->revents, p_wptr->fd);
@@ -253,38 +253,31 @@ void *G2Accept(void *param)
 						 * Any problems? 'Where did you go my lovely...'
 						 * Any invalid FD's remained in PollData?
 						 */
-						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT)))
-						{
-							g2_connection_t **tmp_con_holder = handle_socket_abnorm(e_wptr);
-							if(tmp_con_holder)
-								recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
-							else
-							{
-								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
-								keep_going = false;
-							}
+						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT))) {
+							g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
+							recycle_con(tmp_con_holder, epoll_fd, false);
 						}
 						else
 						{
 							/* Some FD's ready to be filled? Some data ready to be read in? */
-							g2_connection_t **tmp_con_holder;
-							g2_connection_t **tmp_con_b = e_wptr->data.ptr;
+							g2_connection_t *tmp_con_holder;
+							g2_connection_t *tmp_con_b = e_wptr->data.ptr;
 							tmp_con_holder = tmp_con_b;
-							if(!manage_buffer_before(&(*tmp_con_b)->recv, &lrecv_buff))
+							if(!manage_buffer_before(&tmp_con_b->recv, &lrecv_buff))
 								goto killit;
-							if(!manage_buffer_before(&(*tmp_con_b)->send, &lsend_buff))
+							if(!manage_buffer_before(&tmp_con_b->send, &lsend_buff))
 								goto killit;
 
 							tmp_con_holder = handle_socket_io_a(e_wptr, epoll_fd);
 							if(tmp_con_holder)
 							{
-								if(!(*tmp_con_holder)->flags.dismissed &&
-								   G2CONNECTED == (*tmp_con_holder)->connect_state)
+								if(!tmp_con_holder->flags.dismissed &&
+								   G2CONNECTED == tmp_con_holder->connect_state)
 								{
-									g2_connection_t *tmp_con = *tmp_con_holder;
+									g2_connection_t *tmp_con = tmp_con_holder;
 									manage_buffer_after(&tmp_con->recv, &lrecv_buff);
 									manage_buffer_after(&tmp_con->send, &lsend_buff);
-									recycle_con(tmp_con_holder, work_cons, epoll_fd, true);
+									recycle_con(tmp_con_holder, epoll_fd, true);
 									g2_con_helgrind_transfer(tmp_con);
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
@@ -297,20 +290,20 @@ void *G2Accept(void *param)
 								else
 								{
 killit:
-									if(lrecv_buff && (*tmp_con_holder)->recv == lrecv_buff) {
-										(*tmp_con_holder)->recv = NULL;
+									if(lrecv_buff && tmp_con_holder->recv == lrecv_buff) {
+										tmp_con_holder->recv = NULL;
 										buffer_clear(*lrecv_buff);
 									}
-									if(lsend_buff && (*tmp_con_holder)->send == lsend_buff) {
-										(*tmp_con_holder)->send = NULL;
+									if(lsend_buff && tmp_con_holder->send == lsend_buff) {
+										tmp_con_holder->send = NULL;
 										buffer_clear(*lsend_buff);
 									}
-									recycle_con(tmp_con_holder, work_cons, epoll_fd, false);
+									recycle_con(tmp_con_holder, epoll_fd, false);
 								}
 							}
 							else {
-								manage_buffer_after(&(*tmp_con_b)->recv, &lrecv_buff);
-								manage_buffer_after(&(*tmp_con_b)->send, &lsend_buff);
+								manage_buffer_after(&tmp_con_b->recv, &lrecv_buff);
+								manage_buffer_after(&tmp_con_b->send, &lsend_buff);
 							}
 						}
 					}
@@ -322,8 +315,16 @@ killit:
 						if(e_wptr->events & ((uint32_t)EPOLLIN))
 						{
 							/* If our accept_so is ready reading, we have to handle it differently */
-							refresh_needed = true;
-							handle_accept_in(accept_so, work_cons, &work_entry, epoll_fd, sock2main, eevents);
+							if(handle_accept_in(accept_so, work_entry, epoll_fd))
+							{
+								work_entry = g2_con_get_free();
+								if(unlikely(!work_entry)) {
+									clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+									pthread_exit(NULL);
+								}
+							}
+							else
+								refresh_needed = true;
 						}
 
 						/*
@@ -370,7 +371,7 @@ killit:
 	}
 
 	g2_con_free(work_entry);
-	clean_up_a(eevents, work_cons, lrecv_buff, lsend_buff, epoll_fd, sock2main);
+	clean_up_a(eevents, lrecv_buff, lsend_buff, epoll_fd, sock2main);
 	close(accept_so4);
 	close(accept_so6);
 	pthread_exit(NULL);
@@ -416,8 +417,8 @@ out_err:
 }
 #undef OUT_ERR
 
-static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_info **work_cons,
-		struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff, int *epoll_fd)
+static inline bool init_memory_a(struct epoll_event **poll_me, struct norm_buff **lrecv_buff,
+                                 struct norm_buff **lsend_buff, int *epoll_fd)
 {
 	*poll_me = calloc(EVENT_SPACE, sizeof(**poll_me));
 	if(!*poll_me) {
@@ -425,21 +426,12 @@ static inline bool init_memory_a(struct epoll_event **poll_me, struct g2_con_inf
 		return false;
 	}
 
-	*work_cons = calloc(1, sizeof(struct g2_con_info) + (WC_START_CAPACITY * sizeof(g2_connection_t *)));
-	if(!*work_cons) {
-		logg_errno(LOGF_ERR, "work_cons[] memory");
-		free(*poll_me);
-		return false;
-	}
-	(*work_cons)->capacity = WC_START_CAPACITY;
-
 	*lrecv_buff = recv_buff_local_get();
 	*lsend_buff = recv_buff_local_get();
 	if(!(*lrecv_buff && *lsend_buff))
 	{
 		logg_errno(LOGF_ERR, "local buffer");
 		free(*poll_me);
-		free(*work_cons);
 		return false;
 	}
 
@@ -473,83 +465,81 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 
 static bool handle_accept_in(
 	int accept_so,
-	struct g2_con_info *work_cons,
-	g2_connection_t **work_entry,
-	int epoll_fd,
-	int abort_fd,
-	struct epoll_event *poll_me)
+	g2_connection_t *work_entry,
+	int epoll_fd)
 {
 	struct epoll_event tmp_eevent = {0,{0}};
-	socklen_t sin_size = sizeof((*work_entry)->remote_host); /* what to do with this info??? */
+	g2_connection_t *tmp_con;
+	socklen_t sin_size = sizeof(work_entry->remote_host); /* what to do with this info??? */
 	int tmp_fd;
 	int fd_flags;
 
 	do {
-		tmp_fd = accept(accept_so, &(*work_entry)->remote_host.sa, &sin_size);
+		tmp_fd = accept(accept_so, &work_entry->remote_host.sa, &sin_size);
 	} while(0 > tmp_fd && EINTR == errno);
 	if(-1 == tmp_fd) {
 		logg_errno(LOGF_NOTICE, "accepting");
 		return false;
 	}
-	(*work_entry)->com_socket = tmp_fd;
+	work_entry->com_socket = tmp_fd;
 
+	/* increase our total server connection sum */
+	atomic_inc(&server.status.act_connection_sum);
+// TODO: Little race, we may kill the wrong one...
 	/* check if our total server connection limit is reached */
 	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
-		while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
-		handle_accept_give_msg(*work_entry, LOGF_DEBUG, "too many connections");
+		/* have already counted it, so remove it from count */
+		atomic_dec(&server.status.act_connection_sum);
+		while(-1 == close(work_entry->com_socket) && EINTR == errno);
+		handle_accept_give_msg(work_entry, LOGF_DEBUG, "too many connections");
 		return false;
 	}
 
-// TODO: Little race, but its only the connection limit
-	/* increase our total server connection sum */
-	atomic_inc(&server.status.act_connection_sum);
-
-	/* room for another connection? */
-	/* originaly ment to be reallocated */
-	if(unlikely(work_cons->limit == work_cons->capacity)){
-		goto err_out_after_count;
+	/* ip already connected? */
+	tmp_con = g2_conreg_search_ip(&work_entry->remote_host);
+	if(unlikely(tmp_con)) {
+		/* have already counted it, so remove it from count */
+		atomic_dec(&server.status.act_connection_sum);
+		while(-1 == close(work_entry->com_socket) && EINTR == errno);
+		handle_accept_give_msg(work_entry, LOGF_DEBUG, "ip already connected");
+		return false;
 	}
-/*	if(poll_me->limit == poll_me->capacity) {
+// TODO: add after search is not atomic
+	if(!g2_conreg_add(work_entry))
 		goto err_out_after_count;
-	}*/
+
 // TODO: Find external addresses
 
 	/* get the fd-flags and add nonblocking  */
 	/* according to POSIX manpage EINTR is only encountered when the cmd was F_SETLKW */
-	if(-1 == (fd_flags = fcntl((*work_entry)->com_socket, F_GETFL))) {
+	if(-1 == (fd_flags = fcntl(work_entry->com_socket, F_GETFL))) {
 		logg_errno(LOGF_NOTICE, "getting socket fd-flags");
-		goto err_out_after_count;
+		goto err_out_after_add;
 	}
-	if(fcntl((*work_entry)->com_socket, F_SETFL, fd_flags | O_NONBLOCK)) {
+	if(fcntl(work_entry->com_socket, F_SETFL, fd_flags | O_NONBLOCK)) {
 		logg_errno(LOGF_NOTICE, "setting socket non-blocking");
-		goto err_out_after_count;
+		goto err_out_after_add;
 	}
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
-	tmp_eevent.events = (*work_entry)->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
-	tmp_eevent.data.ptr = &work_cons->data[work_cons->limit];
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, (*work_entry)->com_socket, &tmp_eevent)) {
+	tmp_eevent.events = work_entry->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
+	tmp_eevent.data.ptr = work_entry;
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, work_entry->com_socket, &tmp_eevent)) {
 		logg_errno(LOGF_NOTICE, "adding new socket to EPoll");
-		goto err_out_after_count;
+		goto err_out_after_add;
 	}
 
-	handle_accept_give_msg(*work_entry, LOGF_DEVEL, "going to handshake");
-
-	work_cons->data[work_cons->limit] = *work_entry;
-	work_cons->limit++;
-	*work_entry = g2_con_get_free();
-	if(!*work_entry) {
-		clean_up_a(poll_me, work_cons, NULL, NULL, epoll_fd, abort_fd);
-		pthread_exit(NULL);
-	}
+	handle_accept_give_msg(work_entry, LOGF_DEVEL, "going to handshake");
 
 	return true;
 
+err_out_after_add:
+	g2_conreg_remove(work_entry);
 err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
 	atomic_dec(&server.status.act_connection_sum);
-	while(-1 == close((*work_entry)->com_socket) && EINTR == errno);
-	handle_accept_give_msg(*work_entry, LOGF_DEBUG, "problems adding it!");
+	while(-1 == close(work_entry->com_socket) && EINTR == errno);
+	handle_accept_give_msg(work_entry, LOGF_DEBUG, "problems adding it!");
 	return false;
 }
 
@@ -591,9 +581,9 @@ static inline bool handle_accept_abnorm(struct epoll_event *accept_ptr, int epol
 	return ret_val;
 }
 
-static inline g2_connection_t **handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd)
+static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd)
 {
-	g2_connection_t **w_entry = (g2_connection_t **)p_entry->data.ptr;
+	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
@@ -606,28 +596,27 @@ static inline g2_connection_t **handle_socket_io_a(struct epoll_event *p_entry, 
 		if(!do_read(p_entry))
 			return w_entry;
 
-		if(initiate_g2(*w_entry))
+		if(initiate_g2(w_entry))
 		{
-			p_entry->events = (*w_entry)->poll_interrests |= (uint32_t) EPOLLOUT;
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, (*w_entry)->com_socket, p_entry))
-			{
+			p_entry->events = w_entry->poll_interrests |= (uint32_t) EPOLLOUT;
+			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");
-				(*w_entry)->flags.dismissed = true;
+				w_entry->flags.dismissed = true;
 				return w_entry;
 			}
 		}
 		else
 		{
-			if(G2CONNECTED == (*w_entry)->connect_state)
+			if(G2CONNECTED == w_entry->connect_state)
 				return w_entry;
-			else if((*w_entry)->flags.dismissed)
+			else if(w_entry->flags.dismissed)
 			{
 				char addr_buf[INET6_ADDRSTRLEN];
 				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
 					"Dismissed!",
-					combo_addr_print(&(*w_entry)->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&(*w_entry)->remote_host)),
-					(*w_entry)->com_socket);
+					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
+					ntohs(combo_addr_port(&w_entry->remote_host)),
+					w_entry->com_socket);
 				return w_entry;
 			}
 		}
@@ -635,23 +624,14 @@ static inline g2_connection_t **handle_socket_io_a(struct epoll_event *p_entry, 
 	return NULL;
 }
 
-static void clean_up_a(struct epoll_event *poll_me, struct g2_con_info *work_cons,
-		struct norm_buff *lrecv_buff, struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
+static void clean_up_a(struct epoll_event *poll_me, struct norm_buff *lrecv_buff,
+                       struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
 {
-	size_t i;
-
 	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); /* hate doing this, but now it's to late */
 	logg_pos(LOGF_NOTICE, "should go down\n");
 
 	free(poll_me);
-
-	for(i = 0; i < work_cons->limit; i++) {
-		close(work_cons->data[i]->com_socket);
-		g2_con_free(work_cons->data[i]);
-	}
-	
-	free(work_cons);
 
 	recv_buff_local_ret(lrecv_buff);
 	recv_buff_local_ret(lsend_buff);
