@@ -223,7 +223,7 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 	return true;
 }
 
-bool timeout_cancel(GCC_ATTR_UNUSED_PARAM(struct timeout *, who_to_cancel))
+bool timeout_cancel(struct timeout *who_to_cancel GCC_ATTR_UNUSED_PARAM)
 {
 	struct timespec now;
 
@@ -238,7 +238,7 @@ void timeout_timer_task_abort(void)
 	pthread_cond_broadcast(&wakeup.cond);
 }
 
-void *timeout_timer_task(GCC_ATTR_UNUSED_PARAM(void *, param))
+void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 {
 	int i;
 	for(i = 0; i < TWHEEL_SLOTS; i++)

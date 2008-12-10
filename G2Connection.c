@@ -388,7 +388,7 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 	return true;
 }
 
-static bool ulpeer_what(g2_connection_t *to_con, GCC_ATTR_UNUSED_PARAM(size_t, distance))
+static bool ulpeer_what(g2_connection_t *to_con, size_t distance GCC_ATTR_UNUSED_PARAM)
 {
 	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE))) {
 		to_con->flags.upeer = false;
@@ -553,7 +553,7 @@ static bool listen_what(g2_connection_t * to_con, size_t distance)
 	return false;
 }
 
-static bool empty_action_c(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, to_con), GCC_ATTR_UNUSED_PARAM(size_t, distance))
+static bool empty_action_c(g2_connection_t *to_con GCC_ATTR_UNUSED_PARAM, size_t distance GCC_ATTR_UNUSED_PARAM)
 {
 	return false;
 }

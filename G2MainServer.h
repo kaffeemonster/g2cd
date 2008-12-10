@@ -38,7 +38,7 @@
 
 /* Own */
 # include "lib/other.h"
-static always_inline int get_act_loglevel(void);
+static always_inline enum loglevel get_act_loglevel(void);
 # include "G2Connection.h"
 # include "G2Packet.h"
 # include "lib/combo_addr.h"
@@ -143,7 +143,7 @@ _G2MAIN_EXTRNVAR(__thread time_t local_time_now);
 _G2MAIN_EXTRNVAR(time_t local_time_now);
 #endif
 
-static always_inline int get_act_loglevel(void)
+static always_inline enum loglevel get_act_loglevel(void)
 {
 	return server.settings.logging.act_loglevel;
 }

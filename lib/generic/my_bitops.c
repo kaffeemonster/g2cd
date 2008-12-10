@@ -24,8 +24,8 @@
  */
 
 void test_cpu_feature(void (**func)(void),
-	GCC_ATTR_UNUSED_PARAM(struct test_cpu_feature *, t),
-	GCC_ATTR_UNUSED_PARAM(size_t, l))
+                      struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
+                      size_t l GCC_ATTR_UNUSED_PARAM)
 {
 	func = func;
 }

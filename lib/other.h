@@ -46,13 +46,18 @@
  * some Magic for determining the attrib-capabilitie of an gcc or just set it
  * to nothing, if we are not capable of it
  */
-#if !defined __GNUC__ || __GNUC__ < 2
+#if defined(__GNUC__) && __GNUC__ >= 2
+# define HAVE_GCC_ATTRIBUTE
+#elif defined(__SUNPRO_C) && __SUNPRO_C >= 0x590
+# define HAVE_GCC_ATTRIBUTE
+#else
+# undef  HAVE_GCC_ATTRIBUTE
 # define __attribute__(xyz)	/* Ignore */
 #endif
 
-#ifdef __GNUC__
+#ifdef HAVE_GCC_ATTRIBUTE
 # define GCC_ATTRIB(x) __attribute__((x))
-#endif /* __GNUC__ */
+#endif /* HAVE_GCC_ATTRIBUTE */
 
 #if defined __GNUC__ && defined __GNUC_MINOR__
 # define _GNUC_PREREQ(maj, min) \
@@ -60,6 +65,12 @@
 #else
 # define _GNUC_PREREQ(maj, min) 0
 #endif  /* defined __GNUC__ && defined __GNUC_MINOR__ */
+
+#if defined __SUNPRO_C && __SUNPRO_C >= 0x590
+# define _SUNC_PREREQ(x) (__SUNPRO_C >= (x))
+#else
+# define _SUNC_PREREQ(x) 0
+#endif /* defined __SUNPRO_C && __SUNPRO_C >= 0x590 */
 
 #if _GNUC_PREREQ (3,1)
 # define GCC_ATTR_USED	GCC_ATTRIB(__used__)
@@ -80,14 +91,9 @@
 #endif /* _GNUC_PREREQ (3,1) */
 
 #if _GNUC_PREREQ (3,1)
-# define GCC_ATTR_UNUSED_PARAM(type, name) type name GCC_ATTRIB(__unused__)
+# define GCC_ATTR_UNUSED_PARAM GCC_ATTRIB(__unused__)
 #else
-/* hopefully all compiler know that foo(int) means a unused var, no, seems to be a SUN-Spezial */
-# ifdef __SUNCC /* how does the SUN-Compiler calls himself? */
-#  define GCC_ATTR_UNUSED_PARAM(type, name) type
-# else
-#  define GCC_ATTR_UNUSED_PARAM(type, name) type name
-# endif /* __SUNCC */
+# define GCC_ATTR_UNUSED_PARAM
 #endif /* _GNUC_PREREQ (3,1) */
 
 /* Cygwin (since it generates PE-files) doens't know about visibility */
@@ -127,11 +133,11 @@
 # define GCC_ATTR_ALIGNED(x)
 #endif
 
-#if _GNUC_PREREQ (2,7)
+#if _GNUC_PREREQ (2,7) || _SUNC_PREREQ(0x5100)
 # define GCC_ATTR_CONSTRUCT GCC_ATTRIB(__constructor__)
 # define GCC_ATTR_DESTRUCT GCC_ATTRIB(__destructor__)
 #else
-/* needs a warning, code is broken now */
+# error "this will not run with your compiler"
 # define GCC_ATTR_CONSTRUCT
 # define GCC_ATTR_DESTRUCT
 #endif
@@ -155,7 +161,7 @@
 # define unlikely(x)	(x)
 #endif
 
-#if _GNUC_PREREQ (3,1)
+#if _GNUC_PREREQ (3,1) || _SUNC_PREREQ(0x5100)
 # define always_inline inline GCC_ATTRIB(__always_inline__)
 #else
 # define always_inline inline
@@ -173,10 +179,10 @@
 # define prefetch_nt(x)	__builtin_prefetch(x, 0, 0)
 # define prefetchw_nt(x)	__builtin_prefetch(x, 1, 0)
 #else
-# define prefetch(x)	do { } while(0)
-# define prefetchw(x)	do { } while(0)
-# define prefetch_nt(x)	do { } while(0)
-# define prefetchw_nt(x)	do { } while(0)
+# define prefetch(x) (x)
+# define prefetchw(x) (x)
+# define prefetch_nt(x) (x)
+# define prefetchw_nt(x) (x)
 #endif
 
 #if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
@@ -247,7 +253,7 @@ typedef void (*sighandler_t)(int);
 #endif
 
 /* unaligned access */
-#ifdef __GNUC__
+#if defined(__GNUC__) || _SUNC_PREREQ(0x5100)
 # ifdef __linux__
 #  include <endian.h>
 # else

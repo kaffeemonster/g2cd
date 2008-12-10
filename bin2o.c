@@ -9,17 +9,17 @@
  * it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2
  * of the License, or any later version.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
- * 
+ *
  * $Id: $
  */
 
@@ -91,8 +91,7 @@ int main(int argc, char **argv)
 		exit(invokation(argv[0]));
 
 	/* allocate space for in_file array, maybe a bit much, but... */
-	if(!(i_file_name = calloc(argc, sizeof(const char *))))
-	{
+	if(!(i_file_name = calloc(argc, sizeof(const char *)))) {
 		perror(__FILE__ ", " mkstr(__LINE__) ", i_file malloc()");
 		exit(EXIT_FAILURE);
 	}
@@ -146,15 +145,13 @@ int main(int argc, char **argv)
 			puts("Warning: no input files? Will generate empty outfile!");
 	}
 
-	if(0 > pipe(pipe2as))
-	{
+	if(0 > pipe(pipe2as)) {
 		perror(__FILE__ ", " mkstr(__LINE__) ", creating pipe");
 		exit(EXIT_FAILURE);
 	}
 
 	ch_pid = fork();
-	if(-1 == ch_pid)
-	{
+	if(-1 == ch_pid) {
 		perror(__FILE__ ", " mkstr(__LINE__) ", fork()");
 		exit(EXIT_FAILURE);
 	}
@@ -165,8 +162,7 @@ int main(int argc, char **argv)
 		close(pipe2as[1]);
 		if(STDIN_FILENO != pipe2as[0])
 		{
-			if(-1 == dup2(pipe2as[0], STDIN_FILENO))
-			{
+			if(-1 == dup2(pipe2as[0], STDIN_FILENO)) {
 				perror(__FILE__ ", " mkstr(__LINE__) ", dup2()");
 				exit(EXIT_FAILURE);
 			}
@@ -310,11 +306,11 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		write(STDOUT_FILENO, pbuf, w_ptr - pbuf);
 	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
 		return false;
-	w_ptr = pbuf + sprintf(pbuf, "\t.size %s_base_data,(.-%s_base_data)\n", buf->name, buf->name);
+	w_ptr = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
 	w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
 	w_ptr += sprintf(w_ptr, "\t.type %s,@object\n%s:\n", buf->name, buf->name);
 	w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
-	w_ptr += sprintf(w_ptr, "\t.size %s,(.-%s)\n\n", buf->name, buf->name);
+	w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n\n", buf->name, buf->name);
 	if(verbose)
 		write(STDOUT_FILENO, pbuf, w_ptr - pbuf);
 	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))

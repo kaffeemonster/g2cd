@@ -72,9 +72,16 @@ struct cpuinfo
 	bool init_done;
 };
 
-struct cpuid_regs
+union cpuid_regs
 {
-	uint32_t eax, ebx, ecx, edx;
+	/*
+	 * while the info is always 32 bit (uint32_t), the cpu sets
+	 * the whole reg, which means it clears the upper 32 bit...
+	 */
+	struct {
+		size_t eax, ebx, ecx, edx;
+	} r;
+	size_t a[4];
 };
 
 /*
@@ -109,7 +116,7 @@ static void identify_cpu(void) GCC_ATTR_CONSTRUCT;
 static always_inline size_t read_flags(void)
 {
 	size_t f;
-	asm volatile(
+	asm volatile (
 		"pushf\n\t"
 		"pop %0\n\t"
 		: "=r" (f)
@@ -119,33 +126,45 @@ static always_inline size_t read_flags(void)
 
 static always_inline void write_flags(size_t f)
 {
-	asm volatile(
+	asm volatile (
 		"push %0\n\t"
 		"popf\n\t"
 		: : "r" (f) : "cc"
 	);
 }
 
-static always_inline void cpuid(struct cpuid_regs *regs, uint32_t func)
+static always_inline void cpuid(union cpuid_regs *regs, size_t func)
 {
+#ifdef __i386__
+# define PICREG "%%ebx"
+#else
+# define PICREG "%%rbx"
+#endif
 	/* save ebx around cpuid call, PIC code needs it */
 	asm volatile (
-		"xchg	%1, %%ebx\n\t"
+		"xchg	%1, " PICREG "\n\t"
 		"cpuid\n\t"
-		"xchg	%1, %%ebx\n"
-		: /* %0 */ "=a" (regs->eax),
-		  /* %1 */ "=r" (regs->ebx),
-		  /* %2 */ "=c" (regs->ecx),
-		  /* %4 */ "=d" (regs->edx)
+		"xchg	%1, " PICREG "\n"
+		: /* %0 */ "=a" (regs->r.eax),
+		         /*
+		          * let the compiler choose, unfort. sun studio is to stupid
+		          * (puts two oprands into the same register, WTF?)
+		          * but also fucks up the whole output/inlining thing
+		          * -> sorry fanboys, broken Compiler...
+		          */
+		  /* %1 */ "=r" (regs->r.ebx),
+		  /* %2 */ "=c" (regs->r.ecx),
+		  /* %4 */ "=d" (regs->r.edx)
 		: /* %5 */ "0" (func),
-		  /* %6 */ "2" (regs->ecx)
+		  /* %6 */ "2" (regs->r.ecx)
 		: "cc"
 	);
+#undef PICREG
 }
 
-static always_inline void cpuids(struct cpuid_regs *regs, uint32_t func)
+static always_inline void cpuids(union cpuid_regs *regs, size_t func)
 {
-	regs->ecx = 0;
+	regs->r.ecx = 0;
 	cpuid(regs, func);
 }
 
@@ -160,12 +179,12 @@ static inline bool toggle_eflags_test(const size_t mask)
 	f = read_flags();
 	write_flags(f | mask);
 	f = read_flags() & mask;
-	if (!f)
+	if (unlikely(!f))
 		return false;
 	f = read_flags() & ~mask;
 	write_flags(f);
 	f = read_flags() & mask;
-	if (f)
+	if (unlikely(f))
 		return false;
 
 	return true;
@@ -183,8 +202,8 @@ static inline bool is_486(void)
 
 static void identify_cpu(void)
 {
-	struct cpuid_regs a;
-	unsigned i;
+	union cpuid_regs a;
+	size_t i;
 
 	if(our_cpu.init_done)
 		return;
@@ -193,7 +212,8 @@ static void identify_cpu(void)
 	our_cpu.count = 1;
 
 	/* do we have cpuid? we don't want to SIGILL */
-	if(unlikely(!has_cpuid())) {
+	if(unlikely(!has_cpuid()))
+	{
 		/*
 		 * No? *cough* Ok, maybe rare/exotic chip like Geode
 		 * which can switch of cpuid in firmware...
@@ -213,10 +233,10 @@ static void identify_cpu(void)
 
 	/* get vendor string */
 	cpuids(&a, 0x00000000);
-	our_cpu.max_basic = a.eax;
-	our_cpu.vendor_str.r[0] = a.ebx;
-	our_cpu.vendor_str.r[1] = a.edx;
-	our_cpu.vendor_str.r[2] = a.ecx;
+	our_cpu.max_basic = (uint32_t)a.r.eax;
+	our_cpu.vendor_str.r[0] = (uint32_t)a.r.ebx;
+	our_cpu.vendor_str.r[1] = (uint32_t)a.r.edx;
+	our_cpu.vendor_str.r[2] = (uint32_t)a.r.ecx;
 	our_cpu.vendor_str.s[12] = '\0';
 	identify_vendor(&our_cpu);
 
@@ -224,43 +244,43 @@ static void identify_cpu(void)
 	if(our_cpu.max_basic >= 0x00000001)
 	{
 		cpuids(&a, 0x00000001);
-		our_cpu.family   = CPUID_FAMILY(a.eax);
-		our_cpu.model    = CPUID_MODEL(a.eax);
-		our_cpu.stepping = CPUID_STEPPING(a.eax);
+		our_cpu.family   = CPUID_FAMILY((uint32_t)a.r.eax);
+		our_cpu.model    = CPUID_MODEL((uint32_t)a.r.eax);
+		our_cpu.stepping = CPUID_STEPPING((uint32_t)a.r.eax);
 	}
 	else
 	{
 		/* strange cpu, prop via or cyrix, cpuid but no ident... */
 		our_cpu.family = 5;
-		a.eax = a.ebx = a.ecx = a.edx = 0;
+		a.r.eax = a.r.ebx = a.r.ecx = a.r.edx = 0;
 	}
 
 	switch(our_cpu.vendor)
 	{
 	case X86_VENDOR_INTEL:
 		if(our_cpu.family == 0x0F || our_cpu.family == 0x06)
-			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+			our_cpu.model += CPUID_XMODEL((uint32_t)a.r.eax) << 4;
 		break;
 	case X86_VENDOR_AMD:
 		if(our_cpu.family == 0x0F)
-			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+			our_cpu.model += CPUID_XMODEL((uint32_t)a.r.eax) << 4;
 		break;
 	default:
 		if(our_cpu.model == 0x0F)
-			our_cpu.model += CPUID_XMODEL(a.eax) << 4;
+			our_cpu.model += CPUID_XMODEL((uint32_t)a.r.eax) << 4;
 		break;
 	}
 
 	if(our_cpu.family == 0x0F)
-		our_cpu.family += CPUID_XFAMILY(a.eax);
+		our_cpu.family += CPUID_XFAMILY((uint32_t)a.r.eax);
 
 	/* and finaly: get the features */
 	for(i = 0; i < 32; i++) {
-		if(a.edx & (1 << i))
+		if(a.r.edx & (1 << i))
 			our_cpu.features[i] = true;
 	}
 	for(i = 0; i < 32; i++) {
-		if(a.ecx & (1 << i))
+		if(a.r.ecx & (1 << i))
 			our_cpu.features[i + 32] = true;
 	}
 
@@ -269,20 +289,20 @@ static void identify_cpu(void)
 	 * a loophole in the old chips that a leading 1 Bit was ignored and you
 	 * would get the normal flags, but no crash.
 	 */
-	cpuids(&a, 0x80000000);
-	if((a.eax & 0xFFFF0000) == 0x80000000)
-		our_cpu.max_ext = a.eax; /* looks like we have adv flags */
+	cpuids(&a, 0x80000000UL);
+	if(((uint32_t)a.r.eax & 0xFFFF0000) == 0x80000000)
+		our_cpu.max_ext = (uint32_t)a.r.eax; /* looks like we have adv flags */
 
 	/* get extended capabilities */
 	if(our_cpu.max_ext >= 0x80000001)
 	{
-		cpuids(&a, 0x80000001);
+		cpuids(&a, 0x80000001UL);
 		for(i = 0; i < 32; i++) {
-			if(a.edx & (1 << i))
+			if(a.r.edx & (1 << i))
 				our_cpu.features[i + 64] = true;
 		}
 		for(i = 0; i < 32; i++) {
-			if(a.ecx & (1 << i))
+			if(a.r.ecx & (1 << i))
 				our_cpu.features[i + 96] = true;
 		}
 	}
@@ -291,9 +311,12 @@ static void identify_cpu(void)
 	if(our_cpu.max_ext >= 0x80000004)
 	{
 		char *p, *q;
-		cpuids((struct cpuid_regs *)&our_cpu.model_str.r[0], 0x80000002);
-		cpuids((struct cpuid_regs *)&our_cpu.model_str.r[4], 0x80000003);
-		cpuids((struct cpuid_regs *)&our_cpu.model_str.r[8], 0x80000004);
+		cpuids(&a, 0x80000002UL);
+		for(i = 0; i < 4; i++) our_cpu.model_str.r[i] = (uint32_t)a.a[i];
+		cpuids(&a, 0x80000003UL);
+		for(i = 0; i < 4; i++) our_cpu.model_str.r[i+4] = (uint32_t)a.a[i];
+		cpuids(&a, 0x80000004UL);
+		for(i = 0; i < 4; i++) our_cpu.model_str.r[i+8] = (uint32_t)a.a[i];
 		our_cpu.model_str.s[48] = '\0';
 
 		/* Intel chips right-justify these strings, undo this */
@@ -326,8 +349,8 @@ static void identify_cpu(void)
 	 * This is only a problem if we are on multicore chips???
 	 */
 	if(our_cpu.max_ext >= 0x80000008) {
-		cpuids(&a, 0x80000008);
-		our_cpu.num_cores = (a.ecx & 0xFF) + 1;
+		cpuids(&a, 0x80000008UL);
+		our_cpu.num_cores = ((uint32_t)a.r.ecx & 0xFF) + 1;
 		if(1 == our_cpu.num_cores)
 			return;
 		our_cpu.count = our_cpu.num_cores;
@@ -485,7 +508,8 @@ int test_cpu_feature_3dnow_callback(void)
  * Now only a minority of apps fiddle with the u-context in their
  * sighandler, but still, the context gets copied around, buffered
  * in libc, passed between kernel<->userspace and at the end of a
- * sighandler it gets restored from there.
+ * sighandler (even SIGCHILD and other basic unix stuff) it gets
+ * restored from there.
  *
  * So it has to be big enough, everywhere, kernel, syscall, lib{c|s},
  * apps, and better be consistent (no, it will /not/ blend!).
@@ -500,9 +524,12 @@ int test_cpu_feature_3dnow_callback(void)
  * "Yeah, compiled against new ABI" to activate AVX.
  * So a major update, not only a new kernel, a hole new userspace,
  * not backward compatible. There are maybe a lot of programs this
- * will not affect, but you are better save than sorry, compiler are
- * suposed to autovectorize, use SSE for fp-math etc.
- * (even while Intel tried to not fuck it up, no they not thought it through)
+ * will not affect, but you are better save than sorry, compilers
+ * are suposed to autovectorize, use SSE for fp-math etc.
+ *
+ * Even while Intel tried to not fuck it up, no they not thought
+ * it through (or maybe they did in a different problem space?
+ * "Mo'money")...
  *
  * And this means either one bump with a new eXtensible system
  * or everytime Intel invents some new stuff exposed by xsave.
@@ -517,21 +544,23 @@ int test_cpu_feature_3dnow_callback(void)
  * not making this dynamic in the first place, bad design
  * yadda-yadda", on the other hand, who expects the spanish
  * inquisition^W^W new processor registers every two years,
- * compromising simplicity and performance for obscure
- * extensibility in the first place (the ucontext was always
+ * compromising simplicity and performance (think task switch)
+ * for obscure extensibility in the first place. The register
+ * sets of all general purpose processors always shown itself
+ * quite stable for the last 30 years. (The ucontext was always
  * a platform dependent thing, standards only saying there is
  * one, not how it should look like, only platform libs
- * pondering with it). The register sets of all general
- * purpose processors always shown itself quite stable
- * for the last 30 years...
+ * pondering with it)
  *
  * This seems to change now.
  *
  * In this hole course of actions xsave can be seen as the
- * ultimate "once and for all" solution from the HW manufactures
- * side to bring more dynamic to those hardware dependencies.
- * Plans to "transparently" extend the AVX-register to 512-bit
+ * (typical) ultimate "once and for all" solution from Intels
+ * side (first lacking, than pompous) to bring more dynamic
+ * to those hardware dependencies.
+ * Plans to "transparently" extend the AVX-registers to 512-bit
  * and more are already anounced in the first AVX release.
+ *
  * Other extensions may find their way into HW now that
  * frequency doesn't scale, more cores start to stop scaling
  * (or non super-specialised software having problems to adapt,
@@ -540,28 +569,38 @@ int test_cpu_feature_3dnow_callback(void)
  * for everything (finaly!), all piggypacked on the SSE/AVX
  * registers or something totaly new.
  * Thanks to xsave no problem.
+ *
  * Somehow nice to see CPU-manufactures "learn" again to spend
  * transistors on functional units which "do work" and not on
  * bling bling (cache, bus, buffers).
- * On the other hand back to 386: is there a co-pro (for my needs)?
+ * On the other hand back to 386: Will there a "co-pro" for my
+ * needs? Propably no!
  * With Intels wild west style to include new instructions and
- * not thinking about regularity of the instruction set but "need",
- * and whining how expensive something is while integrating MByte
- * of cache and other transitor eater, someone is lost in hoping
- * their needed instruction will show up if he has no billion dollar
- * business plan and a premier Intel support contract...
+ * not thinking about regularity of the instruction set but
+ * "need" (as in application->bussiness: "MpegDecoder"->"$$$"),
+ * and whining how expensive a requested "generic" feature is while
+ * integrating MByte of cache and other transitor eater, someone
+ * is lost in hoping their needed (missing) instruction will show
+ * up if he has no billion dollar business plan and a platinium Intel
+ * support contract...
  * So additions once in a while can be seen as the "new green" and
  * be very likely. (Until politics change again...)
  *
  * You can mask out the saving of the new stuff, but that would
- * mean: no AVX for you. (or Extension 314)
+ * mean: no AVX for you. (or Extension 08/15)
+ *
  * And thats why this hole "does OS suppport this" test was invented
- * and has to be done for a long time:
- * There will be a long time when people do have the most bleeding
+ * IMHO (and has to be done for a long time):
+ * Rapid deployment to the market without any thinking while the
+ * marketing droids can generate lots of hot air about new fooo
+ * (good for sales, stox, reputation). Moving the long tail totaly
+ * to the software, effectivly selling snakeoil to the people, because
+ * there will be a long time when people do have the most bleeding
  * edge distro (type 3 times "foo-bar update") and hardware, but
- * not a new install with dual ABI (or only new ABI) capability.
+ * not a new install with dual ABI (or only new ABI) capability +
+ * software making use of the new fooo (because its moot).
  * (Switching this during an simple update can be deadly, like i
- * once saw someone trying to upgrade his SuSE. Desinstalling perl
+ * once saw someone trying to upgrade his SuSE. Deinstalling perl
  * to resolve conflicts and prepare installing of a new perl was
  * the last action, the update needed perl for itself to run...)
  *

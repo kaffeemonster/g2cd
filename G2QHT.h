@@ -73,7 +73,7 @@ struct qhtable
 #  define _G2QHT_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #  define _G2QHT_EXTRNVAR(x) extern x
 # else
-#  define _G2QHT_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
+#  define _G2QHT_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #  define _G2QHT_EXTRNVAR(x)
 # endif /* _G2QHT_C */
 

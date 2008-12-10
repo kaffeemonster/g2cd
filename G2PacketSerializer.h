@@ -34,7 +34,7 @@
 #  define _G2PACKSER_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #  define _G2PACKSER_EXTRNVAR(x) extern x
 # else
-#  define _G2PACKSER_EXTRN(x) inline x GCC_ATTR_VIS("hidden")
+#  define _G2PACKSER_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #  define _G2PACKSER_EXTRNVAR(x)
 # endif /* _G2PACKET_C */
 

@@ -337,7 +337,7 @@ int main(int argc, char **args)
 	return EXIT_SUCCESS;
 }
 
-static void sig_stop_func(int signr, GCC_ATTR_UNUSED_PARAM(siginfo_t, *si), GCC_ATTR_UNUSED_PARAM(void, *vuc))
+static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGINT == signr || SIGHUP == signr)
 		server_running = false;

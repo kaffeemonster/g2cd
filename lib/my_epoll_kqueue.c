@@ -161,7 +161,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	return ret_val;
 }
 
-int my_epoll_create(GCC_ATTR_UNUSED_PARAM(int, size))
+int my_epoll_create(int size GCC_ATTR_UNUSED_PARAM)
 {
 	return kqueue();
 }

@@ -37,9 +37,16 @@
 # define atomic_sset(x, y) ((x)->next = (y))
 
 # ifdef HAVE_SMP
-#  define LOCK "lock; "
+#  define LOCK "lock\n"
 # else
 #  define LOCK
+# endif
+
+# ifdef __GNUC__
+#  define ASIZE "%z0"
+# else
+/* using a incl/decl/whateverl for int may be wrong */
+#  define ASIZE "l"
 # endif
 
 /*
@@ -114,7 +121,7 @@ static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 static always_inline void atomic_inc(atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		LOCK "inc%z0 %0"
+		LOCK "inc" ASIZE " %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
 		: /* %1 */ "m" (atomic_read(ptr))
@@ -124,7 +131,7 @@ static always_inline void atomic_inc(atomic_t *ptr)
 static always_inline void atomic_dec(atomic_t *ptr)
 {
 	__asm__ __volatile__(
-		LOCK "dec%z0 %0"
+		LOCK "dec" ASIZE " %0"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr))
 		: /* %1 */ "m" (atomic_read(ptr))
@@ -135,7 +142,7 @@ static always_inline int atomic_dec_test(atomic_t *ptr)
 {
 	unsigned char c;
 	__asm__ __volatile__(
-		LOCK "dec%z0 %0\n\t"
+		LOCK "dec" ASIZE " %0\n\t"
 		"setz	%1"
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		: /* %0 */ "=m" (atomic_read(ptr)),
@@ -144,4 +151,5 @@ static always_inline int atomic_dec_test(atomic_t *ptr)
 		: "cc");
 	return c != 0;
 }
+# undef ASIZE
 #endif /* LIB_IMPL_ATOMIC_H */

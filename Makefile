@@ -38,7 +38,10 @@
 #	compiler
 CC = gcc
 HOSTCC = gcc
-CC_VER_INFO = --version
+# gcc
+#CC_VER_INFO = --version
+# sun studio
+CC_VER_INFO = -V
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 AS = as
 #	rcs, and a little silent-magic
@@ -54,7 +57,7 @@ STRIP = strip
 RM = rm -f
 
 # split up host and target
-HOSTCFLAGS = -O -Wall
+HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D _SVID_SOURCE
 
 #
 # the C-Standart the compiler should work with
@@ -70,6 +73,8 @@ CFLAGS += -std=gnu99
 #	wuerg-Around just functions due to Gnu extension to the
 #	C-Language
 #CFLAGS += -std=gnu9x
+#	relax the cun studio compiler a little bit
+#CFLAGS += -Xa
 
 #
 # Warnings (for the Devs)
@@ -142,6 +147,9 @@ CFLAGS += $(ARCH_FLAGS)
 CFLAGS += -pipe
 #CFLAGS += -save-temps
 CFLAGS += -g3 # -pg
+#	sun studio
+#CFLAGS += -g
+#CFLAGS += -keeptmp
 
 #
 # Optimisation
@@ -188,6 +196,8 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -fvisibility=hidden
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
+#	sun studio is ...
+#OPT_FLAGS = -O3 -fast
 #	minimum while debugging, or asm gets unreadable
 #OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
@@ -247,6 +257,9 @@ LDFLAGS += -Wl,--as-needed
 LDFLAGS += -pthread
 #LDFLAGS += -D_POSIX_PTHREAD_SEMANTICS
 #LDFLAGS += -D_REENTRANT
+#	sun studio
+#LDFLAGS += -mt
+#LDFLAGS += -Bdynamic
 # on solaris we can do a little in respect to symbols
 #LDFLAGS += -Wl,-M,.mapfile
 # solaris Linker magic
@@ -277,6 +290,8 @@ CFLAGS += -Izlib
 CFLAGS += -pthread
 #CFLAGS += -D_POSIX_PTHREAD_SEMANTICS
 #CFLAGS += -D_REENTRANT
+#	sun studio
+#CFLAGS += -mt
 #	not used (until now)
 #CFLAGS += -DFASTDBL2INT 
 CFLAGS += -DDEBUG_DEVEL
@@ -718,7 +733,7 @@ version.h: Makefile
 	$(PORT_PR)	"# define COMPILER_INFO\t\"$(CC) \" __VERSION__\n" >> $@; \
 	$(PORT_PR)	"#else\n" >> $@; \
 	$(PORT_PR)	"# define COMPILER_INFO\t\"" >> $@; \
-	$(CC) $(CC_VER_INFO) | head -n 1 | tr -d "\n" >> $@; \
+	$(CC) $(CC_VER_INFO) 2>&1 | head -n 1 | tr -d "\n" >> $@; \
 	$(PORT_PR)	"\"\n" >> $@; \
 	$(PORT_PR)	"#endif\n" >> $@; \
 	$(PORT_PR)	"\n" >> $@; \
