@@ -51,8 +51,8 @@
 /* minutes to seconds */
 #define PI_TIMEOUT    (   30)
 #define LNI_TIMEOUT   ( 1*60)
-#define KHL_TIMEOUT   ( 5*60)
-#define QHT_TIMEOUT   (10*60)
+#define KHL_TIMEOUT   ( 2*60)
+#define QHT_TIMEOUT   ( 5*60)
 #define UPROC_TIMEOUT (15*60)
 
 /*
@@ -281,7 +281,9 @@ static bool unimpl_action_p(GCC_ATTR_UNUSED_PARAM(g2_connection_t *, connec), GC
 static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list_head *target)
 {
 	bool ret_val = false, keep_decoding;
+	struct khl_entry khle[16];
 	g2_packet_t *khl, *ts;
+	size_t res;
 
 	do
 	{
@@ -304,7 +306,6 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 		return ret_val;
 
 	/* build package */
-// TODO: include real known hubs
 	khl = g2_packet_calloc();
 	ts  = g2_packet_calloc();
 
@@ -322,6 +323,45 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 	}
 	else
 		goto out_fail;
+
+	res = g2_khl_fill_p(khle, sizeof(khle)/sizeof(khle[0]), connec->remote_host.s_fam);
+	while(res--)
+	{
+		g2_packet_t *ch = g2_packet_calloc();
+		size_t old_pos;
+		unsigned i;
+		uint16_t port;
+
+		if(!ch)
+			break;
+		ch->type = PT_CH;
+		i  =  sizeof(time_t) + sizeof(uint16_t);
+		i +=  AF_INET == khle[res].na.s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+		if(!g2_packet_steal_data_space(ch, i)) {
+			g2_packet_free(ch);
+			break;
+		}
+
+		old_pos = ch->data_trunk.pos;
+		if(AF_INET == khle[res].na.s_fam) {
+			put_unaligned(khle[res].na.in.sin_addr.s_addr, (uint32_t *)(buffer_start(ch->data_trunk)));
+			ch->data_trunk.pos += sizeof(uint32_t);
+		} else {
+			memcpy(&khle[res].na.in6.sin6_addr.s6_addr, buffer_start(ch->data_trunk), INET6_ADDRLEN);
+			ch->data_trunk.pos += INET6_ADDRLEN;
+		}
+		port = combo_addr_port(&khle[res].na);
+		if(!HOST_IS_BIGENDIAN)
+			port = ntohs(port);
+		put_unaligned(port, (uint16_t *)buffer_start(ch->data_trunk));
+		ch->data_trunk.pos += sizeof(uint16_t);
+		put_unaligned(khle[res].when, (time_t *)buffer_start(ch->data_trunk));
+
+		ch->data_trunk.pos = old_pos;
+		ch->big_endian = HOST_IS_BIGENDIAN;
+		list_add_tail(&ch->list, &khl->children);
+	}
+
 	list_add_tail(&khl->list, target);
 	connec->u.send_stamps.KHL = local_time_now;
 	return true;

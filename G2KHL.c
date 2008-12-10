@@ -59,8 +59,10 @@
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"
 
-#define KHL_CACHE_SIZE 256
-#define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
+#define KHL_CACHE_SHIFT 8
+#define KHL_CACHE_SIZE (1 << KHL_CACHE_SHIFT)
+#define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/4)
+#define KHL_CACHE_HTMASK (KHL_CACHE_HTSIZE-1)
 #define KHL_CACHE_FILL 8
 
 #define KHL_DUMP_IDENT "G2CDKHLDUMP\n"
@@ -109,13 +111,6 @@ struct gwc
 	const char *url;
 };
 
-/* increment version on change */
-struct khl_entry
-{
-	union combo_addr na;
-	time_t when;
-};
-
 struct khl_cache_entry
 {
 	struct rbnode rb; /* keep first */
@@ -142,6 +137,7 @@ static struct {
 	int num;
 	uint32_t ht_seed;
 	struct khl_cache_entry *next_free;
+	struct khl_cache_entry *last_search;
 	struct rbtree tree;
 	struct hlist_head ht[KHL_CACHE_HTSIZE];
 	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
@@ -1123,7 +1119,7 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 // TODO: when IPv6 is common, change it
 	if(likely(addr->s_fam == AF_INET))
 	{
-		hlist_for_each_entry(e, n, &cache.ht[h & (KHL_CACHE_HTSIZE-1)], node)
+		hlist_for_each_entry(e, n, &cache.ht[h & KHL_CACHE_HTMASK], node)
 		{
 			if(e->e.na.s_fam != AF_INET)
 				continue;
@@ -1134,7 +1130,7 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 	}
 	else
 	{
-		hlist_for_each_entry(e, n, &cache.ht[h & (KHL_CACHE_HTSIZE-1)], node)
+		hlist_for_each_entry(e, n, &cache.ht[h & KHL_CACHE_HTMASK], node)
 		{
 			if(e->e.na.s_fam != AF_INET6)
 				continue;
@@ -1150,7 +1146,7 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
 static void cache_ht_add(struct khl_cache_entry *e)
 {
 	uint32_t h = combo_addr_hash(&e->e.na, cache.ht_seed);
-	hlist_add_head(&e->node, &cache.ht[h & (KHL_CACHE_HTSIZE-1)]);
+	hlist_add_head(&e->node, &cache.ht[h & KHL_CACHE_HTMASK]);
 }
 
 static void cache_ht_del(struct khl_cache_entry *e)
@@ -1288,6 +1284,44 @@ life_tree_error:
 out_unlock:
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))
 		diedie("gnarf, KHL cache lock stuck, bye!");
+}
+
+size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
+{
+	struct khl_cache_entry *e;
+	size_t res;
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return 0;
+
+	e = cache.last_search;
+	if(unlikely(!e))
+		e = &cache.entrys[0];
+
+	for(res = 0; res < len; res++)
+	{
+		struct khl_cache_entry *w = NULL;
+		unsigned i = 0;
+
+		for(; i < KHL_CACHE_SIZE; i++)
+		{
+			if(likely(e->used && e->e.na.s_fam == s_fam))
+				w = e;
+			if(++e >= &cache.entrys[KHL_CACHE_SIZE])
+				e = &cache.entrys[0];
+			if(w)
+				break;
+		}
+		if(unlikely(!w))
+			break;
+		memcpy(&p[res], &w->e, sizeof(p[0]));
+	}
+	cache.last_search = e;
+
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("gnarf, KHL cache lock stuck, bye!");
+
+	return res;
 }
 
 /*@unused@*/
