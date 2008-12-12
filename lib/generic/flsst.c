@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -33,7 +33,7 @@ size_t flsst(size_t find)
 	/*
 	 * Do some magic and then use the popcount to calculate the
 	 * flsst.
-	 * 
+	 *
 	 * The upside of this is, there are /no/ conditional jumps in
 	 * it. The downside, we need a (fast)popcount function. IA64
 	 * and SPARCv9 seem to have a OP for that, and the generic
@@ -47,7 +47,7 @@ size_t flsst(size_t find)
 	find |= find >> L2P(1);
 	found = popcountst(find);
 # else
-	/* 
+	/*
 	 * ... who ever needs it:
 	 * Generic Implenetations of devide and conquer approach.
 	 */
@@ -55,7 +55,7 @@ size_t flsst(size_t find)
 	found = SIZE_T_BITS;
 	if(SIZE_T_BITS <= 128)
 	{
-		/* 
+		/*
 		 * this should evaluate to a bunch of clean constant
 		 * tests, exatly the number needed for 32 or 64 Bit,
 		 * even wenn gcc is not highly optimizing
@@ -79,12 +79,11 @@ size_t flsst(size_t find)
 	{
 		/* Totaly generic */
 		size_t mask, shift;
-		mask  = magic_mask(s(1));
+		mask  = magic_mask(L2P(1));
 		shift = SIZE_T_BITS / 2;
 		do
 		{
-			if(!(find & mask))
-			{
+			if(!(find & mask)) {
 				find <<= shift;
 				found -= shift;
 			}
@@ -95,5 +94,42 @@ size_t flsst(size_t find)
 # endif
 	return found;
 }
+
+#if 0
+size_t flsst(size_t x)
+{
+	static const unsigned char l[] =
+	{
+		0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+		4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+		5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+		5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+		6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+		6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+		6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+		6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+		7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+	};
+	size_t i;
+	if(!x)
+		return 0;
+	i = x >> 16;
+	if(i) {
+		x = i >> 8;
+		i = x ? l[x] + 24 : l[i] + 16;
+	} else {
+		i = x >> 8;
+		i = i ? l[i] + 8 : l[x];
+	}
+	return i + 1;
+}
+#endif
 
 static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";

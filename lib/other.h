@@ -190,7 +190,7 @@
  * According to man-page a GNU-Extension, mumbel mumbel...
  * They are right, not on 5.7 Solaris
  */
-# include "lib/my_bitops.h"
+# include "my_bitops.h"
 #endif /* HAVE_STRNLEN || HAVE_MEMPCPY */
 
 /*

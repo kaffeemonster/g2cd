@@ -130,6 +130,7 @@ LIBSRCS = \
 	$(MPL)/adler32.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/inet_ntop.c \
+	$(MPL)/inet_pton.c \
 	$(MPL)/hzp.c \
 	$(MPL)/backtrace.c \
 	$(MPL)/atomic.c
@@ -155,6 +156,7 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/inet_ntop.o \
+	$(MPL)/inet_pton.o \
 	$(MPL)/hzp.o \
 	$(MPL)/backtrace.o \
 	$(MPL)/atomic.o
@@ -183,6 +185,7 @@ $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/inet_ntop.o: $(MPL)/combo_addr.h $(MPL)/itoa.h
+$(MPL)/inet_pton.o: $(MPL)/combo_addr.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)

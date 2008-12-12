@@ -11,12 +11,12 @@
 # g2cd is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version
 # 2 as published by the Free Software Foundation.
-# 
+#
 # g2cd is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public
 # License along with g2cd; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -39,9 +39,9 @@
 CC = gcc
 HOSTCC = gcc
 # gcc
-#CC_VER_INFO = --version
+CC_VER_INFO = --version
 # sun studio
-CC_VER_INFO = -V
+#CC_VER_INFO = -V
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 AS = as
 #	rcs, and a little silent-magic
@@ -199,7 +199,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	sun studio is ...
 #OPT_FLAGS = -O3 -fast
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1
+OPT_FLAGS = -O0
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

@@ -39,24 +39,24 @@
  * since IPv6 is in "heavy deployment", they should not suddenly
  * change the addr len...
  */
-#define INET6_ADDRLEN 16
+# define INET6_ADDRLEN 16
 
 /*
  * Compat foo
  * DANGER, it gets ugly...
  */
 
-#ifndef HAVE_SA_FAMILY_T
+# ifndef HAVE_SA_FAMILY_T
 typedef unsigned short sa_family_t;
-#endif
-#ifndef HAVE_IN_PORT_T
+# endif
+# ifndef HAVE_IN_PORT_T
 typedef uint16_t in_port_t;
-#endif
-#ifndef HAVE_SOCKLEN_T
-typedef socklen_t;
-#endif
+# endif
+# ifndef HAVE_SOCKLEN_T
+typedef uint32_t socklen_t;
+# endif
 
-#ifndef HAVE_IPV6
+# ifndef HAVE_IPV6
 struct in6_addr
 {
 	union
@@ -65,13 +65,13 @@ struct in6_addr
 		uint16_t u6_addr16[8];
 		uint32_t u6_addr32[4];
 	} in6_u;
-# define s6_addr   in6_u.u6_addr8
-# define s6_addr16 in6_u.u6_addr16
-# define s6_addr32 in6_u.u6_addr32
+#  define s6_addr   in6_u.u6_addr8
+#  define s6_addr16 in6_u.u6_addr16
+#  define s6_addr32 in6_u.u6_addr32
 };
-# ifndef AF_INET6
-#  define AF_INET6 10
-# endif
+#  ifndef AF_INET6
+#   define AF_INET6 10
+#  endif
 struct sockaddr_in6
 {
 	sa_family_t sin6_family;
@@ -81,51 +81,54 @@ struct sockaddr_in6
 	uint32_t sin6_scope_id;    /* IPv6 scope-id */
 }
 
-# define IN6_IS_ADDR_UNSPECIFIED(a) \
+#  define IN6_IS_ADDR_UNSPECIFIED(a) \
 	(((const uint32_t *)(a))[0] == 0 && \
 	 ((const uint32_t *)(a))[1] == 0 && \
 	 ((const uint32_t *)(a))[2] == 0 && \
 	 ((const uint32_t *)(a))[3] == 0)
-# define IN6_IS_ADDR_LOOPBACK(a) \
+#  define IN6_IS_ADDR_LOOPBACK(a) \
 	(((const uint32_t *)(a))[0] == 0 && \
 	 ((const uint32_t *)(a))[1] == 0 && \
 	 ((const uint32_t *)(a))[2] == 0 && \
 	 ((const uint32_t *)(a))[3] == htonl(1))
-# define IN6_IS_ADDR_MULTICAST(a) \
+#  define IN6_IS_ADDR_MULTICAST(a) \
 	(((const uint8_t *)(a))[0] == 0xff)
-# define IN6_IS_ADDR_LINKLOCAL(a) \
+#  define IN6_IS_ADDR_LINKLOCAL(a) \
 	((((const uint32_t *)(a))[0] & htonl(0xffc00000)) == \
 	  htonl(0xfe800000))
-# define IN6_IS_ADDR_SITELOCAL(a) \
+#  define IN6_IS_ADDR_SITELOCAL(a) \
 	((((const uint32_t *)(a))[0] & htonl(0xffc00000)) == \
 	  htonl (0xfec00000))
-# define IN6_IS_ADDR_V4MAPPED(a) \
+#  define IN6_IS_ADDR_V4MAPPED(a) \
 	((((const uint32_t *)(a))[0] == 0) && \
 	 (((const uint32_t *)(a))[1] == 0) && \
 	 (((const uint32_t *)(a))[2] == htonl (0xffff)))
-# define IN6_IS_ADDR_V4COMPAT(a) \
+#  define IN6_IS_ADDR_V4COMPAT(a) \
 	((((const uint32_t *)(a))[0] == 0) && \
 	 (((const uint32_t *)(a))[1] == 0) && \
 	 (((const uint32_t *)(a))[2] == 0) && \
 	 (ntohl(((const uint32_t *)(a))[3]) > 1))
-# define IN6_ARE_ADDR_EQUAL(a,b) \
+#  define IN6_ARE_ADDR_EQUAL(a,b) \
 	((((const uint32_t *)(a))[0] == ((const uint32_t *)(b))[0]) && \
 	 (((const uint32_t *)(a))[1] == ((const uint32_t *)(b))[1]) && \
 	 (((const uint32_t *)(a))[2] == ((const uint32_t *)(b))[2]) &&  \
 	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
-#endif /* HAVE_IPV6 */
+# endif /* HAVE_IPV6 */
 
-#ifndef HAVE_INET6_ADDRSTRLEN
+# ifndef HAVE_INET6_ADDRSTRLEN
 /*
  * This buffersize is needed, but we don't have it everywere, even on Systems
  * that claim to be IPv6 capable...
  */
-# define INET6_ADDRSTRLEN 46
-#endif /* HAVE_INET6_ADDRSTRLEN */
+#  define INET6_ADDRSTRLEN 46
+# endif /* HAVE_INET6_ADDRSTRLEN */
 
-#ifndef HAVE_INET_NTOP
+# ifndef HAVE_INET_NTOP
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
-#endif
+# endif
+# ifndef HAVE_INET_PTON
+int inet_pton(int af, const char *src, void *dst)
+# endif
 char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt);
 
 /*
@@ -286,28 +289,5 @@ static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo
 		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
 	}
 }
-
-# ifndef HAVE_INET_PTON
-/*
- * more Wuerg-Around
- */
-#  ifndef HAVE_INET_ATON /* for really stupid systems */
-static __inline__ int inet_pton(int af, const char *src, void *dest)
-{
-	unsigned long result = inet_addr(src);
-	af = af; /* to make compiler happy */
-
-	if((unsigned long)-1 == result)
-		return -1;
-	
-	if(dest)
-		((struct in_addr *)dest)->s_addr = result;
-
-	return 1;
-}
-#  else /* for cygwin and solaris */
-#   define inet_pton(a, b, c) inet_aton(b, c)
-#  endif /* HAVE_INET_ATON */
-# endif /* HAVE_INET_PTON */
 
 #endif /* COMBO_ADDR_H */
