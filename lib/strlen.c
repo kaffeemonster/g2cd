@@ -1,6 +1,6 @@
 /*
- * strnpcpy.c
- * strnpcpy for efficient concatination
+ * strlen.c
+ * strlen just for fun
  *
  * Copyright (c) 2008 Jan Seiffert
  *
@@ -24,28 +24,37 @@
  */
 
 /*
- * strnpcpy - strncpy which returns the end of the copied region
- * dst: where to copy to
- * src: from where to copy
- * maxlen: the maximum length
+ * strlen - strlen, you know...
+ * s: string you need the length
  *
- * return value: a pointer behind the last copied char,
- *               but not more than maxlen.
+ * return value: the string length
+ *
+ * since strlen is a crucial function (not in my code, but
+ * else where) a slow implementation sucks.
+ * So we always provide one.
  */
 
+#define IN_STRWHATEVER
 #include "../config.h"
 #include "other.h"
 
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
+#ifndef STRLEN_DEFINED
+size_t strlen(const char *s);
+# define STRLEN_DEFINED
+#endif
+
 #ifdef I_LIKE_ASM
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
-#  include "x86/strnpcpy.c"
+#  include "x86/strlen.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/strlen.c"
 # else
-#  include "generic/strnpcpy.c"
+#  include "generic/strlen.c"
 # endif
 #else
-# include "generic/strnpcpy.c"
+# include "generic/strlen.c"
 #endif

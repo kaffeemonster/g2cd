@@ -23,8 +23,8 @@
  * $Id:$
  */
 
-void test_cpu_feature(void (**func)(void),
-                      struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
+void test_cpu_feature(void *func,
+                      const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
                       size_t l GCC_ATTR_UNUSED_PARAM)
 {
 	func = func;

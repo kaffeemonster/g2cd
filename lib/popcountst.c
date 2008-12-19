@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,7 +49,7 @@
  * tools. This will Bomb on a real v8 (maybe not a v8+)...
  */
 #  include "sparc64/popcountst.c"
-# elif __powerpc64__
+# elif defined(__powerpc__) || defined(__powerpc64__)
 	/* only available > POWER5, doesn't talk about 32Bit */
 #  include "ppc/popcountst.c"
 # elif __alpha__

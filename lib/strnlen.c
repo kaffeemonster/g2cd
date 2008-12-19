@@ -30,6 +30,9 @@
  *
  * return value: the string length or maxlen, what comes first
  *
+ * NOTE: we asume that the caller garantees that maxlen bytes
+ *       are accessible at s
+ *
  * since strnlen is a GNU extension we have to provide our own.
  * We always provide one, since this implementation is only
  * marginaly slower than glibc one.
@@ -47,6 +50,7 @@
  *  SSE2: 2440ms
  */
 
+#define IN_STRWHATEVER
 #include "../config.h"
 #include "other.h"
 
@@ -54,7 +58,7 @@
 #include "my_bitopsm.h"
 
 #ifndef STRNLEN_DEFINED
-size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_VIS("hidden");
+size_t strnlen(const char *s, size_t maxlen);
 #define STRNLEN_DEFINED
 #endif
 

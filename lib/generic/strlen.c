@@ -1,8 +1,8 @@
 /*
- * strnlen.c
- * strnlen for non-GNU platforms, generic implementation
+ * strlen.c
+ * strlen, generic implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-size_t strnlen(const char *s, size_t maxlen)
+size_t strlen(const char *s)
 {
 	const char *p = s;
 	size_t i;
@@ -37,16 +37,15 @@ size_t strnlen(const char *s, size_t maxlen)
 		/*
 		 * We can do unaligned access, busily start doing
 		 * something.
-		 * We stop at a page boundry to get in a aligned
-		 * swing on the source. (we simply assume 4k pages)
+		 * But make shure we do not cross a page boundry
+		 * on the source side. (we simply assume 4k pages)
 		 */
 		if(IS_ALIGN(p, SO32))
 			goto DO_LARGE;
-		i = (const char *) ALIGN(p, 4096) - p;
-		i = i < maxlen ? i : maxlen;
-		for(; likely(SO32M1 < i); i -= SO32, maxlen -= SO32, p += SO32)
+		i = ((const char *) ALIGN(p, 4096) - p);
+		for(; likely(SO32M1 < i); i -= SO32, p += SO32)
 		{
-			uint32_t r = has_nul_byte32(*(const uint32_t*)p);
+			uint32_t r = has_nul_byte32(*p);
 			if(r) {
 				p += nul_byte_index32(r);
 				goto OUT;
@@ -56,14 +55,11 @@ size_t strnlen(const char *s, size_t maxlen)
 	}
 	else /* Unaligned access is not ok. Align it before access. */
 		i = (const char *) ALIGN(p, SO32) - p;
-
-	while(i && maxlen && *p)
-		maxlen--, p++, i--;
-	if(!*p)
-		goto OUT;
+	while(i && *p)
+		p++, i--;
 
 DO_LARGE:
-	if(SO32M1 < maxlen)
+	if(*p)
 	{
 		/*
 		 * keeping at 32 bit to give 64 bit arches a chance
@@ -72,19 +68,14 @@ DO_LARGE:
 		register const uint32_t *d = ((const uint32_t *)p);
 		uint32_t r;
 
-		while(!(r = has_nul_byte32(*d)) && SO32M1 < maxlen)
-			d++, maxlen -= SO32;
-		p = (const char *)d;
-		if(r) {
-			p += nul_byte_index32(r);
-			goto OUT;
-		}
+		while(!(r = has_nul_byte32(*d)))
+			d++;
+		p  = (const char *)d;
+		p += nul_byte_index32(r);
 	}
 
-	while(maxlen && *p)
-		maxlen--, p++;
 OUT:
 	return p - s;
 }
 
-static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";

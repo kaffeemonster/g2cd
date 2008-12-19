@@ -39,8 +39,6 @@
 #define HAVE_INET6_ADDRSTRLEN
 #define HAVE_INET_NTOP
 #define HAVE_INET_PTON
-/* sometimes we even haven't this */
-#define HAVE_INET_ATON
 
 /* need epoll compat? */
 //#define NEED_EPOLL_COMPAT
@@ -77,19 +75,19 @@
  */
 #define HAVE_SMP
 /* if we have SMP, do we have Spinlocks? Solaris has none! */
-//#define HAVE_SPINLOCKS 
+#define HAVE_SPINLOCKS
 
 /* do we want to use my inline-asm's */
 #define I_LIKE_ASM
 
-/* your arch a little picky bout lots of conditional branches?*/
+/* your arch is a little picky 'bout lots of conditional branches? */
 #if defined(__powerpc__) || defined(__powerpc64__)
 # define I_HATE_CBRANCH
 #endif
 
 
-/* this is callong for trouble, but helpfull */
-//TODO: backtrace a little bit  brocken ATM
+/* this is a call for trouble, but helpfull */
+//TODO: backtrace a little bit broken ATM
 #define WANT_BACKTRACES
 
 /*
@@ -97,6 +95,13 @@
  * If this is wrongly set, you may find a SIGBUS
  */
 #define UNALIGNED_OK 1
+/*
+ * Does your arch has bit foo instructions?
+ * We sometimes need to find the index of a bit. This can be
+ * done fast and cheap if your arch has instructions to scan
+ * for a bit (bsf, cntlz), or to count bits (popcnt).
+ */
+#define HAVE_BIT_INSTR
 
 /*
  * Is __thread keyword for thread local storage available?
@@ -129,15 +134,15 @@
  * byte-wise, since mostly we have to regard the endianess, and
  * to be safe.
  * But sometimes you want to simply work on some mem, and doing
- * it byte-wise would waste Performance. Then this comes into
+ * it byte-wise would waste performance. Then this comes into
  * play.
  * SYSTEM_ALIGNMENT_NEEDED defines what alingment is needed,
  * if this constraint is not met, no multibyte access will be
  * done.
  * SYSTEM_ALIGNMENT_WANTED describes the value which alignment
- * should be achiefed, before doing multibyte access.
+ * should be achieved, before doing multibyte access.
  * Ok, and how do we come to the Numbers?
- * Examples: 
+ * Examples:
  * An x86 can mostly read everything from every address, it
  * just gets realy slow on bad aligned data. So i don't set an
  * needed alignment of one, since such missaligned data is
@@ -151,7 +156,7 @@
  * On an arch were most types like size_t, int, long etc.
  * elvaluates to 64 bit, the needed-value should be raised to
  * 8, but be warned, raising this value to much could lead to
- * a not alignable situation and provoke bytewise access 
+ * a not alignable situation and provoke bytewise access
  * -> slow.
  * The wanted-value is a part for itself, good values for this
  * is a little gambling.

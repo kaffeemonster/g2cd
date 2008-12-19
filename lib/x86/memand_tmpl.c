@@ -55,14 +55,15 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		goto no_alignment_wanted;
 	else
 	{
-		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED))-dst_char;
+		/* align dst, we will see what src looks like afterwards */
+		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED)) - dst_char;
 		len -= i;
+		for(; i/SO32; i -= SO32, dst_char += SO32, src_char += SO32)
+			*((uint32_t *)dst_char) &= *((const uint32_t *)src_char);
 		for(; i; i--)
 			*dst_char++ &= *src_char++;
-
 		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1)) ^
 		    (((intptr_t)src_char) & ((ALIGNMENT_WANTED * 2) - 1));
-
 		/*
 		 * x86 special:
 		 * x86 handles misalignment in hardware for ordinary ops.
@@ -73,11 +74,11 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		 * Either its also aligned by accident, or working
 		 * unaligned dwordwise is still faster than bytewise.
 		 */
-		if(i &  1)
+		if(unlikely(i &  1))
 			goto alignment_size_t;
-		if(i &  2)
+		if(unlikely(i &  2))
 			goto alignment_size_t;
-		if(i &  4)
+		if(unlikely(i &  4))
 			goto alignment_size_t;
 		if(i &  8)
 			goto alignment_8;
@@ -373,6 +374,7 @@ alignment_8:
 	 * don't know...
 	 * to be honest, no great speedup
 	 */
+no_alignment_wanted:
 handle_remaining:
 alignment_size_t:
 	{
@@ -390,41 +392,42 @@ alignment_size_t:
 			PREFETCHW(64(%5))
 			PREFETCHW(96(%5))
 			/* fuck -fpic */
-			"mov	%2, %0\n\t"
-			"mov	%%ebx, %2\n\t"
-			"mov	%0, %%ebx\n\t"
+			"mov	%2, %0\n\t" /* no xchg, contains a lock */
+			"mov	"PICREG", %2\n\t"
+			"mov	%0, "PICREG"\n\t"
 			".p2align 3\n"
 			"1:\n\t"
-			PREFETCH(128(%4,%%ebx,1))
-			PREFETCHW(128(%5,%%ebx,1))
-			"mov	"str_it(SIZE_T_BYTE)"*0(%4,%%ebx,1), %0\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*1(%5,%%ebx,1), %1\n\t"
-			"and	%0,"str_it(SIZE_T_BYTE)"*0(%4,%%ebx,1)\n\t"
-			"and	%1,"str_it(SIZE_T_BYTE)"*1(%5,%%ebx,1)\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*2(%4,%%ebx,1), %0\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*3(%5,%%ebx,1), %1\n\t"
-			"and	%0,"str_it(SIZE_T_BYTE)"*2(%4,%%ebx,1)\n\t"
-			"and	%1,"str_it(SIZE_T_BYTE)"*3(%5,%%ebx,1)\n\t"
-			"add	$"str_it(SIZE_T_BYTE)"*4,%%ebx\n\t"
+			PREFETCH(128(%4,PICREG_R,1))
+			PREFETCHW(128(%5,PICREG_R,1))
+			"mov	"str_it(SIZE_T_BYTE)"*0(%4,"PICREG",1), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*1(%5,"PICREG",1), %1\n\t"
+			"and	%0,"str_it(SIZE_T_BYTE)"*0(%4,"PICREG",1)\n\t"
+			"and	%1,"str_it(SIZE_T_BYTE)"*1(%5,"PICREG",1)\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*2(%4,"PICREG",1), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*3(%5,"PICREG",1), %1\n\t"
+			"and	%0,"str_it(SIZE_T_BYTE)"*2(%4,"PICREG",1)\n\t"
+			"and	%1,"str_it(SIZE_T_BYTE)"*3(%5,"PICREG",1)\n\t"
+			"add	$"str_it(SIZE_T_BYTE)"*4, "PICREG"\n\t"
 			"dec	%3\n\t"
 			"jnz	1b\n\t"
-			"lea	(%4,%%ebx,1), %4\n\t"
-			"lea	(%5,%%ebx,1), %5\n\t"
-			"mov	%2, %%ebx\n"
+			"lea	(%4,"PICREG",1), %4\n\t"
+			"lea	(%5,"PICREG",1), %5\n\t"
+			"mov	%2, "PICREG"\n"
 			"2:\n\t"
+		/* handle remaining in 32 bit, should be small and helps amd64 */
 			"mov	%9, %3\n\t"
-			"shr	$"str_it(SIZE_T_SHIFT)", %3\n\t"
+			"shr	$2, %3\n\t"
 			"test	%3, %3\n\t"
 			"jz	4f\n\t"
 			"xor	%1, %1\n"
 			"3:\n\t"
-			"mov	(%4,%1,"str_it(SIZE_T_BYTE)"), %0\n\t"
-			"and	%0,(%4,%1,"str_it(SIZE_T_BYTE)")\n\t"
+			"mov	(%4,%1,4), %%eax\n\t"
+			"and	%%eax,(%5,%1,4)\n\t"
 			"inc	%1\n\t"
 			"dec	%3\n\t"
 			"jnz	3b\n\t"
-			"lea	(%4,%1,"str_it(SIZE_T_BYTE)"), %4\n\t"
-			"lea	(%5,%1,"str_it(SIZE_T_BYTE)"), %5\n"
+			"lea	(%4,%1,4), %4\n\t"
+			"lea	(%5,%1,4), %5\n"
 			"4:\n"
 			: /* %0 */ "=&a" (tmp1),
 			  /* %1 */ "=&d" (tmp2),
@@ -442,7 +445,6 @@ alignment_size_t:
 		len %= SOST;
 	}
 
-no_alignment_wanted:
 no_alignment_possible:
 	/* and whats left to do from alignment and other datatype */
 	while(len--)

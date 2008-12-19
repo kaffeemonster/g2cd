@@ -10,12 +10,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -25,10 +25,12 @@
  */
 
 #ifndef LIB_MY_BITOPS_H
-#define LIB_MY_BITOPS_H
+# define LIB_MY_BITOPS_H
 
 # include <sys/types.h>
-# include <string.h>
+# ifndef IN_STRWHATEVER
+#  include <string.h>
+# endif
 # include "other.h"
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
@@ -54,8 +56,12 @@ LIB_MY_BITOPS_EXTRN(void *mempcpy(void *restrict dst, const void *restrict src, 
 LIB_MY_BITOPS_EXTRN(char *strpcpy(char *restrict dst, const char *restrict src));
 LIB_MY_BITOPS_EXTRN(char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen));
 # ifndef HAVE_STRNLEN
-LIB_MY_BITOPS_EXTRN(size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE);
+size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE;
 #  define STRNLEN_DEFINED
+# endif
+# ifndef HAVE_STRLEN
+size_t strlen(const char *s) GCC_ATTR_PURE;
+#  define STRLEN_DEFINED
 # endif
 
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))

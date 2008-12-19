@@ -1,6 +1,6 @@
 /*
- * strnlen.c
- * strnlen for non-GNU platforms, x86 implementation
+ * strlen.c
+ * strlen, x86 implementation
  *
  * Copyright (c) 2008 Jan Seiffert
  *
@@ -41,17 +41,6 @@
  */
 
 #if defined( __SSE__) && defined(__GNUC__)
-
-typedef char v8c __attribute__((vector_size (8)));
-#define SOV8M1	(sizeof(v8c) - 1)
-#define SOV8	(sizeof(v8c))
-
-static inline unsigned v8_equal(v8c a, v8c b)
-{
-	v8c compare = __builtin_ia32_pcmpeqb(a, b);
-	return __builtin_ia32_pmovmskb(compare);
-}
-
 # ifdef __SSE2__
 /*
  * SSE2 version
@@ -67,19 +56,22 @@ static inline unsigned v16_equal(v16c a, v16c b)
 	return __builtin_ia32_pmovmskb128(compare);
 }
 
-size_t strnlen(const char *s, size_t maxlen)
+size_t strlen(const char *s)
 {
 	const char *p = s;
+	/* don't step over the page boundery */
+	size_t cycles;
 	prefetch(s);
 
 	if(unlikely(!s))
 		return 0;
 
+	cycles = (const char *)ALIGN(p, 4096) - p;
 	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long strings
+	 * we don't precheck for alignment, 16 is very unlikely
+	 * instead go unaligned until a page boundry
 	 */
-	for(; likely(SOV16M1 < maxlen); maxlen -= SOV16, p += SOV16)
+	for(; likely(SOV16M1 < cycles); cycles -= SOV16, p += SOV16)
 	{
 		unsigned r = v16_equal(__builtin_ia32_loaddqu(p), (v16c){0ULL, 0ULL});
 		if(r) {
@@ -87,28 +79,27 @@ size_t strnlen(const char *s, size_t maxlen)
 			goto OUT;
 		}
 	}
-	if(likely(SOV8M1 < maxlen))
+	for(; likely(SO32M1 < cycles); cycles -= SO32, p += SO32)
 	{
-		unsigned r = v8_equal(*(const v8c *)p, (v8c){0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-		maxlen -= SOV8;
-		p += SOV8;
-	}
-	if(likely(SO32M1 < maxlen))
-	{
-		unsigned r = has_nul_byte32(*(const uint32_t *)p);
+		uint32_t r = has_nul_byte32(*(const uint32_t *)p);
 		if(r) {
 			p += __builtin_ctz(r) / 8;
 			goto OUT;
 		}
-		maxlen -= SO32;
-		p += SO32;
 	}
-	while(maxlen && *p)
-		maxlen--, p++;
+	/* slowly encounter page boundery */
+	while(cycles && *p)
+		p++, cycles--;
+
+	if(likely(*p))
+	{
+		register const v16c *d = (const v16c *)p;
+		unsigned r;
+		while(!(r = v16_equal(*d, (v16c){0ULL, 0ULL})))
+			d++;
+		p  = (const char *)d;
+		p += __builtin_ctz(r);
+	}
 OUT:
 	return p - s;
 }
@@ -117,44 +108,69 @@ OUT:
 /*
  * SSE version
  */
-size_t strnlen(const char *s, size_t maxlen)
+
+typedef char v8c __attribute__((vector_size (8)));
+#define SOV8M1	(sizeof(v8c) - 1)
+#define SOV8	(sizeof(v8c))
+
+static inline unsigned v8_equal(v8c a, v8c b)
+{
+	v8c compare = __builtin_ia32_pcmpeqb(a, b);
+	return __builtin_ia32_pmovmskb(compare);
+}
+
+size_t strlen(const char *s)
 {
 	const char *p = s;
+	/* don't step over the page boundery */
+	size_t cycles;
 	prefetch(s);
 
 	if(unlikely(!s))
 		return 0;
 
+	cycles = (const char *)ALIGN(p, 4096) - p;
 	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long strings
+	 * we don't precheck for alignment, 8 is unlikely
+	 * instead go unaligned until a page boundry
 	 */
-	for(; likely(SOV8M1 < maxlen); maxlen -= SOV8, p += SOV8)
+	for(; likely(SOV8M1 < cycles); cycles -= SOV8, p += SOV8)
 	{
-		unsigned r = v8_equal(*(const v8c *)p, (v8c){0ULL});
+		unsigned r = v8_equal(*(v8c *)p, (v8c){0ULL});
 		if(r) {
 			p += __builtin_ctz(r);
 			goto OUT;
 		}
 	}
-	if(likely(SO32M1 < maxlen))
+	if(likely(SO32M1 < cycles))
 	{
-		unsigned r = has_nul_byte32(*(const uint32_t *)p);
+		uint32_t r = has_nul_byte32(*(uint32_t *)p);
 		if(r) {
 			p += __builtin_ctz(r) / 8;
 			goto OUT;
 		}
-		maxlen -= SO32;
+		cycles -= SO32;
 		p += SO32;
 	}
-	while(maxlen && *p)
-		maxlen--, p++;
+	while(cycles && *p)
+		p++, cycles--;
+
+	if(*p)
+	{
+		register const v8c *d = (const v8c *)p;
+		unsigned r;
+		while(!(r = v8_equal(*d, (v8c){0ULL})))
+			d++;
+		p  = (const char *)d;
+		p += __builtin_ctz(r);
+	}
 OUT:
 	return p - s;
 }
 
 # endif
-static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../generic/strnlen.c"
+# include "../generic/strlen.c"
 #endif
+/* EOF */

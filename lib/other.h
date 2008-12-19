@@ -270,6 +270,11 @@ do { \
 
 # if (__BYTE_ORDER == __LITTLE_ENDIAN)
 #  define HOST_IS_BIGENDIAN	false
+#  if defined(HAVE_BIT_INSTR) && defined(__GNUC__)
+#   define nul_byte_index32(x) (__builtin_ctz(x)/8)
+#  else
+#   define nul_byte_index32(x) nul_byte_index_l32(x)
+#  endif
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \
 	if(!big_end) \
@@ -297,6 +302,11 @@ do { \
 } while(0)
 # elif (__BYTE_ORDER == __BIG_ENDIAN)
 #  define HOST_IS_BIGENDIAN	true
+#  if defined(HAVE_BIT_INSTR) && defined(__GNUC__)
+#   define nul_byte_index32(x) (3-(__builtin_ctz(x)/8))
+#  else
+#   define nul_byte_index32(x) nul_byte_index_b32(x)
+#  endif
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \
 	if(big_end) \
@@ -324,7 +334,7 @@ do { \
 } while(0)
 # else
 #  error "You're kidding, you don't own a PDP11?"
-# endif 
+# endif
 
 # define put_unaligned(val, ptr) \
 do { \

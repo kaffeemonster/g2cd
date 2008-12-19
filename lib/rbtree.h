@@ -261,7 +261,7 @@ enum rbcolor
 {
 	RB_BLACK,
 	RB_RED
-} GCC_ATTRIB_PACKED;
+} GCC_ATTR_PACKED;
 
 struct rbnode
 {

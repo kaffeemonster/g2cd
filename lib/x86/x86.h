@@ -41,6 +41,9 @@
 #undef MMX_STORE
 #undef MMX_FENCE
 #undef SIZE_T_BYTE
+#undef MAKE_PREFETCH
+
+#define MAKE_PREFETCH(x, y) x #y "\n\t"
 
 #ifdef HAVE_AVX
 # define AVX_MOVE(s, d)	"vmovdqa	" #s ", " #d "\n\t"
@@ -49,14 +52,14 @@
 # define AVX_XOR(sa, sb, d)	"vxorpd	" #sa ", " #sb ", " #d "\n\t"
 #endif
 #ifdef HAVE_SSE
-# define SSE_PREFETCH(x)	"prefetcht0	" #x "\n\t"
-# define PREFETCH(x)	"prefetcht0	" #x "\n\t"
+# define SSE_PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
+# define PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
 # ifdef HAVE_3DNOW
-#  define SSE_PREFETCHW(x)	"prefetchw	" #x "\n\t"
-#  define PREFETCHW(x)	"prefetchw	" #x "\n\t"
+#  define SSE_PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
+#  define PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 # else
-#  define SSE_PREFETCHW(x)	"prefetcht0	" #x "\n\t"
-#  define PREFETCHW(x)	"prefetcht0	" #x "\n\t"
+#  define SSE_PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
+#  define PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
 # endif
 # define SSE_FENCE	"sfence\n"
 # ifdef HAVE_SSE2
@@ -78,23 +81,23 @@
 #endif
 #ifdef HAVE_MMX
 # ifdef HAVE_SSE
-#  define MMX_PREFETCH(x)	"prefetcht0	" #x "\n\t"
-#  define PREFETCH(x)	"prefetcht0	" #x "\n\t"
+#  define MMX_PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
+#  define PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
 #  ifdef HAVE_3DNOW
-#   define MMX_PREFETCHW(x)	"prefetchw	" #x "\n\t"
-#   define PREFETCHW(x)	"prefetchw	" #x "\n\t"
+#   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
+#   define PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 #  else
-#   define MMX_PREFETCHW(x)	"prefetcht0	" #x "\n\t"
-#   define PREFETCHW(x)	"prefetcht0	" #x "\n\t"
+#   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
+#   define PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
 #  endif
 #  define MMX_STORE(x, y)	"movq	" #x ", " #y "\n\t"
 #  define MMX_FENCE	"sfence\n"
 # else
 #  ifdef HAVE_3DNOW
-#   define MMX_PREFETCH(x)	"prefetch	" #x "\n\t"
-#   define PREFETCH(x)	"prefetch	" #x "\n\t"
-#   define MMX_PREFETCHW(x)	"prefetchw	" #x "\n\t"
-#   define PREFETCHW(x)	"prefetchw	" #x "\n\t"
+#   define MMX_PREFETCH(x)	MAKE_PREFETCH("prefetch	", x)
+#   define PREFETCH(x)	MAKE_PREFETCH("prefetch	", x)
+#   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
+#   define PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 #  else
 #   define MMX_PREFETCH(x)
 #   define PREFETCH(x)
@@ -113,10 +116,14 @@
 # define SIZE_T_BYTE	4
 # define SIZE_T_SHIFT	2
 # define NOT_MEM	"notl	"
+# define PICREG_R %%ebx
+# define PICREG "%%ebx"
 #else
 # define SIZE_T_BYTE	8
 # define SIZE_T_SHIFT	3
 # define NOT_MEM	"notq	"
+# define PICREG_R %%rbx
+# define PICREG "%%rbx"
 #endif
 
 #undef ALIGNMENT_WANTED

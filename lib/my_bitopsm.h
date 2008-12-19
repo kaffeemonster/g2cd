@@ -33,6 +33,10 @@
 # define SOST	(sizeof(size_t))
 	/* bytes of size_t - 1 */
 # define SOSTM1	(SOST - 1L)
+	/* and sometimes sizeof(uint32_t) */
+# define SO32	(sizeof(uint32_t))
+	/* bytes of size_t - 1 */
+# define SO32M1	(SO32 - 1L)
 	/* bits in a size_t */
 # define SIZE_T_BITS	(SOST * CHAR_BIT)
 	/* is pointer x aligned on a power of n */
@@ -40,9 +44,15 @@
 	/* align pointer x on a power of n */
 # define ALIGN(x, n) \
 	((intptr_t)((x)+(n) - 1L) & ~((intptr_t)(n) - 1L))
+	/* get the bytes till alignment is met */
+#define ALIGN_DIFF(x, n) \
+	(((intptr_t)((x)+(n) - 1L) & ~((intptr_t)(n) - 1L)) - (intptr_t)(x))
 	/* roud up an int to match alignment */
 #define ALIGN_SIZE(x, n) \
 	(((x) + (n) - 1L) & ~((n) - 1L))
+	/* yup, sometimes we have to align down */
+#define ALIGN_DOWN(x, n) \
+	(((intptr_t)(x)) & ~((intptr_t)(n) - 1L))
 	/* some magic to build a constant for 32 & 64 bit, without
 	 * the need for LL suffix
 	 */
@@ -52,4 +62,22 @@
 	 * L2P(0) = 32, L2P(1) = 16, L2P(2) = 8 ...
 	 */
 # define L2P(x)	(SIZE_T_BITS / (1 << x))
+	/* The wonders of binary foo
+	 * true if any byte in the number is zero
+	 */
+#define has_nul_byte32(x) \
+	(((x) -  0x01010101) & ~(x) &  0x80808080)
+#define has_nul_byte(x) \
+	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
+#define nul_byte_index_l32(x) \
+	((x) & 0x80U ? 0 : (((x) & 0x8000U) ? 1 : ((x) & 0x800000U ? 2 : ((x) & 0x80000000 ? 3 : 0))))
+#define nul_byte_index_b32(x) \
+	((x) & 0x80000000U ? 0 : (((x) & 0x800000U) ? 1 : ((x) & 0x8000U ? 2 : ((x) & 0x80 ? 3 : 0))))
+	/*	3322222222221111111111
+	 *	10987654321098765432109876543210
+	 *	10000000100000001000000010000000
+	 */
+#define packedmask_832(x) \
+	((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F;
+
 #endif

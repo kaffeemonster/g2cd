@@ -30,6 +30,7 @@
 #include "../log_facility.h"
 #include "../my_bitops.h"
 #include "x86_features.h"
+#include "x86.h"
 
 /*
  * Types
@@ -135,11 +136,6 @@ static always_inline void write_flags(size_t f)
 
 static always_inline void cpuid(union cpuid_regs *regs, size_t func)
 {
-#ifdef __i386__
-# define PICREG "%%ebx"
-#else
-# define PICREG "%%rbx"
-#endif
 	/* save ebx around cpuid call, PIC code needs it */
 	asm volatile (
 		"xchg	%1, " PICREG "\n\t"
@@ -159,7 +155,6 @@ static always_inline void cpuid(union cpuid_regs *regs, size_t func)
 		  /* %6 */ "2" (regs->r.ecx)
 		: "cc"
 	);
-#undef PICREG
 }
 
 static always_inline void cpuids(union cpuid_regs *regs, size_t func)

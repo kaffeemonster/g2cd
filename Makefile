@@ -56,8 +56,8 @@ OBJCOPY = objcopy
 STRIP = strip
 RM = rm -f
 
-# split up host and target
-HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D _SVID_SOURCE
+# split up host and target CFLAGS
+HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_SVID_SOURCE
 
 #
 # the C-Standart the compiler should work with
@@ -117,20 +117,20 @@ ARCH_FLAGS += -march=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
-ARCH_FLAGS += -momit-leaf-frame-pointer
+#ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors
 # unfortunatly second class citizians
 #ARCH_FLAGS += -minline-all-stringops
-ARCH_FLAGS += -minline-stringops-dynamically
-ARCH_FLAGS += -maccumulate-outgoing-args
+#ARCH_FLAGS += -minline-stringops-dynamically
+#ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
 # specified, it does not "know" special registers (MMX/SSE) which
 # are not in this CPU, if you give them on inline assembly -> compile error
 # generic archs (i686) do not help
 # always force mmx/sse - PPC: force altivec?
-ARCH_FLAGS += -mmmx
-ARCH_FLAGS += -msse
+#ARCH_FLAGS += -mmmx
+#ARCH_FLAGS += -msse
 CFLAGS += $(ARCH_FLAGS)
 
 #
@@ -199,7 +199,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	sun studio is ...
 #OPT_FLAGS = -O3 -fast
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -O0
+#OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -275,6 +275,8 @@ LDFLAGS += -rdynamic
 #
 #LDFLAGS += -L$(ZLIB_LPATH)/lib -Wl,R,$(ZLIB_LPATH)/lib
 
+#LDFLAGS += -Wl.-u,strlen
+#LDFLAGS += -Wl,-u,strnlen
 
 #
 # Include Paths
@@ -299,7 +301,7 @@ CFLAGS += -DDEBUG_DEVEL
 CFLAGS += -DHAVE_CONFIG_H
 CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
-CFLAGS += -DHELGRIND_ME
+#CFLAGS += -DHELGRIND_ME
 #CFLAGS += -DHAVE_BINUTILS=219
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen

@@ -24,7 +24,7 @@
  */
 
 #ifndef ARCH_NAME_SUFFIX
-# define F_NAME(z, x, y) z, y
+# define F_NAME(z, x, y) z x
 #else
 # define F_NAME(z, x, y) static z x##y
 #endif
