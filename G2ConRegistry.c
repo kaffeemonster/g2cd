@@ -250,20 +250,20 @@ static void g2_conreg_init(void) GCC_ATTR_CONSTRUCT;
 static void g2_conreg_deinit(void) GCC_ATTR_DESTRUCT;
 
 /* Funcs */
-static struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct g2_ht_bucket *from, struct g2_ht_chain **from_c, unsigned level)
+static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct g2_ht_bucket *from, struct g2_ht_chain **from_c, unsigned level)
 {
 	unsigned i = 0;
 
 	if(level < (LEVEL_COUNT-1))
 	{
-		for(; i < LEVEL_SIZE; i++, from++)
+		for(; i < LEVEL_SIZE; i++)
 		{
+			logg_develd_old("%p, %p, %p, %p, %.*s%u\n", fill, from, raw_bucket_storage, raw_bucket_storage + count_b, level, "\t\t\t\t\t\t", i);
 			from->qht = NULL;
 			from->dirty = false;
 			fill->d.b[i] = from;
 			from = init_alloc_bucket(from, from + 1, from_c, level + 1);
 		}
-		return from - 1;
 	}
 	else
 	{
@@ -278,8 +278,8 @@ static struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct 
 			fill->d.c[i] = f_c;
 		}
 		*from_c = f_c;
-		return from;
 	}
+	return from;
 }
 static void g2_conreg_init(void)
 {
@@ -294,6 +294,7 @@ static void g2_conreg_init(void)
 	if(!(raw_bucket_storage && raw_chain_storage))
 		diedie("allocating connection registry bucket mem");
 
+	logg_develd("Buckets: %zu\tChains: %zu\n", count_b, count_c);
 	tc = raw_chain_storage;
 	init_alloc_bucket(&ht_root, raw_bucket_storage, &tc, 0);
 	ht_seed = (uint32_t) time(NULL);
