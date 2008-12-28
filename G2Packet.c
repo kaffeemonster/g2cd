@@ -431,7 +431,7 @@ static bool handle_KHL_NH(g2_connection_t *connec GCC_ATTR_UNUSED_PARAM, g2_pack
 	}
 
 	if(source->is_compound)
-		logg_packet("/KHL/NH\twith child! len: %d\n", rem);
+		logg_packet("/KHL/NH\twith child! len: %zd\n", rem);
 
 	memset(&addr, 0, sizeof(addr));
 	/* we Assume network byte order for the IP */
@@ -477,7 +477,7 @@ static bool handle_KHL_CH(g2_connection_t * connec, g2_packet_t *source, struct 
 	 * looks like ip in net byte order, rest in host byte order
 	 */
 	if(source->is_compound)
-		logg_packet("/KHL/CH\twith child! len: %d\n", remaining);
+		logg_packet("/KHL/CH\twith child! len: %zd\n", remaining);
 
 	memset(&addr, 0, sizeof(addr));
 	if(8 == sizeof(time_t))

@@ -269,11 +269,13 @@ do { \
 } while(0)
 
 # if (__BYTE_ORDER == __LITTLE_ENDIAN)
-#  define HOST_IS_BIGENDIAN	false
-#  if defined(HAVE_BIT_INSTR) && defined(__GNUC__)
-#   define nul_byte_index32(x) (__builtin_ctz(x)/8)
+#  define HOST_IS_BIGENDIAN	0
+#  if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
+#   define nul_byte_index32(x) (__builtin_ctz(x)/BITS_PER_CHAR)
+#   define nul_byte_index(x) (__builtin_ctzl(x)/BITS_PER_CHAR)
 #  else
 #   define nul_byte_index32(x) nul_byte_index_l32(x)
+#   define nul_byte_index(x) nul_byte_index_l64(x)
 #  endif
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \
@@ -301,11 +303,13 @@ do { \
 	} \
 } while(0)
 # elif (__BYTE_ORDER == __BIG_ENDIAN)
-#  define HOST_IS_BIGENDIAN	true
-#  if defined(HAVE_BIT_INSTR) && defined(__GNUC__)
-#   define nul_byte_index32(x) (3-(__builtin_ctz(x)/8))
+#  define HOST_IS_BIGENDIAN	1
+#  if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
+#   define nul_byte_index32(x) (__builtin_clz(x)/BITS_PER_CHAR)
+#   define nul_byte_index(x) (__builtin_clzl(x)/BITS_PER_CHAR)
 #  else
 #   define nul_byte_index32(x) nul_byte_index_b32(x)
+#   define nul_byte_index(x) nul_byte_index_b64(x)
 #  endif
 #  define get_unaligned_endian(dest, ptr, big_end) \
 do { \

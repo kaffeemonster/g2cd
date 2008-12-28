@@ -36,125 +36,321 @@
  * generic version (58000ms vs. 54000ms), MMX was a really
  * braindead idea without a MMX->CPU-Reg move instruction
  * to do things not possible with MMX.
+ */
+/*
+ * Sometimes you need a new perspective, like the altivec
+ * way of handling things.
+ * Lower address bits? Totaly overestimated.
  *
- * We use the GCC vector internals, to make things simple for us.
+ * We don't precheck for alignment, 16 or 8 is very unlikely
+ * instead we "align hard", do one load "under the address",
+ * mask the excess info out and afterwards we are fine to go.
+ *
+ * Even this beeing strNlen, this n can be seen as a "hint"
+ * We can overread and underread, but should cut the result
+ * (and not pass a page boundery, but we cannot because
+ * we are aligned).
  */
-
-#if defined( __SSE__) && defined(__GNUC__)
-
-typedef char v8c __attribute__((vector_size (8)));
-#define SOV8M1	(sizeof(v8c) - 1)
-#define SOV8	(sizeof(v8c))
-
-static inline unsigned v8_equal(v8c a, v8c b)
-{
-	v8c compare = __builtin_ia32_pcmpeqb(a, b);
-	return __builtin_ia32_pmovmskb(compare);
-}
-
-# ifdef __SSE2__
 /*
- * SSE2 version
+ * Normaly we could generate this with the gcc vector
+ * __builtins, but since gcc whines when the -march does
+ * not support the operation and we want to always provide
+ * them and switch between them...
+ * And near by, sorry gcc, your bsf handling sucks.
+ * bsf generates flags, no need to test beforehand,
+ * but AFTERWARDS!!!
  */
 
-typedef char v16c __attribute__((vector_size (16)));
-#define SOV16M1	(sizeof(v16c) - 1)
-#define SOV16	(sizeof(v16c))
+#include "x86_features.h"
 
-static inline unsigned v16_equal(v16c a, v16c b)
+#define SOV16	16
+#define SOV8	8
+
+static size_t strnlen_SSE42(const char *s, size_t maxlen)
 {
-	v16c compare = __builtin_ia32_pcmpeqb128(a, b);
-	return __builtin_ia32_pmovmskb128(compare);
-}
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 
-size_t strnlen(const char *s, size_t maxlen)
-{
-	const char *p = s;
-	prefetch(s);
-
-	if(unlikely(!s))
-		return 0;
-
-	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long strings
-	 */
-	for(; likely(SOV16M1 < maxlen); maxlen -= SOV16, p += SOV16)
-	{
-		unsigned r = v16_equal(__builtin_ia32_loaddqu(p), (v16c){0ULL, 0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-	}
-	if(likely(SOV8M1 < maxlen))
-	{
-		unsigned r = v8_equal(*(const v8c *)p, (v8c){0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-		maxlen -= SOV8;
-		p += SOV8;
-	}
-	if(likely(SO32M1 < maxlen))
-	{
-		unsigned r = has_nul_byte32(*(const uint32_t *)p);
-		if(r) {
-			p += __builtin_ctz(r) / 8;
-			goto OUT;
-		}
-		maxlen -= SO32;
-		p += SO32;
-	}
-	while(maxlen && *p)
-		maxlen--, p++;
-OUT:
-	return p - s;
-}
-
-# else
-/*
- * SSE version
- */
-size_t strnlen(const char *s, size_t maxlen)
-{
-	const char *p = s;
-	prefetch(s);
-
-	if(unlikely(!s))
-		return 0;
-
-	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long strings
-	 */
-	for(; likely(SOV8M1 < maxlen); maxlen -= SOV8, p += SOV8)
-	{
-		unsigned r = v8_equal(*(const v8c *)p, (v8c){0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-	}
-	if(likely(SO32M1 < maxlen))
-	{
-		unsigned r = has_nul_byte32(*(const uint32_t *)p);
-		if(r) {
-			p += __builtin_ctz(r) / 8;
-			goto OUT;
-		}
-		maxlen -= SO32;
-		p += SO32;
-	}
-	while(maxlen && *p)
-		maxlen--, p++;
-OUT:
-	return p - s;
-}
-
-# endif
-static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
-#else
-# include "../generic/strnlen.c"
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"neg	%2\n\t"
+		"xor	%0, %0\n\t"
+		"add	$16, %0\n\t"
+		"add	%0, %2\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"sub	%0, %2\n\t"
+		"add	%0, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpestri	$0b1000, (%1), %%xmm1\n\t"
+		"ja	2b\n\t"
+		"cmovz	%2, %3\n\t"
+		"xchg	%3, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%5, %0\n"
+		"5:\n\t"
+		".subsection 2\n"
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+		"jmp	5b\n"
+		".previous"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=r" (p),
+	  /* %2 */ "=&d" (t),
+	  /* %3 */ "=c" (f)
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "2" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+#ifdef __SSE__
+	: "xmm0", "xmm1"
 #endif
+	);
+	return len;
+}
+
+static size_t strnlen_SSE2(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"neg	%2\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"cmp	$16, %2\n\t"
+		"jbe	3f\n\t"
+		"sub	$16, %2\n\t"
+		"test	%0, %0\n\t"
+		"jz	2b\n"
+		"3:\n\t"
+		"mov	%2, %3\n\t"
+		"sub	$16, %3\n\t"
+		"jae	4f\n\t"
+		"neg	%3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n"
+		"4:\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%2, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%5, %0\n"
+		"5:\n\t"
+		".subsection 2\n"
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+		"jmp	5b\n\t"
+		".previous"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=c" (f)
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "2" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+#ifdef __SSE__
+	: "xmm0", "xmm1"
+#endif
+	);
+	return len;
+}
+
+#ifndef __x86_64__
+static size_t strnlen_SSE(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"pxor	%%mm1, %%mm1\n\t"
+		"movq	(%1), %%mm0\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"neg	%2\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"movq	8(%1), %%mm0\n\t"
+		"add	$8, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %0\n\t"
+		"cmp	$8, %2\n\t"
+		"jbe	3f\n\t"
+		"sub	$8, %2\n\t"
+		"test	%0, %0\n\t"
+		"jz	2b\n"
+		"3:\n\t"
+		"mov	%2, %3\n\t"
+		"sub	$8, %3\n\t"
+		"jae	4f\n\t"
+		"neg	%3\n\t"
+		"shl	%b3, %b0\n\t"
+		"shr	%b3, %b0\n"
+		"4:\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%2, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%5, %0\n"
+		"5:\n\t"
+		".subsection 2\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %b0\n\t"
+		"shr	%b3, %b0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+		"jmp	5b\n"
+		".previous"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=c" (f)
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV8)),
+	  /* %7 */ "2" (SOV8),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV8))
+#ifdef __SSE__
+	: "mm0", "mm1"
+#endif
+	);
+	return len;
+}
+#endif
+
+static size_t strnlen_x86(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t r;
+	ssize_t f, k;
+	prefetch(s);
+
+	f = ALIGN_DOWN_DIFF(s, SOST);
+	k = SOST - f - (ssize_t)maxlen;
+	k = k > 0 ? k  : 0;
+
+	p = (const char *)ALIGN_DOWN(s, SOST);
+	r = has_nul_byte(*(const size_t *)p);
+	r <<= k * BITS_PER_CHAR;
+	r >>= k * BITS_PER_CHAR;
+	r >>= f * BITS_PER_CHAR;
+	if(r)
+		return nul_byte_index(r);
+	else if(k)
+		return maxlen;
+
+	maxlen -= SOST - f;
+	do
+	{
+		p += SOST;
+		r = has_nul_byte(*(const size_t *)p);
+		if(maxlen <= SOST)
+			break;
+		maxlen -= SOST;
+	} while(!r);
+	k = SOST - (ssize_t)maxlen;
+	k = k > 0 ? k : 0;
+	r <<= k * BITS_PER_CHAR;
+	r >>= k * BITS_PER_CHAR;
+	if(likely(r))
+		r = nul_byte_index(r);
+	else
+		r = maxlen;
+	return p - s + r;
+}
+
+static const struct test_cpu_feature t_feat[] =
+{
+	{.func = (void (*)(void))strnlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strnlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#endif
+	{.func = (void (*)(void))strnlen_x86, .flags_needed = -1, .callback = NULL},
+};
+
+static size_t strnlen_runtime_sw(const char *s, size_t maxlen);
+/*
+ * Func ptr
+ */
+static size_t (*strnlen_ptr)(const char *s, size_t maxlen) = strnlen_runtime_sw;
+
+/*
+ * constructor
+ */
+static GCC_ATTR_CONSTRUCT void strnlen_select(void)
+{
+	strnlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
+}
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer fails
+ */
+static size_t strnlen_runtime_sw(const char *s, size_t maxlen)
+{
+	strnlen_select();
+	return strnlen_ptr(s, maxlen);
+}
+
+size_t strnlen(const char *s, size_t maxlen)
+{
+	return strnlen_ptr(s, maxlen);
+}
+
+static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
+/* eof */

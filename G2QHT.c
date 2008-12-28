@@ -394,7 +394,7 @@ void g2_qht_frag_clean(struct qht_fragment *to_clean)
 	memset(to_clean, 0, sizeof(*to_clean));
 }
 
-uint32_t g2_qht_global_get_ent(void)
+size_t g2_qht_global_get_ent(void)
 {
 	return global_qht->entries;
 }

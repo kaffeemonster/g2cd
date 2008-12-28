@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t, generic implementation
  *
- * Copyright (c) 2004,2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-size_t flsst(size_t find)
+size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
 	size_t found;
 

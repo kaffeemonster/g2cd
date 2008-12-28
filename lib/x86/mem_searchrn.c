@@ -36,180 +36,480 @@
  * generic version (58000ms vs. 54000ms), MMX was a really
  * braindead idea without a MMX->CPU-Reg move instruction
  * to do things not possible with MMX.
+ */
+/*
+ * Sometimes you need a new perspective, like the altivec
+ * way of handling things.
+ * Lower address bits? Totaly overestimated.
  *
- * We use the GCC vector internals, to make things simple for us.
+ * We don't precheck for alignment, 16 or 8 is very unlikely
+ * instead we "align hard", do one load "under the address",
+ * mask the excess info out and afterwards we are fine to go.
+ *
+ * Even this beeing a mem* function, the lem can be seen as a
+ * "hint". We can overread and underread, but should cut the
+ * result (and not pass a page boundery, but we cannot because
+ * we are aligned).
  */
-
-#if defined( __SSE__) && defined(__GNUC__)
-
-typedef char v8c __attribute__((vector_size (8)));
-#define SOV8M1	(sizeof(v8c) - 1)
-#define SOV8	(sizeof(v8c))
-
-static inline unsigned v8_equal(v8c a, v8c b)
-{
-	v8c compare = __builtin_ia32_pcmpeqb(a, b);
-	return __builtin_ia32_pmovmskb(compare);
-}
-
-# ifdef __SSE2__
 /*
- * SSE2 version
+ * Normaly we could generate this with the gcc vector
+ * __builtins, but since gcc whines when the -march does
+ * not support the operation and we want to always provide
+ * them and switch between them...
+ * And near by, sorry gcc, your bsf handling sucks.
+ * bsf generates flags, no need to test beforehand,
+ * but AFTERWARDS!!!
  */
 
-typedef char v16c __attribute__((vector_size (16)));
-#define SOV16M1	(sizeof(v16c) - 1)
-#define SOV16	(sizeof(v16c))
 
-static inline unsigned v16_equal(v16c a, v16c b)
-{
-	v16c compare = __builtin_ia32_pcmpeqb128(a, b);
-	return __builtin_ia32_pmovmskb128(compare);
-}
+#include "x86_features.h"
 
-void *mem_searchrn(void *src, size_t len)
-{
-	static const v16c y = (const v16c) {'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
-	                                    '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
-	static const v16c z = (const v16c) {'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
-	                                    '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
-	char *src_c = src;
-	unsigned last_rr;
+#define SOV8	8
+#define SOV8M1	(SOV8-1)
+#define SOV16	16
+#define SOV16M1	(SOV16-1)
 
-	prefetch(src_c);
-	if(unlikely(!src_c || !len))
-		return NULL;
-
-	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long mem regions
-	 */
-	for(last_rr = 0; likely(SOV16M1 < len); src_c += SOV16, len -= SOV16)
-	{
-		register v16c x = __builtin_ia32_loaddqu(src_c);
-		unsigned rr = v16_equal(x, y);
-		unsigned rn = v16_equal(x, z);
-		last_rr &= rn;
-		if(last_rr)
-			return src_c - 1;
-		last_rr = rr >> 15;
-		rr &= rn >> 1;
-		if(rr)
-			return src_c + __builtin_ctz(rr);
-	}
-	if(last_rr) {
-		src_c -= 1;
-		goto OUT;
-	}
-	if(likely(SOV8M1 < len))
-	{
-		register v8c x, x2;
-		unsigned rr, rn;
-
-		/* force compiler to keep stuff in registers... */
-		asm (
-			"movq	%6, %2\n\t"
-			"movq	%2, %3\n\t"
-			"pcmpeqb	%4, %2\n\t"
-			"pcmpeqb	%5, %3\n\t"
-			"pmovmskb	%2, %0\n\t"
-			"pmovmskb	%3, %1\n"
-		: /* %0 */ "=r" (rr),
-		  /* %1 */ "=r" (rn),
-		  /* %2 */ "=y" (x),
-		  /* %3 */ "=y" (x2)
-		: /* %4 */ "m" (y),
-		  /* %5 */ "m" (z),
-		  /* %6 */ "m" (*src_c)
-		);
-		last_rr = rr >> 7;
-		rr &= rn >> 1;
-		if(rr)
-			return src_c + __builtin_ctz(rr);
-		len -= SOV8;
-		src_c += SOV8;
-	}
-	if(last_rr) {
-		src_c -= 1;
-		goto OUT;
-	}
-	if(SO32M1 < len)
-	{
-		uint32_t v = *((uint32_t *)src_c) ^ 0x0D0D0D0D; /* '\r\r\r\r' */
-		uint32_t r = has_nul_byte32(v);
-		unsigned i = SO32;
-		if(r)
-			i  = __builtin_ctz(r) / 8;
-		len   -= i;
-		src_c += i;
-	}
-
-OUT:
-	for(; len; len--, src_c++) {
-		if('\r' == *src_c && len-1 && '\n' == src_c[1])
-			return src_c;
-	}
-	return NULL;
-}
-
-# else
-/*
- * SSE version
- */
-
-void *mem_searchrn_SSE(void *src, size_t len)
-{
-	static const v8c y = (const v8c){'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
-	static const v8c z = (const v8c){'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
-	char *src_c = src;
-	unsigned last_rr;
-
-	prefetch(src_c);
-	if(unlikely(!src_c || !len))
-		return NULL;
-
-	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long mem regions
-	 */
-	for(last_rr = 0; likely(SOV8M1 < len); len -= SOV8, src_c += SOV8)
-	{
-		register v8c x = *(v8c *)src_c;
-		unsigned rr = v8_equal(x, y);
-		unsigned rn = v8_equal(x, z);
-		last_rr &= rn;
-		if(last_rr)
-			return src_c - 1;
-		last_rr = rr >> 7;
-		rr &= rn >> 1;
-		if(rr)
-			return src_c + __builtin_ctz(rr);
-	}
-	if(last_rr) {
-		src_c -= 1;
-		goto OUT;
-	}
-	if(SO32M1 < len)
-	{
-		uint32_t v = *((uint32_t *)src_c) ^ 0x0D0D0D0D; /* '\r\r\r\r' */
-		uint32_t r = has_nul_byte32(v);
-		unsigned i = SO32;
-		if(r)
-			i  = __builtin_ctz(r) / 8;
-		len   -= i;
-		src_c += i;
-	}
-
-OUT:
-	for(; len; len--, src_c++) {
-		if('\r' == *src_c && len-1 && '\n' == src_c[1])
-			return src_c;
-	}
-	return NULL;
-}
-# endif
-static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";
-#else
-# include "../generic/mem_searchrn.c"
+static void *mem_searchrn_SSE42(void *src, size_t len);
+static void *mem_searchrn_SSE2(void *src, size_t len);
+#ifndef __x86_64__
+static void *mem_searchrn_SSE(void *src, size_t len);
 #endif
+static void *mem_searchrn_x86(void *src, size_t len);
+
+static void *mem_searchrn_SSE42(void *s, size_t len)
+{
+	char *p, *f;
+	ssize_t k;
+	size_t rr;
+	static const size_t t = 0;
+
+// TODO: untested
+	asm (
+		"prefetcht0	(%1)\n\t"
+		"test	%1, %1\n\t" /* src NULL? */
+		"jz	9f\n\t" /* outa here */
+		"test	%3, %3\n\t" /* len NULL? */
+		"jz	9f\n\t" /* outa here */
+		"add	$2, %0\n\t" /* create a 2 */
+		"pxor	%%xmm0, %%xmm0\n\t"
+		"pinsrw	$0, %k2, %%xmm0\n\t"
+		"mov	%1, %2\n\t" /* duplicate src */
+		"and	$15, %2\n\t" /* create align difference */
+		"and	$-16, %1\n\t" /* align down src */
+		"movdqa	(%1), %%xmm1\n\t" /* load data */
+		"add	%2, %3\n\t" /* len += align diff */
+		"pcmpestrm	$0b1111100, %%xmm0, %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %0\n\t"
+		"shr	%b2, %0\n\t" /* mask out lower stuff */
+		"shl	%b2, %0\n\t"
+		"mov	%3, %2\n\t" /* get len */
+		"neg	%2\n\t" /* negate */
+		"add	$16, %2\n\t" /* add SOV16 */
+		"cmovs	%8, %2\n" /* create a 0 if k < 0 */
+		"inc	%b2\n\t" /* shift out last rr bit */
+		"shl	%b2, %0\n\t"
+		"shr	%b2, %w0\n\t"
+		"bsf	%w0, %w2\n\t" /* create index */
+		"jnz	7f\n\t" /* match -> out */
+		"cmp	$16, %3\n\t" /* len left? */
+		"jbe	9f\n\t" /* no -> done */
+		"shr	$17, %0\n\t" /* put eax.17 in carry */
+		"lea	2(%0), %0\n\t" /* create a two */
+		"jnc	3f\n\t" /* eax.17 == 0 ? -> start normal */
+		"add	$15, %2\n\t" /* create 15 */
+		".p2align 2\n"
+		"4:\n\t"
+		"cmpb	$0x0A, 16(%1)\n\t" /* is first byte in str a '\n'? */
+		"je	7f\n\t"
+		".p2align 1\n"
+		"3:\n\t"
+		"sub	%2, %3\n" /* len -= SOV16 */
+		"add	%2, %1\n\t" /* p += SOV16 */
+		"pcmpestri	$0b01100, (%1), %%xmm0\n\t"
+		"ja	3b\n\t" /* no match(C) or end(Z)? -> continue */
+		"jz	2f\n\t" /* end? -> don't check match position */
+// TODO: does the instruction match a lonely '\r' in the len last byte ?
+		"cmp	$15, %2\n\t" /* index of last char? */
+		"je	4b\n" /* last char matched? - > continue */
+		"jmp	7f\n\t"
+		"2:\n\t"
+#ifndef __x86_64__
+		"setc	%b0\n\t" /* create a 0 if no match was generated */
+		"cmovnc	%0, %2\n\t" /* no match, set rr to zero */
+		"cmovnc	%0, %1\n" /* no match, set p to zero */
+#else
+		"cmovnc	%8, %2\n\t" /* no match, set rr to zero */
+		"cmovnc	%8, %1\n" /* no match, set p to zero */
+#endif
+		"7:\n\t"
+		"movzx	%w2, %2\n\t" /* clear upper half, result is small */
+		"lea	(%1,%2), %0\n" /* add match index to p */
+		"9:\n\t"
+		/*
+		 * done!
+		 * out
+		 */
+	: /*  %0 */ "=a" (f),
+	  /*  %1 */ "=r" (p),
+	  /*  %2 */ "=c" (rr),
+	  /*  %3 */ "=d" (k)
+	: /*  %4 */ "0" (0),
+	  /*  %5 */ "1" (s),
+	  /*  %6 */ "3" (len),
+	  /*  %7 */ "2" (0x0A0D),
+#ifndef __x86_64__
+	  /*  %8 */ "m" (t)
+#else
+	  /* amd64 has enough call clobbered regs not to spill */
+	  /*  %8 */ "r" (t)
+#endif
+#ifdef __SSE__
+	: "xmm0", "xmm1"
+#endif
+	);
+	return f;
+}
+
+static void *mem_searchrn_SSE2(void *s, size_t len)
+{
+	static const char y[SOV16] GCC_ATTR_ALIGNED(SOV16) =
+		{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
+		 '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
+	static const char z[SOV16] GCC_ATTR_ALIGNED(SOV16) =
+		{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
+		 '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
+	char *p, *f;
+	ssize_t k;
+	size_t rr, t;
+
+	asm (
+		"prefetcht0	(%1)\n\t"
+		"test	%7, %7\n\t" /* len NULL? */
+#ifdef __x86_64__
+		"cmovz	%7, %0\n\t" /* create NULL */
+#endif
+		"jz	9f\n\t" /* outa here */
+		"test	%1, %1\n\t" /* src NULL? */
+		"cmovz	%1, %0\n\t" /* create NULL */
+		"jz	9f\n\t" /* outa here */
+		"movdqa	%8, %%xmm0\n\t" /* load search strings */
+		"movdqa	%9, %%xmm1\n\t"
+		"mov	%1, %2\n\t" /* duplicate src */
+		"and	$15, %2\n\t" /* create align difference */
+		"and	$-16, %1\n\t" /* align down src */
+		"movdqa	(%1), %%xmm3\n\t" /* load data */
+		"movdqa	%%xmm3, %%xmm2\n\t"
+		"sub	%2, %4\n\t" /* k -= align diff */
+		"pcmpeqb	%%xmm1, %%xmm3\n\t"
+		"pcmpeqb	%%xmm0, %%xmm2\n\t"
+		"psrldq	$1, %%xmm3\n\t" /* shift '\n' one down */
+		"sub	%7, %4\n\t" /* k -= len */
+		"pmovmskb	%%xmm3, %3\n\t"
+		"pmovmskb	%%xmm2, %0\n\t"
+		"ja	6f\n\t" /* k > 0 ? -> we are done */
+		"shr	%b2, %0\n\t" /* mask out lower stuff */
+		"shl	%b2, %0\n\t"
+		"xchg	%3, %0\n\t" /* copy rr to last_rr */
+		"and	%3, %0\n\t" /* put rn together with rr */
+		"bsf	%0, %0\n\t" /* create index */
+		"jnz	7f\n\t" /* match? -> out */
+		"neg	%4\n\t" /* restore len */
+		"jmp	3f\n\t" /* jump in loop */
+		".p2align 2\n"
+		"1:\n\t"
+		"sub	$16, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"3:\n\t"
+		"shr	$15, %3\n\t" /* pull high bit down */
+		"movdqa	16(%1), %%xmm2\n\t" /* load next data */
+		"movdqa	%%xmm2, %%xmm3\n\t" /* load next data */
+		"add	$16, %1\n\t" /* p += SOV16 */
+		"pcmpeqb	%%xmm1, %%xmm3\n\t"
+		"pcmpeqb	%%xmm0, %%xmm2\n\t"
+		"pmovmskb	%%xmm3, %2\n\t"
+		"and	%2, %3\n\t" /* match between rn and last_rr? */
+		"neg	%3\n\t"
+		"cmovc	%3, %0\n\t"
+		"jc	7f\n\t"
+		"pmovmskb	%%xmm2, %0\n\t"
+		"shr	$1, %2\n\t"
+		"cwd\n\t" /* copy high bit */
+		"and	%2, %0\n\t" /* generate match */
+		"jz	1b\n\t" /* no bits overlapped? -> continue loop */
+		"sub	$16, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"2:\n\t"
+		"bsf	%0, %0\n\t" /* find index */
+		"cmovz	%0, %1\n" /* no match, set p to zero */
+		"7:\n\t"
+		"add	%1, %0\n" /* add match index to p */
+		"9:\n\t"
+		/*
+		 * done!
+		 * out
+		 */
+		".subsection 2\n\t"
+		".p2align 2\n"
+		"4:\n\t"
+		"neg	%4\n\t" /* correct k's sign ;) */
+		"jmp	10f\n\t"
+		".p2align 1\n"
+		"6:\n\t"
+		"and	%3, %0\n\t" /* see if an '\n' matches */
+		"shr	%b2, %0\n\t" /* cut mask lower bits */
+		"shl	%b2, %0\n"
+		"10:\n\t"
+		"mov	%4, %2\n\t" /* get k */
+		"shl	%b2, %w0\n\t" /* cut mask upper bits */
+		"shr	%b2, %w0\n\t"
+		"jmp 2b\n\t"/* back to generate result */
+		".previous"
+	: /*  %0 */ "=a" (p),
+	  /*  %1 */ "=r" (f),
+	  /*  %2 */ "=c" (rr),
+	  /*  %3 */ "=d" (k),
+	  /*  %4 */ "=r" (t)
+	: /*  %5 */ "4" (SOV16),  /* k = SOV16 */
+	  /*  %6 */ "1" (s),
+#ifndef __x86_64__
+	  /*  %7 */ "0" (len),
+#else
+	  /* amd64 has enough call clobbered regs not to spill */
+	  /*  %7 */ "r" (len),
+#endif
+	  /*  %8 */ "m" (*y),
+	  /*  %9 */ "m" (*z)
+#ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2", "xmm3"
+#endif
+	);
+
+	return p;
+}
+
+#ifndef __x86_64__
+static void *mem_searchrn_SSE(void *s, size_t len)
+{
+	static const char y[SOV8] GCC_ATTR_ALIGNED(SOV8) =
+		{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
+	static const char z[SOV8] GCC_ATTR_ALIGNED(SOV8) =
+		{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
+	char *p, *f;
+	ssize_t k;
+	size_t rr, t;
+
+	asm (
+		"prefetcht0	(%1)\n\t"
+		"test	%7, %7\n\t" /* len NULL? */
+		"jz	9f\n\t" /* outa here */
+		"test	%1, %1\n\t" /* src NULL? */
+		"cmovz	%1, %0\n\t" /* create NULL */
+		"jz	9f\n\t" /* outa here */
+		"movq	%8, %%mm0\n\t" /* load search strings */
+		"movq	%9, %%mm1\n\t"
+		"mov	%1, %2\n\t" /* duplicate src */
+		"and	$7, %2\n\t" /* create align difference */
+		"and	$-8, %1\n\t" /* align down src */
+		"movq	(%1), %%mm3\n\t" /* load data */
+		"movq	%%mm3, %%mm2\n\t"
+		"sub	%2, %4\n\t" /* k -= align diff */
+		"pcmpeqb	%%mm1, %%mm3\n\t"
+		"pcmpeqb	%%mm0, %%mm2\n\t"
+		"pmovmskb	%%mm3, %3\n\t"
+		"shr	$1, %3\n\t" /* shift '\n' one down */
+		"sub	%7, %4\n\t" /* k -= len */
+		"pmovmskb	%%mm2, %0\n\t"
+		"ja	6f\n\t" /* k > 0 ? -> we are done */
+		"shr	%b2, %0\n\t" /* mask out lower stuff */
+		"shl	%b2, %0\n\t"
+		"xchg	%3, %0\n\t" /* copy rr to last_rr */
+		"and	%3, %0\n\t" /* put rn together with rr */
+		"bsf	%0, %0\n\t" /* create index */
+		"jnz	7f\n\t" /* match? -> out */
+		"neg	%4\n\t" /* restore len */
+		"jmp	3f\n\t" /* jump in loop */
+		".p2align 2\n"
+		"1:\n\t"
+		"sub	$8, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"3:\n\t"
+		"shr	$7, %3\n\t" /* pull high bit down */
+		"movq	8(%1), %%mm2\n\t" /* load next data */
+		"movq	%%mm2, %%mm3\n\t" /* load next data */
+		"add	$8, %1\n\t" /* p += SOV8 */
+		"pcmpeqb	%%mm1, %%mm3\n\t"
+		"pcmpeqb	%%mm0, %%mm2\n\t"
+		"pmovmskb	%%xmm3, %2\n\t"
+		"and	%2, %3\n\t" /* match between rn and last_rr? */
+		"neg	%3\n\t"
+		"cmovc	%3, %0\n\t"
+		"jc	7f\n\t"
+		"pmovmskb	%%mm2, %0\n\t"
+		"shr	$1, %2\n\t"
+		"cwd\n\t" /* copy high bit */
+		"and	%2, %0\n\t" /* generate match */
+		"jz	1b\n\t" /* no bits overlapped? -> continue loop */
+		"sub	$8, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"2:\n\t"
+		"bsf	%0, %0\n\t" /* find index */
+		"cmovz	%0, %1\n" /* no match, set p to zero */
+		"7:\n\t"
+		"add	%1, %0\n" /* add match index to p */
+		"9:\n\t"
+		/*
+		 * done!
+		 * out
+		 */
+		".subsection 2\n\t"
+		".p2align 2\n"
+		"4:\n\t"
+		"neg	%4\n\t" /* correct k's sign ;) */
+		"jmp	10f\n\t"
+		".p2align 1\n"
+		"6:\n\t"
+		"and	%3, %0\n\t" /* see if an '\n' matches */
+		"shr	%b2, %0\n\t" /* cut mask lower bits */
+		"shl	%b2, %0\n"
+		"10:\n\t"
+		"mov	%4, %2\n\t" /* get k */
+		"shl	%b2, %w0\n\t" /* cut mask upper bits */
+		"shr	%b2, %w0\n\t"
+		"jmp 2b\n\t"/* back to generate result */
+		".previous"
+	: /*  %0 */ "=a" (p),
+	  /*  %1 */ "=r" (f),
+	  /*  %2 */ "=c" (rr),
+	  /*  %3 */ "=d" (k),
+	  /*  %4 */ "=r" (t)
+	: /*  %5 */ "4" (SOV8),  /* k = SOV8 */
+	  /*  %6 */ "1" (s),
+	  /*  %7 */ "0" (len),
+	  /*  %8 */ "m" (*y),
+	  /*  %9 */ "m" (*z)
+#ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2", "xmm3"
+#endif
+	);
+	return p;
+}
+#endif
+
+void *mem_searchrn_x86(void *s, size_t len)
+{
+	char *p;
+	size_t rr, rn, last_rr = 0;
+	ssize_t f, k;
+	prefetch(s);
+
+	if(unlikely(!s || !len))
+		return NULL;
+
+	f = ALIGN_DOWN_DIFF(s, SOST);
+	k = SOST - f - (ssize_t) len;
+	k = k > 0 ? k : 0;
+
+	p  = (char *)ALIGN_DOWN(s, SOST);
+	rn = (*(size_t *)p);
+	rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
+	rr = has_nul_byte(rr);
+	rr <<= k * BITS_PER_CHAR;
+	rr >>= k * BITS_PER_CHAR;
+	rr >>= f * BITS_PER_CHAR;
+	rr <<= f * BITS_PER_CHAR;
+	if(unlikely(rr))
+	{
+		last_rr = rr >> (SOST - 1) * BITS_PER_CHAR;
+		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
+		rn  = has_nul_byte(rn);
+		rr &= rn >> BITS_PER_CHAR;
+		if(rr)
+			return p + nul_byte_index(rr);
+	}
+	if(unlikely(k))
+		return NULL;
+
+	len -= SOST - f;
+	do
+	{
+		p += SOST;
+		rn = *(size_t *)p;
+		rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
+		rr = has_nul_byte(rr);
+		if(unlikely(len <= SOST))
+			break;
+		len -= SOST;
+		if(rr || last_rr)
+		{
+			rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
+			rn = has_nul_byte(rn);
+			last_rr &= rn;
+			if(last_rr)
+				return p - 1;
+			last_rr = rr >> (SOST - 1) * BITS_PER_CHAR;
+			rr &= rn >> BITS_PER_CHAR;
+			if(rr)
+				return p + nul_byte_index(rr);
+		}
+	} while(1);
+	k = SOST - (ssize_t) len;
+	k = k > 0 ? k : 0;
+	rr <<= k * BITS_PER_CHAR;
+	rr >>= k * BITS_PER_CHAR;
+	if(rr || last_rr)
+	{
+		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
+		rn = has_nul_byte(rn);
+		last_rr &= rn;
+		if(last_rr)
+			return p - 1;
+		rr &= rn >> BITS_PER_CHAR;
+		if(rr)
+			return p + nul_byte_index(rr);
+	}
+
+	return NULL;
+}
+
+static const struct test_cpu_feature t_feat[] =
+{
+	{.func = (void (*)(void))mem_searchrn_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))mem_searchrn_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))mem_searchrn_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#endif
+	{.func = (void (*)(void))mem_searchrn_x86, .flags_needed = -1, .callback = NULL},
+};
+
+static void *mem_searchrn_runtime_sw(void *s, size_t len);
+/*
+ * Func ptr
+ */
+static void *(*mem_searchrn_ptr)(void *s, size_t len) = mem_searchrn_runtime_sw;
+
+/*
+ * constructor
+ */
+static GCC_ATTR_CONSTRUCT void mem_searchrn_select(void)
+{
+	mem_searchrn_ptr = test_cpu_feature(t_feat, anum(t_feat));
+}
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer fails
+ */
+static void *mem_searchrn_runtime_sw(void *s, size_t len)
+{
+	mem_searchrn_select();
+	return mem_searchrn_ptr(s, len);
+}
+
+void *mem_searchrn(void *s, size_t len)
+{
+	return mem_searchrn_ptr(s, len);
+}
+
+static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

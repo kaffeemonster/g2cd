@@ -35,9 +35,6 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 	char *dst_char = dst;
 	const char *src_char = src;
 
-	if(!dst || !src)
-		return dst;
-
 	/* we will access the arrays, fetch them */
 	__asm__ __volatile__(
 		PREFETCH(  (%0))
@@ -51,12 +48,16 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		"" : /* no out */ : "r" (src), "r" (dst)
 	);
 
+	if(unlikely(!dst || !src))
+		return dst;
+
+
 	if(unlikely(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*2) > len))
 		goto no_alignment_wanted;
 	else
 	{
 		/* align dst, we will see what src looks like afterwards */
-		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED)) - dst_char;
+		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
 		len -= i;
 		for(; i/SO32; i -= SO32, dst_char += SO32, src_char += SO32)
 			*((uint32_t *)dst_char) &= *((const uint32_t *)src_char);
@@ -103,6 +104,7 @@ alignment_32:
 #ifdef HAVE_AVX
 alignment_16:
 alignment_8:
+alignment_size_t:
 	/*
 	 * anding 256 bit at once even sounds better!
 	 * and alignment is handeld more transparent!
@@ -238,7 +240,59 @@ alignment_16:
 	}
 # endif
 alignment_8:
-# ifdef HAVE_SSE3
+# ifdef HAVE_SSE2
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCHW(  (%2))
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCHW(32(%2))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(96(%2))
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCHW(128(%2))
+			SSE_LOAD8(  0(%1), %%xmm0)
+			SSE_LOAD8( 16(%1), %%xmm1)
+			"add	$32, %1\n\t"
+			SSE_AND(    (%2), %%xmm0)
+			SSE_AND(  16(%2), %%xmm1)
+			SSE_STORE(%%xmm0,   (%2))
+			SSE_STORE(%%xmm1, 16(%2))
+			"add	$32, %2\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %4\n\t"
+			"je	3f\n\t"
+			SSE_LOAD8(   0(%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_AND(    (%2), %%xmm0)
+			SSE_STORE(%%xmm0,  (%2))
+			"add	$16, %2\n"
+			"3:\n\t"
+			/* done */
+			SSE_FENCE
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
+			: "0" (len/32), "r" (len%32)
+			: "cc",
+#  ifdef __SSE__
+			  "xmm0", "xmm1",
+#  endif
+			  "memory"
+		);
+		len %= 16;
+		goto handle_remaining;
+	}
+alignment_size_t:
 	{
 		register intptr_t d0;
 
@@ -376,7 +430,9 @@ alignment_8:
 	 */
 no_alignment_wanted:
 handle_remaining:
+#if !defined(HAVE_SSE2) && !defined(HAVE_AVX)
 alignment_size_t:
+#endif
 	{
 		size_t tmp1, tmp2, cnt1, cnt2, rem = len%(SOST*4);
 
@@ -442,7 +498,7 @@ alignment_size_t:
 			  /* %10 */ "m" (src_char)
 			: "cc"
 		);
-		len %= SOST;
+		len %= SO32;
 	}
 
 no_alignment_possible:

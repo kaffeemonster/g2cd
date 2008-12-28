@@ -37,6 +37,7 @@
 # Name of your Programs
 #	compiler
 CC = gcc
+#CC = x86_64-pc-linux-gnu-gcc
 HOSTCC = gcc
 # gcc
 CC_VER_INFO = --version
@@ -44,16 +45,21 @@ CC_VER_INFO = --version
 #CC_VER_INFO = -V
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 AS = as
+#AS = x86_64-pc-linux-gnu-as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
+#AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ x86_64-pc-linux-gnu-ar
 ARFLAGS = cru
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ ranlib
+#RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ x86_64-pc-linux-gnu-ranlib
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
 OBJCOPY = objcopy
+#OBJCOPY = x86_64-pc-linux-gnu-objcopy
 STRIP = strip
+#STRIP = x86_64-pc-linux-gnu-strip
 RM = rm -f
 
 # split up host and target CFLAGS
@@ -117,11 +123,13 @@ ARCH_FLAGS += -march=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
-#ARCH_FLAGS += -momit-leaf-frame-pointer
+ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors
 # unfortunatly second class citizians
 #ARCH_FLAGS += -minline-all-stringops
 #ARCH_FLAGS += -minline-stringops-dynamically
+# gcc 4.3??
+ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
 #ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
@@ -164,7 +172,7 @@ OPT_FLAGS += -ffast-math
 #	specified for max perf.
 #OPT_FLAGS += -fomit-frame-pointers
 #	did they strip the 's' in 4.x??? And now they error out its incompatible with -pg
-#OPT_FLAGS += -fomit-frame-pointer
+OPT_FLAGS += -fomit-frame-pointer
 # gcc >= 3.x and supported for target (-march ?)
 OPT_FLAGS += -fprefetch-loop-arrays
 OPT_FLAGS += -fpeel-loops

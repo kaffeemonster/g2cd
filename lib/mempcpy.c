@@ -58,6 +58,18 @@ void *mempcpy(void *restrict dst, const void *restrict src, size_t len)
 	char *restrict dst_c = dst;
 	const char *restrict src_c = src;
 
+	if(likely(len < 16))
+		return cpy_rest(dst, src, len);
+
+	if(UNALIGNED_OK)
+	{
+		if(len < 32) {
+			((uint64_t *)dst_c)[0] = ((const uint64_t *)src_c)[0];
+			((uint64_t *)dst_c)[1] = ((const uint64_t *)src_c)[1];
+			return cpy_rest(dst_c + 16, src_c + 16, len - 16);
+		}
+	}
+
 	for(; i < len; i++)
 		dst_c[i] = src_c[i];
 

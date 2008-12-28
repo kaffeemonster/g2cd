@@ -25,66 +25,66 @@
 
 size_t strnlen(const char *s, size_t maxlen)
 {
-	const char *p = s;
-	size_t i;
+	const char *p;
+	size_t r;
+	ssize_t f, k;
 	prefetch(s);
 
-	if(unlikely(!s))
-		return 0;
+	/*
+	 * Sometimes you need a new perspective, like the altivec
+	 * way of handling things.
+	 * Lower address bits? Totaly overestimated.
+	 *
+	 * We don't precheck for alignment.
+	 * Instead we "align hard", do one load "under the address",
+	 * mask the excess info out and afterwards we are fine to go.
+	 *
+	 * Even this beeing strNlen, this n can be seen as a "hint"
+	 * We can overread and underread, but should cut the result.
+	 */
+	f = ALIGN_DOWN_DIFF(s, SOST);
+	k = SOST - f - (ssize_t)maxlen;
+	k = k > 0 ? k  : 0;
 
-	if(UNALIGNED_OK)
-	{
-		/*
-		 * We can do unaligned access, busily start doing
-		 * something.
-		 * We stop at a page boundry to get in a aligned
-		 * swing on the source. (we simply assume 4k pages)
-		 */
-		if(IS_ALIGN(p, SO32))
-			goto DO_LARGE;
-		i = (const char *) ALIGN(p, 4096) - p;
-		i = i < maxlen ? i : maxlen;
-		for(; likely(SO32M1 < i); i -= SO32, maxlen -= SO32, p += SO32)
-		{
-			uint32_t r = has_nul_byte32(*(const uint32_t*)p);
-			if(r) {
-				p += nul_byte_index32(r);
-				goto OUT;
-			}
-		}
-		/* slowly go over the page boundry */
+	p = (const char *)ALIGN_DOWN(s, SOST);
+	r = has_nul_byte(*(const size_t *)p);
+	if(!HOST_IS_BIGENDIAN) {
+		r <<= k * BITS_PER_CHAR;
+		r >>= k * BITS_PER_CHAR;
+		r >>= f * BITS_PER_CHAR;
+	} else {
+		r >>= k * BITS_PER_CHAR;
+		r <<= k * BITS_PER_CHAR;
+		r <<= f * BITS_PER_CHAR;
 	}
-	else /* Unaligned access is not ok. Align it before access. */
-		i = (const char *) ALIGN(p, SO32) - p;
+	if(r)
+		return nul_byte_index(r);
+	else if(k)
+		return maxlen;
 
-	while(i && maxlen && *p)
-		maxlen--, p++, i--;
-	if(!*p)
-		goto OUT;
-
-DO_LARGE:
-	if(SO32M1 < maxlen)
+	maxlen -= SOST - f;
+	do
 	{
-		/*
-		 * keeping at 32 bit to give 64 bit arches a chance
-		 * on short strings
-		 */
-		register const uint32_t *d = ((const uint32_t *)p);
-		uint32_t r;
-
-		while(!(r = has_nul_byte32(*d)) && SO32M1 < maxlen)
-			d++, maxlen -= SO32;
-		p = (const char *)d;
-		if(r) {
-			p += nul_byte_index32(r);
-			goto OUT;
-		}
+		p += SOST;
+		r = has_nul_byte(*(const size_t *)p);
+		if(maxlen <= SOST)
+			break;
+		maxlen -= SOST;
+	} while(!r);
+	k = SOST - (ssize_t)maxlen;
+	k = k > 0 ? k : 0;
+	if(!HOST_IS_BIGENDIAN) {
+		r <<= k * BITS_PER_CHAR;
+		r >>= k * BITS_PER_CHAR;
+	} else {
+		r >>= k * BITS_PER_CHAR;
+		r <<= k * BITS_PER_CHAR;
 	}
-
-	while(maxlen && *p)
-		maxlen--, p++;
-OUT:
-	return p - s;
+	if(likely(r))
+		r = nul_byte_index(r);
+	else
+		r = maxlen;
+	return p - s + r;
 }
 
 static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";

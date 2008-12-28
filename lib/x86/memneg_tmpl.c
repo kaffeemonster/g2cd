@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -37,9 +37,6 @@ static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 #endif
 	char *dst_char = dst;
 
-	if(!dst)
-		return dst;
-
 	/* we will access the arrays, fetch them */
 	__asm__ __volatile__(
 		PREFETCHW(  (%0))
@@ -49,39 +46,28 @@ static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 		"" : /* no out */ : "r" (dst)
 	);
 
+	if(unlikely(!dst))
+		return dst;
+
+/* Suprise!
+ * We cannot missalign a single pointer
+ */
+
 	if(unlikely(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*4) > len))
 		goto no_alignment_wanted;
 	else
 	{
 		/* align dst, we will see what src looks like afterwards */
-		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED)) - dst_char;
+		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
 		len -= i;
 		for(; i/SO32; i -= SO32, dst_char += SO32)
 			*((uint32_t *)dst_char) = ~(*((uint32_t *)dst_char));
 		for(; i; i--, dst_char++)
 			*dst_char = ~(*dst_char);
-		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1));
-		/*
-		 * x86 special:
-		 * x86 handles misalignment in hardware for ordinary ops.
-		 * It has a penalty, but to much software relies on it
-		 * (oh-so important cs enterprisie bullshit bingo soft).
-		 * We simply align the write side, and "don't care" for
-		 * the read side.
-		 * Either its also aligned by accident, or working
-		 * unaligned dwordwise is still faster than bytewise.
-		 */
-		if(unlikely(i &  1))
-			goto alignment_size_t;
-		if(unlikely(i &  2))
-			goto alignment_size_t;
-		if(unlikely(i &  4))
-			goto alignment_size_t;
-		if(i &  8)
-			goto alignment_8;
-		if(i & 16)
-			goto alignment_16;
 		/* fall throuh */
+		goto alignment_size_t;
+		goto alignment_8;
+		goto alignment_16;
 		goto alignment_32;
 		goto handle_remaining;
 	}
@@ -96,9 +82,10 @@ static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 	 * maschine-native datatype
 	 */
 alignment_32:
-#ifdef HAVE_AVX
 alignment_16:
 alignment_8:
+alignment_size_t:
+#ifdef HAVE_AVX
 	/*
 	 * neging 256 bit at once even sounds better!
 	 * and alignment is handeld more transparent!
@@ -162,9 +149,7 @@ alignment_8:
 		len %= 16;
 		goto handle_remaining;
 	}
-#else
-alignment_16:
-# ifdef HAVE_SSE
+#elif defined(HAVE_SSE)
 	/*
 	 * neging 16 byte at once is quite attracktive,
 	 * if its fast...
@@ -217,56 +202,7 @@ alignment_16:
 		len %= 16;
 		goto handle_remaining;
 	}
-# endif
-alignment_8:
-# ifdef HAVE_SSE3
-	{
-		register intptr_t d0;
-
-		__asm__ __volatile__(
-			SSE_PREFETCHW(  (%1))
-			SSE_MOVE(%3, %%xmm2)
-			"test	%0, %0\n\t"
-			"jz	2f\n\t"
-			SSE_PREFETCHW(32(%1))
-			SSE_PREFETCHW(64(%1))
-			SSE_PREFETCHW(96(%1))
-			SSE_MOVE(%%xmm2, %%xmm3)
-			".p2align 3\n"
-			"1:\n\t"
-			SSE_PREFETCHW(128(%1))
-			SSE_LOAD(   (%1), %%xmm0)
-			SSE_LOAD( 16(%1), %%xmm1)
-			SSE_XOR(  %%xmm2, %%xmm0)
-			SSE_XOR(  %%xmm3, %%xmm1)
-			SSE_STORE(%%xmm0,   (%1))
-			SSE_STORE(%%xmm1, 16(%1))
-			"add	$32, %1\n\t"
-			"dec	%0\n\t"
-			"jnz	1b\n"
-			/* loop done, handle trailer */
-			"2:\n\t"
-			"test	$16, %4\n\t"
-			"je	3f\n\t"
-			SSE_LOAD(   (%1), %%xmm0)
-			SSE_XOR(  %%xmm2, %%xmm0)
-			SSE_STORE(%%xmm0,  (%1))
-			"add	$16, %1\n"
-			"3:\n\t"
-			/* done */
-			SSE_FENCE
-			: "=&c" (d0), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
-			: "cc",
-#  ifdef __SSE__
-			"xmm0", "xmm1", "xmm2", "xmm3",
-#  endif
-			"memory"
-		);
-		len %= 16;
-		goto handle_remaining;
-	}
-# elif defined(HAVE_MMX) && !defined(__x86_64__)
+#elif defined(HAVE_MMX) && !defined(__x86_64__)
 	/*
 	 * neging 8 byte on a 32Bit maschine is also atractive
 	 * __builtin_ia32_pneg
@@ -335,7 +271,6 @@ alignment_8:
 		len %= 8;
 		goto handle_remaining;
 	}
-# endif
 #endif
 	/*
 	 * unfortunadly my gcc created horrible loop-code with two
@@ -348,7 +283,6 @@ alignment_8:
 	 */
 no_alignment_wanted:
 handle_remaining:
-alignment_size_t:
 	{
 		size_t cnt1, cnt2, rem;
 
@@ -393,7 +327,7 @@ alignment_size_t:
 			  /* %8 */ "m" (dst_char)
 			: "cc"
 		);
-		len %= SOST;
+		len %= SO32;
 	}
 
 no_alignment_possible:
@@ -412,9 +346,6 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 	char *dst_char = dst;
 	const char *src_char = src;
 
-	if(!dst)
-		return dst;
-
 	if(!src)
 		return DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(dst, len);
 
@@ -431,18 +362,22 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		"" : /* no out */ : "r" (src), "r" (dst)
 	);
 
+	if(unlikely(!dst))
+		return dst;
+
 	if(unlikely(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*4) > len))
 		goto no_alignment_wanted;
 	else
 	{
 		/* align dst, we will see what src looks like afterwards */
-		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED)) - dst_char;
+		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
 		len -= i;
 		for(; i/SO32; i -= SO32, dst_char += SO32, src_char += SO32)
 			*((uint32_t *)dst_char) = ~(*((const uint32_t *)src_char));
 		for(; i; i--)
 			*dst_char++ = ~(*src_char++);
-		i = (((intptr_t)dst_char)&((ALIGNMENT_WANTED*2)-1))^(((intptr_t)src_char)&((ALIGNMENT_WANTED*2)-1));
+		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1)) ^
+		    (((intptr_t)src_char) & ((ALIGNMENT_WANTED * 2) - 1));
 		/*
 		 * x86 special:
 		 * x86 handles misalignment in hardware for ordinary ops.
@@ -482,6 +417,7 @@ alignment_32:
 #ifdef HAVE_AVX
 alignment_16:
 alignment_8:
+alignment_size_t:
 	/*
 	 * neging 256 bit at once even sounds better!
 	 * and alignment is handeld more transparent!
@@ -617,7 +553,61 @@ alignment_16:
 	}
 # endif
 alignment_8:
-# ifdef HAVE_SSE3
+# ifdef HAVE_SSE2
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCHW(  (%2))
+			SSE_MOVE(%4, %%xmm2)
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCHW(32(%2))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(96(%2))
+			SSE_MOVE(%%xmm2, %%xmm3)
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCHW(128(%2))
+			SSE_LOAD8(  0(%1), %%xmm0)
+			SSE_LOAD8( 16(%1), %%xmm1)
+			"add	$32, %1\n\t"
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_XOR(  %%xmm3, %%xmm1)
+			SSE_STORE(%%xmm0,   (%2))
+			SSE_STORE(%%xmm1, 16(%2))
+			"add	$32, %2\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"je	3f\n\t"
+			SSE_LOAD8(  0(%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_XOR(  %%xmm2, %%xmm0)
+			SSE_STORE(%%xmm0,  (%2))
+			"add	$16, %2\n"
+			"3:\n\t"
+			/* done */
+			SSE_FENCE
+			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
+			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "cc",
+#  ifdef __SSE__
+			  "xmm0", "xmm1", "xmm2", "xmm3",
+#  endif
+			  "memory"
+		);
+		len %= 16;
+		goto handle_remaining;
+	}
+alignment_size_t:
 	{
 		register intptr_t d0;
 
@@ -761,7 +751,9 @@ alignment_8:
 	 */
 no_alignment_wanted:
 handle_remaining:
+#if !defined(HAVE_SSE2) && !defined(HAVE_AVX)
 alignment_size_t:
+#endif
 	{
 		size_t tmp1, tmp2, cnt1, cnt2, rem = len%(SOST*4);
 
@@ -832,7 +824,7 @@ alignment_size_t:
 			  /* %10 */ "m" (src_char)
 			: "cc"
 		);
-		len %= SOST;
+		len %= SO32;
 	}
 
 no_alignment_possible:

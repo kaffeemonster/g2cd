@@ -25,57 +25,35 @@
 
 size_t strlen(const char *s)
 {
-	const char *p = s;
-	size_t i;
+	const char *p;
+	size_t r;
 	prefetch(s);
 
-	if(unlikely(!s))
-		return 0;
+	/*
+	 * Sometimes you need a new perspective, like the altivec
+	 * way of handling things.
+	 * Lower address bits? Totaly overestimated.
+	 *
+	 * We don't precheck for alignment.
+	 * Instead we "align hard", do one load "under the address",
+	 * mask the excess info out and afterwards we are fine to go.
+	 */
+	p = (const char *)ALIGN_DOWN(s, SOST);
+	r = has_nul_byte(*(const size_t *)p);
+	if(!HOST_IS_BIGENDIAN)
+		r >>= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
+	else
+		r <<= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
+	if(r)
+		return nul_byte_index(r);
 
-	if(UNALIGNED_OK)
+	do
 	{
-		/*
-		 * We can do unaligned access, busily start doing
-		 * something.
-		 * But make shure we do not cross a page boundry
-		 * on the source side. (we simply assume 4k pages)
-		 */
-		if(IS_ALIGN(p, SO32))
-			goto DO_LARGE;
-		i = ((const char *) ALIGN(p, 4096) - p);
-		for(; likely(SO32M1 < i); i -= SO32, p += SO32)
-		{
-			uint32_t r = has_nul_byte32(*p);
-			if(r) {
-				p += nul_byte_index32(r);
-				goto OUT;
-			}
-		}
-		/* slowly go over the page boundry */
-	}
-	else /* Unaligned access is not ok. Align it before access. */
-		i = (const char *) ALIGN(p, SO32) - p;
-	while(i && *p)
-		p++, i--;
-
-DO_LARGE:
-	if(*p)
-	{
-		/*
-		 * keeping at 32 bit to give 64 bit arches a chance
-		 * on short strings
-		 */
-		register const uint32_t *d = ((const uint32_t *)p);
-		uint32_t r;
-
-		while(!(r = has_nul_byte32(*d)))
-			d++;
-		p  = (const char *)d;
-		p += nul_byte_index32(r);
-	}
-
-OUT:
-	return p - s;
+		p += SOST;
+		r = has_nul_byte(*(const size_t *)p);
+	} while(!r);
+	r = nul_byte_index(r);
+	return p - s + r;
 }
 
 static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";

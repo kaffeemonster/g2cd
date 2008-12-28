@@ -30,81 +30,33 @@
 
 size_t strlen(const char *s)
 {
+	vector unsigned char v0;
+	vector unsigned char v1;
+	vector unsigned char v_perm;
+	vector unsigned char c;
+	uint32_t r;
+	char *p;
 
-	const char *p = s;
-	size_t cycles;
 	prefetch(s);
+	if(unlikely(!s || !len))
+		return NULL;
 
-	if(unlikely(!s))
-		return 0;
+	v0 = vec_splat_u8(0);
+	v1 = vec_splat_u8(1);
 
-	/* don't step over the page boundery */
-	cycles = (const char *)ALIGN(p, 4096) - p;
-	/*
-	 * we don't precheck for alignment, 16 is very unlikely
-	 * instead go unaligned until a page boundry
-	 */
-	if(cycles >= (SOVUC * 2)) /* make shure we have enough space */
-	{
-		vector unsigned char fix_alignment;
-		vector unsigned char v0;
-		vector unsigned char c, c_ex;
+	p = (char *)ALIGN_DOWN(s, SOVUC);
+	c = vec_ld(0, (vector const unsigned char *)p);
+	v_perm = vec_lvsl(0, s);
+	c = vec_perm(c, v1, v_perm);
+	v_perm = vec_lvsr(0, s);
+	c = vec_perm(v1, c, v_perm)
 
-		v0 = vec_splat_u8(0);
-		fix_alignment = vec_align_and_rev(p);
-		c_ex = vec_ld(0, (vector const unsigned char *)p);
-		for(; likely(SOVUCM1 < cycles); cycles -= SOVUC, p += SOVUC)
-		{
-			c = c_ex;
-			c_ex = vec_ld(1 * SOVUC, (vector const unsigned char *)p);
-			c = vec_perm(c, c_ex, fix_alignment);
-			if(vec_any_eq(c, v0)) /* zero byte? */
-			{
-				vector bool char vr;
-				unsigned r;
-
-				vr = vec_cmpeq(c, v0); /* get mask */
-				r = vec_pbmovmsk(vr); /* tranfer */
-				p += __builtin_ctz(r); /* get index */
-				goto OUT;
-			}
-		}
+	while(!vec_any_eq(c, v0)) {
+		p += SOVUC;
+		c = vec_ld(0, (vector const unsigned char *)p);
 	}
-	for(; likely(SO32M1 < cycles); cycles -= SO32, p += SO32)
-	{
-		uint32_t r = has_nul_byte32(*(const uint32_t *)p);
-		if(r) {
-			p += 3 - (__builtin_ctz(r) / 8);
-			goto OUT;
-		}
-	}
-	/* slowly encounter page boundery */
-	while(cycles && *p)
-		p++, cycles--;
-
-	if(likely(*p))
-	{
-		vector unsigned char v0;
-
-		v0 = vec_splat_u8(0);
-		while(1)
-		{
-			vector unsigned char c = vec_ld(0, (vector const unsigned char *)p);
-			if(vec_any_eq(c, v0))
-			{
-				vector bool char vr;
-				unsigned r;
-
-				vr = (vector bool char)vec_perm((vector unsigned char)vec_cmpeq(c, v0), v0, vec_ident_rev());
-				r = vec_pbmovmsk(vr);
-				p += __builtin_ctz(r);
-				break;
-			}
-			p += SOVUC;
-		}
-	}
-OUT:
-	return p - s;
+	r = vec_pmovmskb(vec_cmpeq(c, v0));
+	return p + __builtin_clz(r) - 16;
 }
 
 static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";

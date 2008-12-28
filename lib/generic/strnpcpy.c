@@ -23,22 +23,19 @@
  * $Id: $
  */
 
-/*
- * keep it 32 Bit, so even 64Bit arches have a chance to use
- * a broader datatype and not immediatly baile out
- */
-#define ALIGN_WANTED SO32
+#define ALIGN_WANTED SOST
 
 char *strnpcpy(char *dst, const char *src, size_t maxlen)
 {
-	size_t i = 0;
+	size_t i;
+	size_t r;
 
 	prefetch(src);
 	prefetchw(dst);
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	if(unlikely(maxlen < SO32))
+	if(unlikely(maxlen < SOST))
 		goto OUT;
 
 	if(UNALIGNED_OK)
@@ -49,18 +46,19 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 		 * But make shure we do not cross a page boundry
 		 * on the source side. (we simply assume 4k pages)
 		 */
-		if(IS_ALIGN(src, SO32))
+		if(IS_ALIGN(src, SOST))
 			goto DO_LARGE;
 
 		/* quickly go to the page boundry */
 		i = ((char *)ALIGN(src, 4096) - src);
 		i = i < maxlen ? i : maxlen;
-		for(; likely(SO32M1 < i); i -= SO32, maxlen -= SO32, src += SO32, dst += SO32)
+		for(; likely(SOSTM1 < i); i -= SOST, maxlen -= SOST, src += SOST, dst += SOST)
 		{
-			uint32_t c = *(const uint32_t *)src;
-			if(has_nul_byte32(c))
-				goto OUT;
-			*(uint32_t *)dst = c;
+			size_t c = *(const size_t *)src;
+			r = has_nul_byte(c);
+			if(r)
+				return cpy_rest0(dst, src, nul_byte_index(r));
+			*(size_t *)dst = c;
 		}
 
 		/* slowly go over the page boundry */
@@ -79,9 +77,7 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 		/* Now check which alignment we achieved */
 		i = (((intptr_t)dst) & ((ALIGN_WANTED * 2) - 1)) ^
 		    (((intptr_t)src) & ((ALIGN_WANTED * 2) - 1));
-		if(1 & i)
-			goto OUT;
-		if(2 & i)
+		if(SOSTM1 & i)
 			goto OUT;
 		/* fallthrough */
 	}
@@ -90,14 +86,20 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 DO_LARGE:
 	if(likely(*src))
 	{
-		uint32_t *dst_b = (uint32_t *)dst;
-		const uint32_t *src_b = (const uint32_t *)src;
+		size_t *dst_b = (size_t *)dst;
+		const size_t *src_b = (const size_t *)src;
 
-		i = maxlen / SO32;
-		for(; likely(i) && !has_nul_byte32(*src_b); i--)
-			*dst_b++ = *src_b++;
+		i = maxlen / SOST;
+		for(; likely(i); i--, src_b++, dst_b++)
+		{
+			size_t c = *src_b;
+			r = has_nul_byte(c);
+			if(r)
+				return cpy_rest0(dst, src, nul_byte_index(r));
+			*dst_b = c;
+		}
 
-		maxlen = i * SO32 + (maxlen % SO32);
+		maxlen = i * SOST + (maxlen % SOST);
 		dst = (char *)dst_b;
 		src = (const char *)src_b;
 	}

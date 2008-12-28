@@ -202,6 +202,20 @@ static void identify_cpu(void)
 
 	if(our_cpu.init_done)
 		return;
+	/*
+	 * imidiatly prevent other calls to go trough this function.
+	 *
+	 * This function is not thread save, but that is not our problem.
+	 * This function may use lib funcs because the compiler thought
+	 * it would be clever to use a memcpy or such thing somewhere.
+	 *
+	 * Problem: These functions may want to detect the cpu...
+	 * To prevent infinite recursion, just kick them out.
+	 * They should fall back to the generic impl. when confronted
+	 * with a not yet fully populated our_cpu and later sitch to
+	 * the right one.
+	 */
+	our_cpu.init_done = true;
 
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
@@ -211,7 +225,7 @@ static void identify_cpu(void)
 	{
 		/*
 		 * No? *cough* Ok, maybe rare/exotic chip like Geode
-		 * which can switch of cpuid in firmware...
+		 * which can switch off cpuid in firmware...
 		 */
 		 /* distinguish 386 from 486, same trick for EFLAGS bit 18 */
 		if(is_486()) {
@@ -221,7 +235,6 @@ static void identify_cpu(void)
 			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
-		our_cpu.init_done = true;
 		logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
 		return;
 	}
@@ -333,7 +346,6 @@ static void identify_cpu(void)
 		our_cpu.stepping, our_cpu.model_str.s);
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
-	our_cpu.init_done = true;
 	/* ... except it is an AMD Opteron */
 	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)
 		return;
@@ -653,10 +665,9 @@ int test_cpu_feature_avx_callback(void)
 /*
  * Test a feature on a x86-CPU and change function pointer
  */
-void test_cpu_feature(void *f, const struct test_cpu_feature *t, size_t l)
+void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
 	size_t i;
-	void (**func)(void) = f;
 	identify_cpu();
 	for(i = 0; i < l; i++)
 	{
@@ -664,10 +675,10 @@ void test_cpu_feature(void *f, const struct test_cpu_feature *t, size_t l)
 		   our_cpu.features[t[i].flags_needed]) {
 			if(t[i].callback && !t[i].callback())
 				continue;
-			*func = t[i].func;
-			return;
+			return t[i].func;
 		}
 	}
+	return NULL; /* whoever fucked it up, die! */
 }
 
 static char const rcsid_mbx[] GCC_ATTR_USED_VAR = "$Id:$";

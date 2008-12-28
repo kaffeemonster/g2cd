@@ -37,178 +37,144 @@
  * braindead idea without a MMX->CPU-Reg move instruction
  * to do things not possible with MMX.
  *
- * We use the GCC vector internals, to make things simple for us.
  */
-
-#if defined( __SSE__) && defined(__GNUC__)
-
-# define TYPEM(x) ((x) + ((x)-1))
-
-typedef char v8c __attribute__((vector_size (8)));
-# define SOV8M1	(sizeof(v8c) - 1)
-# define SOV8	(sizeof(v8c))
-
-static inline unsigned v8_equal(v8c a, v8c b)
-{
-	v8c compare = __builtin_ia32_pcmpeqb(a, b);
-	return __builtin_ia32_pmovmskb(compare);
-}
-
-/* don't inline, will only bloat, since its tail called */
-static noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i)
-{
-	uint16_t *dst_w = (uint16_t *)dst;
-	const uint16_t *src_w = (const uint16_t *)src;
-	uint32_t *dst_dw = (uint32_t *)dst;
-	const uint32_t *src_dw = (const uint32_t *)src;
-	uint64_t *dst_qw = (uint64_t *)dst;
-	const uint64_t *src_qw = (const uint64_t *)src;
-
-	switch(i)
-	{
-# ifdef __SSE2__
-	case 15:
-		dst[14] = src[14];
-	case 14:
-		dst_w[6] = src_w[6];
-		goto C12;
-	case 13:
-		dst[12] = src[12];
-	case 12:
-C12:
-		dst_dw[2] = src_dw[2];
-		goto C8;
-	case 11:
-		dst[10] = src[10];
-	case 10:
-		dst_w[4] = src_w[4];
-		goto C8;
-	case  9:
-		dst[8] = src[8];
-	case  8:
-C8:
-		dst_qw[0] = src_qw[0];
-		break;
-#endif /* __SSE2__ */
-	case  7:
-		dst[6] = src[6];
-	case  6:
-		dst_w[2] = src_w[2];
-		goto C4;
-	case  5:
-		dst[4] = src[4];
-	case  4:
-C4:
-		dst_dw[0] = src_dw[0];
-		break;
-	case  3:
-		dst[2] = src[2];
-	case  2:
-		dst_w[0] = src_w[0];
-		break;
-	case  1:
-		dst[0] = src[0];
-	case  0:
-		break;
-	}
-	dst[i] = '\0';
-	return dst + i;
-}
-
-# ifdef __SSE2__
 /*
- * SSE2 version
+ * We don't check for alignment, 16 or 8 is very unlikely.
+ * We always busily start doing something to please short strings.
+ * First we work unaligned until the first page boundery,
+ * then we can see what to do.
+ */
+/*
+ * Normaly we could generate this with the gcc vector
+ * __builtins, but since gcc whines when the -march does
+ * not support the operation and we want to always provide
+ * them and switch between them...
  */
 
-typedef char v16c __attribute__((vector_size (16)));
-#  define SOV16M1	(sizeof(v16c) - 1)
-#  define SOV16	(sizeof(v16c))
+#include "x86_features.h"
 
-static inline unsigned v16_equal(v16c a, v16c b)
-{
-	v16c compare = __builtin_ia32_pcmpeqb128(a, b);
-	return __builtin_ia32_pmovmskb128(compare);
-}
+#define SOV8	8
+#define SOV8M1	(SOV8-1)
+#define SOV16	16
+#define SOV16M1	(SOV16-1)
 
-char *strnpcpy(char *dst, const char *src, size_t maxlen)
+char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
+char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
+char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
+char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
+
+#define cpy_one_u32(dst, src, i, maxlen) \
+	if(likely(SO32M1 < i)) \
+	{ \
+		uint32_t c = *(const uint32_t *)src; \
+		uint32_t r32 = has_nul_byte32(c); \
+		if(likely(r32)) {\
+			asm ("bsf %1, %0" : "=r" (r32) : "r" (r32) : "cc"); \
+			return cpy_rest0(dst, src, r32 / BITS_PER_CHAR); \
+		} \
+		*(uint32_t *)dst = c; \
+		i -= SO32; \
+		maxlen -= SO32; \
+		src += SO32; \
+		dst += SO32; \
+	}
+
+#ifndef __x86_64__
+# define cpy_one_u64(dst, src, i, maxlen) \
+	if(likely(SOV8M1 < i)) \
+	{ \
+		unsigned rsse; \
+		asm( \
+			"pxor	%%mm0, %%mm0\n\t" \
+			"movq	%3, %%mm1\n\t" \
+			"pcmpeqb	%%mm1, %%mm0\n\t" \
+			"pmovmskb	%%mm0, %0\n\t" \
+			"test	%0, %0\n\t" \
+			"jnz	1f\n\t" \
+			"movq	%%mm1, %2\n" \
+			"1:\n" \
+		: /* %0 */ "=r" (rsse), \
+		  /* %1 */ "=m" (*dst) \
+		: /* %2 */ "m" (*src), \
+		  /* %3 */ "m" (*dst) \
+		); \
+		if(likely(rsse)) { \
+			asm ("bsf %1, %0" : "=r" (rsse) : "r" (rsse) : "cc"); \
+			return cpy_rest0(dst, src, rsse); \
+		} \
+		i -= SOV8; \
+		maxlen -= SOV8; \
+		src += SOV8; \
+		dst += SOV8; \
+	}
+#else
+# define cpy_one_u64(dst, src, i, maxlen) \
+	if(likely(SOSTM1 < i)) \
+	{ \
+		size_t c = *(const size_t *)src; \
+		size_t r64 = has_nul_byte(c); \
+		if(likely(r64)) { \
+			asm ("bsf %1, %0" : "=r" (r64) : "r" (r64) : "cc"); \
+			return cpy_rest0(dst, src, r64 / BITS_PER_CHAR); \
+		} \
+		*(size_t *)dst = c; \
+		i -= SOST; \
+		maxlen -= SOST; \
+		src += SOST; \
+		dst += SOST; \
+	}
+#endif
+
+char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
 {
-	size_t i = 0, cycles;
-	unsigned r;
+	size_t i;
+	size_t r;
 
 	prefetch(src);
 	prefetchw(dst);
-	prefetch((char *)cpy_rest);
-	prefetch((char *)cpy_rest + 64);
-	prefetch((char *)cpy_rest + 128);
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	/*
-	 * We don't check for alignment, 16 is very unlikely.
-	 * First we work unaligned until the first page boundery,
-	 * so we start doing something for short strings.
-	 */
 	i = ((char *)ALIGN(src, 4096) - src);
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
-	for(r = 0, cycles = i; likely(SOV16M1 < i);
-	    i -= SOV16, src += SOV16, dst += SOV16) {
-		v16c x = __builtin_ia32_loaddqu(src);
-		if(unlikely(r = v16_equal(x, (v16c){0ULL, 0ULL})))
-			break;
-		__builtin_ia32_storedqu(dst, x);
-	}
-	barrier();
-	if(likely(r))
-		return cpy_rest(dst, src, __builtin_ctz(r));
-	maxlen -= (cycles - i);
-	if(likely(SOV8M1 < i))
+	if(likely(SOV16M1 < i))
 	{
-	/*
-	 * ATM gcc 4.3.2 generates HORRIBLE MMX code (SSE is OK...)
-	 * Somehow he is scared to death and spills his operands
-	 * like crazy to the stack. Wow, thats cool in a copy loop...
-	 * Looks like the loop sheduler fucks it up trying to
-	 * generate a loop he can "jump into".
-	 */
-		v8c x, x2;
-
-		asm(
-			"movq	%4, %1\n\t"
-			"movq	%1, %0\n\t"
-			"pcmpeqb	%6, %1\n\t"
-			"pmovmskb	%1, %2\n\t"
-			"test	%2, %2\n\t"
-			"jnz	1f\n\t"
-			"movq	%0, %5\n"
-			"1:\n"
-		: /* %0 */ "=y" (x),
-		  /* %1 */ "=y" (x2),
-		  /* %2 */ "=&r" (r),
-		  /* %3 */ "=m" (*dst)
-		: /* %4 */ "m" (*src),
-		  /* %5 */ "m" (*dst),
-		  /* %6 */ "y" ((v8c){0ULL})
+		size_t cycles = i;
+		asm (
+				"pxor	%%xmm1, %%xmm1\n\t"
+				"jmp	1f\n"
+				"3:\n\t"
+				".p2align 2\n\t"
+				"sub	%3, %0\n\t"
+				"add	%3, %1\n\t"
+				"movdqu	%%xmm0, (%2)\n\t"
+				"add	%3, %2\n\t"
+				"cmp	%3, %0\n\t"
+				"jb	2f\n"
+				"1:\n\t"
+				"movdqu	(%1), %%xmm0\n\t"
+				"pcmpistri	$0b1000, %%xmm0, %%xmm1\n\t"
+				"jnz	3b\n"
+				"2:"
+			: /* %0 */ "=r" (i),
+			  /* %1 */ "=r" (src),
+			  /* %2 */ "=r" (dst),
+			  /* %3 */ "=c" (r)
+			: /* %4 */ "0" (i),
+			  /* %5 */ "1" (src),
+			  /* %6 */ "2" (dst),
+			  /* %7 */ "3" (0)
+#ifdef __SSE__
+			: "xmm0", "xmm1"
+#endif
 		);
 		if(likely(r))
-			return cpy_rest(dst, src, __builtin_ctz(r));
-		i -= SOV8;
-		maxlen -= SOV8;
-		src += SOV8;
-		dst += SOV8;
+			return cpy_rest0(dst, src, r);
+		maxlen -= (cycles - i);
 	}
-	if(likely(SO32M1 < i))
-	{
-		uint32_t c = *(const uint32_t *)src;
-		r = has_nul_byte32(c);
-		if(likely(r))
-			return cpy_rest(dst, src, __builtin_ctz(r) / 8);
-		*(uint32_t *)dst = c;
-		i -= SO32;
-		maxlen -= SO32;
-		src += SO32;
-		dst += SO32;
-	}
+	cpy_one_u64(dst, src, i, maxlen);
+	cpy_one_u32(dst, src, i, maxlen);
 
 	/* slowly go over the page boundry */
 	for(; i && *src; i--, maxlen--)
@@ -226,13 +192,9 @@ CPY_NEXT:
 	return dst;
 }
 
-# else
-/*
- * SSE version
- */
-char *strnpcpy(char *dst, const char *src, size_t maxlen)
+char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
 {
-	size_t i = 0, cycles;
+	size_t i;
 	unsigned r;
 
 	prefetch(src);
@@ -240,37 +202,119 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	/*
-	 * We don't check for alignment, 8 is very unlikely.
-	 * First we work unaligned until the first page boundery,
-	 * so we start doing something for short strings.
-	 */
 	i = ((char *)ALIGN(src, 4096) - src);
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
-	for(r = 0, cycles = i; likely(SOV8M1 < i);
-	    i -= SOV8, src += SOV8, dst += SOV8) {
-		v8c x = *(const v8c *)src;
-		if(unlikely(r = v8_equal(x, (v8c){0ULL})))
-			break;
-		*(v8c *)dst = x;
-	}
-	barrier();
-	if(likely(r))
-		return cpy_rest(dst, src, __builtin_ctz(r));
-	maxlen -= (cycles - i);
-	if(likely(SO32M1 < i))
+	if(likely(SOV16M1 < i))
 	{
-		uint32_t c = *(uint32_t *)src;
-		r = unlikely(has_nul_byte32(c));
-		if(r)
-			return cpy_rest(dst, src, __builtin_ctz(r) / 8);
-		*(uint32_t *)dst = c;
-		i -= SO32;
-		maxlen -= SO32;
-		src += SO32;
-		dst += SO32;
+		size_t cycles = i;
+		asm (
+			"pxor	%%xmm2, %%xmm2\n\t"
+			"jmp	1f\n"
+			"3:\n\t"
+			"sub	$16, %0\n\t"
+			"add	$16, %1\n\t"
+			"movdqu	%%xmm1, (%2)\n\t"
+			"add	$16, %2\n\t"
+			"cmp	$15, %0\n\t"
+			"jbe	2f\n"
+			"1:\n\t"
+			"movdqu	(%1), %%xmm1\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpeqb	%%xmm2, %%xmm0\n\t"
+			"pmovmskb	%%xmm0, %3\n\t"
+			"test	%3, %3\n\t"
+			"jz	3b\n"
+			"2:"
+		: /* %0 */ "=r" (i),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (dst),
+		  /* %3 */ "=r" (r)
+		: /* %4 */ "0" (i),
+		  /* %5 */ "1" (src),
+		  /* %6 */ "2" (dst)
+#ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2"
+#endif
+		);
+		if(likely(r)) {
+			asm ("bsf %1, %0" : "=r" (r) : "r" (r) : "cc");
+			return cpy_rest0(dst, src, r);
+		}
+		maxlen -= (cycles - i);
 	}
+	cpy_one_u64(dst, src, i, maxlen);
+	cpy_one_u32(dst, src, i, maxlen);
+
+	/* slowly go over the page boundry */
+	for(; i && *src; i--, maxlen--)
+		*dst++ = *src++;
+
+	/* src is aligned, life is good... */
+	if(likely(*src) && likely(maxlen)) {
+		i = maxlen;
+		/* since only src is aligned, simply continue with movdqu */
+		goto CPY_NEXT;
+	}
+
+	if(likely(maxlen))
+		*dst = '\0';
+	return dst;
+}
+
+#ifndef __x86_64__
+char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen)
+{
+	size_t i;
+	unsigned r;
+
+	prefetch(src);
+	prefetchw(dst);
+	if(unlikely(!src || !dst || !maxlen))
+		return dst;
+
+	i = ((char *)ALIGN(src, 4096) - src);
+	i = i < maxlen ? i : maxlen;
+CPY_NEXT:
+	if(SOV8M1 < i)
+	{
+		size_t cycles = i;
+		asm (
+			"pxor	%%mm2, %%mm2\n\t"
+			"jmp	1f\n"
+			"3:\n\t"
+			"sub	$8, %0\n\t"
+			"add	$8, %1\n\t"
+			"movq	%%mm1, (%2)\n\t"
+			"add	$8, %1\n\t"
+			"cmp	$7, %0\n\t"
+			"jbe	2f\n"
+			"1:\n\t"
+			"movq	(%1), %%mm1\n\t"
+			"movq	%%mm1, %%mm0\n\t"
+			"pcmpeqb	%%mm2, %%mm0\n\t"
+			"pmovmskb	%%mm0, %3\n\t"
+			"test	%3, %3\n\t"
+			"jz	3b\n"
+			"2:"
+		: /* %0 */ "=r" (i),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (dst),
+		  /* %3 */ "=r" (r)
+		: /* %4 */ "0" (i),
+		  /* %5 */ "1" (src),
+		  /* %6 */ "2" (dst)
+#ifdef __SSE__
+		: "mm0", "mm1", "mm2"
+#endif
+		);
+		if(likely(r)) {
+			asm ("bsf %1, %0" : "=r" (r) : "r" (r) : "cc");
+			return cpy_rest0(dst, src, r);
+		}
+		maxlen -= (cycles - i);
+	}
+	cpy_one_u32(dst, src, i, maxlen);
 
 	/* slowly go over the page boundry */
 	for(; i && *src; i--, maxlen--)
@@ -286,9 +330,111 @@ CPY_NEXT:
 		*dst = '\0';
 	return dst;
 }
-# endif
-static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
-#else
-# include "../generic/strnlen.c"
 #endif
+
+char *strnpcpy_x86(char *dst, const char *src, size_t maxlen)
+{
+	size_t i;
+
+	prefetch(src);
+	prefetchw(dst);
+	if(unlikely(!src || !dst || !maxlen))
+		return dst;
+
+CPY_NEXT:
+	i = (char *)ALIGN(src, 4096) - src;
+	i = i < maxlen ? i : maxlen;
+	if(SOSTM1 < i)
+	{
+		size_t cycles = i;
+		size_t r = 0;
+		do
+		{
+			size_t c = *(const size_t *)src;
+			r = has_nul_byte(c);
+			if(r)
+				break;
+			*(size_t *)dst = c;
+			i -= SOST;
+			src += SOST;
+			dst += SOST;
+		} while(SOSTM1 < i);
+		if(likely(r)) {
+			asm ("bsf %1, %0" : "=r" (r) : "r" (r) : "cc");
+			return cpy_rest0(dst, src, r / BITS_PER_CHAR);
+		}
+		maxlen -= (cycles - i);
+	}
+#ifdef __x86_64__
+	cpy_one_u32(dst, src, i, maxlen);
+#endif
+
+	/* slowly go over the page boundry */
+	for(; i && *src; i--, maxlen--)
+		*dst++ = *src++;
+
+	/* src is aligned, life is good... */
+	if(likely(*src) && likely(maxlen)) 
+	{
+		/*
+		 * we have done one page, maybe the string is longer.
+		 * Now align dst (faster write) and work till next page
+		 * boundery.
+		 */
+		i = (char *)ALIGN(dst, SOST) - dst;
+		i = i < maxlen ? i : maxlen;
+#ifdef __x86_64__
+		cpy_one_u32(dst, src, i, maxlen);
+#endif
+		for(; i && *src; i--, maxlen--)
+			*dst++ = *src++;
+		goto CPY_NEXT;
+	}
+
+	if(likely(maxlen))
+		*dst = '\0';
+	return dst;
+}
+
+static const struct test_cpu_feature t_feat[] =
+{
+	{.func = (void (*)(void))strnpcpy_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strnpcpy_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))strnpcpy_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#endif
+	{.func = (void (*)(void))strnpcpy_x86, .flags_needed = -1, .callback = NULL},
+};
+
+static char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen);
+/*
+ * Func ptr
+ */
+static char *(*strnpcpy_ptr)(char *dst, const char *src, size_t maxlen) = strnpcpy_runtime_sw;
+
+/*
+ * constructor
+ */
+static GCC_ATTR_CONSTRUCT void strnpcpy_select(void)
+{
+	strnpcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
+}
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer failes
+ */
+static char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
+{
+	strnpcpy_select();
+	return strnpcpy_ptr(dst, src, maxlen);
+}
+
+char *strnpcpy(char *dst, const char *src, size_t maxlen)
+{
+	return strnpcpy_ptr(dst, src, maxlen);
+}
+
+static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

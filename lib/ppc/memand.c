@@ -49,7 +49,7 @@
  * I simply assume that larger access is always better then byte
  * access, basically the x86 trick.
  */
-static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
+void *memand(void *dst, const void *src, size_t len)
 {
 	char *dst_char = dst;
 	const char *src_char = src;
@@ -335,14 +335,5 @@ no_alignment_possible:
 
 	return dst;
 }
-
-/*
- * We always go over a function pointer to comfort x86 millions
- * SIMD evolutions. We could use this to provide different ppc
- * implementations (altivec/non-altivec, alignment constrained),
- * if only telling different ppc processors apart would be easily
- * possible...
- */
-void *(*memand)(void *dst, const void *src, size_t len) = DFUNC_NAME(memand, ARCH_NAME_SUFFIX);
 
 static char const rcsid_ma[] GCC_ATTR_USED_VAR = "$Id:$";

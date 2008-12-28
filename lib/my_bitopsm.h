@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -53,6 +53,9 @@
 	/* yup, sometimes we have to align down */
 #define ALIGN_DOWN(x, n) \
 	(((intptr_t)(x)) & ~((intptr_t)(n) - 1L))
+	/* and the diff to it */
+#define ALIGN_DOWN_DIFF(x, n) \
+	(((intptr_t)(x)) & ((intptr_t)(n) - 1L))
 	/* some magic to build a constant for 32 & 64 bit, without
 	 * the need for LL suffix
 	 */
@@ -65,19 +68,25 @@
 	/* The wonders of binary foo
 	 * true if any byte in the number is zero
 	 */
-#define has_nul_byte32(x) \
+# define has_nul_byte32(x) \
 	(((x) -  0x01010101) & ~(x) &  0x80808080)
-#define has_nul_byte(x) \
+# define has_nul_byte(x) \
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
-#define nul_byte_index_l32(x) \
+# define nul_byte_index_l32(x) \
 	((x) & 0x80U ? 0 : (((x) & 0x8000U) ? 1 : ((x) & 0x800000U ? 2 : ((x) & 0x80000000 ? 3 : 0))))
-#define nul_byte_index_b32(x) \
+# define nul_byte_index_b32(x) \
 	((x) & 0x80000000U ? 0 : (((x) & 0x800000U) ? 1 : ((x) & 0x8000U ? 2 : ((x) & 0x80 ? 3 : 0))))
-	/*	3322222222221111111111
-	 *	10987654321098765432109876543210
-	 *	10000000100000001000000010000000
+# define nul_byte_index_l64(x) \
+	(0x80808080U & (x) ? nul_byte_index_l32(x) : nul_byte_index_l32((x)>>32) + 4)
+# define nul_byte_index_b64(x) \
+	(0x80808080U & ((x)>>32) ? nul_byte_index_b32((x)>>32) : nul_byte_index_b32(x) + 4)
+	/*	666655555555554444444444333333333322222222221111111111
+	 *	3210987654321098765432109876543210987654321098765432109876543210
+	 *	1000000010000000100000001000000010000000100000001000000010000000
 	 */
-#define packedmask_832(x) \
-	((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F;
+# define packedmask_832(x) \
+	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F);
+# define packedmask_864(x) \
+	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28 | (x) >>  35| (x) >> 42 | (x) >> 49 | (x) >> 56) & 0xFF);
 
 #endif

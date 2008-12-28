@@ -24,9 +24,9 @@
  */
 
 #ifndef ARCH_NAME_SUFFIX
-# define F_NAME(z, x, y) z x
+# define F_NAME(z, x, y) z GCC_ATTR_CONST GCC_ATTR_FASTCALL x
 #else
-# define F_NAME(z, x, y) static z x##y
+# define F_NAME(z, x, y) static z GCC_ATTR_CONST GCC_ATTR_FASTCALL x##y
 #endif
 
 F_NAME(size_t, popcountst, _generic) (size_t n)

@@ -27,17 +27,19 @@
  * Make sure to avoid asm operant size suffixes, this is
  * used in 32Bit & 64Bit
  */
-size_t flsst(size_t find)
+size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
+	size_t t;
 	size_t found;
 	__asm__ __volatile__(
-		"xor\t%0, %0\n\t"
-		"bsr\t%1, %0\n\t"
-		"jz\t1f\n\t"
-		"inc\t%0\n"
-		"1:\n"
-		: "=r" (found)
-		: "mr" (find)
+		"or	$-1, %1\n\t"
+		"bsr	%2, %0\n\t"
+		"cmovz	%1, %0\n\t"
+		"inc	%0\n"
+		"1:"
+		: /* %0 */ "=r" (found),
+		  /* %1 */ "=&r" (t)
+		: /* %2 */ "mr" (find)
 		: "cc"
 	);
 	return found;

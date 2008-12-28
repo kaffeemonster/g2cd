@@ -59,7 +59,7 @@ static inline vector unsigned char vec_align_and_rev(const char *p)
  * Transfering a logic mask from a SIMD register to a general purpose
  * register. We try to emulate this. But i fear it is not very efficient...
  */
-static inline unsigned vec_pbmovmsk(vector bool char vr)
+static inline uint32_t vec_pmovmskb(vector bool char vr)
 {
 //	vector unsigned char swap_ident;
 	vector unsigned char factor;
@@ -67,7 +67,7 @@ static inline unsigned vec_pbmovmsk(vector bool char vr)
 	vector unsigned short vr_h, vr_l;
 
 // TODO: Transfer variable aligned to 16???
-	unsigned r;
+	uint32_t r;
 
 	vr = vec_and(vr, vec_splat_u8(1)); /* single bit */
 	factor = vec_xor(vec_identl(0), vec_splat_u8(15)); /* get reverse ident */

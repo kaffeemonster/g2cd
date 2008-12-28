@@ -97,30 +97,59 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 # include "memand_tmpl.c"
 #endif
 
-void *(*memand)(void *dst, const void *src, size_t len) = memand_x86;
+/*
+ * needed features
+ */
+static const struct test_cpu_feature t_feat[] =
+{
+#if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))memand_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+#endif
+	{.func = (void (*)(void))memand_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memand_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+	{.func = (void (*)(void))memand_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memand_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))memand_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memand_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))memand_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
+	{.func = (void (*)(void))memand_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+#endif
+	{.func = (void (*)(void))memand_x86, .flags_needed = -1, .callback = NULL},
+};
 
+static void *memand_runtime_sw(void *dst, const void *src, size_t len);
+/*
+ * Func ptr
+ */
+static void *(*memand_ptr)(void *dst, const void *src, size_t len) = memand_runtime_sw;
+
+/*
+ * constructor
+ */
 static void memand_select(void) GCC_ATTR_CONSTRUCT;
 static void memand_select(void)
 {
-	static const struct test_cpu_feature f[] =
-	{
-#if HAVE_BINUTILS >= 219
-		{.func = (void (*)(void))memand_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
-#endif
-		{.func = (void (*)(void))memand_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memand_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
-		{.func = (void (*)(void))memand_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memand_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
-		{.func = (void (*)(void))memand_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memand_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
-#ifndef __x86_64__
-		{.func = (void (*)(void))memand_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
-		{.func = (void (*)(void))memand_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
-#endif
-		{.func = (void (*)(void))memand_x86, .flags_needed = -1, .callback = NULL},
-	};
-	test_cpu_feature(&memand, f, anum(f));
+	memand_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer failes
+ */
+static void *memand_runtime_sw(void *dst, const void *src, size_t len)
+{
+	memand_select();
+	return memand_ptr(dst, src, len);
+}
+
+/*
+ * trampoline
+ */
+void *memand(void *dst, const void *src, size_t len)
+{
+	return memand_ptr(dst, src, len);
+}
 
 static char const rcsid_max[] GCC_ATTR_USED_VAR = "$Id:$";

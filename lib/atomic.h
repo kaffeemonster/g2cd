@@ -78,8 +78,8 @@ typedef union xxxxxx4
 	  * But we have a Problem, in an array of pointers several
 	  * are in such an area. An access to an neighboring element
 	  * would trash the cpu-watch.
-	  * So extra for array use, this type is defined, wich padds
-	  * array-elems far enough from each other.
+	  * So extra for array use, this type is defined, which padds
+	  * array-elements far enough from each other.
 	  * (be warned, this makes the array larger! Keep the number
 	  * of entrys small)
 	  * (this is a hook atm, real magic has to follow)
@@ -100,7 +100,7 @@ typedef union xxxxxx4
 #  elif defined(__IA64__)
 #   include "ia64/atomic.h"
 #  elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
-/* 
+/*
  * gcc sometimes sets __sparcv8 even if you say "gimme v9" to not confuse
  * solaris tools. This will Bomb on a real v8 (maybe not a v8+)...
  */
@@ -114,12 +114,24 @@ typedef union xxxxxx4
 #  elif defined(__alpha__)
 #   include "alpha/atomic.h"
 #  elif defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+        defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
 #   include "arm/atomic.h"
 #  else
+#   if _GNUC_PREREQ(4, 1)
+#    define atomic_cmppx(nval, oval, ptr) __sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
+#    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
+#    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
+#    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)
+#   endif
 #   include "generic/atomic.h"
 #  endif
 # else
+#   if _GNUC_PREREQ(4, 1)
+#    define atomic_cmppx(nval, oval, ptr) __sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
+#    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
+#    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
+#    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)
+#   endif
 #  include "generic/atomic.h"
 # endif
 
@@ -131,7 +143,7 @@ static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 	do {
 		node->next = tmp2;
 		tmp1 = tmp2;
-		tmp2 = atomic_cmpalx(node, tmp2, head);
+		tmp2 = deatomic(atomic_cmpalx(node, tmp2, head));
 	} while(unlikely(tmp1 != tmp2));
 }
 # endif
@@ -144,11 +156,11 @@ static always_inline atomicst_t *atomic_pop(atomicst_t *head)
 	do
 	{
 		tmp1 = tmp2;
-		tmp2 = atomic_cmpalx(atomic_sread(tmp2), tmp2, head);
+		tmp2 = deatomic(atomic_cmpalx(atomic_sread(tmp2), tmp2, head));
 		if(!tmp2)
 			break;
 	} while(unlikely(tmp1 != tmp2));
-	/* 
+	/*
 	 * We may now have poped the "wrong" element
 	 * If you wanted simply the next, everthing is OK
 	 * If you wanted THIS element, oops

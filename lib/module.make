@@ -80,6 +80,9 @@ POPCOUNTSTSRC = \
 	$(MPL)/sparc64/popcountst.c \
 	$(MPL)/ppc/popcountst.c \
 	$(MPL)/alpha/popcountst.c
+CPY_RESTSRC = \
+	$(MPL)/generic/cpy_rest.c \
+	$(MPL)/x86/cpy_rest.c
 MEMXORSRC = \
 	$(MPL)/generic/memxor.c \
 	$(MPL)/x86/memxor.c \
@@ -133,6 +136,7 @@ LIBASRCS = \
 LIBSRCS = \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
+	$(MPL)/cpy_rest.c \
 	$(MPL)/memxor.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
@@ -155,6 +159,7 @@ LIBSRCS = \
 BITOPOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
+	$(MPL)/cpy_rest.o \
 	$(MPL)/memxor.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
@@ -195,6 +200,7 @@ $(LIBCOMMON)($(LIBOBJS)): arflock
 $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
+$(MPL)/cpy_rest.o: $(CPY_RESTSRC)
 $(MPL)/memxor.o: $(MEMXORSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)

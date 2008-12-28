@@ -34,20 +34,17 @@
 # include "other.h"
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
-# if defined(I_LIKE_ASM)
-#  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) extern x (*y) z GCC_ATTR_VIS("hidden")
-# else
-#  define LIB_MY_BITOPS_EXTRN_P(x, y ,z) x y z GCC_ATTR_VIS("hidden")
-# endif
 # ifdef ADLER32_C
 LIB_MY_BITOPS_EXTRN(uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len));
 # endif
-LIB_MY_BITOPS_EXTRN_P(size_t, popcountst, (size_t n) GCC_ATTR_CONST);
-LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST);
+LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
+LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 
-LIB_MY_BITOPS_EXTRN_P(void *, memxor, (void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN_P(void *, memand, (void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN_P(void *, memneg, (void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(char *cpy_rest(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
+LIB_MY_BITOPS_EXTRN(char *cpy_rest0(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
+LIB_MY_BITOPS_EXTRN(void *memxor(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 # ifndef HAVE_MEMPCPY
 LIB_MY_BITOPS_EXTRN(void *mempcpy(void *restrict dst, const void *restrict src, size_t len));
@@ -82,7 +79,7 @@ struct test_cpu_feature
 	long flags_needed;
 };
 
-LIB_MY_BITOPS_EXTRN(void test_cpu_feature(void *, const struct test_cpu_feature *, size_t));
+LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
 LIB_MY_BITOPS_EXTRN(int test_cpu_feature_avx_callback(void));
 LIB_MY_BITOPS_EXTRN(int test_cpu_feature_3dnow_callback(void));
 

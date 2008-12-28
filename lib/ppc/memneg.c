@@ -49,7 +49,7 @@
  * I simply assume that larger access is always better then byte
  * access, basically the x86 trick.
  */
-static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
+void *memneg(void *dst, const void *src, size_t len)
 {
 	char *dst_char;
 	const char *src_char;
@@ -129,8 +129,9 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 	 * <others>:  zzzzZZZzzzz...
 	 * Steve:    "HEY!"
 	 * IBM:      "Huh? MMX? What? Ahhh, Intel. Yeah, look, its from
-	 *            Intel, you know, pigs can fly..."
-	 * Steve:    "Yeah, but we need to do something!"
+	 *            Intel, we know them, pigs can fly..."
+	 * Steve:    "Yeah, but we need to do something! Leading multimedia
+	 *            market position yadda yadda yadda"
 	 * Motorola: "Hmmm, Oh, K"
 	 *            *search*
 	 *           "Maybe ..."
@@ -138,8 +139,8 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 	 *           "There must be an old DSP blueprint from us down
 	 *            here in the bottom drawer ..."
 	 *            *dust* *cough*
-	 *           "Ah, there you are ... we could simply piggie pack
-	 *            it if we connect pin ..."
+	 *           "Ah, there you go ... we could simply piggy pack
+	 *            this if we connect pin ..."
 	 * Steve:    "Make it so!"
 	 *
 	 * Altivec can pump xx GB of data through its pipelines when
@@ -332,14 +333,5 @@ no_alignment_possible:
 
 	return dst;
 }
-
-/*
- * We always go over a function pointer to comfort x86 millions
- * SIMD evolutions. We could use this to provide different ppc
- * implementations (altivec/non-altivec, alignment constrained),
- * if only telling different ppc processors apart would be easily
- * possible...
- */
-void *(*memneg)(void *dst, const void *src, size_t len) = DFUNC_NAME(memneg, ARCH_NAME_SUFFIX);
 
 static char const rcsid_mx[] GCC_ATTR_USED_VAR = "$Id:$";

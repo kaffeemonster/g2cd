@@ -830,7 +830,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				if(!next)
 					break;
 				dist = next - start;
-				logg_develd_old("line: \"%.*s\"\n", dist, start);
+				logg_develd_old("line: %zu, %zu \"%.*s\"\n", dist, buffer_remaining(*to_con->recv), dist, start);
 				if(likely(dist))
 					header_handle_line(to_con, start, dist);
 				to_con->recv->pos += 2;
@@ -1162,7 +1162,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				if(!next)
 					break;
 				dist = next - start;
-				logg_develd_old("line: \"%.*s\"\n", dist, start);
+				logg_develd_old("line: %u \"%.*s\"\n", dist, dist, start);
 				if(likely(dist))
 					header_handle_line(to_con, start, dist);
 				to_con->recv->pos += 2;

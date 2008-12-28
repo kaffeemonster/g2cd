@@ -28,78 +28,85 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-void *mem_searchrn(void *src, size_t len)
+void *mem_searchrn(void *s, size_t len)
 {
-	static const vector unsigned char y =
-		{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
-		 '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
-	static const vector unsigned char z =
-		{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
-		 '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
-	char *src_c = src;
+	vector unsigned char v_cr;
+	vector unsigned char v_nl;
+	vector unsigned char v0;
+	vector unsigned char v_perm;
+	vector unsigned char c;
+	vector bool char rr, rn;
+	vector bool char last_rr;
+	char *p;
+	ssize_t f, k;
 
-	prefetch(src_c);
-	if(unlikely(!src_c || !len))
+	prefetch(s);
+	if(unlikely(!s || !len))
 		return NULL;
 
-	/*
-	 * we work our way unaligned forward, this func
-	 * is not meant for too long mem regions
-	 */
-	if(len >= (SOVUC * 2))
+	v_cr = vec_splat_u8('\r');
+	v_nl = vec_splat_u8('\n');
+	v0   = vec_splat_u8(0);
+	last_rr = v0;
+
+	k = SOVUC - ALIGN_DOWN_DIFF(s, SOVUC) - (ssize_t)len;
+
+	p = (char *)ALIGN_DOWN(s, SOVUC);
+	c = vec_ld(0, (vector const unsigned char *)p);
+	if(unlikely(k > 0))
+		goto K_SHIFT;
+	v_perm = vec_lvsl(0, s);
+	c = vec_perm(c, v0, v_perm);
+	v_perm = vec_lvsr(0, s);
+	c = vec_perm(v0, c, v_perm)
+	rr = vec_cmpeq(c, v_cr);
+	rn = vec_cmpeq(c, v_nl);
+
+	k = -k;
+	goto START_LOOP;
+
+	do
 	{
-		vector unsigned char fix_alignment;
-		vector unsigned char v0;
-		vector unsigned char c, c_ex;
-		vector bool char last_rr;
-
-		v0 = vec_splat_u8(0);
-		fix_alignment = vec_align_and_rev(src_c);
-		c_ex = vec_ld(0, (vector const unsigned char *)src_c);
-		last_rr = v0;
-		for(; likely(SOVUC < len); src_c += SOVUC, len -= SOVUC)
+		p += SOVUC;
+		c = vec_ld(0, (vector const unsigned char *)p);
+		k -= SOVUC;
+		if(k > 0)
 		{
-			vector bool char rr, rn;
+			rr = vec_cmpeq(c, v_cr);
+			rn = vec_cmpeq(c, v_nl);
 
-			c = c_ex;
-			c_ex = vec_ld(1 * SOVUC, (vector const unsigned char *)src_c);
-			c = vec_perm(c, c_ex, fix_alignment);
-
-			rr = vec_cmpeq(c, y);
-			rn = vec_cmpeq(c, z);
 			if(vec_any_eq(last_rr, rn))
-				return src_c - 1;
+				return p - 1;
+START_LOOP:
 			last_rr = (vector bool char)vec_sld(v0, (vector unsigned char)rr, 1);
 			rn = (vector bool char)vec_sld(v0, (vector unsigned char)rn, 15);
 			rr = vec_and(rr, rn); /* get mask */
 			if(vec_any_ne(rr, v0)) {
-				unsigned r;
-				r = vec_pbmovmsk(rr);
-				return src_c + __builtin_ctz(r);
+				uint32_t r;
+				r = vec_pmovmskb(rr);
+				return p + __builtin_clz(r) - 16;
 			}
 		}
-		if(vec_any_ne(last_rr, v0)) {
-			src_c -= 1;
-			goto OUT;
-		}
-	}
-	for(; SO32M1 < len; src_c += SO32, len -= SO32)
-	{
-		uint32_t v = *((uint32_t *)src_c) ^ 0x0D0D0D0D; /* '\r\r\r\r' */
-		uint32_t r = has_nul_byte32(v);
-		if(r) {
-			unsigned i  = 3 - (__builtin_ctz(r) / 8);
-			len   -= i;
-			src_c += i;
-			break;
-		}
+	} while(k > 0);
+	k = -k;
+K_SHIFT:
+	v_perm = vec_lvsr(0, (vector unsigned char *)k);
+	c = vec_perm(v0, c, v_perm)
+	v_perm = vec_lvsl(0, (vector unsigned char *)k);
+	c = vec_perm(c, v0, v_perm);
+	rr = vec_cmpeq(c, v_cr);
+	rn = vec_cmpeq(c, v_nl);
+	if(vec_any_eq(last_rr, rn))
+		return p - 1;
+
+	rn = (vector bool char)vec_sld(v0, (vector unsigned char)rn, 15);
+	rr = vec_and(rr, rn); /* get mask */
+	if(vec_any_ne(rr, v0)) {
+		uint32_t r;
+		r = vec_pmovmskb(rr);
+		return p + __builtin_clz(r) - 16;
 	}
 
-OUT:
-	for(; len; len--, src_c++) {
-		if('\r' == *src_c && len-1 && '\n' == src_c[1])
-			return src_c;
-	}
 	return NULL;
 }
 

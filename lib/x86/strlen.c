@@ -36,141 +36,260 @@
  * generic version (58000ms vs. 54000ms), MMX was a really
  * braindead idea without a MMX->CPU-Reg move instruction
  * to do things not possible with MMX.
+ */
+/*
+ * Sometimes you need a new perspective, like the altivec
+ * way of handling things.
+ * Lower address bits? Totaly overestimated.
  *
- * We use the GCC vector internals, to make things simple for us.
+ * We don't precheck for alignment, 16 or 8 is very unlikely
+ * instead we "align hard", do one load "under the address",
+ * mask the excess info out and afterwards we are fine to go.
  */
-
-#if defined( __SSE__) && defined(__GNUC__)
-# ifdef __SSE2__
 /*
- * SSE2 version
+ * Normaly we could generate this with the gcc vector
+ * __builtins, but since gcc whines when the -march does
+ * not support the operation and we want to always provide
+ * them and switch between them...
+ * And near by, sorry gcc, your bsf handling sucks.
+ * bsf generates flags, no need to test beforehand,
+ * but AFTERWARDS!!!
  */
 
-typedef char v16c __attribute__((vector_size (16)));
-#define SOV16M1	(sizeof(v16c) - 1)
-#define SOV16	(sizeof(v16c))
+#include "x86_features.h"
 
-static inline unsigned v16_equal(v16c a, v16c b)
+#define SOV16	16
+#define SOV8	8
+
+static size_t strlen_SSE42(const char *s)
 {
-	v16c compare = __builtin_ia32_pcmpeqb128(a, b);
-	return __builtin_ia32_pmovmskb128(compare);
-}
-
-size_t strlen(const char *s)
-{
-	const char *p = s;
-	/* don't step over the page boundery */
-	size_t cycles;
-	prefetch(s);
-
-	if(unlikely(!s))
-		return 0;
-
-	cycles = (const char *)ALIGN(p, 4096) - p;
+	size_t len, t;
+	const char *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 	/*
-	 * we don't precheck for alignment, 16 is very unlikely
-	 * instead go unaligned until a page boundry
+	 * even if nehalem can handle unaligned load much better
+	 * (so they promised), we still align hard to get in
+	 * swing with the page boundery.
 	 */
-	for(; likely(SOV16M1 < cycles); cycles -= SOV16, p += SOV16)
-	{
-		unsigned r = v16_equal(__builtin_ia32_loaddqu(p), (v16c){0ULL, 0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-	}
-	for(; likely(SO32M1 < cycles); cycles -= SO32, p += SO32)
-	{
-		uint32_t r = has_nul_byte32(*(const uint32_t *)p);
-		if(r) {
-			p += __builtin_ctz(r) / 8;
-			goto OUT;
-		}
-	}
-	/* slowly encounter page boundery */
-	while(cycles && *p)
-		p++, cycles--;
-
-	if(likely(*p))
-	{
-		register const v16c *d = (const v16c *)p;
-		unsigned r;
-		while(!(r = v16_equal(*d, (v16c){0ULL, 0ULL})))
-			d++;
-		p  = (const char *)d;
-		p += __builtin_ctz(r);
-	}
-OUT:
-	return p - s;
-}
-
-# else
-/*
- * SSE version
- */
-
-typedef char v8c __attribute__((vector_size (8)));
-#define SOV8M1	(sizeof(v8c) - 1)
-#define SOV8	(sizeof(v8c))
-
-static inline unsigned v8_equal(v8c a, v8c b)
-{
-	v8c compare = __builtin_ia32_pcmpeqb(a, b);
-	return __builtin_ia32_pmovmskb(compare);
-}
-
-size_t strlen(const char *s)
-{
-	const char *p = s;
-	/* don't step over the page boundery */
-	size_t cycles;
-	prefetch(s);
-
-	if(unlikely(!s))
-		return 0;
-
-	cycles = (const char *)ALIGN(p, 4096) - p;
-	/*
-	 * we don't precheck for alignment, 8 is unlikely
-	 * instead go unaligned until a page boundry
-	 */
-	for(; likely(SOV8M1 < cycles); cycles -= SOV8, p += SOV8)
-	{
-		unsigned r = v8_equal(*(v8c *)p, (v8c){0ULL});
-		if(r) {
-			p += __builtin_ctz(r);
-			goto OUT;
-		}
-	}
-	if(likely(SO32M1 < cycles))
-	{
-		uint32_t r = has_nul_byte32(*(uint32_t *)p);
-		if(r) {
-			p += __builtin_ctz(r) / 8;
-			goto OUT;
-		}
-		cycles -= SO32;
-		p += SO32;
-	}
-	while(cycles && *p)
-		p++, cycles--;
-
-	if(*p)
-	{
-		register const v8c *d = (const v8c *)p;
-		unsigned r;
-		while(!(r = v8_equal(*d, (v8c){0ULL})))
-			d++;
-		p  = (const char *)d;
-		p += __builtin_ctz(r);
-	}
-OUT:
-	return p - s;
-}
-
-# endif
-static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
-#else
-# include "../generic/strlen.c"
+	asm (
+		"pxor	%%xmm0, %%xmm0\n\t"
+		"movdqa	(%1), %%xmm1\n\t"
+		"pcmpeqb	%%xmm0, %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpistri	$0b1000, (%1), %%xmm0\n\t"
+		"jnz	1b\n\t"
+		"lea	(%1,%2),%0\n\t"
+		"sub	%3, %0\n"
+		"2:"
+		: /* %0 */ "=r" (len),
+		  /* %1 */ "=r" (p),
+		  /* %2 */ "=c" (t)
+		: /* %3 */ "m" (s),
+		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
+		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
+#ifdef __SSE2__
+		: "xmm0", "xmm1"
 #endif
+	);
+	return len;
+}
+
+static size_t strlen_SSE2(const char *s)
+{
+	size_t len;
+	const char *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	asm (
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jz	1b\n\t"
+		"add	%1, %0\n\t"
+		"sub	%2, %0\n\t"
+		"2:"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=r" (p)
+		: /* %2 */ "m" (s),
+		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
+		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
+#ifdef __SSE2__
+		: "xmm0", "xmm1"
+#endif
+	);
+	return len;
+}
+
+#ifndef __x86_64__
+static size_t strlen_SSE(const char *s)
+{
+	size_t len;
+	const char *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	asm (
+		"pxor	%%mm1, %%mm1\n\t"
+		"movq	(%1), %%mm0\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %0\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"movq	8(%1), %%mm0\n\t"
+		"add	$8, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jz	1b\n\t"
+		"add	%1, %0\n\t"
+		"sub	%2, %0\n\t"
+		"2:\n\t"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=r" (p)
+		: /* %2 */ "m" (s),
+		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV8)),
+		  /* %4 */ "1" (ALIGN_DOWN(s, SOV8))
+#ifdef __SSE__
+		: "mm0", "mm1"
+#endif
+	);
+	return len;
+}
+#endif
+
+static size_t strlen_x86(const char *s)
+{
+	const char *p;
+	size_t t, len;
+	asm (
+#ifndef __x86_64__
+		"push	%2\n\t"
+#endif
+		"mov	(%1), %2\n\t"
+#ifndef __x86_64__
+		"lea	-0x1010101(%2),%0\n\t"
+#else
+		"mov	%2, %0\n\t"
+		"add	%8, %0\n\t"
+#endif
+		"not	%2\n\t"
+		"and	%2, %0\n\t"
+#ifndef __x86_64__
+		"pop	%2\n\t"
+#endif
+		"and	%7, %0\n\t"
+		"shr	%%cl, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"add	%5, %1\n\t"
+		"mov	(%1), %2\n\t"
+#ifndef __x86_64__
+		"lea	-0x1010101(%2),%0\n\t"
+#else
+		"mov	%2, %0\n\t"
+		"add	%8, %0\n\t"
+#endif
+		"not	%2\n\t"
+		"and	%2, %0\n\t"
+		"and	%7, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jz	1b\n\t"
+		"add	%1, %0\n\t"
+		"sub	%6, %0\n"
+		"2:"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=&r" (p),
+#ifndef __x86_64__
+	  /* %2 */ "=c" (t)
+#else
+	  /* %2 */ "=&r" (t)
+#endif
+	: /* %3 */ "1" (ALIGN_DOWN(s, SOST)),
+	  /* %4 */ "K" (SOST),
+#ifndef __x86_64__
+	  /* %5 */ "2" (ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR),
+	  /*
+	   * 386 should keep it on stack to prevent
+	   * register spill and a frame
+	   */
+	  /* %6 */ "m" (s),
+	  /* %7 */ "e" (0x80808080)
+#else
+	  /*
+	   * amd64 has more register and a regcall abi
+	   * so keep in reg.
+	   */
+	  /* %5 */ "c" (ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR),
+	  /* %6 */ "r" (s),
+	  /* %7 */ "r" ( 0x8080808080808080LL),
+	  /* %8 */ "r" (-0x0101010101010101LL)
+#endif
+	);
+	return len;
+}
+
+
+static const struct test_cpu_feature t_feat[] =
+{
+	{.func = (void (*)(void))strlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))strlen_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#endif
+	{.func = (void (*)(void))strlen_x86, .flags_needed = -1, .callback = NULL},
+};
+
+static size_t strlen_runtime_sw(const char *s);
+/*
+ * Func ptr
+ */
+static size_t (*strlen_ptr)(const char *s) = strlen_runtime_sw;
+
+/*
+ * constructor
+ */
+static GCC_ATTR_CONSTRUCT void strlen_select(void)
+{
+	strlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
+}
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer failes
+ */
+static size_t strlen_runtime_sw(const char *s)
+{
+	strlen_select();
+	return strlen_ptr(s);
+}
+
+size_t strlen(const char *s)
+{
+	return strlen_ptr(s);
+}
+
+static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

@@ -23,66 +23,105 @@
  * $Id: $
  */
 
-/*
- * keep it 32 Bit, so even 64Bit arches have a chance to use
- * a broader datatype and not immediatly baile out
- */
-#define ALIGN_WANTED SO32
-
-void *mem_searchrn(void *src, size_t len)
+void *mem_searchrn(void *s, size_t len)
 {
-	char *src_c = src;
-	size_t i = 0;
+	char *p;
+	size_t rr, rn, last_rr = 0;
+	ssize_t f, k;
+	prefetch(s);
 
-	prefetch(src);
-	if(unlikely(!src_c || !len))
+	if(unlikely(!s || !len))
 		return NULL;
+	/*
+	 * Sometimes you need a new perspective, like the altivec
+	 * way of handling things.
+	 * Lower address bits? Totaly overestimated.
+	 *
+	 * We don't precheck for alignment, 8 or 4 is very unlikely
+	 * instead we "align hard", do one load "under the address",
+	 * mask the excess info out and afterwards we are fine to go.
+	 *
+	 * Even this beeing a mem* function, the len can be seen as a
+	 * "hint". We can overread and underread, but should cut the
+	 * result (and not pass a page boundery, but we cannot because
+	 * we are aligned).
+	 */
+	f = ALIGN_DOWN_DIFF(s, SOST);
+	k = SOST - f - (ssize_t)len;
 
-	if(unlikely(len < 4))
-		goto OUT;
-
-	if(!UNALIGNED_OK)
-	{
-		/* Unaligned access is not ok.
-		 * Blindly try to align src.
-		 */
-		i = (char *)ALIGN(src_c, ALIGN_WANTED) - src_c;
-		for(; len && i; len--, i--, src_c++) {
-			if('\r' == *src_c && len-1 && '\n' == src_c[1])
-					return src_c;
-		}
+	p  = (char *)ALIGN_DOWN(s, SOST);
+	rn = (*(size_t *)p);
+	rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
+	rr = has_nul_byte(rr);
+	if(!HOST_IS_BIGENDIAN) {
+		rr >>= f * BITS_PER_CHAR;
+		rr <<= f * BITS_PER_CHAR;
+	} else {
+		rr <<= f * BITS_PER_CHAR;
+		rr >>= f * BITS_PER_CHAR;
 	}
+	if(unlikely(k > 0))
+		goto K_SHIFT_CORRECT;
 
-	/* Everything's aligned, life is good... */
+	k = -k;
+	goto START_LOOP;
+
+	do
 	{
-		register uint32_t *src_b = (uint32_t *)src_c;
-		size_t cycles;
-		uint32_t r;
-
-		cycles = i = len / SO32;
-		for(; likely(i); i--, src_b++)
+		p += SOST;
+		rn = *(size_t *)p;
+		rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
+		rr = has_nul_byte(rr);
+		k -= SOST;
+		if(k > 0)
 		{
-			uint32_t v = *src_b ^ 0x0D0D0D0D; /* '\r\r\r\r' */
-			r = has_nul_byte32(v);
-			if(r)
+START_LOOP:
+			if(rr || last_rr)
 			{
-				unsigned o = nul_byte_index32(r);
-				len   -= o;
-				src_b  = (uint32_t *)(((char *)src_b) + o) ;
-				break;
+				rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
+				rn = has_nul_byte(rn);
+				last_rr &= rn;
+				if(last_rr)
+					return p - 1;
+				if(!HOST_IS_BIGENDIAN)
+					rr &= rn >> BITS_PER_CHAR;
+				else
+					rr &= rn << BITS_PER_CHAR;
+				if(rr)
+					return p + nul_byte_index(rr);
 			}
 		}
-
-		len  -= (cycles - i) * SO32;
-		src_c = (char *)src_b;
+	} while(k > 0);
+	if(unlikely(k < 0))
+	{
+		k = -k;
+K_SHIFT_CORRECT:
+		if(!HOST_IS_BIGENDIAN) {
+			rr <<= k * BITS_PER_CHAR;
+			rr >>= k * BITS_PER_CHAR;
+		} else {
+			rr >>= k * BITS_PER_CHAR;
+			rr <<= k * BITS_PER_CHAR;
+		}
 	}
 
-OUT:
-	for(; len; len--, src_c++) {
-		if('\r' == *src_c && len-1 && '\n' == src_c[1])
-			return src_c;
+	if(rr || last_rr)
+	{
+		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
+		rn = has_nul_byte(rn);
+		last_rr &= rn;
+		if(last_rr)
+			return p - 1;
+		if(!HOST_IS_BIGENDIAN)
+			rr &= rn >> BITS_PER_CHAR;
+		else
+			rr &= rn << BITS_PER_CHAR;
+		if(rr)
+			return p + nul_byte_index(rr);
 	}
+
 	return NULL;
+
 }
 
 static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";

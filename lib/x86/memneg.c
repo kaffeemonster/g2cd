@@ -97,30 +97,56 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 # include "memneg_tmpl.c"
 #endif
 
-void *(*memneg)(void *dst, const void *src, size_t len) = memneg_x86;
+static const struct test_cpu_feature t_feat[] =
+{
+#if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))memneg_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+#endif
+	{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memneg_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+	{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memneg_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
+	{.func = (void (*)(void))memneg_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+#ifndef __x86_64__
+	{.func = (void (*)(void))memneg_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
+	{.func = (void (*)(void))memneg_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+#endif
+	{.func = (void (*)(void))memneg_x86, .flags_needed = -1, .callback = NULL},
+};
 
+static void *memneg_runtime_sw(void *dst, const void *src, size_t len);
+/*
+ * Func ptr
+ */
+static void *(*memneg_ptr)(void *dst, const void *src, size_t len) = memneg_runtime_sw;
+
+/*
+ * constructor
+ */
 static void memneg_select(void) GCC_ATTR_CONSTRUCT;
 static void memneg_select(void)
 {
-	static const struct test_cpu_feature f[] =
-	{
-#if HAVE_BINUTILS >= 219
-		{.func = (void (*)(void))memneg_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
-#endif
-		{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memneg_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
-		{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memneg_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
-		{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
-		{.func = (void (*)(void))memneg_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
-#ifndef __x86_64__
-		{.func = (void (*)(void))memneg_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
-		{.func = (void (*)(void))memneg_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
-#endif
-		{.func = (void (*)(void))memneg_x86, .flags_needed = -1, .callback = NULL},
-	};
-	test_cpu_feature(&memneg, f, anum(f));
+	memneg_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructer failes
+ */
+static void *memneg_runtime_sw(void *dst, const void *src, size_t len)
+{
+	memneg_select();
+	return memneg_ptr(dst, src, len);
+}
+
+/*
+ * trampoline
+ */
+void *memneg(void *dst, const void *src, size_t len)
+{
+	return memneg_ptr(dst, src, len);
+}
 
 static char const rcsid_mnx[] GCC_ATTR_USED_VAR = "$Id:$";

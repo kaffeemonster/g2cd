@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -85,7 +85,6 @@
 # define I_HATE_CBRANCH
 #endif
 
-
 /* this is a call for trouble, but helpfull */
 //TODO: backtrace a little bit broken ATM
 #define WANT_BACKTRACES
@@ -99,7 +98,8 @@
  * Does your arch has bit foo instructions?
  * We sometimes need to find the index of a bit. This can be
  * done fast and cheap if your arch has instructions to scan
- * for a bit (bsf, cntlz), or to count bits (popcnt).
+ * for a bit (bsf, cntlz). (popcnt is a bad idea if your
+ * shifter are slow, sparc)
  */
 #define HAVE_BIT_INSTR
 
