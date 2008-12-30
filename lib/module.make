@@ -109,6 +109,9 @@ STRLENSRC = \
 	$(MPL)/generic/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
+STRNCASECMP_ASRC = \
+	$(MPL)/generic/strncasecmp_a.c \
+	$(MPL)/x86/strncasecmp_a.c
 STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \
@@ -140,10 +143,12 @@ LIBSRCS = \
 	$(MPL)/memxor.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
+	$(MPL)/memcpy.c \
 	$(MPL)/mempcpy.c \
 	$(MPL)/mem_searchrn.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
+	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
 	$(MPL)/my_epoll.c \
@@ -163,10 +168,12 @@ BITOPOBJS = \
 	$(MPL)/memxor.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
+	$(MPL)/memcpy.o \
 	$(MPL)/mempcpy.o \
 	$(MPL)/mem_searchrn.o \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
+	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
 	$(MPL)/adler32.o \
@@ -207,6 +214,7 @@ $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
 $(MPL)/strlen.o: $(STRLENSRC)
+$(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h

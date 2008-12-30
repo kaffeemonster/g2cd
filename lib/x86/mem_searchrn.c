@@ -91,15 +91,15 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"test	%3, %3\n\t" /* len NULL? */
 		"jz	9f\n\t" /* outa here */
 		"add	$2, %0\n\t" /* create a 2 */
-		"pxor	%%xmm0, %%xmm0\n\t"
-		"pinsrw	$0, %k2, %%xmm0\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"pinsrw	$0, %k2, %%xmm1\n\t"
 		"mov	%1, %2\n\t" /* duplicate src */
 		"and	$15, %2\n\t" /* create align difference */
 		"and	$-16, %1\n\t" /* align down src */
-		"movdqa	(%1), %%xmm1\n\t" /* load data */
+		"movdqa	(%1), %%xmm2\n\t" /* load data */
 		"add	%2, %3\n\t" /* len += align diff */
-		"pcmpestrm	$0b1111100, %%xmm0, %%xmm1\n\t"
-		"pmovmskb	%%xmm1, %0\n\t"
+		"pcmpestrm	$0b1111100, %%xmm1, %%xmm2\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
 		"shr	%b2, %0\n\t" /* mask out lower stuff */
 		"shl	%b2, %0\n\t"
 		"mov	%3, %2\n\t" /* get len */
@@ -125,7 +125,7 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"3:\n\t"
 		"sub	%2, %3\n" /* len -= SOV16 */
 		"add	%2, %1\n\t" /* p += SOV16 */
-		"pcmpestri	$0b01100, (%1), %%xmm0\n\t"
+		"pcmpestri	$0b01100, (%1), %%xmm1\n\t"
 		"ja	3b\n\t" /* no match(C) or end(Z)? -> continue */
 		"jz	2f\n\t" /* end? -> don't check match position */
 // TODO: does the instruction match a lonely '\r' in the len last byte ?
@@ -164,7 +164,7 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 	  /*  %8 */ "r" (t)
 #endif
 #ifdef __SSE__
-	: "xmm0", "xmm1"
+	: "xmm0", "xmm1", "xmm2"
 #endif
 	);
 	return f;

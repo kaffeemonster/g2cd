@@ -198,7 +198,8 @@ static size_t strlen_x86(const char *s)
 		"pop	%2\n\t"
 #endif
 		"and	%7, %0\n\t"
-		"shr	%%cl, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
@@ -215,10 +216,11 @@ static size_t strlen_x86(const char *s)
 		"and	%2, %0\n\t"
 		"and	%7, %0\n\t"
 		"bsf	%0, %0\n\t"
-		"jz	1b\n\t"
+		"jz	1b\n"
+		"2:\n\t"
+		"shr	$3, %0\n\t"
 		"add	%1, %0\n\t"
-		"sub	%6, %0\n"
-		"2:"
+		"sub	%6, %0"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=&r" (p),
 #ifndef __x86_64__

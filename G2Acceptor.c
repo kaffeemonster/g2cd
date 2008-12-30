@@ -705,8 +705,8 @@ static noinline void header_handle_line(g2_connection_t *to_con, char *line, siz
 	{
 		if((size_t)f_dist != KNOWN_HEADER_FIELDS[i]->length)
 			continue;
-		if(!strncasecmp(f_start, KNOWN_HEADER_FIELDS[i]->txt,
-		                KNOWN_HEADER_FIELDS[i]->length)) {
+		if(!strncasecmp_a(f_start, KNOWN_HEADER_FIELDS[i]->txt,
+		                  KNOWN_HEADER_FIELDS[i]->length)) {
 			f_num = i;
 			f_found = true;
 			break;

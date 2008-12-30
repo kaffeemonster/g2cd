@@ -76,8 +76,8 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 # ifndef __PIC__
 #  define CLOB
 #  define JUMP_POS (i-15)
-		"neg	%3\n\t"
-		"lea	1f(,%3,8), %2\n\t"
+		"neg	%4\n\t"
+		"lea	1f(,%4,8), %2\n\t"
 # else
 #  define CLOB "&"
 #  define JUMP_POS (i-15)
@@ -91,7 +91,7 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 * pay their bill...
 	 */
 		"call	i686_get_pc\n\t"
-		"lea	1f-.(%2,%3,8), %2\n\t"
+		"lea	1f-.(%2,%4,8), %2\n\t"
 		".subsection 2\n\t"
 		"i686_get_pc:\n\t"
 		"movl (%%esp), %2\n\t"
@@ -229,14 +229,21 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	  /* %0 */ "=D" (dst),
 	  /* %1 */ "=S" (src),
 #endif
-	  /* %2 */ "="CLOB"r" (t)
-	: /* %3 */ "r" (JUMP_POS),
-	  /* %4 */ "0" (dst),
-	  /* %5 */ "1" (src)
+	  /* %2 */ "="CLOB"r" (t),
+	  /* %3 */ "=m" (*dst)
+	: /* %4 */ "r" (JUMP_POS),
+	  /* %5 */ "0" (dst),
+	  /* %6 */ "1" (src)
 	);
 	return dst;
 #undef CLOB
 #undef MOVSQ
+}
+
+char GCC_ATTR_FASTCALL *cpy_rest_o(char *dst, const char *src, unsigned i)
+{
+	cpy_rest(dst, src, i);
+	return dst;
 }
 
 char GCC_ATTR_FASTCALL *cpy_rest0(char *dst, const char *src, unsigned i)

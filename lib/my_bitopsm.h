@@ -39,6 +39,8 @@
 # define SO32M1	(SO32 - 1L)
 	/* bits in a size_t */
 # define SIZE_T_BITS	(SOST * CHAR_BIT)
+# define ROUND_ALIGN(x, n) \
+	(((x)+(n) - 1L) & ~((n) - 1L))
 	/* is pointer x aligned on a power of n */
 # define IS_ALIGN(x, n)	(!(((intptr_t)(x)) & ((n) - 1L)))
 	/* align pointer x on a power of n */
@@ -65,6 +67,17 @@
 	 * L2P(0) = 32, L2P(1) = 16, L2P(2) = 8 ...
 	 */
 # define L2P(x)	(SIZE_T_BITS / (1 << x))
+	/* Not for the faint at heart
+	 * true if any byte in x is between m and n
+	 * m and n have to be 7 Bit!
+	 */
+# define has_between(x, m, n) \
+	(((~0UL/255*(127 + (n)) - ((x) & ~0UL/255*127)) & ~(x) & (((x) & ~0UL/255*127) + ~0UL/255*(127-m))) & ~0UL/255*128)
+	/* true if any byte in x is greater than n
+	 * n has to be 7 Bit!
+	 */
+# define has_greater(x, n) \
+	((((x) + ~0UL/255*(127-(n))) | (x)) & ~0UL/255*128)
 	/* The wonders of binary foo
 	 * true if any byte in the number is zero
 	 */

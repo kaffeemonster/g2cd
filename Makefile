@@ -207,7 +207,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	sun studio is ...
 #OPT_FLAGS = -O3 -fast
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1
+##OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

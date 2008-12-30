@@ -84,7 +84,7 @@ static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 		errno = ENOSPC;
 		return NULL;
 	}
-	return memcpy(dst, tbuf, wptr - tbuf);
+	return (char *)mempcpy(dst, tbuf, wptr - tbuf) - 1;
 }
 
 static const char *print_ipv4(const struct in_addr *src, char *dst, socklen_t cnt)
@@ -162,7 +162,7 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 		errno = ENOSPC;
 		return NULL;
 	}
-	return memcpy(dst, tbuf, wptr - tbuf);
+	return (char *)mempcpy(dst, tbuf, wptr - tbuf) - 1;
 }
 
 static const char *print_ipv6(const struct in6_addr *src, char *dst, socklen_t cnt)

@@ -50,7 +50,7 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 			goto DO_LARGE;
 
 		/* quickly go to the page boundry */
-		i = ((char *)ALIGN(src, 4096) - src);
+		i = ALIGN_DIFF(src, 4096);
 		i = i < maxlen ? i : maxlen;
 		for(; likely(SOSTM1 < i); i -= SOST, maxlen -= SOST, src += SOST, dst += SOST)
 		{
@@ -71,7 +71,7 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 		 * Unaligned access is not ok.
 		 * Blindly try to align dst and check the outcome
 		 */
-		i = (char *)ALIGN(dst, ALIGN_WANTED) - dst;
+		i = ALIGN_DIFF(dst, ALIGN_WANTED);
 		for(; maxlen && i && *src; maxlen--, i--)
 			*dst++ = *src++;
 		/* Now check which alignment we achieved */

@@ -1,6 +1,6 @@
 /*
  * mempcpy.c
- * mempcpy for non-GNU platforms
+ * memcpy
  *
  * Copyright (c) 2008 Jan Seiffert
  *
@@ -24,15 +24,12 @@
  */
 
 /*
- * mempcpy - memcpy which returns the end of the copied region
+ * memcpy - memcpy
  * dst: where to copy to
  * src: from where to copy
  * len: how much to copy
  *
- * return value: a pointer behind the last copied byte
- *
- * since mempcpy is a GNU extension we have to provide our own.
- * We simply always provide one.
+ * return value: a pointer to dst
  */
 
 #include "../config.h"
@@ -41,9 +38,9 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-#ifndef MEMPCPY_DEFINED
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
-#define MEMPCPY_DEFINED
+#ifndef MEMCPY_DEFINED
+void *memcpy(void *restrict dst, const void *restrict src, size_t len);
+#define MEMCPY_DEFINED
 #endif
 
 /*
@@ -53,7 +50,7 @@ void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
  * normaly used in this situation.
  */
 
-static noinline GCC_ATTR_FASTCALL void *mempcpy_big(void *restrict dst, const void *restrict src, size_t len)
+static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
 {
 	size_t i = 0;
 	char *restrict dst_c = dst;
@@ -64,24 +61,24 @@ static noinline GCC_ATTR_FASTCALL void *mempcpy_big(void *restrict dst, const vo
 		if(len < 32) {
 			((uint64_t *)dst_c)[0] = ((const uint64_t *)src_c)[0];
 			((uint64_t *)dst_c)[1] = ((const uint64_t *)src_c)[1];
-			return cpy_rest(dst_c + 16, src_c + 16, len - 16);
+			return cpy_rest_o(dst_c + 16, src_c + 16, len - 16);
 		}
 	}
 
 	for(; i < len; i++)
 		dst_c[i] = src_c[i];
 
-	return dst_c + i;
+	return dst;
 }
 
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len)
+void *memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
-		return cpy_rest(dst, src, len);
+		return cpy_rest_o(dst, src, len);
 
 	/* trick gcc to generate lean stack frame and do a tailcail */
-	return mempcpy_big(dst, src, len);
+	return memcpy_big(dst, src, len);
 }
 
-static char const rcsid_mpcg[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mcg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

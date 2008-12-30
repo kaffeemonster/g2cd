@@ -214,6 +214,7 @@ CPY_NEXT:
 			"3:\n\t"
 			"sub	$16, %0\n\t"
 			"add	$16, %1\n\t"
+		/* there is movmsku since sse2, but creating the mask is a PITA */
 			"movdqu	%%xmm1, (%2)\n\t"
 			"add	$16, %2\n\t"
 			"cmp	$15, %0\n\t"

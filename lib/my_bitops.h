@@ -41,17 +41,23 @@ LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL
 LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 
 LIB_MY_BITOPS_EXTRN(char *cpy_rest(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
+LIB_MY_BITOPS_EXTRN(char *cpy_rest_o(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(char *cpy_rest0(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(void *memxor(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
+# ifndef HAVE_MEMCPY
+void *memcpy(void *restrict dst, const void *restrict src, size_t len);
+#  define MEMCPY_DEFINED
+# endif
 # ifndef HAVE_MEMPCPY
-LIB_MY_BITOPS_EXTRN(void *mempcpy(void *restrict dst, const void *restrict src, size_t len));
+void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
 #  define MEMPCPY_DEFINED
 # endif
-LIB_MY_BITOPS_EXTRN(char *strpcpy(char *restrict dst, const char *restrict src));
-LIB_MY_BITOPS_EXTRN(char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen));
+LIB_MY_BITOPS_EXTRN(int strncasecmp_a(const char *s1, const char *s2, size_t n));
+char *strpcpy(char *restrict dst, const char *restrict src);
+char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen);
 # ifndef HAVE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE;
 #  define STRNLEN_DEFINED

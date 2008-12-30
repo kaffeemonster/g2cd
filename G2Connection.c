@@ -43,6 +43,7 @@
 #include "lib/recv_buff.h"
 #include "lib/atomic.h"
 #include "lib/hzp.h"
+#include "lib/my_bitops.h"
 
 #define PACKET_SPACE_START_CAP 128
 
@@ -375,7 +376,7 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 
 	if(likely(str_size(ACCEPT_G2) <= distance))
 	{
-		if(!strncasecmp(buffer_start(*to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
+		if(!strncasecmp_a(buffer_start(*to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
 		//found!!
 			logg_develd_old("found for Content:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
@@ -390,13 +391,13 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 
 static bool ulpeer_what(g2_connection_t *to_con, size_t distance GCC_ATTR_UNUSED_PARAM)
 {
-	if(!strncasecmp(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE))) {
+	if(!strncasecmp_a(buffer_start(*to_con->recv), G2_FALSE, str_size(G2_FALSE))) {
 		to_con->flags.upeer = false;
 		to_con->u.accept.flags.upeer_ok = true;
 		return false;
 	}
 
-	if(!strncasecmp(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE))) {
+	if(!strncasecmp_a(buffer_start(*to_con->recv), G2_TRUE, str_size(G2_TRUE))) {
 		to_con->flags.upeer = true;
 		to_con->u.accept.flags.upeer_ok = true;
 		return false;
@@ -429,7 +430,7 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 		if(unlikely(KNOWN_ENCODINGS[i]->length > distance))
 			continue;
 
-		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
+		if(!strncasecmp_a(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
 		//found!!
 			to_con->encoding_out = i;
@@ -455,7 +456,7 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 		if(KNOWN_ENCODINGS[i]->length > distance)
 			continue;
 
-		if(!strncasecmp(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
+		if(!strncasecmp_a(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
 		/* found!! */
 			to_con->encoding_in = i;
@@ -521,7 +522,7 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 		if(str_size(ACCEPT_G2) > distance)
 			break;
 
-		if(!strncasecmp(w_ptr, ACCEPT_G2, str_size(ACCEPT_G2)))
+		if(!strncasecmp_a(w_ptr, ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
 		/* found!! */
 			logg_develd_old("found for Accept:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
