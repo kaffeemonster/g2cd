@@ -352,8 +352,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 			ch->data_trunk.pos += INET6_ADDRLEN;
 		}
 		port = combo_addr_port(&khle[res].na);
-		if(!HOST_IS_BIGENDIAN)
-			port = ntohs(port);
+		port = ntohs(port);
 		put_unaligned(port, (uint16_t *)buffer_start(ch->data_trunk));
 		ch->data_trunk.pos += sizeof(uint16_t);
 		put_unaligned(khle[res].when, (time_t *)buffer_start(ch->data_trunk));
@@ -362,6 +361,7 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 		ch->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&ch->list, &khl->children);
 	}
+	khl->big_endian = HOST_IS_BIGENDIAN;
 
 	list_add_tail(&khl->list, target);
 	connec->u.send_stamps.KHL = local_time_now;
@@ -587,9 +587,10 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 			goto out_fail;
 		addr = local_addr.in.sin_addr.s_addr;
 		port = combo_addr_port(&local_addr);
+		port = ntohs(port);
 		put_unaligned(addr, (uint32_t *)buffer_start(na->data_trunk));
 		put_unaligned(port, (uint16_t *)(buffer_start(na->data_trunk)+4));
-		na->big_endian = true; /* always send data in net byte order */
+		na->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&na->list, &lni->children);
 	}
 	else
@@ -626,6 +627,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 		else
 			g2_packet_free(hs);
 	}
+	lni->big_endian = HOST_IS_BIGENDIAN;
 	list_add_tail(&lni->list, target);
 	connec->u.send_stamps.LNI = local_time_now;
 
