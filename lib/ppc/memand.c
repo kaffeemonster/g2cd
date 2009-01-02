@@ -121,8 +121,9 @@ void *memand(void *dst, const void *src, size_t len)
 	 * <others>:  zzzzZZZzzzz...
 	 * Steve:    "HEY!"
 	 * IBM:      "Huh? MMX? What? Ahhh, Intel. Yeah, look, its from
-	 *            Intel, you know, pigs can fly..."
-	 * Steve:    "Yeah, but we need to do something!"
+	 *            Intel, we know them, pigs can fly..."
+	 * Steve:    "Yeah, but we need to do something! Leading multimedia
+	 *            market position yadda yadda yadda"
 	 * Motorola: "Hmmm, Oh, K"
 	 *            *search*
 	 *           "Maybe ..."
@@ -130,7 +131,7 @@ void *memand(void *dst, const void *src, size_t len)
 	 *           "There must be an old DSP blueprint from us down
 	 *            here in the bottom drawer ..."
 	 *            *dust* *cough*
-	 *           "Ah, there you are ... we could simply piggie pack
+	 *           "Ah, there you are ... we could simply piggy pack
 	 *            it if we connect pin ..."
 	 * Steve:    "Make it so!"
 	 *

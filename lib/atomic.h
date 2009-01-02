@@ -93,7 +93,7 @@ typedef union xxxxxx4
 /* same for atomicptr_t and atomicst_t */
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
 
-# if (!defined NEED_GENERIC) && (defined I_LIKE_ASM)
+# if !(defined NEED_GENERIC) && (defined I_LIKE_ASM)
 #  if defined(__i386__) || defined(__x86_64__)
 	/* work for both */
 #   include "x86/atomic.h"
@@ -118,7 +118,7 @@ typedef union xxxxxx4
 #   include "arm/atomic.h"
 #  else
 #   if _GNUC_PREREQ(4, 1)
-#    define atomic_cmppx(nval, oval, ptr) __sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
+#    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval))
 #    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
 #    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)
@@ -127,7 +127,7 @@ typedef union xxxxxx4
 #  endif
 # else
 #   if _GNUC_PREREQ(4, 1)
-#    define atomic_cmppx(nval, oval, ptr) __sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
+#    define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval)))
 #    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
 #    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)

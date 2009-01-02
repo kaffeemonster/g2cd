@@ -168,29 +168,29 @@ alignment_16:
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		register vector const unsigned char *src_vec = (vector const unsigned char *) src_char;
 		register vector unsigned char v[4];
-		static vector const unsigned char all_one =
-			{~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0};
+		static vector const unsigned char v_0;
 		size_t small_len = len / SOVUC;
 		register size_t smaller_len = small_len / 4;
 		small_len %= 4;
 
+		v_0 = vec_splat_u8(0);
 		for(; smaller_len--; dst_vec += 4, src_vec += 4)
 		{
 			v[0] = vec_ld(0 * SOVUC, src_vec);
 			v[1] = vec_ld(1 * SOVUC, src_vec);
 			v[2] = vec_ld(2 * SOVUC, src_vec);
 			v[3] = vec_ld(3 * SOVUC, src_vec);
-			v[0] = vec_xor(v[0], all_one);
-			v[1] = vec_xor(v[1], all_one);
-			v[2] = vec_xor(v[2], all_one);
-			v[3] = vec_xor(v[3], all_one);
+			v[0] = vec_nor(v[0], v_0);
+			v[1] = vec_nor(v[1], v_0);
+			v[2] = vec_nor(v[2], v_0);
+			v[3] = vec_nor(v[3], v_0);
 			vec_st(v[0], 0 * SOVUC, dst_vec);
 			vec_st(v[1], 1 * SOVUC, dst_vec);
 			vec_st(v[2], 2 * SOVUC, dst_vec);
 			vec_st(v[3], 3 * SOVUC, dst_vec);
 		}
 		for(; small_len--; dst_vec++, src_vec++)
-			*dst_vec = vec_xor(*dst_vec, *src_vec);
+			*dst_vec = vec_nor(*src_vec, v_0);
 
 		len %= SOVUC;
 		dst_char  = (char *) dst_vec;
@@ -217,12 +217,12 @@ no_alignment_wanted:
 		register vector const unsigned char *src_vec;
 		vector unsigned char v[9];                  /* 0-8 */
 		vector unsigned char fix_alignment;         /* 9 */
-		static vector const unsigned char all_one = /* 10 */
-			{~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0,~0};
+		static vector const unsigned char v_0;      /* 10 */
 		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
 		register size_t smaller_len = small_len / 8;
 		small_len %= 8;
 
+		v_0 = vec_splat_u8(0);
 		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
 		src_vec = (vector const unsigned char *) src_char;
 		v[8] = vec_ld(0, src_vec);
@@ -251,14 +251,14 @@ no_alignment_wanted:
 			v[7] = vec_perm(v[7], v[8], fix_alignment);
 
 			/* neg it */
-			v[0] = vec_xor(v[0], all_one);
-			v[1] = vec_xor(v[1], all_one);
-			v[2] = vec_xor(v[2], all_one);
-			v[3] = vec_xor(v[3], all_one);
-			v[4] = vec_xor(v[4], all_one);
-			v[5] = vec_xor(v[5], all_one);
-			v[6] = vec_xor(v[6], all_one);
-			v[7] = vec_xor(v[7], all_one);
+			v[0] = vec_nor(v[0], v_0);
+			v[1] = vec_nor(v[1], v_0);
+			v[2] = vec_nor(v[2], v_0);
+			v[3] = vec_nor(v[3], v_0);
+			v[4] = vec_nor(v[4], v_0);
+			v[5] = vec_nor(v[5], v_0);
+			v[6] = vec_nor(v[6], v_0);
+			v[7] = vec_nor(v[7], v_0);
 
 			/* store it */
 			vec_st(v[0], 0 * SOVUC, dst_vec);
@@ -276,7 +276,7 @@ no_alignment_wanted:
 			v[0] = v[8];
 			v[8] = vec_ld(1 * SOVUC, src_vec);
 			v[0] = vec_perm(v[0], v[8], fix_alignment);
-			*dst_vec = vec_xor(v[0], all_one);
+			*dst_vec = vec_nor(v[0], v_0);
 		}
 
 // TODO: Hmmm, how many bytes are left???

@@ -1262,7 +1262,7 @@ life_tree_error:
 	{
 		logg_devel("found older entry\n");
 		if(!(t = rbtree_cache_remove(&cache.tree, t)))
-			goto out_unlock; /* the tree is amies? */
+			goto out_unlock; /* the tree is amiss? */
 		cache_ht_del(t);
 		e = t;
 	}

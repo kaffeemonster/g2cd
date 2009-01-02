@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -23,11 +23,18 @@
  * $Id:$
  */
 
-void test_cpu_feature(void *func,
-                      const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
-                      size_t l GCC_ATTR_UNUSED_PARAM)
+void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
-	func = func;
+	size_t i;
+	for(i = 0; i < l; i++)
+	{
+		if(-1 == t[i].flags_needed) {
+			if(t[i].callback && !t[i].callback)
+				continue;
+			return t[i].func;
+		}
+	}
+	return NULL; /* die, sucker, die! */
 }
 
 static char const rcsid_mbg[] GCC_ATTR_USED_VAR = "$Id:$";

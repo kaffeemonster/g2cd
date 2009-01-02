@@ -38,6 +38,7 @@
 #	compiler
 CC = gcc
 #CC = x86_64-pc-linux-gnu-gcc
+#CC = powerpc-linux-gnu-gcc
 HOSTCC = gcc
 # gcc
 CC_VER_INFO = --version
@@ -46,20 +47,25 @@ CC_VER_INFO = --version
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
 AS = as
 #AS = x86_64-pc-linux-gnu-as
+#AS = powerpc-linux-gnu-as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
 #AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ x86_64-pc-linux-gnu-ar
+#AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ powerpc-linux-gnu-ar
 ARFLAGS = cru
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ ranlib
 #RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ x86_64-pc-linux-gnu-ranlib
+#RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ powerpc-linux-gnu-ranlib
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
 OBJCOPY = objcopy
 #OBJCOPY = x86_64-pc-linux-gnu-objcopy
+#OBJCOPY = powerpc-linux-gnu-objcopy
 STRIP = strip
 #STRIP = x86_64-pc-linux-gnu-strip
+#STRIP = powerpc-linux-gnu-strip
 RM = rm -f
 
 # split up host and target CFLAGS
@@ -86,7 +92,9 @@ CFLAGS += -std=gnu99
 # Warnings (for the Devs)
 #
 #	most eminent warnings
-WARN_FLAGS = -Wall -Wimplicit -Wmissing-prototypes -Wwrite-strings
+WARN_FLAGS = -Wall
+#	icc is mostly gcc compatible, mostly...
+WARN_FLAGS += -Wimplicit -Wwrite-strings -Wmissing-prototypes  
 #	middle
 WARN_FLAGS += -Wpointer-arith -Wcast-align
 #  ok, if you want to get picky...
@@ -101,7 +109,7 @@ WARN_FLAGS += -Wshadow
 #	interesting to know
 #CFLAGS += -Winline
 #	not on gcc 2.95.3
-WARN_FLAGS += -Wdisabled-optimization
+#WARN_FLAGS += -Wdisabled-optimization
 #	gcc 3.4.?
 WARN_FLAGS += -Wsequence-point
 CFLAGS += $(WARN_FLAGS)
@@ -205,7 +213,8 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
 #	sun studio is ...
-#OPT_FLAGS = -O3 -fast
+#	icc has looots of options, but those are the simple ones...
+#OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
 ##OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)

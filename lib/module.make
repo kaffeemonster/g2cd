@@ -104,14 +104,16 @@ MEM_SEARCHRNSRC = \
 	$(MPL)/ppc/mem_searchrn.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
-	$(MPL)/x86/strnlen.c
+	$(MPL)/x86/strnlen.c \
+	$(MPL)/ppc/strnlen.c
 STRLENSRC = \
 	$(MPL)/generic/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
-	$(MPL)/x86/strncasecmp_a.c
+	$(MPL)/x86/strncasecmp_a.c \
+	$(MPL)/ppc/strncasecmp_a.c
 STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \

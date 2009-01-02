@@ -44,10 +44,10 @@
 #include "lib/other.h"
 /* Own includes */
 #define _G2UDP_C
-#include "G2UDP.h"
-#include "G2MainServer.h"
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
+#include "G2UDP.h"
+#include "G2MainServer.h"
 #include "G2PacketSerializer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"

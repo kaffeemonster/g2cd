@@ -403,19 +403,19 @@ static void identify_cpu(void)
 	 * seem to drop the ball on read-modify-write instructions _directly
 	 * after_ a locked instruction ("lock foo; bla reg, mem", missing
 	 * internal lfence, they say). Ok, you also need > 1 Processor.
-	 * This is unfortunatly all wild speculation, no (visible) Errata,
+	 * This is unfortunatly all heavy speculation, no (visible) Errata,
 	 * no info, but:
-	 * Google speaks of Opteron Rev. E Model 32..63 in their perftools stuff
-	 * MySQL seem to hit it on 64Bit
+	 * Google speaks of Opteron Rev. E Model 32..63 in their perftools stuff.
+	 * MySQL seem to hit it on 64Bit (Bugreport).
 	 * Slowlaris trys to detect it, marks everything affected < Model 0x40
 	 *  (but since they don't build machines with every avail. AMD
-	 *  processor (only Servers with Opterons...), this smells like a
-	 *  sledgehammer)
+	 *   processor (only Servers with Opterons...), this smells like a
+	 *   sledgehammer)
 	 *
 	 * I don't know if we are affected (depends on code gererated by
 	 * compiler...) and how to fix it sanely to not add an if() or always
 	 * an lfence (self modifing code anyone?) at least warn that something
-	 * may be amies, 'til we know what to do or if we even hit this prob.
+	 * may be amiss, 'til we know what to do or if we even hit this prob.
 	 */
 	if(our_cpu.vendor == X86_VENDOR_AMD &&
 	   our_cpu.family == 0x0F &&
@@ -424,7 +424,7 @@ static void identify_cpu(void)
 	{
 		int ologlevel = server.settings.logging.act_loglevel;
 		server.settings.logging.act_loglevel = LOGF_WARN;
-		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, they say.\nThis may leed to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
+		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, they say.\nThis may lead to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
 		server.settings.logging.act_loglevel = ologlevel;
 	}
 	return;

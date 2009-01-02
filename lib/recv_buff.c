@@ -242,7 +242,7 @@ static inline struct norm_buff *recv_buff_alloc_system(void)
 	return ret;
 }
 
-struct noinline norm_buff *recv_buff_alloc(void)
+noinline struct norm_buff *recv_buff_alloc(void)
 {
 	int failcount = 0;
 	struct norm_buff *ret_val = NULL;

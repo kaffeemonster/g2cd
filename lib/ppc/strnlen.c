@@ -1,6 +1,6 @@
 /*
- * strlen.c
- * strlen, ppc implementation
+ * strnlen.c
+ * strnlen for non-GNU platforms, ppc implementation
  *
  * Copyright (c) 2008 Jan Seiffert
  *
@@ -28,13 +28,14 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-size_t strlen(const char *s)
+size_t strnlen(const char *s, size_t maxlen)
 {
 	vector unsigned char v0;
 	vector unsigned char v1;
 	vector unsigned char v_perm;
 	vector unsigned char c;
-	uint32_t r;
+	size_t r;
+	ssize_t f, k;
 	char *p;
 
 	prefetch(s);
@@ -42,23 +43,53 @@ size_t strlen(const char *s)
 	v0 = vec_splat_u8(0);
 	v1 = vec_splat_u8(1);
 
+	f = ALIGN_DOWN_DIFF(s, SOVUC);
+	k = SOST - f - (ssize_t)maxlen;
+
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ld(0, (vector const unsigned char *)p);
+	c = vec_ld(0, (vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(v1, c, v_perm);
-
-	while(!vec_any_eq(c, v0)) {
-		p += SOVUC;
-		c = vec_ld(0, (vector const unsigned char *)p);
+	if(k > 0)
+	{
+// TODO: +1 to give a break condition?
+		v_perm = vec_lvsr(0, (unsigned char *)k);
+		c = vec_perm(v0, c, v_perm);
+		v_perm = vec_lvsl(0, (unsigned char *)k);
+		c = vec_perm(c, v0, v_perm);
 	}
+
+	if(vec_any_eq(c, v0))
+		goto OUT;
+
+	maxlen -= SOST - f;
+	do
+	{
+		p += SOVUC;
+		c = vec_ld(0, (vector unsigned char *)p);
+		if(maxlen <= SOVUC)
+			break;
+		maxlen -= SOVUC;
+	} while(!vec_any_eq(c, v0));
+
+	k = SOST - (ssize_t)maxlen;
+	if(k > 0)
+	{
+// TODO: +1 to give a break condition?
+		v_perm = vec_lvsr(0, (unsigned char *)k);
+		c = vec_perm(v0, c, v_perm);
+		v_perm = vec_lvsl(0, (unsigned char *)k);
+		c = vec_perm(c, v0, v_perm);
+	}
+OUT:
 	r = vec_pmovmskb(vec_cmpeq(c, v0));
 	return p - s + __builtin_clz(r) - 16;
 }
 
-static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../generic/strlen.c"
+# include "../generic/strnlen.c"
 #endif
 /* EOF */

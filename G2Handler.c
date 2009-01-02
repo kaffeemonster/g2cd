@@ -48,13 +48,13 @@
 #include "lib/other.h"
 /* Own includes */
 #define _G2HANDLER_C
+#define _NEED_G2_P_TYPE
+#include "G2Packet.h"
 #include "G2Handler.h"
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2ConHelper.h"
 #include "G2ConRegistry.h"
-#define _NEED_G2_P_TYPE
-#include "G2Packet.h"
 #include "G2PacketSerializer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"

@@ -38,7 +38,7 @@ void *mem_searchrn(void *s, size_t len)
 	vector bool char rr, rn;
 	vector bool char last_rr;
 	char *p;
-	ssize_t f, k;
+	ssize_t k;
 
 	prefetch(s);
 	if(unlikely(!s || !len))
@@ -55,10 +55,10 @@ void *mem_searchrn(void *s, size_t len)
 	c = vec_ld(0, (vector const unsigned char *)p);
 	if(unlikely(k > 0))
 		goto K_SHIFT;
-	v_perm = vec_lvsl(0, s);
+	v_perm = vec_lvsl(0, (unsigned char *)s);
 	c = vec_perm(c, v0, v_perm);
-	v_perm = vec_lvsr(0, s);
-	c = vec_perm(v0, c, v_perm)
+	v_perm = vec_lvsr(0, (unsigned char *)s);
+	c = vec_perm(v0, c, v_perm);
 	rr = vec_cmpeq(c, v_cr);
 	rn = vec_cmpeq(c, v_nl);
 
@@ -90,9 +90,9 @@ START_LOOP:
 	} while(k > 0);
 	k = -k;
 K_SHIFT:
-	v_perm = vec_lvsr(0, (vector unsigned char *)k);
-	c = vec_perm(v0, c, v_perm)
-	v_perm = vec_lvsl(0, (vector unsigned char *)k);
+	v_perm = vec_lvsr(0, (unsigned char *)k);
+	c = vec_perm(v0, c, v_perm);
+	v_perm = vec_lvsl(0, (unsigned char *)k);
 	c = vec_perm(c, v0, v_perm);
 	rr = vec_cmpeq(c, v_cr);
 	rn = vec_cmpeq(c, v_nl);
