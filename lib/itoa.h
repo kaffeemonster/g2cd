@@ -70,8 +70,22 @@
 		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
 	} while(0)
 
-# define MAKE_FUNC(prfx, type, kernel) \
-	static inline char *prfx##toa(char *buff, const type num) \
+# define HEXU_KERNEL_N(buff, wptr, n, rem) \
+	do { \
+		static const char hexchar[] = HEXUC_STRING; \
+		wptr = buff; \
+		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(--rem && n); \
+	} while(0)
+
+# define HEXL_KERNEL_N(buff, wptr, n, rem) \
+	do { \
+		static const char hexchar[] = HEXLC_STRING; \
+		wptr = buff; \
+		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(--rem && n); \
+	} while(0)
+
+# define MAKE_FUNC_X(prfx, type, kernel, add) \
+	static inline char *prfx##to##add(char *buff, const type num) \
 	{ \
 		char *wptr; \
 		type n = num; \
@@ -80,8 +94,10 @@
 		return wptr; \
 	}
 
-# define MAKE_FUNC_N(prfx, type, kernel) \
-	static inline char *prfx##ntoa(char *buff, size_t rem, const type num) \
+# define MAKE_FUNC(prfx, type, kernel) MAKE_FUNC_X(prfx, type, kernel, a)
+
+# define MAKE_FUNC_N_X(prfx, type, kernel, add) \
+	static inline char *prfx##nto##add(char *buff, size_t rem, const type num) \
 	{ \
 		char *wptr = NULL; \
 		type n = num; \
@@ -95,8 +111,10 @@
 		return wptr; \
 	}
 
-# define MAKE_FUNC_FIX(prfx, type, kernel, fill, fixprfx) \
-	static inline char *prfx##toa_##fixprfx##fix(char *buff, const type num, unsigned digits) \
+# define MAKE_FUNC_N(prfx, type, kernel) MAKE_FUNC_N_X(prfx, type, kernel, a)
+
+# define MAKE_FUNC_FIX_X(prfx, type, kernel, fill, fixprfx, add) \
+	static inline char *prfx##to##add##_##fixprfx##fix(char *buff, const type num, unsigned digits) \
 	{ \
 		char *wptr0, *wptr1; \
 		type n = num; \
@@ -108,6 +126,8 @@
 		return wptr0; \
 	} \
 
+# define MAKE_FUNC_FIX(prfx, type, kernel, fill, fixprfx) MAKE_FUNC_FIX_X(prfx, type, kernel, fill, fixprfx, a)
+
 # define MAKE_SFUNC_0FIX(prfx, type) MAKE_FUNC_FIX(prfx, type, SIGNED_KERNEL, '0', 0)
 # define MAKE_UFUNC_0FIX(prfx, type) MAKE_FUNC_FIX(prfx, type, UNSIGNED_KERNEL, '0', 0)
 # define MAKE_SFUNC_SFIX(prfx, type) MAKE_FUNC_FIX(prfx, type, SIGNED_KERNEL, ' ', s)
@@ -116,47 +136,47 @@
 # define MAKE_UFUNC_N(prfx, type) MAKE_FUNC_N(prfx, type, UNSIGNED_KERNEL_N)
 # define MAKE_SFUNC(prfx, type) MAKE_FUNC(prfx, type, SIGNED_KERNEL)
 # define MAKE_UFUNC(prfx, type) MAKE_FUNC(prfx, type, UNSIGNED_KERNEL)
+# define MAKE_LXFUNC_0FIX(prfx, type) MAKE_FUNC_FIX_X(prfx, type, HEXL_KERNEL, '0', 0, xa)
+# define MAKE_UXFUNC_0FIX(prfx, type) MAKE_FUNC_FIX_X(prfx, type, HEXU_KERNEL, '0', 0, Xa)
+# define MAKE_LXFUNC_SFIX(prfx, type) MAKE_FUNC_FIX_X(prfx, type, HEXL_KERNEL, ' ', s, xa)
+# define MAKE_UXFUNC_SFIX(prfx, type) MAKE_FUNC_FIX_X(prfx, type, HEXU_KERNEL, ' ', s, Xa)
+# define MAKE_LXFUNC_N(prfx, type) MAKE_FUNC_N_X(prfx, type, HEXL_KERNEL_N, xa)
+# define MAKE_UXFUNC_N(prfx, type) MAKE_FUNC_N_X(prfx, type, HEXU_KERNEL_N, Xa)
+# define MAKE_LXFUNC(prfx, type) MAKE_FUNC_X(prfx, type, HEXL_KERNEL, xa)
+# define MAKE_UXFUNC(prfx, type) MAKE_FUNC_X(prfx, type, HEXU_KERNEL, Xa)
 
-MAKE_SFUNC(       c,   signed char)
-MAKE_SFUNC_N(     c,   signed char)
-MAKE_SFUNC_SFIX(  c,   signed char)
-MAKE_SFUNC_0FIX(  c,   signed char)
-MAKE_UFUNC(      uc, unsigned char)
-MAKE_UFUNC_N(    uc, unsigned char)
-MAKE_UFUNC_SFIX( uc, unsigned char)
-MAKE_UFUNC_0FIX( uc, unsigned char)
-MAKE_SFUNC(       s,   signed short)
-MAKE_SFUNC_N(     s,   signed short)
-MAKE_SFUNC_SFIX(  s,   signed short)
-MAKE_SFUNC_0FIX(  s,   signed short)
-MAKE_UFUNC(      us, unsigned short)
-MAKE_UFUNC_N(    us, unsigned short)
-MAKE_UFUNC_SFIX( us, unsigned short)
-MAKE_UFUNC_0FIX( us, unsigned short)
-MAKE_SFUNC(       i,   signed int)
-MAKE_SFUNC_N(     i,   signed int)
-MAKE_SFUNC_SFIX(  i,   signed int)
-MAKE_SFUNC_0FIX(  i,   signed int)
-MAKE_UFUNC(       u, unsigned int)
-MAKE_UFUNC_N(     u, unsigned int)
-MAKE_UFUNC_SFIX(  u, unsigned int)
-MAKE_UFUNC_0FIX(  u, unsigned int)
-MAKE_SFUNC(       l,   signed long)
-MAKE_SFUNC_N(     l,   signed long)
-MAKE_SFUNC_SFIX(  l,   signed long)
-MAKE_SFUNC_0FIX(  l,   signed long)
-MAKE_UFUNC(      ul, unsigned long)
-MAKE_UFUNC_N(    ul, unsigned long)
-MAKE_UFUNC_SFIX( ul, unsigned long)
-MAKE_UFUNC_0FIX( ul, unsigned long)
-MAKE_SFUNC(      ll,   signed long long)
-MAKE_SFUNC_N(    ll,   signed long long)
-MAKE_SFUNC_SFIX( ll,   signed long long)
-MAKE_SFUNC_0FIX( ll,   signed long long)
-MAKE_UFUNC(     ull, unsigned long long)
-MAKE_UFUNC_N(   ull, unsigned long long)
-MAKE_UFUNC_SFIX(ull, unsigned long long)
-MAKE_UFUNC_0FIX(ull, unsigned long long)
+#define MAKE_SFUNC_SET(prfx, type) \
+	MAKE_SFUNC(       prfx, type) \
+	MAKE_SFUNC_N(     prfx, type) \
+	MAKE_SFUNC_SFIX(  prfx, type) \
+	MAKE_SFUNC_0FIX(  prfx, type)
+
+#define MAKE_UFUNC_SET(prfx, type) \
+	MAKE_UFUNC(       prfx, type) \
+	MAKE_UFUNC_N(     prfx, type) \
+	MAKE_UFUNC_SFIX(  prfx, type) \
+	MAKE_UFUNC_0FIX(  prfx, type) \
+	MAKE_LXFUNC(      prfx, type) \
+	MAKE_UXFUNC(      prfx, type) \
+	MAKE_LXFUNC_N(    prfx, type) \
+	MAKE_UXFUNC_N(    prfx, type) \
+	MAKE_LXFUNC_SFIX( prfx, type) \
+	MAKE_UXFUNC_SFIX( prfx, type) \
+	MAKE_LXFUNC_0FIX( prfx, type) \
+	MAKE_UXFUNC_0FIX( prfx, type)
+
+MAKE_SFUNC_SET(   c,   signed char)
+MAKE_UFUNC_SET(  uc, unsigned char)
+MAKE_SFUNC_SET(   s,   signed short)
+MAKE_UFUNC_SET(  us, unsigned short)
+MAKE_SFUNC_SET(   i,   signed int)
+MAKE_UFUNC_SET(   u, unsigned int)
+MAKE_SFUNC_SET(   l,   signed long)
+MAKE_UFUNC_SET(  ul, unsigned long)
+MAKE_SFUNC_SET(  ll,   signed long long)
+MAKE_UFUNC_SET( ull, unsigned long long)
+MAKE_SFUNC_SET(   z,          ssize_t)
+MAKE_UFUNC_SET(  uz,          size_t)
 
 
 static inline char *addrtoa(char *buff, const void *ptr)
@@ -192,56 +212,22 @@ static inline char *ptoa(char *buff, const void *ptr)
 	return buff + (sizeof(ptr) * 2) + 2;
 }
 
-static inline char *ustoxa(char *buff, const unsigned short num)
-{
-	char *wptr;
-	unsigned n = num;
-
-	HEXL_KERNEL(buff, wptr, n);
-	strreverse(buff, wptr - 1);
-	return wptr;
-}
-
-static inline char *utoXa_0fix(char *buff, const unsigned num, unsigned fix)
-{
-	char *wptr0, *wptr1;
-	unsigned n = num;
-	unsigned i;
-
-	for(wptr0 = buff, i = fix; i--;)
-		*wptr0++ = '0';
-
-	HEXU_KERNEL(buff, wptr1, n);
-	wptr0 = wptr0 >= wptr1 ? wptr0 : wptr1;
-	strreverse(buff, wptr0 - 1);
-
-	return wptr0;
-}
-
-static inline char *ultoXa_0fix(char *buff, const unsigned long num, unsigned fix)
-{
-	char *wptr0, *wptr1;
-	unsigned long n = num;
-	unsigned i;
-
-	for(wptr0 = buff, i = fix; i--;)
-		*wptr0++ = '0';
-
-	HEXU_KERNEL(buff, wptr1, n);
-	wptr0 = wptr0 >= wptr1 ? wptr0 : wptr1;
-	strreverse(buff, wptr0 - 1);
-
-	return wptr0;
-}
-
-#undef HEXC_STRING
+#undef HEXUC_STRING
+#undef HEXLC_STRING
 #undef SIGNED_KERNEL
+#undef SIGNED_KERNEL_N
 #undef UNSIGNED_KERNEL
 #undef UNSIGNED_KERNEL_N
 #undef HEXU_KERNEL
+#undef HEXU_KERNEL_N
+#undef HEXL_KERNEL
+#undef HEXL_KERNEL_N
 #undef MAKE_FUNC
+#undef MAKE_FUNC_X
 #undef MAKE_FUNC_N
+#undef MAKE_FUNC_N_X
 #undef MAKE_FUNC_FIX
+#undef MAKE_FUNC_FIX_X
 #undef MAKE_SFUNC_0FIX
 #undef MAKE_UFUNC_0FIX
 #undef MAKE_SFUNC_SFIX
@@ -250,7 +236,17 @@ static inline char *ultoXa_0fix(char *buff, const unsigned long num, unsigned fi
 #undef MAKE_UFUNC_N
 #undef MAKE_SFUNC
 #undef MAKE_UFUNC
+#undef MAKE_LXFUNC_0FIX
+#undef MAKE_UXFUNC_0FIX
+#undef MAKE_LXFUNC_SFIX
+#undef MAKE_UXFUNC_SFIX
+#undef MAKE_LXFUNC_N
+#undef MAKE_UXFUNC_N
+#undef MAKE_LXFUNC
+#undef MAKE_UXFUNC
 
+#undef MAKE_SFUNC_SET
+#undef MAKE_UFUNC_SET
 
 #endif /* ITOA_H */
 /* EOF */

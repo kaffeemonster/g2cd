@@ -322,12 +322,9 @@ static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, i
 			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
 			if(!g2_packet_serialize_to_buff(entry, d_target))
 			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"failed to encode packet-stream",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "failed to encode packet-stream", &w_entry->remote_host,
+				          w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				return w_entry;
 			}
@@ -430,12 +427,9 @@ retry_unpack:
 
 			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length))
 			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"failed to decode packet-stream",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "failed to decode packet-stream", &w_entry->remote_host,
+				          w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				return w_entry;
 			}

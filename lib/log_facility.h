@@ -92,4 +92,9 @@ _LOGF_EXTRN(int logg_more_ent(const enum loglevel, const char *, const char *, c
 #  define logg_more	logg_more_ent
 # endif
 
+#include <stdarg.h>
+
+_LOGF_EXTRN(int my_snprintf(char *buf, size_t maxlen, const char *fmt, ...)) GCC_ATTR_PRINTF(3,4);
+_LOGF_EXTRN(int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap));
+
 #endif /* LIB_LOG_FACILITY_H */

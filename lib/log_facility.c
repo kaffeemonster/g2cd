@@ -2,7 +2,7 @@
  * log_facility.c
  * logging logic/magic/functions
  *
- * Copyright (c) 2004,2005,2006,2007 Jan Seiffert
+ * Copyright (c) 2004-2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <syslog.h>
+#include <unistd.h>
 /* other */
 #include "other.h"
 #ifdef HAVE_ALLOCA_H
@@ -49,7 +50,7 @@
 	do_logging_int(x, "%s:%s()@%u: " y, __FILE__, __func__, __LINE__)
 
 static inline int do_vlogging(const enum loglevel, const char *, va_list);
-static inline int do_logging(const enum loglevel, const char *);
+static inline int do_logging(const enum loglevel, const char *, size_t);
 static inline int do_logging_int(const enum loglevel, const char *, ...);
 
 /*
@@ -183,12 +184,12 @@ static inline int do_vlogging(const enum loglevel level, const char *fmt, va_lis
 	return vfprintf(log_where, fmt, args);
 }
 
-static inline int do_logging(const enum loglevel level, const char *string)
+static inline int do_logging(const enum loglevel level, const char *string, size_t len)
 {
-	FILE *log_where = level >= LOG_NOTICE ? stdout : stderr;
+	int log_where = level >= LOG_NOTICE ? STDOUT_FILENO : STDERR_FILENO;
 
 // TODO: properly distribute logmsg to all logging services.
-	return fputs(string, log_where);
+	return write(log_where, string, len);
 }
 
 static inline int do_logging_int(const enum loglevel level, const char *fmt, ...)
@@ -360,7 +361,7 @@ realloc:
 		}
 		/* put msg printed out in buffer */
 		va_copy(tmp_valist, args);
-		ret_val = vsnprintf(buffer_start(*logg_buff), buffer_remaining(*logg_buff), fmt, tmp_valist);
+		ret_val = my_vsnprintf(buffer_start(*logg_buff), buffer_remaining(*logg_buff), fmt, tmp_valist);
 		va_end(tmp_valist);
 		/* error? repeat */
 	} while(unlikely(ret_val < 0 || (size_t)ret_val > buffer_remaining(*logg_buff)));
@@ -437,7 +438,7 @@ no_errno:
 
 	/* output that stuff */
 	buffer_flip(*logg_buff);
-	ret_val = do_logging(level, buffer_start(*logg_buff));
+	ret_val = do_logging(level, buffer_start(*logg_buff), buffer_remaining(*logg_buff));
 	logg_ret_buf(logg_buff);
 	return ret_val;
 }
@@ -478,6 +479,5 @@ int logg_more_ent(const enum loglevel level,
 	return ret_val;
 }
 
-
 static char const rcsid_lf[] GCC_ATTR_USED_VAR = "$Id: log_facility.c,v 1.7 2005/11/05 11:02:32 redbully Exp redbully $";
-//EOF
+/* EOF */

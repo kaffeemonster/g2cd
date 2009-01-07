@@ -217,7 +217,7 @@ void *G2UDP(void *param)
 				goto out;
 		}
 
-		snprintf(tmp_nam, sizeof(tmp_nam), "./G2UDPincomming%lu.bin", (unsigned long)getpid());
+		my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2UDPincomming%lu.bin", (unsigned long)getpid());
 		if(0 > (out_file = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR))) {
 			logg_errno(LOGF_ERR, "opening UDP-file");
 			goto out;
@@ -380,19 +380,17 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 
 /************ DEBUG *****************/
 	{
-	char addr_buf[INET6_ADDRSTRLEN];
 	size_t old_remaining;
 	ssize_t result;
 
 	buffer_compact(*d_hold);
 	old_remaining = d_hold->pos;
 
-	res_byte = (size_t) snprintf(buffer_start(*d_hold), buffer_remaining(*d_hold),
-		"\n----------\nseq: %u\tpart: %u/%u\ndeflate: %s\tack_me: %s\nsa_family: %i\nsin_addr:sin_port: %s:%hu\n----------\n",
+	res_byte = (size_t) my_snprintf(buffer_start(*d_hold), buffer_remaining(*d_hold),
+		"\n----------\nseq: %u\tpart: %u/%u\ndeflate: %s\tack_me: %s\nsa_family: %i\nsin_addr:sin_port: %p#I\n----------\n",
 		(unsigned)tmp_packet.sequence, (unsigned)tmp_packet.part, (unsigned)tmp_packet.count,
 		(tmp_packet.flags.deflate) ? "true" : "false", (tmp_packet.flags.ack_me) ? "true" : "false", 
-		from->s_fam, combo_addr_print(from, addr_buf, sizeof(addr_buf)),
-		ntohs(combo_addr_port(from)));
+		from->s_fam, from);
 
 		d_hold->pos += (res_byte > buffer_remaining(*d_hold)) ? buffer_remaining(*d_hold) : res_byte;
 
@@ -536,16 +534,11 @@ static inline ssize_t udp_sock_send(struct norm_buff *d_hold, union combo_addr *
 	case  0:
 		if(buffer_remaining(*d_hold))
 		{
-			if(EAGAIN != errno)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %s\tFromPort: %hu\n",
-					"error writing?!", errno, fd,
-					combo_addr_print(to, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(to)));
+			if(EAGAIN != errno) {
+				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
+				         "error writing?!", errno, fd, to);
 				worker.keep_going = false;
-			}
-			else
+			} else
 				logg_devel("Nothing to write!\n");
 		}
 		else
@@ -555,12 +548,9 @@ static inline ssize_t udp_sock_send(struct norm_buff *d_hold, union combo_addr *
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno)
-		{
+		if(EAGAIN != errno) {
 			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i",
-				"sendto:",
-				errno,
-				fd);
+			            "sendto:", errno, fd);
 			worker.keep_going = false;
 		}
 		break;
@@ -610,16 +600,11 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 	case  0:
 		if(buffer_remaining(*d_hold))
 		{
-			if(EAGAIN != errno)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %s\tFromPort: %hu\n",
-					"error reading?!", errno, udp_poll->fd,
-					combo_addr_print(from, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(from)));
+			if(EAGAIN != errno) {
+				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
+				          "error reading?!", errno, udp_poll->fd, from);
 				worker.keep_going = false;
-			}
-			else
+			} else
 				logg_devel("Nothing to read!\n");
 		}
 		else
@@ -629,12 +614,9 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno)
-		{
+		if(EAGAIN != errno) {
 			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i",
-				"recvfrom:",
-				errno,
-				udp_poll->fd);
+			            "recvfrom:", errno, udp_poll->fd);
 			worker.keep_going = false;
 		}
 		break;

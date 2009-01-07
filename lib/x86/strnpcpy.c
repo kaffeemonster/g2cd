@@ -58,10 +58,10 @@
 #define SOV16	16
 #define SOV16M1	(SOV16-1)
 
-char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
-char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
-char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
-char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
+static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
+static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
+static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
+static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 
 #define cpy_one_u32(dst, src, i, maxlen) \
 	if(likely(SO32M1 < i)) \
@@ -86,12 +86,12 @@ char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 		unsigned rsse; \
 		asm( \
 			"pxor	%%mm0, %%mm0\n\t" \
-			"movq	%3, %%mm1\n\t" \
+			"movq	%2, %%mm1\n\t" \
 			"pcmpeqb	%%mm1, %%mm0\n\t" \
 			"pmovmskb	%%mm0, %0\n\t" \
 			"test	%0, %0\n\t" \
 			"jnz	1f\n\t" \
-			"movq	%%mm1, %2\n" \
+			"movq	%%mm1, %3\n" \
 			"1:\n" \
 		: /* %0 */ "=r" (rsse), \
 		  /* %1 */ "=m" (*dst) \
@@ -125,7 +125,7 @@ char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 	}
 #endif
 
-char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
+static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	size_t r;
@@ -192,7 +192,7 @@ CPY_NEXT:
 	return dst;
 }
 
-char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
+static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	unsigned r;
@@ -264,7 +264,7 @@ CPY_NEXT:
 }
 
 #ifndef __x86_64__
-char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen)
+static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	unsigned r;
@@ -333,7 +333,7 @@ CPY_NEXT:
 }
 #endif
 
-char *strnpcpy_x86(char *dst, const char *src, size_t maxlen)
+static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 

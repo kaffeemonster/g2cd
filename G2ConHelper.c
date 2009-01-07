@@ -71,13 +71,8 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 	if(!msg)
 		msg = "unknown problem";
 
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-			msg,
-			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-			ntohs(combo_addr_port(&w_entry->remote_host)),
-			w_entry->com_socket);
+	logg_posd(LOGF_DEBUG, "%s Ip: %p#I\ttFDNum: %i\n",
+	          msg, &w_entry->remote_host, w_entry->com_socket);
 /*
  * Under Linux get errno out off ERRQUEUE and print/log it
  *			#define ERR_BUFF_SIZE 4096
@@ -87,7 +82,6 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
  *			sizeof(err_buff),
  *			MSG_ERRQUEUE);
  */
- 	}
 	return w_entry;
 }
 
@@ -97,14 +91,9 @@ bool do_read(struct epoll_event *p_entry)
 	ssize_t result = 0;
 	bool ret_val = true;
 #ifdef DEBUG_DEVEL
-	if(!w_entry->recv)
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-			"no recv buffer!",
-			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-			ntohs(combo_addr_port(&w_entry->remote_host)),
-			w_entry->com_socket);
+	if(!w_entry->recv) {
+		logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+		          "no recv buffer!", &w_entry->remote_host, w_entry->com_socket);
 		w_entry->flags.dismissed = true;
 		return false;
 	}
@@ -112,7 +101,8 @@ bool do_read(struct epoll_event *p_entry)
 
 	do	{
 		errno = 0;
-		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv), buffer_remaining(*w_entry->recv), 0);
+		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv),
+		              buffer_remaining(*w_entry->recv), 0);
 	} while(-1 == result && EINTR == errno);
 
 	switch(result)
@@ -123,18 +113,12 @@ bool do_read(struct epoll_event *p_entry)
 	case  0:
 		if(buffer_remaining(*w_entry->recv))
 		{
-			if(EAGAIN != errno)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"EOF reached!", errno,
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			if(EAGAIN != errno) {
+				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
+				          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				ret_val = false;
-			}
-			else
+			} else
 				logg_devel("Nothing to read!\n");
 		}
 		break;
@@ -182,15 +166,9 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				result = -1;
-			}
-			else if(w_entry->flags.dismissed)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"Dismissed!",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			} else if(w_entry->flags.dismissed) {
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				result = -1;
 			}
 		}
@@ -198,18 +176,12 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 	case  0:
 		if(iovec_len(vec, cnt))
 		{
-			if(EAGAIN != errno)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"Dismissed!",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			if(EAGAIN != errno) {
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				result = -1;
-			}
-			else
+			} else
 				logg_devel("not ready to write\n");
 		}
 		else if(!more)
@@ -219,15 +191,9 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				result = -1;
-			}
-			else if(w_entry->flags.dismissed)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"EOF reached!", errno,
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			} else if(w_entry->flags.dismissed) {
+				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
+				          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
 				result = -1;
 			}
 		}
@@ -246,14 +212,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	bool ret_val = true;
 	ssize_t result = 0;
 #ifdef DEBUG_DEVEL
-	if(!w_entry->send)
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-			"no send buffer!",
-			combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-			ntohs(combo_addr_port(&w_entry->remote_host)),
-			w_entry->com_socket);
+	if(!w_entry->send) {
+		logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+		          "no send buffer!", &w_entry->remote_host, w_entry->com_socket);
 		w_entry->flags.dismissed = true;
 		ret_val = false;
 	}
@@ -278,15 +239,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;
-			}
-			else if(w_entry->flags.dismissed)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s\tIP: %s\tPort: %hu\tFDNum: %i\n",
-					"Dismissed!",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			} else if(w_entry->flags.dismissed) {
+				logg_posd(LOGF_DEBUG, "%s\tIP: %p#I\tFDNum: %i\n",
+				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				ret_val = false;
 			}
 		}
@@ -294,18 +249,12 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	case  0:
 		if(buffer_remaining(*w_entry->send))
 		{
-			if(EAGAIN != errno)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"Dismissed!",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			if(EAGAIN != errno) {
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				ret_val = false;
-			}
-			else
+			} else
 				logg_devel("not ready to write\n");
 		}
 		else
@@ -315,15 +264,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;
-			}
-			else if(w_entry->flags.dismissed)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"EOF reached!", errno,
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			} else if(w_entry->flags.dismissed) {
+				logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
+				          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
 				ret_val = false;
 			}
 		}
@@ -398,8 +341,7 @@ void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buf
 	if(likely(*con_buff == *our_buff))
 	{
 		logg_devel_old("local buffer\n");
-		if(likely(buffer_cempty(**con_buff))) /* buffer is empty */
-		{
+		if(likely(buffer_cempty(**con_buff))) { /* buffer is empty */
 			logg_devel_old("empty\n");
 			*con_buff = NULL;
 			buffer_clear(**our_buff);
@@ -409,8 +351,7 @@ void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buf
 	}
 	else
 	{
-		if(buffer_cempty(**con_buff))
-		{
+		if(buffer_cempty(**con_buff)) {
 			logg_devel_old("foreign buffer empty\n");
 			recv_buff_local_ret(*con_buff);
 			*con_buff = NULL;

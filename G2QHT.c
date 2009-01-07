@@ -624,10 +624,10 @@ static int qht_tdump_fd, qht_pdump_fd;
 static void qht_dump_init(void)
 {
 	char tmp_nam[sizeof("./G2QHTtdump.bin") + 12];
-	snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTtdump%lu.bin", (unsigned long)getpid());
+	my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTtdump%lu.bin", (unsigned long)getpid());
 	if(0 > (qht_tdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
 		logg_errno(LOGF_ERR, "opening QHT-table-file");
-	snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTpdump%lu.bin", (unsigned long)getpid());
+	my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTpdump%lu.bin", (unsigned long)getpid());
 	if(0 > (qht_pdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
 		logg_errno(LOGF_ERR, "opening QHT-patch-file");
 }

@@ -449,17 +449,11 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 	if(l <= get_act_loglevel())
 	{
 		union combo_addr our_local_addr;
-		char addr_buf1[INET6_ADDRSTRLEN], addr_buf2[INET6_ADDRSTRLEN];
 		socklen_t sin_size = sizeof(our_local_addr);
 
 		getsockname(work_entry->com_socket, &our_local_addr.sa, &sin_size);
-		logg(LOGF_DEBUG, "Connection\tFrom: %s:%hu\tTo: %s:%hu\tFDNum: %i -> %s\n",
-		     combo_addr_print(&work_entry->remote_host, addr_buf1, sizeof(addr_buf1)),
-		     ntohs(combo_addr_port(&work_entry->remote_host)),
-		     combo_addr_print(&our_local_addr, addr_buf2, sizeof(addr_buf2)),
-		     ntohs(combo_addr_port(&our_local_addr)),
-		     work_entry->com_socket,
-		     msg);
+		logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
+		     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
 	}
 }
 
@@ -609,14 +603,9 @@ static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, i
 		{
 			if(G2CONNECTED == w_entry->connect_state)
 				return w_entry;
-			else if(w_entry->flags.dismissed)
-			{
-				char addr_buf[INET6_ADDRSTRLEN];
-				logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-					"Dismissed!",
-					combo_addr_print(&w_entry->remote_host, addr_buf, sizeof(addr_buf)),
-					ntohs(combo_addr_port(&w_entry->remote_host)),
-					w_entry->com_socket);
+			else if(w_entry->flags.dismissed) {
+				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				return w_entry;
 			}
 		}

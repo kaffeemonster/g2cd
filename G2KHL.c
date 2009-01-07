@@ -243,9 +243,9 @@ init_next:
 	name_len += strlen(server.settings.khl.dump_fname);
 	name = alloca(name_len + 2);
 
-	strcpy(name, data_root_dir);
-	strcat(name, "/");
-	strcat(name, server.settings.khl.dump_fname);
+	buff = strpcpy(name, data_root_dir);
+	*buff++ = '/';
+	strcpy(buff, server.settings.khl.dump_fname);
 
 	khl_dump = fopen(name, "rb");
 	if(!khl_dump) {
@@ -259,8 +259,7 @@ init_next:
 		goto out;
 	}
 
-	buff[str_size(KHL_DUMP_IDENT)] = '\0';
-	if(strcmp(buff, KHL_DUMP_IDENT)) {
+	if(strncmp(buff, KHL_DUMP_IDENT, str_size(KHL_DUMP_IDENT))) {
 		logg_posd(LOGF_INFO, "\"%s\" has wrong khl dump ident\n", name);
 		goto out;
 	}
@@ -1017,7 +1016,7 @@ void g2_khl_end(void)
 	FILE *khl_dump;
 	uint32_t signature[3];
 	const char *data_root_dir;
-	char *name;
+	char *name, *wptr;
 	size_t name_len, i;
 
 	if(gwc_db)
@@ -1036,8 +1035,8 @@ void g2_khl_end(void)
 	name_len += strlen(server.settings.khl.dump_fname);
 	name = alloca(name_len + 1);
 
-	strcpy(name, data_root_dir);
-	strcat(name, server.settings.khl.dump_fname);
+	wptr = strpcpy(name, data_root_dir);
+	strcpy(wptr, server.settings.khl.dump_fname);
 
 	khl_dump = fopen(name, "wb");
 	if(!khl_dump) {
@@ -1216,20 +1215,12 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 	struct khl_cache_entry *e, *t;
 
 	/* check for bogus addresses */
-	if(unlikely(!combo_addr_is_public(addr)))
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_develd("addr %s is privat, not added\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)));
+	if(unlikely(!combo_addr_is_public(addr))) {
+		logg_develd("addr %pI is privat, not added\n", addr);
 		return;
 	}
+	logg_develd_old("adding: %p#I, %u\n", addr, (unsigned)when);
 
-#ifdef DEBUG_DEVEL_OLD
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_develd_old("adding: %s:%u, %u\n", combo_addr_print(addr, addr_buf, sizeof(addr_buf)),
-		                (unsigned)ntohs(combo_addr_port(addr)), (unsigned)when);
-	}
-#endif
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;

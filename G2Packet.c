@@ -714,11 +714,7 @@ static bool handle_LNI_NA(g2_connection_t *connec, g2_packet_t *source, struct l
 	if(!source->big_endian)
 		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
 	combo_addr_set_port(&connec->sent_addr, tmp_port);
-	{
-		char addr_buf[INET6_ADDRSTRLEN];
-		logg_packet("/LNI/NA:\t%s:%hu\n", combo_addr_print(&connec->sent_addr,
-			addr_buf, sizeof(addr_buf)), ntohs(combo_addr_port(&connec->sent_addr)));
-	}
+	logg_packet("/LNI/NA:\t%p#I\n", &connec->sent_addr);
 
 	return false;
 }

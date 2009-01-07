@@ -216,7 +216,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-##OPT_FLAGS = -O1
+#OPT_FLAGS = -O1
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

@@ -481,10 +481,8 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 
 	ret_val = combo_addr_read(buffer, &to_con->sent_addr);
 	
-	if(0 < ret_val)
-	{
-		logg_develd_old("found for Remote-IP:\t%s\n", combo_addr_print(&to_con->sent_addr,
-			char addr_buf[INET6_ADDRSTRLEN], sizeof(addr_buf)));
+	if(0 < ret_val) {
+		logg_develd_old("found for Remote-IP:\t%pI\n", &to_con->sent_addr);
 		to_con->u.accept.flags.addr_ok = true;
 		return false;
 	}
@@ -492,14 +490,9 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	{
 		to_con->u.accept.flags.addr_ok = false;
 		if(0 == ret_val)
-		{
-			char addr_buf[INET6_ADDRSTRLEN];
-			logg_posd(LOGF_DEBUG, "%s Ip: %s\tPort: %hu\tFDNum: %i\n",
-				"got illegal remote-ip",
-				combo_addr_print(&to_con->remote_host, addr_buf, sizeof(addr_buf)),
-				ntohs(combo_addr_port(&to_con->remote_host)),
-				to_con->com_socket);
-		}
+			logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+			          "got illegal remote-ip", &to_con->remote_host,
+			           to_con->com_socket);
 		else
 			logg_errno(LOGF_DEBUG, "reading remote-ip");
 

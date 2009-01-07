@@ -430,28 +430,34 @@ static void identify_cpu(void)
 	return;
 }
 
+static int cmp_vendor(const char *str1, const char *str2)
+{
+	const uint32_t *v1 = (const uint32_t *)str1, *v2 = (const uint32_t *)str2;
+	return v1[0] == v2[0] && v1[1] == v2[1] && v1[2] == v2[2];
+}
+
 static void identify_vendor(struct cpuinfo *cpu)
 {
 	char *s = cpu->vendor_str.s;
-	if(!strcmp(s, "GenuineIntel"))
+	if(cmp_vendor(s, "GenuineIntel"))
 		cpu->vendor = X86_VENDOR_INTEL;
-	else if(!strcmp(s, "AuthenticAMD"))
+	else if(cmp_vendor(s, "AuthenticAMD"))
 		cpu->vendor = X86_VENDOR_AMD;
-	else if(!strcmp(s, "CentaurHauls"))
+	else if(cmp_vendor(s, "CentaurHauls"))
 		cpu->vendor = X86_VENDOR_CENTAUR;
-	else if(!strcmp(s, "GenuineTMx86"))
+	else if(cmp_vendor(s, "GenuineTMx86"))
 		cpu->vendor = X86_VENDOR_TRANSMETA;
-	else if(!strcmp(s, "TransmetaCPU"))
+	else if(cmp_vendor(s, "TransmetaCPU"))
 		cpu->vendor = X86_VENDOR_TRANSMETA;
-	else if(!strcmp(s, "CyrixInstead"))
+	else if(cmp_vendor(s, "CyrixInstead"))
 		cpu->vendor = X86_VENDOR_CYRIX;
-	else if(!strcmp(s, "SiS SiS SiS "))
+	else if(cmp_vendor(s, "SiS SiS SiS "))
 		cpu->vendor = X86_VENDOR_SIS;
-	else if(!strcmp(s, "Geode by NSC"))
+	else if(cmp_vendor(s, "Geode by NSC"))
 		cpu->vendor = X86_VENDOR_NSC;
-	else if(!strcmp(s, "NexGenDriven"))
+	else if(cmp_vendor(s, "NexGenDriven"))
 		cpu->vendor = X86_VENDOR_NEXGEN;
-	else if(!strcmp(s, "UMC UMC UMC"))
+	else if(cmp_vendor(s, "UMC UMC UMC"))
 		cpu->vendor = X86_VENDOR_UMC;
 	else
 		cpu->vendor = X86_VENDOR_OTHER;

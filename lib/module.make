@@ -155,6 +155,7 @@ LIBSRCS = \
 	$(MPL)/strnpcpy.c \
 	$(MPL)/my_epoll.c \
 	$(MPL)/log_facility.c \
+	$(MPL)/vsnprintf.c \
 	$(MPL)/adler32.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/inet_ntop.c \
@@ -186,6 +187,7 @@ LIBOBJS = \
 	$(BITOPOBJS) \
 	$(MPL)/my_epoll.o \
 	$(MPL)/log_facility.o \
+	$(MPL)/vsnprintf.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/inet_ntop.o \
 	$(MPL)/inet_pton.o \
@@ -220,6 +222,7 @@ $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
+$(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/inet_ntop.o: $(MPL)/combo_addr.h $(MPL)/itoa.h
