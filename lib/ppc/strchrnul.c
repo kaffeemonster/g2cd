@@ -1,8 +1,8 @@
 /*
- * strlen.c
- * strlen, ppc implementation
+ * strchrnul.c
+ * strchrnul for non-GNU-platforms, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -28,37 +28,54 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-size_t strlen(const char *s)
+char *strlen(const char *s, int c)
 {
 	vector unsigned char v0;
 	vector unsigned char v1;
+	vector unsigned char v_c;
 	vector unsigned char v_perm;
-	vector unsigned char c;
+	vector unsigned char x;
+	vector bool char m1, m2;
 	uint32_t r;
 	char *p;
 
 	prefetch(s);
 
+	/* transfer lower nibble */
+	v_c = vec_lvsl(c, (unsigned char *)NULL);
+	/* transfer upper nibble */
+	x   = vec_lvsl(c >> 4, (unsigned char *)NULL);
+	x   = vec_sl(x, vec_splat_u8(4));
+	/* glue together */
+	v_c = vec_or(v_c, x);
+	v_c = vec_splat(v_c, 0);
+
 	v0 = vec_splat_u8(0);
 	v1 = vec_splat_u8(1);
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (vector const unsigned char *)p);
+	x = vec_ldl(0, (vector const unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
-	c = vec_perm(c, v1, v_perm);
+	x = vec_perm(x, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
-	c = vec_perm(v1, c, v_perm);
+	x = vec_perm(v1, x, v_perm);
+	m1 = vec_cmpeq(x, v0);
+	m2 = vec_cmpeq(x, v_c);
+	m1 = vec_or(m1, m2);
 
-	while(!vec_any_eq(c, v0)) {
+	while(vec_all_eq(m1, v0)) {
 		p += SOVUC;
-		c = vec_ldl(0, (vector const unsigned char *)p);
+		x = vec_ldl(0, (vector const unsigned char *)p);
+		m1 = vec_cmpeq(x, v0);
+		m2 = vec_cmpeq(x, v_c);
+		m1 = vec_or(m1, m2);
 	}
-	r = vec_pmovmskb(vec_cmpeq(c, v0));
-	return p - s + __builtin_clz(r) - 16;
+	r = vec_pmovmskb((vector unsigned char)m1);
+	return (char *)(uintptr_t)p + __builtin_clz(r) - 16;
 }
 
-static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../generic/strlen.c"
+# include "../generic/strchrnul.c"
 #endif
 /* EOF */

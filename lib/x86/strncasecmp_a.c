@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, x86 implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -76,7 +76,9 @@ static int strncasecmp_a_SSE42(const char *s1, const char *s2, size_t n)
 
 LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
@@ -137,7 +139,9 @@ LOOP_AGAIN:
 	n -= cycles;
 
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
@@ -173,7 +177,9 @@ static int strncasecmp_a_SSE2(const char *s1, const char *s2, size_t n)
 
 LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
@@ -254,7 +260,9 @@ LOOP_AGAIN:
 	n -= cycles;
 
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
@@ -290,7 +298,9 @@ static int strncasecmp_a_SSE(const char *s1, const char *s2, size_t n)
 
 LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	j = ROUND_ALIGN(n, 8);
 	i = i < j ? i : j;
@@ -371,7 +381,9 @@ LOOP_AGAIN:
 	n -= cycles;
 
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
@@ -407,7 +419,9 @@ static int strncasecmp_a_x86(const char *s1, const char *s2, size_t n)
 
 LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	j = ROUND_ALIGN(n, SOST);
 	i = i < j ? i : j;
@@ -447,7 +461,9 @@ LOOP_AGAIN:
 	n -= cycles;
 
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 

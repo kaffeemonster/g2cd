@@ -53,19 +53,19 @@
 # define AVX_XOR(sa, sb, d)	"vxorpd	" #sa ", " #sb ", " #d "\n\t"
 #endif
 #ifdef HAVE_SSE
-# define SSE_PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
-# define PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
+# define SSE_PREFETCH(x)	MAKE_PREFETCH("prefetchnta	", x)
+# define PREFETCH(x)	MAKE_PREFETCH("prefetchnta	", x)
 # ifdef HAVE_3DNOW
 #  define SSE_PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 #  define PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 # else
-#  define SSE_PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
-#  define PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
+#  define SSE_PREFETCHW(x)	MAKE_PREFETCH("prefetchnta	", x)
+#  define PREFETCHW(x)	MAKE_PREFETCH("prefetchnta	", x)
 # endif
 # define SSE_FENCE	"sfence\n"
 # ifdef HAVE_SSE2
 #  define SSE_MOVE(x, y)	"movdqa	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y)	"movdqa	" #x ", " #y "\n\t"
+#  define SSE_STORE(x, y)	"movntdq	" #x ", " #y "\n\t"
 #  define SSE_AND(x, y)	"pand	" #x ", " #y "\n\t"
 #  define SSE_XOR(x, y)	"pxor	" #x ", " #y "\n\t"
 #  define SSE_LOAD8(x, y)	"movlpd	" #x ", " #y "\n\tmovhpd	8+" #x ", " #y "\n\t"
@@ -77,23 +77,23 @@
 # else
 #  define SSE_LOAD8(x, y)	"movlps	" #x ", " #y "\n\tmovhps	8+" #x ", " #y "\n\t"
 #  define SSE_MOVE(x, y)	"movaps	" #x ", " #y "\n\t"
-#  define SSE_STORE(x, y)	"movaps	" #x ", " #y "\n\t"
+#  define SSE_STORE(x, y)	"movntps	" #x ", " #y "\n\t"
 #  define SSE_AND(x, y)	"andps	" #x ", " #y "\n\t"
 #  define SSE_XOR(x, y)	"xorps	" #x ", " #y "\n\t"
 # endif
 #endif
 #ifdef HAVE_MMX
 # ifdef HAVE_SSE
-#  define MMX_PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
-#  define PREFETCH(x)	MAKE_PREFETCH("prefetcht0	", x)
+#  define MMX_PREFETCH(x)	MAKE_PREFETCH("prefetchnta	", x)
+#  define PREFETCH(x)	MAKE_PREFETCH("prefetchnta	", x)
 #  ifdef HAVE_3DNOW
 #   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 #   define PREFETCHW(x)	MAKE_PREFETCH("prefetchw	", x)
 #  else
-#   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
-#   define PREFETCHW(x)	MAKE_PREFETCH("prefetcht0	", x)
+#   define MMX_PREFETCHW(x)	MAKE_PREFETCH("prefetchnta	", x)
+#   define PREFETCHW(x)	MAKE_PREFETCH("prefetchnta	", x)
 #  endif
-#  define MMX_STORE(x, y)	"movq	" #x ", " #y "\n\t"
+#  define MMX_STORE(x, y)	"movntq	" #x ", " #y "\n\t"
 #  define MMX_FENCE	"sfence\n"
 # else
 #  ifdef HAVE_3DNOW

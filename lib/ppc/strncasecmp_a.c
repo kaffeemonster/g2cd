@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,7 +74,9 @@ int strncasecmp_a(const char *s1, const char *s2, size_t n)
 
 LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	j = ROUND_ALIGN(n, 2 * SOVUC);
 	i = i < j ? i : j;
@@ -84,15 +86,15 @@ LOOP_AGAIN:
 	{
 		v_perm1 = vec_lvsl(0, (const unsigned char *)s1);
 		v_perm2 = vec_lvsl(0, (const unsigned char *)s1);
-		c_ex1 = vec_ld(0, (const unsigned char *)s1);
-		c_ex2 = vec_ld(0, (const unsigned char *)s2);
+		c_ex1 = vec_ldl(0, (const unsigned char *)s1);
+		c_ex2 = vec_ldl(0, (const unsigned char *)s2);
 		for(cycles = i; likely(i >= 2 * SOVUC); i -= SOVUC)
 		{
 			vector bool char v_mask;
 			c_1   = c_ex1;
 			c_2   = c_ex2;
-			c_ex1 = vec_ld(1 * SOVUC, (const unsigned char *)s1);
-			c_ex2 = vec_ld(1 * SOVUC, (const unsigned char *)s2);
+			c_ex1 = vec_ldl(1 * SOVUC, (const unsigned char *)s1);
+			c_ex2 = vec_ldl(1 * SOVUC, (const unsigned char *)s2);
 			c_1   = vec_perm(c_1, c_ex1, v_perm1);
 			c_2   = vec_perm(c_2, c_ex2, v_perm2);
 
@@ -127,7 +129,9 @@ LOOP_AGAIN:
 	n -= cycles;
 
 	i = ALIGN_DIFF(s1, 4096);
+	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 

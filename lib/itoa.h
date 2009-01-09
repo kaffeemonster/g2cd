@@ -186,10 +186,8 @@ static inline char *addrtoa(char *buff, const void *ptr)
 	uintptr_t p = (uintptr_t)ptr;
 	unsigned i;
 
-	for(i = 0; i < sizeof(ptr); i++) {
-		*wptr-- = hexchar[(p >> (   i  * 4)) & 0x0F];
-		*wptr-- = hexchar[(p >> ((1+i) * 4)) & 0x0F];
-	}
+	for(i = 0; i < (sizeof(ptr) * 2); i++)
+		*wptr-- = hexchar[(p >> (i  * 4)) & 0x0F];
 
 	return buff + (sizeof(ptr) * 2);
 }
@@ -203,11 +201,9 @@ static inline char *ptoa(char *buff, const void *ptr)
 
 	buff[0] = '0';
 	buff[1] = 'x';
-	wptr = &buff[2] + (sizeof(ptr) * 2);
-	for(i = 0; i < sizeof(ptr); i++) {
-		*wptr-- = hexchar[(p >> (   i  * 4)) & 0x0F];
-		*wptr-- = hexchar[(p >> ((1+i) * 4)) & 0x0F];
-	}
+	wptr = &buff[1] + (sizeof(ptr) * 2);
+	for(i = 0; i < (sizeof(ptr) * 2); i++)
+		*wptr-- = hexchar[(p >> (i  * 4)) & 0x0F];
 
 	return buff + (sizeof(ptr) * 2) + 2;
 }

@@ -2,7 +2,7 @@
  * strnpcpy.c
  * strnpcpy for efficient concatination, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -38,13 +38,14 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	i = ((char *)ALIGN(src, 4096) - src);
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
 	/* align dst for vector ops */
 	for(cycles = ALIGN_DIFF(dst, SO32); cycles && i && *src; cycles--, i--, maxlen--)
 		*dst++ = *src++;
-	if(*src)
+	if(!*src)
 		goto OUT;
 	for(cycles = ALIGN_DIFF(dst, SOVUC) / SOVUC;
 	    cycles && likely(SO32M1 < i); src += SO32, dst += SO32, maxlen -= SO32 i -= SO32, cycles--)
@@ -66,10 +67,10 @@ CPY_NEXT:
 
 		v0 = vec_splat_u8(0);
 		fix_alignment = vec_align(src);
-		c_ex = vec_ld(0, (vector const unsigned char *)src);
+		c_ex = vec_ldl(0, (vector const unsigned char *)src);
 		for(cycles = i; likely(SOVUC < i); i -= SOVUC, src += SOVUC, dst += SOVUC) {
 			c = c_ex;
-			c_ex = vec_ld(1 * SOVUC, (vector unsigned char *)src);
+			c_ex = vec_ldl(1 * SOVUC, (vector unsigned char *)src);
 			c = vec_perm(c, c_ex, fix_alignment);
 			if(vec_any_eq(c, v0)) /* zero byte? */
 			{

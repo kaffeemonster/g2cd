@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, generic implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -60,7 +60,9 @@ LOOP_AGAIN:
 	if(UNALIGNED_OK)
 	{
 		i = ALIGN_DIFF(s1, 4096);
+		i = i ? i : 4096;
 		j = ALIGN_DIFF(s2, 4096);
+		j = j ? j : i;
 		i = i < j ? i : j;
 		j = ROUND_ALIGN(n, SOST);
 		i = i < j ? i : j;
@@ -110,7 +112,9 @@ LOOP_SOST:
 	if(UNALIGNED_OK)
 	{
 		i = ALIGN_DIFF(s1, 4096);
+		i = i ? i : 4096;
 		j = ALIGN_DIFF(s2, 4096);
+		j = j ? j : i;
 		i = i < j ? i : j;
 		i = i < n ? i : n;
 	}

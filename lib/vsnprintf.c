@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include "other.h"
+#include "my_bitops.h"
 #include "itoa.h"
 #include "log_facility.h"
 #include "combo_addr.h"
@@ -116,47 +117,60 @@ enum length_mod
 struct format_spec
 {
 	const char *fmt_start;
+	va_list *ap;
+	const char *fmt;
+	char *buf;
+	size_t len;
+	size_t maxlen;
 	unsigned precision;
 	unsigned width;
 	enum length_mod mod;
-	struct
+	union
 	{
-		bool sign:1;
-		bool zero:1;
-		bool space:1;
-		bool left:1;
-		bool alternate:1;
-		bool ip:1;
-	} flags;
+		struct
+		{
+			bool sign:1;
+			bool zero:1;
+			bool space:1;
+			bool left:1;
+			bool alternate:1;
+			bool ip:1;
+		} flags;
+		int xyz;
+	} u;
 };
+
+/*
+ * Conversions
+ */
 
 #define A_POP(type, prfx) \
 		do { \
-			d.prfx = va_arg(*ap, type); \
+			d.prfx = va_arg(*fmt->ap, type); \
 		} while(0)
 
 
-static noinline size_t format_i(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_i(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 {
 	union all_types d;
 	size_t len = 0;
-	char *ret_val = buf;
+	char *ret_val = fmt->buf;
 
 #define A_PRINT(type, prfx) \
 		do { \
-			d.prfx = va_arg(*ap, type); \
-			if(unlikely(fmt->flags.sign) && d.prfx >= 0) { \
-				if(len <= maxlen) \
-					*buf++ = '+'; \
-				len++; \
+			d.prfx = va_arg(*fmt->ap, type); \
+			if(unlikely(fmt->u.flags.sign) && d.prfx >= 0) { \
+				if(len++ < fmt->maxlen) \
+					*fmt->buf = '+'; \
+				fmt->buf++; \
 			} \
-			if(fmt->flags.zero) \
-				ret_val = prfx##toa_0fix(buf, d.prfx, fmt->width); \
-			else if(fmt->flags.space) \
-				ret_val = prfx##toa_sfix(buf, d.prfx, fmt->width); \
+			if(fmt->u.flags.zero) \
+				ret_val = prfx##toa_0fix(fmt->buf, d.prfx, fmt->width); \
+			else if(fmt->u.flags.space) \
+				ret_val = prfx##toa_sfix(fmt->buf, d.prfx, fmt->width); \
 			else { \
-				ret_val = prfx##ntoa(buf, maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : buf; \
+				ret_val = prfx##ntoa(fmt->buf, fmt->maxlen, d.prfx); \
+				ret_val = ret_val ? ret_val : fmt->buf; \
 			} \
 		} while(0)
 
@@ -195,33 +209,31 @@ static noinline size_t format_i(struct format_spec *fmt, char *buf, size_t maxle
 
 #undef A_PRINT
 
-	len += ret_val - buf;
-	buf  = ret_val;
-
+	len += ret_val - fmt->buf;
 	return len;
 }
 
-static noinline size_t format_u(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_u(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 {
 	union all_types d;
 	size_t len = 0;
-	char *ret_val = buf;
+	char *ret_val = fmt->buf;
 
 #define A_PRINT(type, prfx) \
 		do { \
-			d.prfx = va_arg(*ap, type); \
-			if(unlikely(fmt->flags.sign)) { \
-				if(len <= maxlen) \
-					*buf++ = '+'; \
-				len++; \
+			d.prfx = va_arg(*fmt->ap, type); \
+			if(unlikely(fmt->u.flags.sign)) { \
+				if(len++ < fmt->maxlen) \
+					*fmt->buf = '+'; \
+				fmt->buf++; \
 			} \
-			if(fmt->flags.zero) \
-				ret_val = prfx##toa_0fix(buf, d.prfx, fmt->width); \
-			else if(fmt->flags.space) \
-				ret_val = prfx##toa_sfix(buf, d.prfx, fmt->width); \
+			if(fmt->u.flags.zero) \
+				ret_val = prfx##toa_0fix(fmt->buf, d.prfx, fmt->width); \
+			else if(fmt->u.flags.space) \
+				ret_val = prfx##toa_sfix(fmt->buf, d.prfx, fmt->width); \
 			else { \
-				ret_val = prfx##ntoa(buf, maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : buf; \
+				ret_val = prfx##ntoa(fmt->buf, fmt->maxlen, d.prfx); \
+				ret_val = ret_val ? ret_val : fmt->buf; \
 			} \
 		} while(0)
 
@@ -260,9 +272,7 @@ static noinline size_t format_u(struct format_spec *fmt, char *buf, size_t maxle
 
 #undef A_PRINT
 
-	len += ret_val - buf;
-	buf  = ret_val;
-
+	len += ret_val - fmt->buf;
 	return len;
 }
 
@@ -273,11 +283,21 @@ static char *pr_nop(char *buf)
 }
 #endif
 
-static noinline size_t format_X(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_X(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 {
 	union all_types d;
 	size_t len = 0;
-	char *ret_val = buf;
+	char *ret_val = fmt->buf;
+
+	if(unlikely(fmt->u.flags.alternate))
+	{
+		if(len++ < fmt->maxlen)
+			*fmt->buf = '0';
+		fmt->buf++;
+		if(len++ < fmt->maxlen)
+			*fmt->buf = 'x';
+		fmt->buf++;
+	}
 
 #if 0
 	/* printing all this over one large array of function pointers
@@ -301,14 +321,14 @@ static noinline size_t format_X(struct format_spec *fmt, char *buf, size_t maxle
 
 #define A_PRINT(type, prfx) \
 		do { \
-			d.prfx = va_arg(*ap, type); \
-			if(fmt->flags.zero) \
-				ret_val = prfx##toXa_0fix(buf, d.prfx, fmt->width); \
-			else if(fmt->flags.space) \
-				ret_val = prfx##toXa_sfix(buf, d.prfx, fmt->width); \
+			d.prfx = va_arg(*fmt->ap, type); \
+			if(fmt->u.flags.zero) \
+				ret_val = prfx##toXa_0fix(fmt->buf, d.prfx, fmt->width); \
+			else if(fmt->u.flags.space) \
+				ret_val = prfx##toXa_sfix(fmt->buf, d.prfx, fmt->width); \
 			else { \
-				ret_val = prfx##ntoXa(buf, maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : buf; \
+				ret_val = prfx##ntoXa(fmt->buf, fmt->maxlen, d.prfx); \
+				ret_val = ret_val ? ret_val : fmt->buf; \
 			} \
 		} while(0)
 
@@ -347,28 +367,36 @@ static noinline size_t format_X(struct format_spec *fmt, char *buf, size_t maxle
 
 #undef A_PRINT
 
-	len += ret_val - buf;
-	buf  = ret_val;
-
+	len += ret_val - fmt->buf;
 	return len;
 }
 
-static noinline size_t format_x(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_x(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 {
 	union all_types d;
 	size_t len = 0;
-	char *ret_val = buf;
+	char *ret_val = fmt->buf;
+
+	if(unlikely(fmt->u.flags.alternate))
+	{
+		if(len++ < fmt->maxlen)
+			*fmt->buf = '0';
+		fmt->buf++;
+		if(len++ < fmt->maxlen)
+			*fmt->buf = 'x';
+		fmt->buf++;
+	}
 
 #define A_PRINT(type, prfx) \
 		do { \
-			d.prfx = va_arg(*ap, type); \
-			if(fmt->flags.zero) \
-				ret_val = prfx##toxa_0fix(buf, d.prfx, fmt->width); \
-			else if(fmt->flags.space) \
-				ret_val = prfx##toxa_sfix(buf, d.prfx, fmt->width); \
+			d.prfx = va_arg(*fmt->ap, type); \
+			if(fmt->u.flags.zero) \
+				ret_val = prfx##toxa_0fix(fmt->buf, d.prfx, fmt->width); \
+			else if(fmt->u.flags.space) \
+				ret_val = prfx##toxa_sfix(fmt->buf, d.prfx, fmt->width); \
 			else { \
-				ret_val = prfx##ntoxa(buf, maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : buf; \
+				ret_val = prfx##ntoxa(fmt->buf, fmt->maxlen, d.prfx); \
+				ret_val = ret_val ? ret_val : fmt->buf; \
 			} \
 		} while(0)
 
@@ -407,68 +435,23 @@ static noinline size_t format_x(struct format_spec *fmt, char *buf, size_t maxle
 
 #undef A_PRINT
 
-	len += ret_val - buf;
-	buf  = ret_val;
-
+	len += ret_val - fmt->buf;
 	return len;
 }
 
-static noinline size_t format_o(struct format_spec *fmt, char *buf, size_t maxlen GCC_ATTRIB_UNUSED, va_list *ap)
+/*
+ * floating point conversion - UNIMPLEMETNED
+ * not over unimp, to pop the right arg size
+ */
+static size_t f_fp(struct format_spec *fmt, unsigned char c)
 {
 	union all_types d;
-	size_t len = 0;
-	char *ret_val = buf;
-
-// TODO: octal print anyone?
-
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-		A_POP(unsigned, u);
-		break;
-	case MOD_LONG:
-		A_POP(unsigned long, ul);
-		break;
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-		A_POP(unsigned long long, ull);
-		break;
-	case MOD_CHAR:
-		A_POP(unsigned, uc);
-		break;
-	case MOD_SHORT:
-		A_POP(unsigned, us);
-		break;
-	case MOD_SIZE_T:
-		A_POP(size_t, uz);
-		break;
-	case MOD_INTMAX_T:
-		A_POP(uintmax_t, uj);
-		break;
-	case MOD_PTRDIFF_T:
-		A_POP(ptrdiff_t, t);
-		break;
-	case MOD_LONGDOUBLE:
-// TODO: think about this
-		A_POP(unsigned long long, ull);
-		break;
-	}
-
-	len += ret_val - buf;
-	buf  = ret_val;
-
-	return len;
-}
-
-static noinline size_t format_fp(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap, const char *fmt_str)
-{
-	union all_types d;
-	size_t fmt_len = fmt_str - fmt->fmt_start;
+	size_t fmt_len = fmt->fmt - fmt->fmt_start;
 
 	printf("unimplemented format \"%.*s\": '%c'\n",
-	       (int)fmt_len, fmt->fmt_start, *(fmt_str-1));
+	       (int)fmt_len, fmt->fmt_start, c);
 	/* whatever the user wants, don't know, print literatly */
-	mempcpy(buf, fmt->fmt_start, fmt_len < maxlen ? fmt_len : maxlen);
+	mempcpy(fmt->buf, fmt->fmt_start, fmt_len < fmt->maxlen ? fmt_len : fmt->maxlen);
 
 	switch(fmt->mod)
 	{
@@ -493,7 +476,7 @@ static noinline size_t format_fp(struct format_spec *fmt, char *buf, size_t maxl
 
 #undef A_POP
 
-static noinline size_t format_strerror(struct format_spec *fmt GCC_ATTRIB_UNUSED, char *buf, size_t maxlen, va_list *ap GCC_ATTRIB_UNUSED)
+static size_t f_serr(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 {
 	size_t err_str_len = 0;
 #if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
@@ -505,7 +488,7 @@ static noinline size_t format_strerror(struct format_spec *fmt GCC_ATTRIB_UNUSED
 	 * wich needs a #define __GNU_SOURCE, but conflicts
 	 * with this...
 	 */
-	const char *s = strerror_r(errno, buf, maxlen);
+	const char *s = strerror_r(errno, fmt->buf, fmt->maxlen);
 # else
 	/*
 	 * Ol Solaris seems to have a static msgtable, so
@@ -515,21 +498,21 @@ static noinline size_t format_strerror(struct format_spec *fmt GCC_ATTRIB_UNUSED
 	const char *s = strerror(errno);
 # endif
 	if(s)
-		err_str_len = strnlen(s, maxlen);
+		err_str_len = strnlen(s, fmt->maxlen);
 	else {
 		s = "Unknown system error";
-		err_str_len = strlen(s) < maxlen ?
-		              strlen(s) : maxlen;
+		err_str_len = strlen(s) < fmt->maxlen ?
+		              strlen(s) : fmt->maxlen;
 	}
 
-	if(s != buf)
-		memcpy(buf, s, err_str_len);
+	if(s != fmt->buf)
+		memcpy(fmt->buf, s, err_str_len);
 #else
-	if(!strerror_r(errno, buf, maxlen))
-		err_str_len += strnlen(buf, maxlen);
+	if(!strerror_r(errno, fmt->buf, fmt->maxlen))
+		err_str_len += strnlen(fmt->buf, fmt->maxlen);
 	else
 	{
-		char *bs = buf;
+		char *bs = fmt->buf;
 		if(EINVAL == errno) {
 			strlitcpy(bs, "Unknown errno value!");
 			err_str_len = str_size("Unknown errno value!");
@@ -546,13 +529,17 @@ static noinline size_t format_strerror(struct format_spec *fmt GCC_ATTRIB_UNUSED
 }
 
 
-static noinline  size_t format_s(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_s(struct format_spec *fmt, unsigned char c)
 {
 	const char *s;
 	char *t;
 	size_t len = 0, diff;
+	size_t maxlen = fmt->maxlen;
 
-	s = va_arg(*ap, const char *);
+	s = va_arg(*fmt->ap, const char *);
+
+	if(unlikely('S' == c))
+		fmt->mod = MOD_LONG;
 
 	if(unlikely(fmt->precision))
 		maxlen = maxlen < fmt->precision ? maxlen : fmt->precision;
@@ -567,22 +554,22 @@ static noinline  size_t format_s(struct format_spec *fmt, char *buf, size_t maxl
 	if(unlikely(!s))
 		s = "<null>";
 
-	if(unlikely(fmt->flags.space))
+	if(unlikely(fmt->u.flags.space))
 	{
 		size_t r_len = strnlen(s, fmt->precision);
 		size_t d_len = fmt->precision - r_len;
 		if(d_len) {
 // TODO: field left justified
-			memset(buf, ' ', d_len < maxlen ? d_len : maxlen);
+			memset(fmt->buf, ' ', d_len < maxlen ? d_len : maxlen);
 			maxlen -= d_len;
 		}
-		memcpy(buf + d_len, s, r_len < maxlen ? r_len : maxlen);
+		memcpy(fmt->buf + d_len, s, r_len < maxlen ? r_len : maxlen);
 		len += fmt->precision;
 	}
 	else
 	{
-		t = strnpcpy(buf, s, maxlen);
-		diff = t - buf;
+		t = strnpcpy(fmt->buf, s, maxlen);
+		diff = t - fmt->buf;
 		len += diff;
 		if(*t)
 		{ /* not complete? */
@@ -602,7 +589,7 @@ static noinline  size_t format_s(struct format_spec *fmt, char *buf, size_t maxl
 
 		memset(&ps, 0, sizeof(ps));
 		for(; len <= (maxlen - MB_CUR_MAX) && *ws != L'\0'; ws++) {
-			size_t ret_val = wcrtomb(buf, *ws, &ps);
+			size_t ret_val = wcrtomb(fmt->buf, *ws, &ps);
 			if(ret_val != (size_t)-1)
 				len += ret_val;
 		}
@@ -621,327 +608,376 @@ static noinline  size_t format_s(struct format_spec *fmt, char *buf, size_t maxl
 }
 
 
-static noinline size_t format_c(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_c(struct format_spec *fmt, unsigned char c)
 {
-	size_t len = 0;
+	size_t len;
+
+	if(unlikely('C' == c))
+		fmt->mod = MOD_LONG;
 
 	if(likely(MOD_LONG != fmt->mod))
 	{
-		int c = va_arg(*ap, int);
-		if(maxlen)
-			*buf = (char) c;
-		len++;
+		int x = va_arg(*fmt->ap, int);
+		if(fmt->maxlen)
+			*fmt->buf = (char)x;
+		len = 1;
 	}
 	else
 	{
 #ifndef WANT_WCHAR
 // TODO: popping an int may be wrong
-		int x GCC_ATTRIB_UNUSED = va_arg(*ap, int);
-		if(maxlen)
-			*buf = '?';
-		len++;
+		int x GCC_ATTRIB_UNUSED = va_arg(*fmt->ap, int);
+		if(fmt->maxlen)
+			*fmt->buf = '?';
+		len = 1;
 #else
 		mbstate_t ps;
 		char tbuf[MB_CUR_MAX];
-		wint_t wc = va_arg(*ap, wint_t);
+		wint_t wc = va_arg(*fmt->ap, wint_t);
 		size_t ret_val;
 
 		memset(&ps, 0, sizeof(ps));
 		ret_val = wcrtomb(tbuf, wc, &ps);
 		if((size_t)-1 != ret_val) {
-			memcpy(buf, tbuf, ret_val <= maxlen ? ret_val : maxlen - len);
-			len += ret_val;
-		}
+			memcpy(fmt->buf, tbuf, ret_val <= fmt->maxlen ? ret_val : fmt->maxlen);
+			len = ret_val;
+		} else
+			len = 0;
 #endif
 	}
 
 	return len;
 }
 
-static noinline size_t format_p(struct format_spec *fmt, char *buf, size_t maxlen, va_list *ap)
+static size_t f_p(struct format_spec *fmt, unsigned char c)
 {
-	void *ptr = va_arg(*ap, void *);
+	void *ptr = va_arg(*fmt->ap, void *);
 	char *ret_val;
 	size_t len = 0;
 
-	if(!fmt->flags.ip)
+	for(c = *fmt->fmt++; '#' == c || 'I' == c; c = *fmt->fmt++)
 	{
-		if((sizeof(void *) * 2) + 2 > maxlen)
+		if('#' == c)
+			fmt->u.flags.alternate = true;
+		if('I' == c)
+			fmt->u.flags.ip = true;
+	}
+	fmt->fmt--;
+
+	if(!fmt->u.flags.ip)
+	{
+		if((sizeof(void *) * 2) + 2 > fmt->maxlen)
 			len = (sizeof(void *) * 2) + 2;
 		else
-			len = ptoa(buf, ptr) - buf;
+			len = ptoa(fmt->buf, ptr) - fmt->buf;
 	}
 	else
 	{
 		union combo_addr *addr = ptr;
 		if(!addr) {
-			strlitcpy(buf, "<null>");
+			memcpy(fmt->buf, "<null>", str_size("<null>") < fmt->maxlen ? str_size("<null>") : fmt->maxlen);
 			return str_size("<null>");
 		}
 
-		if(fmt->flags.alternate && AF_INET6 == addr->s_fam && len++ <= maxlen)
-			*buf++ = '[';
+		if(fmt->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= fmt->maxlen)
+			*fmt->buf++ = '[';
 
-		ret_val = combo_addr_print_c(addr, buf, maxlen);
+		ret_val = combo_addr_print_c(addr, fmt->buf, fmt->maxlen);
 		if(!ret_val) {
-			if(maxlen <= INET6_ADDRSTRLEN)
+			if(fmt->maxlen <= INET6_ADDRSTRLEN)
 				len += INET6_ADDRSTRLEN;
 			else
-				ret_val = buf;
+				ret_val = fmt->buf;
 		}
-		len += ret_val - buf;
-		if(fmt->flags.alternate)
+		len += ret_val - fmt->buf;
+		if(fmt->u.flags.alternate)
 		{
-			buf = ret_val;
-			if(AF_INET6 == addr->s_fam && len++ <= maxlen)
-				*buf++ = ']';
-			if(len++ <= maxlen)
-				*buf++ = ':';
-			ret_val = usntoa(buf, maxlen - len, ntohs(combo_addr_port(addr)));
-			ret_val = ret_val ? ret_val : buf;
-			len += ret_val - buf;
+			fmt->buf = ret_val;
+			if(AF_INET6 == addr->s_fam && len++ <= fmt->maxlen)
+				*fmt->buf++ = ']';
+			if(len++ <= fmt->maxlen)
+				*fmt->buf++ = ':';
+			ret_val = usntoa(fmt->buf, fmt->maxlen - len, ntohs(combo_addr_port(addr)));
+			ret_val = ret_val ? ret_val : fmt->buf;
+			len += ret_val - fmt->buf;
 		}
 	}
 
 	return len;
 }
 
+#define format_dispatch(f) format_table[*((const unsigned char *)(f)->fmt)]((f), *((const unsigned char *)(f)->fmt++))
+typedef size_t (*fmt_func)(struct format_spec *, unsigned char);
+static const fmt_func format_table[256];
+
+/*
+ * width
+ */
+static size_t widths(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	int w = va_arg(*fmt->ap, int);
+	if(w < 0) {
+		fmt->u.flags.left = true;
+		w = -w;
+	}
+	fmt->width = (unsigned)w;
+	return format_dispatch(fmt);
+}
+static size_t widthn(struct format_spec *fmt, unsigned char c)
+{
+	unsigned w = 0;
+	for(; c && isdigit(c); c = *fmt->fmt++) {
+		w *= 10;
+		w += c - '0';
+	}
+	fmt->fmt--;
+	fmt->width = w;
+	return format_dispatch(fmt);
+}
+
+/*
+ * precision
+ */
+static size_t prec_p(struct format_spec *fmt, unsigned char c)
+{
+	unsigned p = 0;
+	c = *fmt->fmt++;
+	if('*' == c) {
+		int t = va_arg(*fmt->ap, int);
+		if(t > 0)
+			p = (unsigned)t;
+	} else {
+		for(; c && isdigit(c); c = *fmt->fmt++) {
+			p *= 10;
+			p += c - '0';
+		}
+		fmt->fmt--;
+	}
+	fmt->precision = p;
+	return format_dispatch(fmt);
+}
+
+/*
+ * flags
+ */
+static size_t flag_h(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.alternate = true;
+	return format_dispatch(fmt);
+}
+static size_t flag_0(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.zero = true;
+	return format_dispatch(fmt);
+}
+static size_t flag_m(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.left = true;
+	return format_dispatch(fmt);
+}
+static size_t flag_s(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.space = true;
+	return format_dispatch(fmt);
+}
+static size_t flag_p(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.sign = true;
+	return format_dispatch(fmt);
+}
+static size_t flag_I(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->u.flags.ip = true;
+	return format_dispatch(fmt);
+}
+
+/*
+ * lenght mod
+ */
+static size_t lmod_L(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_LONGDOUBLE;
+	return format_dispatch(fmt);
+}
+static size_t lmod_q(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_QUAD;
+	return format_dispatch(fmt);
+}
+static size_t lmod_j(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_INTMAX_T;
+	return format_dispatch(fmt);
+}
+static size_t lmod_z(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_SIZE_T;
+	return format_dispatch(fmt);
+}
+static size_t lmod_t(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_PTRDIFF_T;
+	return format_dispatch(fmt);
+}
+static size_t lmod_h(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_SHORT != fmt->mod ? MOD_SHORT : MOD_CHAR;
+	return format_dispatch(fmt);
+}
+static size_t lmod_l(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	fmt->mod = MOD_LONG != fmt->mod ? MOD_LONG : MOD_LONGLONG;
+	return format_dispatch(fmt);
+}
+
+/*
+ * specials
+ */
+static size_t lit_p(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	if(likely(fmt->maxlen))
+		*fmt->buf = '%';
+	return 1;
+}
+static size_t p_len(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	int *n = va_arg(*fmt->ap, int *);
+	*n = (int) fmt->len;
+	return 0;
+}
+
+/*
+ * other conversion - uninmplemented
+ */
+static size_t fmtnop(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+{
+	size_t fmt_len = fmt->fmt - fmt->fmt_start;
+	union all_types dummy GCC_ATTRIB_UNUSED;
+	/*
+	 * we don't understand the format, but at least we
+	 * must remove it from the arglist, or we will crash
+	 * if we search a pointer later on.
+	 * Assume an int, because std-promotion makes an int
+	 * out of everything, if its a (long) long, only
+	 * the modifier can help or ups...
+	 */
+	switch(fmt->mod)
+	{
+	case MOD_NONE:
+	case MOD_CHAR:
+	case MOD_SHORT:
+		{ dummy.i = va_arg(*fmt->ap, int); break; }
+	case MOD_LONG:
+		{ dummy.l = va_arg(*fmt->ap, long); break; }
+	case MOD_LONGLONG:
+		{ dummy.ll = va_arg(*fmt->ap, long long); break; }
+	case MOD_LONGDOUBLE:
+		{ dummy.L = va_arg(*fmt->ap, long double); break; }
+	case MOD_QUAD:
+		{ dummy.q = va_arg(*fmt->ap, int64_t); break; }
+	case MOD_INTMAX_T:
+		{ dummy.j = va_arg(*fmt->ap, intmax_t); break; }
+	case MOD_SIZE_T:
+		{ dummy.z = va_arg(*fmt->ap, size_t); break; }
+	case MOD_PTRDIFF_T:
+		{ dummy.t = va_arg(*fmt->ap, ptrdiff_t); break;}
+	}
+	/* whatever the user wants, don't know, print literatly */
+	memcpy(fmt->buf, fmt->fmt_start, fmt_len < fmt->maxlen ? fmt_len : fmt->maxlen);
+	return fmt_len;
+}
+static size_t unimpl(struct format_spec *fmt, unsigned char c)
+{
+	size_t fmt_len = fmt->fmt - fmt->fmt_start;
+	printf("unimplemented format \"%.*s\": '%c'\n",
+	       (int)fmt_len, fmt->fmt_start, c);
+	return fmtnop(fmt, c);
+}
+
+/*
+ * Jump table
+ *
+ * If we would categorize the format characters with a switch statement,
+ * the compiler would propably generate a jump-table. Let's make this
+ * explicitly.
+ * This way we can tranfer control between the subfuncs. (decode-as-we-go)
+ * And GCC, with -foptimize-sibling-calls, generates nice tail calls.
+ */
+static const fmt_func format_table[256] =
+{
+	/*           00,     01,     02,     03,     04,     05,     06,     07,     08,     09,     0A,     0B,     0C,     0D,     0E,     0F, */
+	/* 00 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*          NUL,    SOH,    STX,    ETX,    EOT,    ENQ,    ACK,    BEL,     BS,     HT,     LF,     VT,     FF,     CR,     SO,     SI, */
+	/* 10 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*          DLE,    DC1,    DC2,    DC3,    DC4,    NAK,    SYN,    ETB,    CAN,     EM,    SUB,    ESC,     FS,     GS,     RS,     US, */
+	/* 20 */ flag_s, fmtnop, fmtnop, flag_h, unimpl,  lit_p, fmtnop, fmtnop, fmtnop, fmtnop, widths, flag_p, fmtnop, flag_m, prec_p, fmtnop,
+	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
+	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
+	/* 40 */ fmtnop,   f_fp, fmtnop,    f_c, fmtnop,   f_fp,   f_fp,   f_fp, fmtnop, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
+	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
+	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */
+	/* 60 */ fmtnop,   f_fp, fmtnop,    f_c,    f_i,   f_fp,   f_fp,   f_fp, lmod_h,    f_i, lmod_j, fmtnop, lmod_l, f_serr,  p_len, unimpl,
+	/*            `,      a,      b,      c,      d,      e,      f,      g,      h,      i,      j,      k,      l,      m,      n,      o, */
+	/* 70 */    f_p, lmod_q, fmtnop,    f_s, lmod_t,    f_u, fmtnop, fmtnop,    f_x, fmtnop, lmod_z, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*            p,      q,      r,      s,      t,      u,      v,      w,      x,      y,      z,      {,      |,      },      ~,    DEL, */
+	/* 80 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* 90 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* A0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* B0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* C0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* D0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* E0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+	/* F0 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
+};
+
 int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 {
 	struct format_spec cur_fmt;
-	size_t len = 0, ret_len;
-	bool in_fmt = false;
-	char c;
-	cur_fmt.fmt_start = fmt;
+	char *m;
+	size_t len = 0, diff;
 
-	for(c = *fmt++; c; c = *fmt++)
+	cur_fmt.ap = &ap;
+	cur_fmt.fmt = fmt;
+	do
 	{
-		if(likely(!in_fmt))
-		{
-			if(likely('%' != c)) {
-				if(likely(len++ <= maxlen))
-					*buf++ = c;
-			} else {
-				in_fmt = true;
-				memset(&cur_fmt, 0, sizeof(cur_fmt));
-				cur_fmt.fmt_start = fmt - 1;
-			}
-			continue;
+		m = strchrnul(cur_fmt.fmt, '%');
+		diff = m - cur_fmt.fmt;
+		if(likely(diff)) {
+			mempcpy(buf, cur_fmt.fmt, len + diff < maxlen ? diff : maxlen - len);
+			buf += diff;
+			len += diff;
 		}
-		switch(c)
+		if('%' == *m)
 		{
-		/* conversion */
-		case 'd':
-		case 'i':
-			ret_len = format_i(&cur_fmt, buf, maxlen - len, &ap);
+			size_t ret_len;
+
+			cur_fmt.fmt = m + 1;
+			cur_fmt.fmt_start = cur_fmt.fmt - 1;
+			cur_fmt.buf = buf;
+			cur_fmt.len = len;
+			cur_fmt.maxlen = maxlen - len;
+			cur_fmt.precision = 0;
+			cur_fmt.width = 0;
+			cur_fmt.mod = MOD_NONE;
+			cur_fmt.u.xyz = 0;
+
+			ret_len = format_dispatch(&cur_fmt);
 			buf += ret_len;
 			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'u':
-			ret_len = format_u(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'x':
-			ret_len = format_x(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'X':
-			ret_len = format_X(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'o':
-			ret_len = format_o(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'S':
-			cur_fmt.mod = MOD_LONG;
-		case 's':
-			ret_len = format_s(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'C':
-			cur_fmt.mod = MOD_LONG;
-		case 'c':
-			ret_len = format_c(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'p':
-p_fmt_retry:
-			c = *fmt;
-			if('#' == c || 'I' == c)
-			{
-				fmt++;
-				if('#' == c)
-					cur_fmt.flags.alternate = true;
-				if('I' == c)
-					cur_fmt.flags.ip = true;
-				goto p_fmt_retry;
-			}
-			ret_len = format_p(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		case 'm':
-			ret_len = format_strerror(&cur_fmt, buf, maxlen - len, &ap);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		/* floating point conversion - UNIMPLEMETNED */
-		case 'e':
-		case 'E':
-		case 'f':
-		case 'F':
-		case 'g':
-		case 'G':
-		case 'a':
-		case 'A':
-			ret_len = format_fp(&cur_fmt, buf, maxlen - len, &ap, fmt);
-			buf += ret_len;
-			len += ret_len;
-			in_fmt = false;
-			break;
-		/* specials */
-		case '%':
-			if(likely(len++ < maxlen))
-				*buf++ = '%';
-			in_fmt = false;
-			break;
-		case 'n':
-			{
-				int *n = va_arg(ap, int *);
-				*n = (int) len;
-				in_fmt = false;
-			}
-			break;
-		/* precision */
-		case '.':
-			{
-				unsigned p = 0;
-				c = *fmt++;
-				if('*' == c) {
-					int t = va_arg(ap, int);
-					if(t > 0)
-						p = (unsigned)t;
-				} else {
-					for(; c && isdigit(c); c = *fmt++) {
-						p *= 10;
-						p += c - '0';
-					}
-					fmt--;
-				}
-				cur_fmt.precision = p;
-			}
-			break;
-		/* width */
-		case '*':
-			{
-				int w = va_arg(ap, int);
-				if(w < 0) {
-					cur_fmt.flags.left = true;
-					w = -w;
-				}
-				cur_fmt.width = (unsigned)w;
-			}
-			break;
-		case '1':
-		case '2':
-		case '3':
-		case '4':
-		case '5':
-		case '6':
-		case '7':
-		case '8':
-		case '9':
-			{
-				unsigned w = 0;
-				for(; c && isdigit(c); c = *fmt++) {
-					w *= 10;
-					w += c - '0';
-				}
-				fmt--;
-				cur_fmt.width = w;
-			}
-			break;
-		/* flags */
-		case '#': cur_fmt.flags.alternate = true; break;
-		case '0': cur_fmt.flags.zero  = true;     break;
-		case '-': cur_fmt.flags.left  = true;     break;
-		case ' ': cur_fmt.flags.space = true;     break;
-		case '+': cur_fmt.flags.sign  = true;     break;
-		case 'I': cur_fmt.flags.ip    = true;     break;
-		/* length mod */
-		case 'L': cur_fmt.mod = MOD_LONGDOUBLE;   break;
-		case 'q': cur_fmt.mod = MOD_QUAD;         break;
-		case 'j': cur_fmt.mod = MOD_INTMAX_T;     break;
-		case 'z': cur_fmt.mod = MOD_SIZE_T;       break;
-		case 't': cur_fmt.mod = MOD_PTRDIFF_T;    break;
-		case 'h': cur_fmt.mod = MOD_SHORT != cur_fmt.mod ? MOD_SHORT : MOD_CHAR; break;
-		case 'l': cur_fmt.mod = MOD_LONG != cur_fmt.mod ? MOD_LONG : MOD_LONGLONG; break;
-		/* other conversion - uninmplemented */
-		case '$':
-			{
-				size_t fmt_len = fmt - cur_fmt.fmt_start;
-				printf("unimplemented format \"%.*s\": '%c'\n",
-				       (int)fmt_len, cur_fmt.fmt_start, c);
-			}
-		default:
-			{
-				size_t fmt_len = fmt - cur_fmt.fmt_start;
-				union all_types dummy GCC_ATTRIB_UNUSED;
-				/*
-				 * we don't understand the format, but at least we
-				 * must remove it from the arglist, or we will crash
-				 * if we search a pointer later on.
-				 * Assume an int, because std-promotion makes an int
-				 * out of everything, if its a (long) long, only
-				 * the modifier can help or ups...
-				 */
-				switch(cur_fmt.mod)
-				{
-				case MOD_NONE:
-				case MOD_CHAR:
-				case MOD_SHORT:
-					{ dummy.i = va_arg(ap, int); break; }
-				case MOD_LONG:
-					{ dummy.l = va_arg(ap, long); break; }
-				case MOD_LONGLONG:
-					{ dummy.ll = va_arg(ap, long long); break; }
-				case MOD_LONGDOUBLE:
-					{ dummy.L = va_arg(ap, long double); break; }
-				case MOD_QUAD:
-					{ dummy.q = va_arg(ap, int64_t); break; }
-				case MOD_INTMAX_T:
-					{ dummy.j = va_arg(ap, intmax_t); break; }
-				case MOD_SIZE_T:
-					{ dummy.z = va_arg(ap, size_t); break; }
-				case MOD_PTRDIFF_T:
-					{ dummy.t = va_arg(ap, ptrdiff_t); break;}
-				}
-				/* whatever the user wants, don't know, print literatly */
-				if(likely(len + fmt_len <= maxlen))
-					buf = mempcpy(buf, cur_fmt.fmt_start, fmt_len);
-				else
-					buf = mempcpy(buf, cur_fmt.fmt_start, maxlen - len);
-				len += fmt_len;
-				in_fmt = false;
-			}
 		}
-	}
+		else
+			break;
+	} while(1);
 
 	if(likely(len < maxlen))
 		*buf = '\0';

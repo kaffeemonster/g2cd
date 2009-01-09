@@ -2,7 +2,7 @@
  * strnpcpy.c
  * strnpcpy for efficient concatination, x86 implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -135,7 +135,8 @@ static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	i = ((char *)ALIGN(src, 4096) - src);
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
 	if(likely(SOV16M1 < i))
@@ -202,7 +203,8 @@ static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	i = ((char *)ALIGN(src, 4096) - src);
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
 	if(likely(SOV16M1 < i))
@@ -274,7 +276,8 @@ static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen)
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	i = ((char *)ALIGN(src, 4096) - src);
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
 	i = i < maxlen ? i : maxlen;
 CPY_NEXT:
 	if(SOV8M1 < i)
@@ -343,7 +346,8 @@ static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen)
 		return dst;
 
 CPY_NEXT:
-	i = (char *)ALIGN(src, 4096) - src;
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
 	i = i < maxlen ? i : maxlen;
 	if(SOSTM1 < i)
 	{
@@ -382,7 +386,7 @@ CPY_NEXT:
 		 * Now align dst (faster write) and work till next page
 		 * boundery.
 		 */
-		i = (char *)ALIGN(dst, SOST) - dst;
+		i = ALIGN_DIFF(dst, SOST);
 		i = i < maxlen ? i : maxlen;
 #ifdef __x86_64__
 		cpy_one_u32(dst, src, i, maxlen);

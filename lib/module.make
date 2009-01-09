@@ -110,6 +110,10 @@ STRLENSRC = \
 	$(MPL)/generic/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
+STRCHRNULSRC = \
+	$(MPL)/generic/strchrnul.c \
+	$(MPL)/x86/strchrnul.c \
+	$(MPL)/ppc/strchrnul.c
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
 	$(MPL)/x86/strncasecmp_a.c \
@@ -150,6 +154,7 @@ LIBSRCS = \
 	$(MPL)/mem_searchrn.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
+	$(MPL)/strchrnul.c \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
@@ -176,6 +181,7 @@ BITOPOBJS = \
 	$(MPL)/mem_searchrn.o \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
+	$(MPL)/strchrnul.o \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
@@ -218,6 +224,7 @@ $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
 $(MPL)/strlen.o: $(STRLENSRC)
+$(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)

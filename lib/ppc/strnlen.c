@@ -47,7 +47,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	k = SOST - f - (ssize_t)maxlen;
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ld(0, (vector unsigned char *)p);
+	c = vec_ldl(0, (vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
@@ -68,7 +68,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	do
 	{
 		p += SOVUC;
-		c = vec_ld(0, (vector unsigned char *)p);
+		c = vec_ldl(0, (vector unsigned char *)p);
 		if(maxlen <= SOVUC)
 			break;
 		maxlen -= SOVUC;
