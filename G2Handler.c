@@ -124,6 +124,10 @@ void *G2Handler(void *param)
 
 	/* we are up and running */
 	server.status.all_abord[THREAD_HANDLER] = true;
+
+	my_snprintf(buffer_start(*lsend_buff), buffer_remaining(*lsend_buff), OUR_PROC " Handler %i", 0);
+	g2_set_thread_name(buffer_start(*lsend_buff));
+
 	while(keep_going)
 	{
 		recv_buff_local_refill();

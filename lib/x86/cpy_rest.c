@@ -132,7 +132,7 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 * So do it in two steps.
 	 */
 		"lea	1f(%%rip), %2\n\t"
-		"lea	(%2,%q3,8), %2\n\t"
+		"lea	(%2,%q4,8), %2\n\t"
 #endif
 		"jmp	*%2\n\t" /* computet goto FTW */
 		".p2align 4,,7\n\t"

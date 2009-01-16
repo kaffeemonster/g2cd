@@ -142,6 +142,8 @@ int main(int argc, char **args)
 	 */
 	adjust_our_niceness(server.settings.nice_adjust);
 
+	g2_set_thread_name(OUR_PROC " main");
+
 	/* init khl system */
 	if(!g2_khl_init())
 		return EXIT_FAILURE;
@@ -830,6 +832,23 @@ static inline void clean_up_m(void)
 	fclose(stdout); // get a sync if we output to a file
 	fclose(stderr);
 }
+
+#ifdef __linux__
+#include <sys/prctl.h>
+void g2_set_thread_name(const char *name)
+{
+	/*
+	 * we don't care for the result, either it works, nice
+	 * or not, also OK...
+	 */
+	prctl(PR_SET_NAME, name, 0, 0, 0);
+}
+#else
+void g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
+{
+	/* NOP */
+}
+#endif
 
 /*
  * hmpf, ok, we try to say the compiler to include them (if it

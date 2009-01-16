@@ -60,7 +60,9 @@
 
 static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
 static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
+#ifndef __x86_64__
 static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
+#endif
 static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 
 #define cpy_one_u32(dst, src, i, maxlen) \

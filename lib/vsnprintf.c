@@ -69,10 +69,9 @@
  * buffers throughout the program.
  *
  * Known limitations:
- * - Does not return the correct needed length when truncating
+ * - Does not always return the correct needed length when truncating
  * - Can not print floating point
  * - the maxlen is not always obeyed...
- * - octal is also not implemented
  * - Very fancy modifier/conversion options are ?broken?
  * - And surely not std. conform
  */
@@ -111,15 +110,17 @@ enum length_mod
 	MOD_QUAD,
 	MOD_INTMAX_T,
 	MOD_SIZE_T,
-	MOD_PTRDIFF_T
+	MOD_PTRDIFF_T,
+	MOD_MAX_NUM
 } GCC_ATTRIB_PACKED;
+
+#define type_log10_aprox(x) (((((sizeof(x) * BITS_PER_CHAR)+1)*1233)>>12)+1)
 
 struct format_spec
 {
 	const char *fmt_start;
 	va_list *ap;
-	const char *fmt;
-	char *buf;
+	char *wptr;
 	size_t len;
 	size_t maxlen;
 	unsigned precision;
@@ -138,345 +139,350 @@ struct format_spec
 		} flags;
 		int xyz;
 	} u;
+	char conv_buf[(type_log10_aprox(intmax_t) * 2) + 4];
 };
 
+typedef const char *(*fmt_func)(char *buf, const char *fmt, struct format_spec *);
+
+#define HEXUC_STRING "0123456789ABCDEFGHIJKL"
+#define HEXLC_STRING "0123456789abcdefghijkl"
+
+#define format_dispatch(buf, fmt, f) format_table[*(const unsigned char *)(fmt)]((buf), ((fmt)+1), (f))
+static const fmt_func format_table[256];
+
 /*
- * Conversions
+ * Helper
  */
-
-#define A_POP(type, prfx) \
-		do { \
-			d.prfx = va_arg(*fmt->ap, type); \
-		} while(0)
-
-
-static size_t f_i(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static noinline const char *end_format(char *buf, const char *fmt, struct format_spec *spec)
 {
-	union all_types d;
-	size_t len = 0;
-	char *ret_val = fmt->buf;
-
-#define A_PRINT(type, prfx) \
-		do { \
-			d.prfx = va_arg(*fmt->ap, type); \
-			if(unlikely(fmt->u.flags.sign) && d.prfx >= 0) { \
-				if(len++ < fmt->maxlen) \
-					*fmt->buf = '+'; \
-				fmt->buf++; \
-			} \
-			if(fmt->u.flags.zero) \
-				ret_val = prfx##toa_0fix(fmt->buf, d.prfx, fmt->width); \
-			else if(fmt->u.flags.space) \
-				ret_val = prfx##toa_sfix(fmt->buf, d.prfx, fmt->width); \
-			else { \
-				ret_val = prfx##ntoa(fmt->buf, fmt->maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : fmt->buf; \
-			} \
-		} while(0)
-
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-		A_PRINT(int, i);
-		break;
-	case MOD_LONG:
-		A_PRINT(long, l);
-		break;
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-		A_PRINT(long long, ll);
-		break;
-	case MOD_CHAR:
-		A_PRINT(int, c);
-		break;
-	case MOD_SHORT:
-		A_PRINT(int, s);
-		break;
-	case MOD_SIZE_T:
-		A_PRINT(ssize_t, z);
-		break;
-	case MOD_INTMAX_T:
-		A_POP(intmax_t, j);
-		break;
-	case MOD_PTRDIFF_T:
-		A_POP(ptrdiff_t, t);
-		break;
-	case MOD_LONGDOUBLE:
-// TODO: think about this
-		A_POP(long long, ll);
-		break;
-	}
-
-#undef A_PRINT
-
-	len += ret_val - fmt->buf;
-	return len;
+	spec->wptr = buf;
+	return fmt;
 }
 
-static size_t f_u(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static inline char *strncpyrev(char *dst, const char *end, const char *start, size_t n)
 {
-	union all_types d;
-	size_t len = 0;
-	char *ret_val = fmt->buf;
-
-#define A_PRINT(type, prfx) \
-		do { \
-			d.prfx = va_arg(*fmt->ap, type); \
-			if(unlikely(fmt->u.flags.sign)) { \
-				if(len++ < fmt->maxlen) \
-					*fmt->buf = '+'; \
-				fmt->buf++; \
-			} \
-			if(fmt->u.flags.zero) \
-				ret_val = prfx##toa_0fix(fmt->buf, d.prfx, fmt->width); \
-			else if(fmt->u.flags.space) \
-				ret_val = prfx##toa_sfix(fmt->buf, d.prfx, fmt->width); \
-			else { \
-				ret_val = prfx##ntoa(fmt->buf, fmt->maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : fmt->buf; \
-			} \
-		} while(0)
-
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-		A_PRINT(unsigned, u);
-		break;
-	case MOD_LONG:
-		A_PRINT(unsigned long, ul);
-		break;
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-		A_PRINT(unsigned long long, ull);
-		break;
-	case MOD_CHAR:
-		A_PRINT(unsigned, uc);
-		break;
-	case MOD_SHORT:
-		A_PRINT(unsigned, us);
-		break;
-	case MOD_SIZE_T:
-		A_PRINT(size_t, uz);
-		break;
-	case MOD_INTMAX_T:
-		A_POP(uintmax_t, uj);
-		break;
-	case MOD_PTRDIFF_T:
-		A_POP(ptrdiff_t, t);
-		break;
-	case MOD_LONGDOUBLE:
-// TODO: think about this
-		A_POP(unsigned long long, ull);
-		break;
-	}
-
-#undef A_PRINT
-
-	len += ret_val - fmt->buf;
-	return len;
+	char *r = dst + ((end + 1) - start);
+	while(n-- && end >= start)
+		*dst++ = *end--;
+	return r;
 }
 
-#if 0
-static char *pr_nop(char *buf)
+
+/*****************************************************************************************
+ *
+ * Conversions
+ *
+ *****************************************************************************************/
+
+static noinline const char *decimal_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
+	size_t len = spec->wptr - spec->conv_buf;
+	if(spec->width && spec->width > len)
+	{
+		size_t i;
+
+		i = spec->width - len;
+		i = i < spec->maxlen ? i : spec->maxlen;
+		if(spec->u.flags.zero && !spec->u.flags.left)
+		{
+			if(spec->precision)
+				goto OUT_CPY;
+			while(i--)
+				*buf++ = '0';
+		}
+		else
+		{
+			char *ins;
+			if(!spec->u.flags.left) {
+				ins = buf;
+				buf += i;
+			} else
+				ins = buf + i;
+			while(i--)
+				*ins++ = ' ';
+		}
+		len = spec->width;
+	}
+OUT_CPY:
+	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, spec->maxlen); \
+	spec->len += len;
+	return end_format(buf, fmt, spec);
+}
+
+/*
+ * SIGNED
+ */
+#define MAKE_SFUNC(prfx, type) \
+static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
+{ \
+	type n = va_arg(*spec->ap, type); \
+	char *wptr; \
+	wptr = spec->conv_buf; \
+	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
+	if(n < 0) \
+		*wptr++ = '-'; \
+	else if(spec->u.flags.sign && !spec->u.flags.zero) \
+		*wptr++ = '+'; \
+	else if(spec->u.flags.space) \
+		*wptr++ = ' '; \
+	spec->wptr = wptr; \
+	return decimal_finish(buf, fmt, spec); \
+}
+
+MAKE_SFUNC( i, int)
+MAKE_SFUNC( l, long)
+MAKE_SFUNC(ll, long long)
+MAKE_SFUNC( j, intmax_t)
+MAKE_SFUNC( z, ssize_t)
+MAKE_SFUNC( t, ptrdiff_t)
+
+/*
+ * UNSIGNED
+ */
+#define MAKE_UFUNC(prfx, type) \
+static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
+{ \
+	type n = va_arg(*spec->ap, type); \
+	char *wptr; \
+	wptr = spec->conv_buf; \
+	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
+	spec->wptr = wptr; \
+	return decimal_finish(buf, fmt, spec); \
+}
+
+MAKE_UFUNC(  u, unsigned)
+MAKE_UFUNC( ul, unsigned long)
+MAKE_UFUNC(ull, unsigned long long)
+MAKE_UFUNC( uj, uintmax_t)
+MAKE_UFUNC( uz, size_t)
+MAKE_UFUNC( ut, ptrdiff_t)
+
+/*
+ * HEX
+ */
+static inline char *hex_insert_alternate(char *buf, size_t count)
+{
+	if(count--) {
+		*buf++ = '0';
+		if(count)
+			*buf++ = 'x';
+	}
 	return buf;
 }
-#endif
 
-static size_t f_X(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static noinline const char *hex_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
-	union all_types d;
-	size_t len = 0;
-	char *ret_val = fmt->buf;
-
-	if(unlikely(fmt->u.flags.alternate))
+	size_t len = spec->wptr - spec->conv_buf;
+	len += !spec->u.flags.alternate ? 0 : 2;
+	if(spec->width && spec->width > len)
 	{
-		if(len++ < fmt->maxlen)
-			*fmt->buf = '0';
-		fmt->buf++;
-		if(len++ < fmt->maxlen)
-			*fmt->buf = 'x';
-		fmt->buf++;
-	}
+		size_t i, ch_count = !spec->u.flags.alternate ? 0 :
+			spec->maxlen > 2 ? 2 : spec->maxlen;
 
-#if 0
-	/* printing all this over one large array of function pointers
-	 * would be cool, but who pops the arg in the right size?
-	 * sh*t-f****ng var args...
-	 */
-	char *(*funcs)()[MOD_MAXIMUM][4] =
-	{
-		{   utoXa,   utoXa_0fix,   utoXa_sfix, pr_nop }, /*        none */
-		{  uctoXa,  uctoXa_0fix,  uctoXa_sfix, pr_nop }, /*        char */
-		{  ustoXa,  ustoXa_0fix,  ustoXa_sfix, pr_nop }, /*       short */
-		{  ultoXa,  ultoXa_0fix,  ultoXa_sfix, pr_nop }, /*        long */
-		{ ulltoXa, ulltoXa_0fix, ulltoXa_sfix, pr_nop }, /*   long long */
-		{  pr_nop,       pr_nop,       pr_nop, pr_nop }, /* long double */
-		{ ulltoXa, ulltoXa_0fix, ulltoXa_sfix, pr_nop }, /*        quad */
-		{  pr_nop,       pr_nop,       pr_nop, pr_nop }, /*    intmax_t */
-		{  uztoXa,  uztoXa_0fix,  uztoXa_sfix, pr_nop }, /*      size_t */
-		{  pr_nop,       pr_nop,       pr_nop, pr_nop }, /*   ptrdiff_t */
-	}
-#endif
-
-#define A_PRINT(type, prfx) \
-		do { \
-			d.prfx = va_arg(*fmt->ap, type); \
-			if(fmt->u.flags.zero) \
-				ret_val = prfx##toXa_0fix(fmt->buf, d.prfx, fmt->width); \
-			else if(fmt->u.flags.space) \
-				ret_val = prfx##toXa_sfix(fmt->buf, d.prfx, fmt->width); \
-			else { \
-				ret_val = prfx##ntoXa(fmt->buf, fmt->maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : fmt->buf; \
-			} \
-		} while(0)
-
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-		A_PRINT(unsigned, u);
-		break;
-	case MOD_LONG:
-		A_PRINT(unsigned long, ul);
-		break;
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-		A_PRINT(unsigned long long, ull);
-		break;
-	case MOD_CHAR:
-		A_PRINT(unsigned, uc);
-		break;
-	case MOD_SHORT:
-		A_PRINT(unsigned, us);
-		break;
-	case MOD_SIZE_T:
-		A_PRINT(size_t, uz);
-		break;
-	case MOD_INTMAX_T:
-		A_POP(uintmax_t, uj);
-		break;
-	case MOD_PTRDIFF_T:
-		A_POP(ptrdiff_t, t);
-		break;
-	case MOD_LONGDOUBLE:
-// TODO: think about this
-		A_POP(unsigned long long, ull);
-		break;
-	}
-
-#undef A_PRINT
-
-	len += ret_val - fmt->buf;
-	return len;
+		i = spec->width - len;
+		i = i < spec->maxlen - ch_count ? i : spec->maxlen - ch_count;
+		if(spec->u.flags.zero && !spec->u.flags.left)
+		{
+			if(spec->u.flags.alternate)
+				buf = hex_insert_alternate(buf, spec->maxlen);
+			if(spec->precision)
+				goto OUT_CPY;
+			while(i--)
+				*buf++ = '0';
+		}
+		else
+		{
+			char *ins;
+			if(!spec->u.flags.left) {
+				ins = buf;
+				buf += i;
+			} else
+				ins = buf + i;
+			while(i--)
+				*ins++ = ' ';
+			if(spec->u.flags.alternate)
+				buf = hex_insert_alternate(buf, spec->maxlen);
+		}
+		len = spec->width;
+	} else if(spec->u.flags.alternate)
+		buf = hex_insert_alternate(buf, spec->maxlen);
+OUT_CPY:
+	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, spec->maxlen);
+	spec->len += len;
+	return end_format(buf, fmt, spec);
 }
 
-static size_t f_x(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+#define MAKE_XFUNC(prfx, type) \
+static const char *v##prfx##toxa(char *buf, const char *fmt, struct format_spec *spec) \
+{ \
+	type n = va_arg(*spec->ap, type); \
+	const char *hexchar = 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING; \
+	char *wptr; \
+	wptr = spec->conv_buf; \
+	do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
+	spec->wptr = wptr; \
+	return hex_finish(buf, fmt, spec); \
+} \
+
+MAKE_XFUNC(  u, unsigned)
+MAKE_XFUNC( ul, unsigned long)
+MAKE_XFUNC(ull, unsigned long long)
+MAKE_XFUNC( uj, uintmax_t)
+MAKE_XFUNC( uz, size_t)
+MAKE_XFUNC( ut, ptrdiff_t)
+
+/*
+ * OCTAL
+ */
+#define MAKE_OFUNC(prfx, type) \
+static const char *v##prfx##tooa(char *buf, const char *fmt, struct format_spec *spec) \
+{ \
+	type n = va_arg(*spec->ap, type); \
+	char *wptr; \
+	wptr = spec->conv_buf; \
+	do { *wptr++ = (n % 8) + '0'; n /= 8; } while(n); \
+	if(spec->u.flags.alternate && '0' != *(wptr-1)) \
+		*wptr++ = '0'; \
+	spec->wptr = wptr; \
+	return decimal_finish(buf, fmt, spec); \
+} \
+
+MAKE_OFUNC(  u, unsigned)
+MAKE_OFUNC( ul, unsigned long)
+MAKE_OFUNC(ull, unsigned long long)
+MAKE_OFUNC( uj, uintmax_t)
+MAKE_OFUNC( uz, size_t)
+MAKE_OFUNC( ut, ptrdiff_t)
+
+/*
+ * NOP
+ */
+/*
+ * we don't understand the format, but at least we
+ * must remove it from the arglist, or we will crash
+ * if we search a pointer later on.
+ * Assume an int, because std-promotion makes an int
+ * out of everything, if its a (long) long, only
+ * the modifier can help or ups...
+ */
+static noinline const char *nop_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
-	union all_types d;
-	size_t len = 0;
-	char *ret_val = fmt->buf;
+	size_t fmt_len = fmt - spec->fmt_start;
+	/* whatever the user wants, don't know, print literatly */
+	memcpy(buf, spec->fmt_start, spec->len + fmt_len < spec->maxlen ? fmt_len : spec->maxlen - spec->len);
+	spec->len += fmt_len;
+	return end_format(buf+ fmt_len, fmt, spec);
+}
 
-	if(unlikely(fmt->u.flags.alternate))
-	{
-		if(len++ < fmt->maxlen)
-			*fmt->buf = '0';
-		fmt->buf++;
-		if(len++ < fmt->maxlen)
-			*fmt->buf = 'x';
-		fmt->buf++;
-	}
+#define MAKE_NFUNC(prfx, type) \
+static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
+{ \
+	type n GCC_ATTRIB_UNUSED = va_arg(*spec->ap, type); \
+	return nop_finish(buf, fmt, spec); \
+} \
 
-#define A_PRINT(type, prfx) \
-		do { \
-			d.prfx = va_arg(*fmt->ap, type); \
-			if(fmt->u.flags.zero) \
-				ret_val = prfx##toxa_0fix(fmt->buf, d.prfx, fmt->width); \
-			else if(fmt->u.flags.space) \
-				ret_val = prfx##toxa_sfix(fmt->buf, d.prfx, fmt->width); \
-			else { \
-				ret_val = prfx##ntoxa(fmt->buf, fmt->maxlen, d.prfx); \
-				ret_val = ret_val ? ret_val : fmt->buf; \
-			} \
-		} while(0)
+MAKE_NFUNC(  n, unsigned)
+MAKE_NFUNC( nl, unsigned long)
+MAKE_NFUNC(nll, unsigned long long)
+MAKE_NFUNC( nj, uintmax_t)
+MAKE_NFUNC( nz, size_t)
+MAKE_NFUNC( nt, ptrdiff_t)
 
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-		A_PRINT(unsigned, u);
-		break;
-	case MOD_LONG:
-		A_PRINT(unsigned long, ul);
-		break;
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-		A_PRINT(unsigned long long, ull);
-		break;
-	case MOD_CHAR:
-		A_PRINT(unsigned, uc);
-		break;
-	case MOD_SHORT:
-		A_PRINT(unsigned, us);
-		break;
-	case MOD_SIZE_T:
-		A_PRINT(size_t, uz);
-		break;
-	case MOD_INTMAX_T:
-		A_POP(uintmax_t, uj);
-		break;
-	case MOD_PTRDIFF_T:
-		A_POP(ptrdiff_t, t);
-		break;
-	case MOD_LONGDOUBLE:
-// TODO: think about this
-		A_POP(unsigned long long, ull);
-		break;
-	}
+/*
+ * FLOTING POINT - UNIMPLEMETNED
+ * not over unimp, to pop the right arg size
+ */
+static noinline const char *fp_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	size_t fmt_len = fmt - spec->fmt_start;
+	printf("[FLOAT] unimplemented format \"%.*s\": '%c'\n",
+	       (int)fmt_len, spec->fmt_start, *(fmt-1));
+	return nop_finish(buf, fmt, spec);
+}
 
-#undef A_PRINT
+static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	double GCC_ATTRIB_UNUSED n = va_arg(*spec->ap, double);
+	return fp_finish(buf, fmt, spec);
+}
+static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	long double GCC_ATTRIB_UNUSED n = va_arg(*spec->ap, long double);
+	return fp_finish(buf, fmt, spec);
+}
 
-	len += ret_val - fmt->buf;
-	return len;
+
+/*
+ * decider...
+ */
+/*
+ * printing all this over one large array of function
+ * pointers would be cool...
+ */
+static const fmt_func num_format_table[][MOD_MAX_NUM] =
+{	/*                                                     l
+	 *                                                      o
+	 *                                             l         n                                    p
+	 *                                              o         g                  i                 t
+	 *                                               n                            n                 r
+	 *                                                g         d                  t        s        d
+	 *                                                           o                  m        i        i
+	 *               n       c       s        l         l         u         q        a        z        f
+	 *                o       h       o        o         o         b         u        x        e        f
+	 *                 n       a       r        n         n         l         a        _        _        _
+	 *                  e       r       t        g         g         e         d        t        t        t
+	 *     HEXL */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa}, /* 0 */
+	/*     HEXU */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa}, /* 1 */
+	/* UNSIGNED */ {  vutoa,  vutoa,  vutoa,  vultoa,  vulltoa,  vulltoa,  vulltoa,  vujtoa,  vuztoa,  vuttoa}, /* 2 */
+	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa}, /* 3 */
+	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa}, /* 4 */
+	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa}, /* 5 */
+	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa}  /* 6 */
+};
+
+static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[0][spec->mod](buf, fmt, spec);
+}
+static const char *f_X(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[1][spec->mod](buf, fmt, spec);
+}
+static const char *f_u(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[2][spec->mod](buf, fmt, spec);
+}
+static const char *f_i(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[3][spec->mod](buf, fmt, spec);
+}
+static const char *f_o(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[4][spec->mod](buf, fmt, spec);
+}
+static const char *f_fp(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[5][spec->mod](buf, fmt, spec);
+}
+static const char *fmtnop(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[6][spec->mod](buf, fmt, spec);
+}
+/*
+ * other conversion - uninmplemented
+ */
+static const char *unimpl(char *buf, const char *fmt, struct format_spec *spec)
+{
+	size_t fmt_len = fmt - spec->fmt_start;
+	printf("unimplemented format \"%.*s\": '%c'\n",
+	       (int)fmt_len, spec->fmt_start, *(fmt-1));
+	return fmtnop(buf, fmt, spec);
 }
 
 /*
- * floating point conversion - UNIMPLEMETNED
- * not over unimp, to pop the right arg size
+ * ERRNO
  */
-static size_t f_fp(struct format_spec *fmt, unsigned char c)
-{
-	union all_types d;
-	size_t fmt_len = fmt->fmt - fmt->fmt_start;
-
-	printf("unimplemented format \"%.*s\": '%c'\n",
-	       (int)fmt_len, fmt->fmt_start, c);
-	/* whatever the user wants, don't know, print literatly */
-	mempcpy(fmt->buf, fmt->fmt_start, fmt_len < fmt->maxlen ? fmt_len : fmt->maxlen);
-
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-	case MOD_LONG:
-	case MOD_QUAD:
-	case MOD_LONGLONG:
-	case MOD_CHAR:
-	case MOD_SHORT:
-	case MOD_SIZE_T:
-	case MOD_INTMAX_T:
-	case MOD_PTRDIFF_T:
-		A_POP(double, e);
-		break;
-	case MOD_LONGDOUBLE:
-		A_POP(long double, L);
-		break;
-	}
-
-	return fmt_len;
-}
-
-#undef A_POP
-
-static size_t f_serr(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 #if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
@@ -488,7 +494,7 @@ static size_t f_serr(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 	 * wich needs a #define __GNU_SOURCE, but conflicts
 	 * with this...
 	 */
-	const char *s = strerror_r(errno, fmt->buf, fmt->maxlen);
+	const char *s = strerror_r(errno, buf, spec->maxlen);
 # else
 	/*
 	 * Ol Solaris seems to have a static msgtable, so
@@ -498,21 +504,21 @@ static size_t f_serr(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 	const char *s = strerror(errno);
 # endif
 	if(s)
-		err_str_len = strnlen(s, fmt->maxlen);
+		err_str_len = strnlen(s, spec->maxlen);
 	else {
 		s = "Unknown system error";
-		err_str_len = strlen(s) < fmt->maxlen ?
-		              strlen(s) : fmt->maxlen;
+		err_str_len = strlen(s) < spec->maxlen ?
+		              strlen(s) : spec->maxlen;
 	}
 
-	if(s != fmt->buf)
-		memcpy(fmt->buf, s, err_str_len);
+	if(s != buf)
+		memcpy(buf, s, err_str_len);
 #else
-	if(!strerror_r(errno, fmt->buf, fmt->maxlen))
-		err_str_len += strnlen(fmt->buf, fmt->maxlen);
+	if(!strerror_r(errno, buf, spec->maxlen))
+		err_str_len += strnlen(buf, spec->maxlen);
 	else
 	{
-		char *bs = fmt->buf;
+		char *bs = buf;
 		if(EINVAL == errno) {
 			strlitcpy(bs, "Unknown errno value!");
 			err_str_len = str_size("Unknown errno value!");
@@ -525,60 +531,72 @@ static size_t f_serr(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
 		}
 	}
 #endif
-	return err_str_len;
+	buf += err_str_len;
+	spec->len += err_str_len;
+	return end_format(buf, fmt, spec);
 }
 
-
-static size_t f_s(struct format_spec *fmt, unsigned char c)
+/*
+ * STRING
+ */
+static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 {
 	const char *s;
 	char *t;
 	size_t len = 0, diff;
-	size_t maxlen = fmt->maxlen;
+	size_t maxlen = spec->maxlen - spec->len;
 
-	s = va_arg(*fmt->ap, const char *);
+	s = va_arg(*spec->ap, const char *);
 
-	if(unlikely('S' == c))
-		fmt->mod = MOD_LONG;
+	if(unlikely('S' == *(fmt-1)))
+		spec->mod = MOD_LONG;
 
-	if(unlikely(fmt->precision))
-		maxlen = maxlen < fmt->precision ? maxlen : fmt->precision;
+	if(unlikely(spec->precision))
+		maxlen = maxlen < spec->precision ? maxlen : spec->precision;
 
 #ifdef WANT_WCHAR
-	if(likely(MOD_LONG != fmt->mod) || !s)
+	if(likely(MOD_LONG != spec->mod) || !s)
 	{
 #else
-	if(unlikely(MOD_LONG == fmt->mod))
+	if(unlikely(MOD_LONG == spec->mod))
 		s = "%l???s";
 #endif
 	if(unlikely(!s))
 		s = "<null>";
 
-	if(unlikely(fmt->u.flags.space))
+	if(unlikely(spec->u.flags.space))
 	{
-		size_t r_len = strnlen(s, fmt->precision);
-		size_t d_len = fmt->precision - r_len;
-		if(d_len) {
-// TODO: field left justified
-			memset(fmt->buf, ' ', d_len < maxlen ? d_len : maxlen);
-			maxlen -= d_len;
-		}
-		memcpy(fmt->buf + d_len, s, r_len < maxlen ? r_len : maxlen);
-		len += fmt->precision;
+		size_t r_len = strnlen(s, spec->precision);
+		size_t d_len = spec->precision - r_len;
+		if(d_len)
+		{
+			if(!spec->u.flags.left) {
+				memset(buf, ' ', d_len < maxlen ? d_len : maxlen);
+				maxlen -= d_len;
+				memcpy(buf + d_len, s, r_len < maxlen ? r_len : maxlen);
+			} else {
+				memset(buf + d_len, ' ', r_len + d_len < maxlen ? d_len : maxlen - r_len);
+				memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
+			}
+		} else
+			memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
+		buf += spec->precision;
+		len += spec->precision;
 	}
 	else
 	{
-		t = strnpcpy(fmt->buf, s, maxlen);
-		diff = t - fmt->buf;
+		t = strnpcpy(buf, s, maxlen);
+		diff = t - buf;
 		len += diff;
 		if(*t)
 		{ /* not complete? */
-			if(fmt->precision) {
-				if(diff < fmt->precision)
-					len += fmt->precision - diff;
+			if(spec->precision) {
+				if(diff < spec->precision)
+					len += spec->precision - diff;
 			} else
 				len += strlen(s + diff);
 		}
+		buf += len;
 	}
 #ifdef WANT_WCHAR
 	}
@@ -588,310 +606,289 @@ static size_t f_s(struct format_spec *fmt, unsigned char c)
 		const wchar_t *ws = (const wchar_t *)s;
 
 		memset(&ps, 0, sizeof(ps));
-		for(; len <= (maxlen - MB_CUR_MAX) && *ws != L'\0'; ws++) {
-			size_t ret_val = wcrtomb(fmt->buf, *ws, &ps);
-			if(ret_val != (size_t)-1)
+		for(; len < (maxlen - MB_CUR_MAX) && *ws != L'\0'; ws++) {
+			size_t ret_val = wcrtomb(buf, *ws, &ps);
+			if(ret_val != (size_t)-1) {
 				len += ret_val;
+				buf += ret_val;
+			}
 		}
 		if(unlikely(*ws != L'\0' && len >= (maxlen - MB_CUR_MAX)))
 		{
+			size_t h_len = 0;
 			char tbuf[MB_CUR_MAX];
 			for(; *ws != L'\0'; ws++) {
 				size_t ret_val = wcrtomb(tbuf, *ws, &ps);
-			if((size_t)-1 != ret_val)
-					len += ret_val;
+				if((size_t)-1 != ret_val)
+						h_len += ret_val;
 			}
+			len += h_len;
+			buf += h_len;
 		}
 	}
 #endif
-	return len;
+
+	spec->len += len;
+	return end_format(buf, fmt, spec);
 }
 
-
-static size_t f_c(struct format_spec *fmt, unsigned char c)
+/*
+ * CHAR
+ */
+static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t len;
 
-	if(unlikely('C' == c))
-		fmt->mod = MOD_LONG;
+	if(unlikely('C' == *(fmt-1)))
+		spec->mod = MOD_LONG;
 
-	if(likely(MOD_LONG != fmt->mod))
+	if(likely(MOD_LONG != spec->mod))
 	{
-		int x = va_arg(*fmt->ap, int);
-		if(fmt->maxlen)
-			*fmt->buf = (char)x;
+		int x = va_arg(*spec->ap, int);
+		if(spec->maxlen - spec->len)
+			*buf = (char)x;
+		buf++;
 		len = 1;
 	}
 	else
 	{
 #ifndef WANT_WCHAR
 // TODO: popping an int may be wrong
-		int x GCC_ATTRIB_UNUSED = va_arg(*fmt->ap, int);
-		if(fmt->maxlen)
-			*fmt->buf = '?';
+		int x GCC_ATTRIB_UNUSED = va_arg(*spec->ap, int);
+		if(spec->maxlen - spec->len)
+			*buf = '?';
+		buf++;
 		len = 1;
 #else
 		mbstate_t ps;
 		char tbuf[MB_CUR_MAX];
-		wint_t wc = va_arg(*fmt->ap, wint_t);
+		wint_t wc = va_arg(*spec->ap, wint_t);
 		size_t ret_val;
 
 		memset(&ps, 0, sizeof(ps));
 		ret_val = wcrtomb(tbuf, wc, &ps);
 		if((size_t)-1 != ret_val) {
-			memcpy(fmt->buf, tbuf, ret_val <= fmt->maxlen ? ret_val : fmt->maxlen);
+			memcpy(buf, tbuf, spec->len + ret_val < spec->maxlen ? ret_val : spec->maxlen - spec->len);
 			len = ret_val;
 		} else
 			len = 0;
+		buf += len;
 #endif
 	}
 
-	return len;
+	spec->len += len;
+	return end_format(buf, fmt, spec);
 }
 
-static size_t f_p(struct format_spec *fmt, unsigned char c)
+/*
+ * POINTER
+ */
+static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 {
-	void *ptr = va_arg(*fmt->ap, void *);
+	void *ptr = va_arg(*spec->ap, void *);
 	char *ret_val;
 	size_t len = 0;
+	char c;
 
-	for(c = *fmt->fmt++; '#' == c || 'I' == c; c = *fmt->fmt++)
+	for(c = *fmt++; '#' == c || 'I' == c; c = *fmt++)
 	{
 		if('#' == c)
-			fmt->u.flags.alternate = true;
+			spec->u.flags.alternate = true;
 		if('I' == c)
-			fmt->u.flags.ip = true;
+			spec->u.flags.ip = true;
 	}
-	fmt->fmt--;
+	fmt--;
 
-	if(!fmt->u.flags.ip)
+	if(!spec->u.flags.ip)
 	{
-		if((sizeof(void *) * 2) + 2 > fmt->maxlen)
+		if((sizeof(void *) * 2) + 2 > spec->maxlen)
 			len = (sizeof(void *) * 2) + 2;
 		else
-			len = ptoa(fmt->buf, ptr) - fmt->buf;
+			len = ptoa(buf, ptr) - buf;
+		buf += len;
 	}
 	else
 	{
 		union combo_addr *addr = ptr;
 		if(!addr) {
-			memcpy(fmt->buf, "<null>", str_size("<null>") < fmt->maxlen ? str_size("<null>") : fmt->maxlen);
-			return str_size("<null>");
+			mempcpy(buf, "<null>", str_size("<null>") < spec->maxlen ? str_size("<null>") : spec->maxlen);
+			buf += str_size("<null>");
+			len  = str_size("<null>");
+			goto OUT_MORE;
 		}
 
-		if(fmt->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= fmt->maxlen)
-			*fmt->buf++ = '[';
+		if(spec->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= spec->maxlen)
+			*buf++ = '[';
 
-		ret_val = combo_addr_print_c(addr, fmt->buf, fmt->maxlen);
+		ret_val = combo_addr_print_c(addr, buf, spec->maxlen);
 		if(!ret_val) {
-			if(fmt->maxlen <= INET6_ADDRSTRLEN)
+			if(spec->maxlen <= INET6_ADDRSTRLEN)
 				len += INET6_ADDRSTRLEN;
 			else
-				ret_val = fmt->buf;
+				ret_val = buf;
 		}
-		len += ret_val - fmt->buf;
-		if(fmt->u.flags.alternate)
+		len += ret_val - buf;
+		buf = ret_val;
+		if(spec->u.flags.alternate)
 		{
-			fmt->buf = ret_val;
-			if(AF_INET6 == addr->s_fam && len++ <= fmt->maxlen)
-				*fmt->buf++ = ']';
-			if(len++ <= fmt->maxlen)
-				*fmt->buf++ = ':';
-			ret_val = usntoa(fmt->buf, fmt->maxlen - len, ntohs(combo_addr_port(addr)));
-			ret_val = ret_val ? ret_val : fmt->buf;
-			len += ret_val - fmt->buf;
+			if(AF_INET6 == addr->s_fam && len++ <= spec->maxlen)
+				*buf++ = ']';
+			if(len++ <= spec->maxlen)
+				*buf++ = ':';
+			ret_val = usntoa(buf, spec->maxlen - len, ntohs(combo_addr_port(addr)));
+			ret_val = ret_val ? ret_val : buf;
+			len += ret_val - buf;
+			buf = ret_val;
 		}
 	}
 
-	return len;
+OUT_MORE:
+	spec->len += len;
+	return end_format(buf, fmt, spec);
 }
 
-#define format_dispatch(f) format_table[*((const unsigned char *)(f)->fmt)]((f), *((const unsigned char *)(f)->fmt++))
-typedef size_t (*fmt_func)(struct format_spec *, unsigned char);
-static const fmt_func format_table[256];
+/************************************************************************
+ *
+ * Other format stuff
+ *
+ ************************************************************************/
 
 /*
  * width
  */
-static size_t widths(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *widths(char *buf, const char *fmt, struct format_spec *spec)
 {
-	int w = va_arg(*fmt->ap, int);
+	int w = va_arg(*spec->ap, int);
 	if(w < 0) {
-		fmt->u.flags.left = true;
+		spec->u.flags.left = true;
 		w = -w;
 	}
-	fmt->width = (unsigned)w;
-	return format_dispatch(fmt);
+	spec->width = (unsigned)w;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t widthn(struct format_spec *fmt, unsigned char c)
+static const char *widthn(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned w = 0;
-	for(; c && isdigit(c); c = *fmt->fmt++) {
+	char c;
+	for(c = *(fmt-1); c && isdigit(c); c = *fmt++) {
 		w *= 10;
 		w += c - '0';
 	}
-	fmt->fmt--;
-	fmt->width = w;
-	return format_dispatch(fmt);
+	fmt--;
+	spec->width = w;
+	return format_dispatch(buf, fmt, spec);
 }
 
 /*
  * precision
  */
-static size_t prec_p(struct format_spec *fmt, unsigned char c)
+static const char *prec_p(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned p = 0;
-	c = *fmt->fmt++;
+	char c = *fmt++;
 	if('*' == c) {
-		int t = va_arg(*fmt->ap, int);
+		int t = va_arg(*spec->ap, int);
 		if(t > 0)
 			p = (unsigned)t;
 	} else {
-		for(; c && isdigit(c); c = *fmt->fmt++) {
+		for(; c && isdigit(c); c = *fmt++) {
 			p *= 10;
 			p += c - '0';
 		}
-		fmt->fmt--;
+		fmt--;
 	}
-	fmt->precision = p;
-	return format_dispatch(fmt);
+	spec->precision = p;
+	return format_dispatch(buf, fmt, spec);
 }
 
 /*
  * flags
  */
-static size_t flag_h(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_h(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.alternate = true;
-	return format_dispatch(fmt);
+	spec->u.flags.alternate = true;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t flag_0(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_0(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.zero = true;
-	return format_dispatch(fmt);
+	spec->u.flags.zero = true;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t flag_m(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_m(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.left = true;
-	return format_dispatch(fmt);
+	spec->u.flags.left = true;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t flag_s(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_s(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.space = true;
-	return format_dispatch(fmt);
+	spec->u.flags.space = true;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t flag_p(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_p(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.sign = true;
-	return format_dispatch(fmt);
+	spec->u.flags.sign = true;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t flag_I(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *flag_I(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->u.flags.ip = true;
-	return format_dispatch(fmt);
+	spec->u.flags.ip = true;
+	return format_dispatch(buf, fmt, spec);
 }
 
 /*
  * lenght mod
  */
-static size_t lmod_L(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_L(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_LONGDOUBLE;
-	return format_dispatch(fmt);
+	spec->mod = MOD_LONGDOUBLE;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_q(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_q(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_QUAD;
-	return format_dispatch(fmt);
+	spec->mod = MOD_QUAD;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_j(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_j(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_INTMAX_T;
-	return format_dispatch(fmt);
+	spec->mod = MOD_INTMAX_T;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_z(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_z(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_SIZE_T;
-	return format_dispatch(fmt);
+	spec->mod = MOD_SIZE_T;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_t(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_t(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_PTRDIFF_T;
-	return format_dispatch(fmt);
+	spec->mod = MOD_PTRDIFF_T;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_h(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_h(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_SHORT != fmt->mod ? MOD_SHORT : MOD_CHAR;
-	return format_dispatch(fmt);
+	spec->mod = MOD_SHORT != spec->mod ? MOD_SHORT : MOD_CHAR;
+	return format_dispatch(buf, fmt, spec);
 }
-static size_t lmod_l(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lmod_l(char *buf, const char *fmt, struct format_spec *spec)
 {
-	fmt->mod = MOD_LONG != fmt->mod ? MOD_LONG : MOD_LONGLONG;
-	return format_dispatch(fmt);
+	spec->mod = MOD_LONG != spec->mod ? MOD_LONG : MOD_LONGLONG;
+	return format_dispatch(buf, fmt, spec);
 }
 
 /*
  * specials
  */
-static size_t lit_p(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 {
-	if(likely(fmt->maxlen))
-		*fmt->buf = '%';
-	return 1;
+	if(likely(spec->maxlen - spec->len))
+		*buf++ = '%';
+	spec->len++;
+	return end_format(buf, fmt, spec);
 }
-static size_t p_len(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
+static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
-	int *n = va_arg(*fmt->ap, int *);
-	*n = (int) fmt->len;
-	return 0;
-}
-
-/*
- * other conversion - uninmplemented
- */
-static size_t fmtnop(struct format_spec *fmt, unsigned char c GCC_ATTRIB_UNUSED)
-{
-	size_t fmt_len = fmt->fmt - fmt->fmt_start;
-	union all_types dummy GCC_ATTRIB_UNUSED;
-	/*
-	 * we don't understand the format, but at least we
-	 * must remove it from the arglist, or we will crash
-	 * if we search a pointer later on.
-	 * Assume an int, because std-promotion makes an int
-	 * out of everything, if its a (long) long, only
-	 * the modifier can help or ups...
-	 */
-	switch(fmt->mod)
-	{
-	case MOD_NONE:
-	case MOD_CHAR:
-	case MOD_SHORT:
-		{ dummy.i = va_arg(*fmt->ap, int); break; }
-	case MOD_LONG:
-		{ dummy.l = va_arg(*fmt->ap, long); break; }
-	case MOD_LONGLONG:
-		{ dummy.ll = va_arg(*fmt->ap, long long); break; }
-	case MOD_LONGDOUBLE:
-		{ dummy.L = va_arg(*fmt->ap, long double); break; }
-	case MOD_QUAD:
-		{ dummy.q = va_arg(*fmt->ap, int64_t); break; }
-	case MOD_INTMAX_T:
-		{ dummy.j = va_arg(*fmt->ap, intmax_t); break; }
-	case MOD_SIZE_T:
-		{ dummy.z = va_arg(*fmt->ap, size_t); break; }
-	case MOD_PTRDIFF_T:
-		{ dummy.t = va_arg(*fmt->ap, ptrdiff_t); break;}
-	}
-	/* whatever the user wants, don't know, print literatly */
-	memcpy(fmt->buf, fmt->fmt_start, fmt_len < fmt->maxlen ? fmt_len : fmt->maxlen);
-	return fmt_len;
-}
-static size_t unimpl(struct format_spec *fmt, unsigned char c)
-{
-	size_t fmt_len = fmt->fmt - fmt->fmt_start;
-	printf("unimplemented format \"%.*s\": '%c'\n",
-	       (int)fmt_len, fmt->fmt_start, c);
-	return fmtnop(fmt, c);
+	int *n = va_arg(*spec->ap, int *);
+	*n = (int) spec->len;
+	return end_format(buf, fmt, spec);
 }
 
 /*
@@ -918,7 +915,7 @@ static const fmt_func format_table[256] =
 	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
 	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */
-	/* 60 */ fmtnop,   f_fp, fmtnop,    f_c,    f_i,   f_fp,   f_fp,   f_fp, lmod_h,    f_i, lmod_j, fmtnop, lmod_l, f_serr,  p_len, unimpl,
+	/* 60 */ fmtnop,   f_fp, fmtnop,    f_c,    f_i,   f_fp,   f_fp,   f_fp, lmod_h,    f_i, lmod_j, fmtnop, lmod_l, f_serr,  p_len,    f_o,
 	/*            `,      a,      b,      c,      d,      e,      f,      g,      h,      i,      j,      k,      l,      m,      n,      o, */
 	/* 70 */    f_p, lmod_q, fmtnop,    f_s, lmod_t,    f_u, fmtnop, fmtnop,    f_x, fmtnop, lmod_z, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            p,      q,      r,      s,      t,      u,      v,      w,      x,      y,      z,      {,      |,      },      ~,    DEL, */
@@ -940,49 +937,44 @@ static const fmt_func format_table[256] =
 	/*             ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       ,       , */
 };
 
+/*
+ * Entry funcs
+ */
 int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 {
 	struct format_spec cur_fmt;
-	char *m;
-	size_t len = 0, diff;
+	size_t diff;
+	const char *m;
 
 	cur_fmt.ap = &ap;
-	cur_fmt.fmt = fmt;
+	cur_fmt.len = 0;
+	cur_fmt.maxlen = maxlen;
 	do
 	{
-		m = strchrnul(cur_fmt.fmt, '%');
-		diff = m - cur_fmt.fmt;
-		if(likely(diff)) {
-			mempcpy(buf, cur_fmt.fmt, len + diff < maxlen ? diff : maxlen - len);
-			buf += diff;
-			len += diff;
-		}
-		if('%' == *m)
-		{
-			size_t ret_len;
+		m = strchrnul(fmt, '%');
+		diff = m - fmt;
+		if(likely(diff))
+			buf = mempcpy(buf, fmt, cur_fmt.len + diff < cur_fmt.maxlen ? diff : cur_fmt.maxlen - cur_fmt.len);
+		cur_fmt.len += diff;
+		fmt = m;
 
-			cur_fmt.fmt = m + 1;
-			cur_fmt.fmt_start = cur_fmt.fmt - 1;
-			cur_fmt.buf = buf;
-			cur_fmt.len = len;
-			cur_fmt.maxlen = maxlen - len;
+		if('%' == *fmt)
+		{
+			cur_fmt.fmt_start = fmt;
 			cur_fmt.precision = 0;
 			cur_fmt.width = 0;
 			cur_fmt.mod = MOD_NONE;
 			cur_fmt.u.xyz = 0;
-
-			ret_len = format_dispatch(&cur_fmt);
-			buf += ret_len;
-			len += ret_len;
-		}
-		else
+			fmt = format_dispatch(buf, fmt+1, &cur_fmt);
+			buf = cur_fmt.wptr;
+		} else
 			break;
 	} while(1);
 
-	if(likely(len < maxlen))
+	if(likely(cur_fmt.len < maxlen))
 		*buf = '\0';
 
-	return (int) len;
+	return (int)cur_fmt.len;
 }
 
 int my_snprintf(char *buf, size_t maxlen, const char *fmt, ...)

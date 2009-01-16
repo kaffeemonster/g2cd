@@ -168,12 +168,11 @@ alignment_16:
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		register vector const unsigned char *src_vec = (vector const unsigned char *) src_char;
 		register vector unsigned char v[4];
-		static vector const unsigned char v_0;
+		vector const unsigned char v_0 = vec_splat_u8(0);
 		size_t small_len = len / SOVUC;
 		register size_t smaller_len = small_len / 4;
 		small_len %= 4;
 
-		v_0 = vec_splat_u8(0);
 		for(; smaller_len--; dst_vec += 4, src_vec += 4)
 		{
 			v[0] = vec_ldl(0 * SOVUC, src_vec);
@@ -215,14 +214,13 @@ no_alignment_wanted:
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		/* only src sucks */
 		register vector const unsigned char *src_vec;
-		vector unsigned char v[9];                  /* 0-8 */
-		vector unsigned char fix_alignment;         /* 9 */
-		static vector const unsigned char v_0;      /* 10 */
+		vector unsigned char v[9];                        /* 0-8 */
+		vector unsigned char fix_alignment;               /* 9  */
+		vector const unsigned char v_0 = vec_splat_u8(0); /* 10 */
 		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
 		register size_t smaller_len = small_len / 8;
 		small_len %= 8;
 
-		v_0 = vec_splat_u8(0);
 		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
 		src_vec = (vector const unsigned char *) src_char;
 		v[8] = vec_ldl(0, src_vec);

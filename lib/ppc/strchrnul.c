@@ -28,7 +28,7 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-char *strlen(const char *s, int c)
+char *strchrnul(const char *s, int c)
 {
 	vector unsigned char v0;
 	vector unsigned char v1;

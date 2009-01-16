@@ -248,6 +248,8 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 
 	server.status.all_abord[THREAD_TIMER] = true;
 
+	g2_set_thread_name(OUR_PROC " timeout");
+
 	while(!wakeup.abort)
 	{
 		int ret_val;

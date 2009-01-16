@@ -160,7 +160,7 @@ CFLAGS += $(ARCH_FLAGS)
 #
 # stuff it here, were -save-temps is
 #	this hopefully makes compilation faster, gcc-specific?
-CFLAGS += -pipe
+#CFLAGS += -pipe
 #CFLAGS += -save-temps
 CFLAGS += -g3 # -pg
 #	sun studio
@@ -743,6 +743,7 @@ version.h: Makefile
 	$(PORT_PR)	"#define _VERSION_H\n" >> $@; \
 	$(PORT_PR)	"\n" >> $@; \
 	$(PORT_PR)	"#define DIST\t\"$(DISTNAME)\"\n" >> $@; \
+	$(PORT_PR)	"#define OUR_PROC\t\"$(MAIN)\"\n" >> $@; \
 	$(PORT_PR)	"#define OUR_UA\t\"$(LONGNAME)\"\n" >> $@; \
 	$(PORT_PR)	"#define OUR_VERSION\t\"$(VERSION)\"\n" >> $@; \
 	$(PORT_PR)	"#define SYSTEM_INFO\t\"" >> $@; \

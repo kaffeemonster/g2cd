@@ -217,7 +217,11 @@ void *G2Accept(void *param)
 
 	/* we are up and running */
 	server.status.all_abord[THREAD_ACCEPTOR] = true;
-	/* 
+
+	my_snprintf(buffer_start(*lsend_buff), buffer_remaining(*lsend_buff), OUR_PROC " Acceptor %i", 0);
+	g2_set_thread_name(buffer_start(*lsend_buff));
+
+	/*
 	 * We'll be doing this quite a long time, so we have to make sure, to get
 	 * not confused by a EINTR and leak ressources (for example when close()ing
 	 * a fd), execpt when we bail out.

@@ -283,6 +283,7 @@ LOOP_AGAIN:
 	return 0;
 }
 
+#ifndef __x86_64__
 static int strncasecmp_a_SSE(const char *s1, const char *s2, size_t n)
 {
 	size_t m1;
@@ -403,6 +404,7 @@ LOOP_AGAIN:
 
 	return 0;
 }
+#endif
 
 static int strncasecmp_a_x86(const char *s1, const char *s2, size_t n)
 {

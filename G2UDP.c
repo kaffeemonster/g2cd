@@ -86,13 +86,16 @@ static void *G2UDP_loop(void *param)
 	union combo_addr from;
 	int answer_fd = -1;
 
+	my_snprintf(d_hold.data, d_hold.limit, OUR_PROC " UDP %i", (int)param);
+	g2_set_thread_name(d_hold.data);
+
 	while(worker.keep_going)
 	{
 		bool repoll;
 		/*
 		 * let only one thread at a time poll and recieve a packet
 		 *
-		 * We could keep them aout with a simple lock, but to avoid
+		 * We could keep them out with a simple lock, but to avoid
 		 * a "thundering herd" Problem, when the reciever leaves the
 		 * section, we put them on a conditional (in the hope,
 		 * cond_signal to wake one is implemented sensible...)
@@ -172,7 +175,7 @@ static void *G2UDP_loop(void *param)
 		buffer_clear(d_hold);
 	}
 
-	if(!param)
+	if(param)
 		pthread_exit(NULL);
 	/* only the creator thread should get out here */
 	return NULL;
@@ -231,7 +234,7 @@ void *G2UDP(void *param)
 	worker.keep_going = true;
 	for(i = 0; i < num_helper; i++)
 	{
-		if(pthread_create(&helper[i], &server.settings.t_def_attr, G2UDP_loop, NULL)) {
+		if(pthread_create(&helper[i], &server.settings.t_def_attr, G2UDP_loop, (void *)(i + 1))) {
 			logg_errnod(LOGF_WARN, "starting UDP helper threads, will run with %u", i);
 			num_helper = i;
 			break;
@@ -240,7 +243,7 @@ void *G2UDP(void *param)
 	/* we become one of them, only the special one which cleans up */
 	/* we are up and running */
 	server.status.all_abord[THREAD_UDP] = true;
-	G2UDP_loop((void *)0x01);
+	G2UDP_loop(NULL);
 
 	for(i = 0; i < num_helper; i++)
 	{

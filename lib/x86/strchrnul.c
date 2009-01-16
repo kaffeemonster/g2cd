@@ -72,7 +72,7 @@ static char *strchrnul_SSE42(const char *s, int c)
 		"movzbl	%4, %k0\n\t"
 		"pxor	%%xmm1, %%xmm1\n\t"
 		"pinsrw	$0b00000000, %k0, %%xmm1\n\t"
-		"and	$0xfffffff0, %2\n\t"
+		"and	$-16, %2\n\t"
 		"mov	$16, %k0\n\t"
 		"mov	%0, %1\n\t"
 		"pcmpestrm	$0b1000000, (%2), %%xmm1\n\t"
@@ -122,7 +122,7 @@ static char *strchrnul_SSE2(const char *s, int c)
 		"movb	%4, %b0\n\t"
 		"movb	%b0, %h0\n\t"
 		"mov	%1, %2\n\t"
-		"and	$0xfffffff0, %1\n\t"
+		"and	$-16, %1\n\t"
 		"and	$0x0f, %2\n\t"
 		"pxor	%%xmm1, %%xmm1\n\t"
 		"pinsrw	$0b00000000, %k0, %%xmm2\n\t"
@@ -176,7 +176,7 @@ static char *strchrnul_SSE(const char *s, int c)
 		"movb	%4, %b0\n\t"
 		"movb	%b0, %h0\n\t"
 		"mov	%1, %2\n\t"
-		"and	$0xfffffff8, %1\n\t"
+		"and	$-8, %1\n\t"
 		"and	$0x7, %2\n\t"
 		"pxor	%%mm1, %%mm1\n\t"
 		"pinsrw	$0b00000000, %k0, %%mm2\n\t"
@@ -238,7 +238,7 @@ static char *strchrnul_x86(const char *s, int c)
 		"mov	%2, %0\n\t"
 		"add	%10, %0\n\t"
 #endif
-		"xor	%7, %3\n\t"
+		"xor	%4, %3\n\t"
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
 #ifndef __x86_64__
@@ -254,8 +254,8 @@ static char *strchrnul_x86(const char *s, int c)
 		"pop	%2\n\t"
 #endif
 		"and	%9, %0\n\t"
-		"shr	%b2, %0\n\t"
-		"shl	%b2, %0\n\t"
+		"shr	%b8, %0\n\t"
+		"shl	%b8, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
@@ -269,7 +269,7 @@ static char *strchrnul_x86(const char *s, int c)
 		"mov	%2, %0\n\t"
 		"add	%10, %0\n\t"
 #endif
-		"xor	%7, %3\n\t"
+		"xor	%4, %3\n\t"
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
 #ifndef __x86_64__
