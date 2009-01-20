@@ -37,7 +37,6 @@ ZHEADS = \
 
 # all src files
 ZSRCS = \
-	$(MPZ)/adler32.c \
 	$(MPZ)/compress.c \
 	$(MPZ)/crc32.c \
 	$(MPZ)/uncompr.c \
@@ -57,7 +56,6 @@ ZOBJS = \
 	$(MPZ)/deflate.o \
 	$(MPZ)/compress.o \
 	$(MPZ)/crc32.o \
-	$(MPZ)/adler32.o \
 	$(MPZ)/inftrees.o \
 	$(MPZ)/trees.o \
 	$(MPZ)/zutil.o
@@ -80,7 +78,6 @@ $(ZLIB): $(ZLIB)($(ZOBJS))
 $(ZLIB)($(ZOBJS)): arflock
 
 # Dependencies
-$(MPZ)/adler32.o:
 $(MPZ)/compress.o:
 $(MPZ)/crc32.o: $(MPZ)/crc32.h 
 $(MPZ)/deflate.o: $(MPZ)/zutil.h

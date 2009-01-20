@@ -231,9 +231,10 @@ CFLAGS += $(OPT_FLAGS)
 #
 # Libs
 #
+LDLIBS_BASE = -lcommon
 # Libraries from the System (which will never be modules)
 #	Solaris...
-LDLIBS_BASE = -ldl #-lm
+LDLIBS_BASE += -ldl #-lm
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
 # either you set this and the appropreate flags below, or you
@@ -288,12 +289,14 @@ LDFLAGS += -pthread
 LDFLAGS += -rdynamic
 
 #
-#	Lib Paths (additional)
-#
+#	Lib Paths
+LDFLAGS += -L./lib/
+# (additional)
 #LDFLAGS += -L$(ZLIB_LPATH)/lib -Wl,R,$(ZLIB_LPATH)/lib
 
-#LDFLAGS += -Wl.-u,strlen
+#LDFLAGS += -Wl,-u,strlen
 #LDFLAGS += -Wl,-u,strnlen
+#LDFLAGS += -Wl,-u,adler32
 
 #
 # Include Paths
@@ -567,7 +570,7 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #	define a diffrent main-name and the solaris 5.7 'make'
 #	is a little...
 $(MAIN): $(OBJS) $(LIBCOMMON) .mapfile
-	@./ccdrv -s$(VERBOSE) "LD[$@]" $(CC) -o $@ $(OBJS) $(LDFLAGS) $(LIBCOMMON) $(LOADLIBES) $(LDLIBS)
+	@./ccdrv -s$(VERBOSE) "LD[$@]" $(CC) -o $@ $(OBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS)
 
 once: final
 final: .final
@@ -576,7 +579,7 @@ final: .final
 
 withzlib: .withzlib
 .withzlib: $(OBJS) $(ZLIB) $(LIBCOMMON) .mapfile
-	@./ccdrv -s$(VERBOSE) "LD[$(MAIN)]" $(CC) -o $(MAIN) $(OBJS) $(LDFLAGS) $(ZLIB) $(LIBCOMMON) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+	@./ccdrv -s$(VERBOSE) "LD[$(MAIN)]" $(CC) -o $(MAIN) $(OBJS) $(LDFLAGS) $(ZLIB) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 	
 oncewithzlib686: finalwithzlib686
 finalwithzlib686: .finalwithzlib686

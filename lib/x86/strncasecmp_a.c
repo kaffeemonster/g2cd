@@ -88,9 +88,8 @@ LOOP_AGAIN:
 	asm (
 		"cmp	$16, %2\n\t"
 		"jb	3f\n\t"
-		"pxor	%%xmm0, %%xmm1\n\t"
 		"mov	0x7A60, %k3\n\t"
-		"pinsrw	$0, %3, %%xmm1\n\t"
+		"movd	%k3, %%xmm1\n\t"
 		"movdqa	%4, %%xmm2\n\t"
 		"jmp	2f\n"
 		"1:\n\t"

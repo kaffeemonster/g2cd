@@ -122,6 +122,10 @@ STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \
 	$(MPL)/ppc/strnpcpy.c
+ADLER32SRC = \
+	$(MPL)/generic/adler32.c \
+	$(MPL)/x86/adler32.c \
+	$(MPL)/ppc/adler32.c
 MY_BITOPSSRC = \
 	$(MPL)/generic/my_bitops.c \
 	$(MPL)/x86/my_bitops.c
@@ -227,6 +231,7 @@ $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
+$(MPL)/adler32.o: $(ADLER32SRC)
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h

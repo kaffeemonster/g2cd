@@ -2,7 +2,7 @@
  * ppc_altivec.h
  * little ppc altivec helper
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -32,19 +32,17 @@
 /* you have to love GCC, it does not take NULL on vec_lvsl ... */
 static inline vector unsigned char vec_identl(unsigned level)
 {
-	vector unsigned char ret;
-	asm("lvsl %0,%1,%2" : "=v" (ret) : "r" (level), "r" (0));
-	return ret;
+	return vec_lvsl(0, (const unsigned char *)level);
 }
 
 static inline vector unsigned char vec_ident_rev()
 {
-	return vec_xor(vec_identl(0), vec_splat_u8(15));
+	return vec_xor(vec_lvsl(0, (const unsigned char *)0), vec_splat_u8(15));
 }
 
 static inline vector unsigned char vec_align(const char *p)
 {
-	return vec_lvsl(0, (const volatile unsigned char *)p);
+	return vec_lvsl(0, (const unsigned char *)p);
 }
 
 static inline vector unsigned char vec_align_and_rev(const char *p)
@@ -52,6 +50,19 @@ static inline vector unsigned char vec_align_and_rev(const char *p)
 	vector unsigned char ret = vec_align(p);
 	ret = vec_perm(ret, vec_splat_u8(0), vec_ident_rev());
 	return ret;
+}
+
+static inline vector unsigned int vec_mullw(vector unsigned int a, vector unsigned int b)
+{
+	vector unsigned int v16   = vec_splat_u32(-16);
+	vector unsigned int v0_32 = vec_splat_u32(0);
+	vector unsigned int swap, low, high;
+
+	swap = vec_rl(b, v16);
+	low  = vec_mulo((vector unsigned short)a, (vector unsigned short)b);
+	high = vec_msum((vector unsigned short)a, (vector unsigned short)swap, v0_32);
+	high = vec_sl(high, v16);
+	return vec_add(low, high);
 }
 
 /*
@@ -70,8 +81,7 @@ static inline uint32_t vec_pmovmskb(vector bool char vr)
 	uint32_t r;
 
 	vr = vec_and(vr, vec_splat_u8(1)); /* single bit */
-	factor = vec_xor(vec_identl(0), vec_splat_u8(15)); /* get reverse ident */
-//	factor = vec_add(swap_ident, vec_splat_u8(1));
+	factor = vec_ident_rev(); /* get reverse ident */
 	vr_h = vec_sl((vector unsigned short)vec_unpackh(vr), (vector unsigned short)vec_unpackh((vector signed char)factor)); /* shift */
 	vr_l = vec_sl((vector unsigned short)vec_unpackl(vr), (vector unsigned short)vec_unpackl((vector signed char)factor));
 	vri = (vector unsigned int)vec_sums((vector int)vr_l, (vector int)vec_splat_u8(0)); /* consolidate */

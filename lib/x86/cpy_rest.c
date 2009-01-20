@@ -92,7 +92,7 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 */
 		"call	i686_get_pc\n\t"
 		"lea	1f-.(%2,%4,8), %2\n\t"
-		".subsection 2\n\t"
+		".subsection 2\n"
 		"i686_get_pc:\n\t"
 		"movl (%%esp), %2\n\t"
 		"ret\n\t"

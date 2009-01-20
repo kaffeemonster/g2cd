@@ -280,7 +280,7 @@ static GCC_ATTR_CONSTRUCT void strlen_select(void)
 /*
  * runtime switcher
  *
- * this is inherent racy, we only provide it if the constructer failes
+ * this is inherent racy, we only provide it if the constructor fails
  */
 static size_t strlen_runtime_sw(const char *s)
 {

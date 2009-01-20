@@ -91,8 +91,7 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"test	%3, %3\n\t" /* len NULL? */
 		"jz	9f\n\t" /* outa here */
 		"add	$2, %0\n\t" /* create a 2 */
-		"pxor	%%xmm1, %%xmm1\n\t"
-		"pinsrw	$0, %k2, %%xmm1\n\t"
+		"movd %k2, %%xmm1\n\t"
 		"mov	%1, %2\n\t" /* duplicate src */
 		"and	$15, %2\n\t" /* create align difference */
 		"and	$-16, %1\n\t" /* align down src */
