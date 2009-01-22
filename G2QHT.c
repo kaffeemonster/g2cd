@@ -81,7 +81,6 @@ struct scratch
 /* Vars */
 static pthread_key_t key2qht_zpad;
 static pthread_key_t key2qht_scratch1;
-static struct qhtable *global_qht;
 
 /* Internal Prototypes */
 	/* do not remove this proto, our it won't work... */
@@ -95,9 +94,11 @@ static void g2_qht_free_hzp(void *);
 #ifdef QHT_DUMP
 static void qht_dump_init(void);
 static void qht_dump_deinit(void);
+static void qht_dump(void *, void *, size_t);
 #else
 #define qht_dump_init()
 #define qht_dump_deinit()
+#define qht_dump(x, y, z) do { } while(0)
 #endif
 
 /* tls thingies */
@@ -109,24 +110,13 @@ static void qht_init(void)
 
 	if(pthread_key_create(&key2qht_scratch1, free))
 		diedie("couldn't create TLS key for qht");
-	if(g2_qht_reset(&global_qht, 1<<20))
-		diedie("couldn't create global QHT");
-	/* the only qht where lazy init harms (at least ATM) */
-	memset(global_qht->data, ~0, global_qht->data_length);
-	global_qht->flags.reset_needed = false;
 }
 
 static void qht_deinit(void)
 {
-	/* if we died in an constructor, me might not be fully set up */
-	if(!global_qht)
-		return;
 	qht_dump_deinit();
 	pthread_key_delete(key2qht_zpad);
 	pthread_key_delete(key2qht_scratch1);
-	/* we are exiting... */
-	atomic_set(&global_qht->refcnt, 0);
-	g2_qht_free_hzp(global_qht);
 }
 
 /* zpad helper */
@@ -394,18 +384,6 @@ void g2_qht_frag_clean(struct qht_fragment *to_clean)
 	memset(to_clean, 0, sizeof(*to_clean));
 }
 
-size_t g2_qht_global_get_ent(void)
-{
-	return global_qht->entries;
-}
-
-static inline void g2_qht_global_patch(void *pbuf, size_t plength)
-{
-// TODO: This needs full locking mumbo jumbo
-	memxor(global_qht->data, pbuf, global_qht->data_length > plength ? plength : global_qht->data_length);
-	global_qht->time_stamp = local_time_now;
-}
-
 /* funcs */
 const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 {
@@ -417,7 +395,7 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 
 	/* remove qht from source while we work on it */
 	tmp_table = *ttable;
-	*ttable = NULL;
+//	*ttable = NULL;
 
 	if(atomic_read(&tmp_table->refcnt) > 1)
 		logg_develd("WARNING: patch called on table with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
@@ -426,7 +404,7 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 
 /*	if(tmp_table->flags.reset_needed)
 		logg_develd("reset_needed qht-table passed: %p\n", (void *) tmp_table);*/
- 
+
 	switch(frag->compressed)
 	{
 	case COMP_DEFLATE:
@@ -457,11 +435,11 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 					memneg(tmp_table->data, tmp_ptr, tmp_table->data_length);
 				else
 					memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
-				g2_qht_global_patch(tmp_ptr, tmp_table->data_length);
 				ret_val = "compressed patch applied";
 			}
 
 			inflateEnd(&zpad->z);
+			qht_dump(tmp_table->data, tmp_ptr, tmp_table->data_length);
 		}
 		break;
 	case COMP_NONE:
@@ -469,7 +447,7 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 			memneg(tmp_table->data, frag->data, tmp_table->data_length);
 		else
 			memxor(tmp_table->data, frag->data, tmp_table->data_length);
-		g2_qht_global_patch(frag->data, frag->length);
+		qht_dump(tmp_table->data, frag->data, tmp_table->data_length);
 		ret_val = "patch applied";
 		break;
 	default:
@@ -478,7 +456,7 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 
 	tmp_table->time_stamp = time(NULL);
 
-	*ttable = tmp_table;
+//	*ttable = tmp_table;
 	return ret_val;
 }
 
@@ -573,7 +551,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 		logg_develd("TODO: %lu bits, %lu entries, can handle this, but hashes will be bogus\n",
 			(unsigned long) bits, (unsigned long) qht_ent);
 
-	/* 
+	/*
 	 * set the master table NULL, someone could traverse it,
 	 * while we process it
 	 */
@@ -615,7 +593,6 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 	tmp_table->time_stamp = local_time_now;
 	/* bring back the table */
 	*ttable = tmp_table;
-// TODO: Global QHT-needs-update flag (wich would need per connection locking)
 	return false;
 }
 
@@ -638,6 +615,12 @@ static void qht_dump_deinit(void)
 		close(qht_tdump_fd);
 	if(0 <= qht_pdump_fd)
 		close(qht_pdump_fd);
+}
+
+static void qht_dump(void *table, void *patch, size_t len)
+{
+	write(qht_tdump_fd, table, len);
+	write(qht_pdump_fd, patch, len);
 }
 #endif
 

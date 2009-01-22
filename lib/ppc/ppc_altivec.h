@@ -52,6 +52,7 @@ static inline vector unsigned char vec_align_and_rev(const char *p)
 	return ret;
 }
 
+/* multiply two 32 bit ints, return the low 32 bit */
 static inline vector unsigned int vec_mullw(vector unsigned int a, vector unsigned int b)
 {
 	vector unsigned int v16   = vec_splat_u32(-16);
@@ -62,6 +63,22 @@ static inline vector unsigned int vec_mullw(vector unsigned int a, vector unsign
 	low  = vec_mulo((vector unsigned short)a, (vector unsigned short)b);
 	high = vec_msum((vector unsigned short)a, (vector unsigned short)swap, v0_32);
 	high = vec_sl(high, v16);
+	return vec_add(low, high);
+}
+
+/* multiply two 32 bit ints, return the high 32 bit */
+static inline vector unsigned int vec_mullwh(vector unsigned int a, vector unsigned int b)
+{
+	vector unsigned int v16   = vec_splat_u32(-16);
+	vector unsigned int v0_32 = vec_splat_u32(0);
+	vector unsigned int swap, low, high;
+
+	swap = vec_rl(b, v16);
+	low  = vec_mulo((vector unsigned short)a, (vector unsigned short)b);
+	low  = vec_sr(low, v16); /* we only care for the "overflow" */
+	low  = vec_msum((vector unsigned short)a, (vector unsigned short)swap, low);
+	low  = vec_sr(low, v16); /* we only care for the "overflow" */
+	high = vec_mule((vector unsigned short)a, (vector unsigned short)b);
 	return vec_add(low, high);
 }
 

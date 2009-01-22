@@ -36,6 +36,7 @@
 #  define _G2CONREGISTRY_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif
 
+_G2CONREGISTRY_EXTRN(void g2_conreg_mark_dirty(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_add(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_remove(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(g2_connection_t *g2_conreg_search_addr(union combo_addr *));

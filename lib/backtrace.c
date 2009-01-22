@@ -141,6 +141,14 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 # endif
 	int stderrfd = fileno(stderr), ret_val = 0, i;
 
+	if(-1 == stderrfd) {
+		/*
+		 * we crashed very late or something else is foo
+		 * fix it, we maybe write to lala land, but...
+		 */
+		stderrfd = STDERR_FILENO;
+	}
+
 # ifdef __sun__
 #  define DEBUG_CMD \
  "/usr/proc/bin/pstack "

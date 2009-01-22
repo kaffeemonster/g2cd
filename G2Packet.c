@@ -45,6 +45,7 @@
 #include "G2QHT.h"
 #include "G2KHL.h"
 #include "G2MainServer.h"
+#include "G2ConRegistry.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 
@@ -833,6 +834,8 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	}
 	/* patch io and complete */
 	patch_txt = g2_qht_patch(&connec->qht, &connec->qht->fragments);
+	/* we patched a connection, not some free standing QHT */
+	g2_conreg_mark_dirty(connec);
 	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_clean(&connec->qht->fragments);
@@ -857,8 +860,10 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 
 	get_unaligned_endian(qht_ent, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
 	
-	if(g2_qht_reset(&connec->qht, qht_ent))
+	if(unlikely(g2_qht_reset(&connec->qht, qht_ent)))
 		connec->flags.dismissed = true;
+	else
+		g2_conreg_mark_dirty(connec);
 
 	logg_packet(STDSF, "/QHT-reset");
 	return false;

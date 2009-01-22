@@ -63,7 +63,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	vector unsigned int v0_32 = vec_splat_u32(0);
 	vector unsigned int   vsh = vec_splat_u8(4);
 	vector unsigned char   v1 = vec_splat_u8(1);
-	vector unsigned char vord = vec_ident_rev();
+	vector unsigned char vord = vec_ident_rev() + v1;
 	vector unsigned char   v0 = vec_splat_u8(0);
 	vector unsigned int vs1, vs2;
 	vector unsigned char in16, vord_a, v1_a, vperm;
@@ -169,6 +169,57 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				buf += k;
 				k -= k;
 			}
+
+#if 0
+			/*
+			 * we could stay 4 times NMAX in the loops above and
+			 * fill all 4 uint32_t near overflow.
+			 * Then we have to make the modulus on all vector elements.
+			 * there is only one problem:
+			 * No divide.
+			 *
+			 * This is not really a problem, there is the trick to
+			 * multiply by the "magic reciprocal". GCC does the same even
+			 * in scalar code to prevent a divide (modern CPUs:
+			 * mul 8 cycles, div still 44 cycles).
+			 *
+			 * But there we bump into the next problem:
+			 * no 32 Bit mul and esp. no 64 Bit results...
+			 *
+			 * We can also work around this, but it is expensive.
+			 * So to be a win the input array better is really big,
+			 * that transfers over the stack hurt more than all this:
+			 */
+			v15_32 = vec_splat_u32(15);
+			vbase_recp = 4 times 0x080078071; /* a mem load hides here */
+			vbase  = 4 times 0xFFF1; /* and propably here */
+			/* divde vectors by BASE */
+			/* multiply vectors by BASE reciprocal, get high 32 bit */
+			vres1 = vec_mullwh(vs1, vbase_recp); /* 9 operations */
+			vres2 = vec_mullwh(vs2, vbase_recp);
+			/* adjust */
+			vres1 = vec_sr(vres1, v15_32);
+			vres2 = vec_sr(vres2, v15_32);
+			/* multiply result again by BASE */
+			vres1 = vec_mullw(vbase, vres1); /* 7 oprations */
+			vres2 = vec_mullw(vbase, vres2);
+			/* substract result */
+			vs1 -= vres1;
+			vs2 -= vres2;
+			/*
+			 * Nearly 19 vector ops per vector ~ 40 in total
+			 *
+			 * Hint: after building the horizontal sum, you have to
+			 * do the mod dance again, then in scalar code.
+			 *
+			 * on x86, which is similar challanged (has 64 bit mul,
+			 * but you need to unpack, load constants, reshuffle)
+			 * but has faster simd <-> cpu transport, it's only a
+			 * whiff of a win, and a loss on medium lengths.
+			 *
+			 * Just noted down it doesn't get lost.
+			 */
+#endif
 
 			/* add horizontal */
 // TODO: uff, shit, does saturation and signed harm here?

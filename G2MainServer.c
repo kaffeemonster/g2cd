@@ -260,6 +260,12 @@ int main(int argc, char **args)
 				sock_poll[THREAD_SUM_COM].fd = extra_fd;
 				sock_poll[THREAD_SUM_COM].events = POLLIN|POLLERR|POLLHUP;
 				sock_poll[THREAD_SUM_COM].revents = 0;
+				/*
+				 * first hzp scan, then update (will generate new
+				 * mem to free, which we want to linger around one
+				 * more round)
+				 */
+				g2_qht_global_update();
 			}
 			break;
 		/* Something bad happened */

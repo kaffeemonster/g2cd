@@ -80,10 +80,13 @@ struct qhtable
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_frag_clean(struct qht_fragment *));
-_G2QHT_EXTRN(size_t g2_qht_global_get_ent(void));
 _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
 _G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
+/* funcs for the global qht are in the G2ConRegistry */
+_G2QHT_EXTRN(size_t g2_qht_global_get_ent(void));
+_G2QHT_EXTRN(struct qhtable *g2_qht_global_get(void));
+_G2QHT_EXTRN(void g2_qht_global_update(void));
 
 #endif /* G2QHT_H */
 /* EOF */

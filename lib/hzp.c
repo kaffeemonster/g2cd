@@ -182,7 +182,7 @@ void hzp_unref(enum hzps key)
  * some kind of substitute: new mem or NULL, whatever the program
  * flow can accept), it can not be freed immediately, because some
  * thread maybe still work with it (thats why we track references).
- * 
+ *
  * So we put it in a "to Free" list, and when all references are
  * gone, we can finaly free it, with the supplied callback (the
  * freemethod).
@@ -192,7 +192,7 @@ void hzp_unref(enum hzps key)
  * Nice sideffect: can be used as poormans gc. Drop in what you want,
  * someone else will actually free it, so the calling thread can save
  * the free method latency.
- * 
+ *
  * params: item - memory to manage the free list
  *         data - the mem to free (and the callback understands)
  *         free_func - the free callback, either libc free or 
@@ -305,7 +305,7 @@ int hzp_scan(int threshold)
 
 /*
  * hzp_free - thread exit call back from pthread_key interface
- * 
+ *
  * When a thread exits, this func gets called with its data
  * at the TSD entry this was registered for.
  * There should be a struct hzp, mark it unused, so a collector

@@ -81,7 +81,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 				".p2align 3,,3\n\t"
 				".p2align 2\n"
 				"1:\n\t"
-				"movdqu	(%0), %%xmm0\n\t"
+				"lddqu	(%0), %%xmm0\n\t"
 				"prefetchnta	32(%0)\n\t"
 				"movdqa	%%xmm3, %%xmm6\n\t"
 				"sub	$16, %3\n\t"
