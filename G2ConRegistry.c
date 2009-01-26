@@ -502,7 +502,9 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 			if(!connec->qht)
 				continue;
 
-			if(!connec->qht->flags.reset_needed)
+			/* keep empty qht out of master qht */
+			/* keep other hubs out of master qht */
+			if(!connec->qht->flags.reset_needed && !connec->flags.upeer)
 			{
 				if(new_sub->flags.reset_needed) {
 					memcpy(new_sub->data, connec->qht->data, new_sub->data_length);
@@ -587,6 +589,7 @@ void g2_qht_global_update(void)
 		return;
 
 	do_global_update(NULL, &ht_root, 0);
+// TODO: When the QHT gets updated, push change activly to other hubs
 
 	if(unlikely(pthread_mutex_unlock(&update_lock)))
 		diedie("Huuarg, ConReg update lock stuck, bye!");

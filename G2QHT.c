@@ -64,12 +64,13 @@ struct zpad_heap
 	char data[DYN_ARRAY_LEN];
 };
 
+/* unfortunatly, the deflater is memory greedy... */
 struct zpad
 {
 	z_stream z;
-	struct zpad_heap *pad_free;                   // pointer in the pad to free space
-	unsigned char pad[1<<14] GCC_ATTR_ALIGNED(8); // other allok space, 16k
-	unsigned char window[1<<15];                  // 15 Bit window size, should result in 32k byte
+	struct zpad_heap *pad_free;                   /* pointer in the pad to free space */
+	unsigned char pad[1<<19] GCC_ATTR_ALIGNED(8); /* other allok space, 512k */
+	unsigned char window[1<<16];                  /* 16 Bit window size, should result in 64k */
 };
 
 struct scratch
@@ -94,10 +95,12 @@ static void g2_qht_free_hzp(void *);
 #ifdef QHT_DUMP
 static void qht_dump_init(void);
 static void qht_dump_deinit(void);
+static void qht_sdump(void *, size_t);
 static void qht_dump(void *, void *, size_t);
 #else
 #define qht_dump_init()
 #define qht_dump_deinit()
+#define qht_sdump(x, y) do { } while(0)
 #define qht_dump(x, y, z) do { } while(0)
 #endif
 
@@ -123,7 +126,7 @@ static void qht_deinit(void)
 /*
  * Poor mans allocator for zlib
  *
- * normaly zlib makes two allocs, one seams to be the internal
+ * normaly zlib makes two allocs, one seems to be the internal
  * state (+9k on 32bit *cough*) and the other is the window, norm
  * 32k for 15 bit.
  *
@@ -132,84 +135,90 @@ static void qht_deinit(void)
  * versions) it is at least so intelligent it may also handle 3
  * allocs, and frees, maybe ;)
  *
+ * And since a deflater is very memory hungry, one time 6k,
+ * three (!!!) times 32k * 2 and one time 16k * 4, total over
+ * 260k, with a little more space in the pad we also can handle
+ * a deflater.
+ *
  * !! THE heap for this zpad instance is NOT locked !!
+ * Why, it should be thread local to this deflater/inflater!
  */
 static void *qht_zpad_alloc(void *opaque, unsigned int num, unsigned int size)
 {
 	struct zpad *z_pad = opaque;
-	size_t bsize;
+	struct zpad_heap *zheap, *tmp_zheap;
+	size_t bsize, org_len;
 
-	if(!z_pad)
+	if(unlikely(!z_pad))
 		goto err_record;
 
 	/* mildly sanetiy check */
-	if( num > sizeof(z_pad->pad) + sizeof(z_pad->window) ||
-		size > sizeof(z_pad->pad) + sizeof(z_pad->window))
+	if(unlikely( num > sizeof(z_pad->pad) + sizeof(z_pad->window)) ||
+	   unlikely(size > sizeof(z_pad->pad) + sizeof(z_pad->window)) ||
+	   unlikely(size > UINT_MAX / num))
 		goto err_record;
 	bsize = num * size;
 
 	/* bsize should afterwards have the LSB cleared */
 	bsize = ALIGN_SIZE(bsize, sizeof(void *));
 
-	if(bsize + sizeof(struct zpad_heap) > sizeof(z_pad->pad) + sizeof(z_pad->window))
+	if(unlikely(bsize + sizeof(struct zpad_heap) > sizeof(z_pad->pad) + sizeof(z_pad->window)))
 		goto err_record;
 
 	/* start lock */
+	zheap = z_pad->pad_free;
+	org_len = zheap->length & ~1; /* mask out the free flag */
+	/*
+	 * normaly we simply allocate at the end, and 'nuff said, but
+	 * to be complete...
+	 */
+	if(unlikely(!(zheap->length & 1) || bsize + sizeof(*zheap) > org_len))
 	{
-		struct zpad_heap *zheap = z_pad->pad_free, *tmp_zheap;
-		size_t org_len = zheap->length & ~1; /* mask out the free flag */
-		/* 
-		 * normaly we simply allocate at the end, and 'nuff said, but
-		 * to be complete...
-		 */
-		if(!(zheap->length & 1) || bsize + sizeof(*zheap) > org_len)
+		tmp_zheap = (struct zpad_heap *)z_pad->pad;
+		/* walk the heap list */
+		do
 		{
-			tmp_zheap = (struct zpad_heap *) z_pad->pad;
-			/* walk the heap list */
-			do
+			size_t tmp_len = tmp_zheap->length & ~1;
+			/* if free and big enough */
+			if(likely(tmp_zheap->length & 1))
 			{
-				size_t tmp_len;
-retry:
-				tmp_len = tmp_zheap->length & ~1;
-				/* if free and big enough */
-				if(tmp_zheap->length & 1)
-				{
-					if(bsize + sizeof(*zheap) <= tmp_len) {
-						org_len = tmp_len;
-						zheap = tmp_zheap;
-						goto insert_in_heap;
-					}
-					else if(tmp_zheap->next && (tmp_zheap->next->length & 1)) {
-						qht_zpad_merge(tmp_zheap);
-						goto retry;
-					}
+				if(bsize + sizeof(*zheap) <= tmp_len) {
+					org_len = tmp_len;
+					zheap = tmp_zheap;
+					goto insert_in_heap;
 				}
-			} while((tmp_zheap = tmp_zheap->next));
-			goto err_record;
-		}
-insert_in_heap:
-		zheap->length     = bsize;
-		/* Mind the parentheses... */
-		tmp_zheap         = (struct zpad_heap*)(zheap->data + bsize);
-		if((unsigned char *)tmp_zheap < z_pad->pad)
-			die("zpad heap probably corrupted, underflow!\n");
-		if((unsigned char *)tmp_zheap > (z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)))
-		{
-			logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %lu + %lu - %lu = %p\n",
-				(void *)tmp_zheap, z_pad->pad, (unsigned long)sizeof(z_pad->pad),
-				(unsigned long)sizeof(z_pad->window), (unsigned long)sizeof(*zheap),
-				(void *)(z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap)));
-			exit(EXIT_FAILURE);
-		}
-		tmp_zheap->length = (org_len - bsize - sizeof(*zheap)) | 1;
-		tmp_zheap->next   = zheap->next;
-		zheap->next       = tmp_zheap;
-		z_pad->pad_free   = tmp_zheap;
-	/* end lock */
-		logg_develd_old("zpad alloc: n: %u\ts: %u\tb: %lu\tp: 0x%p\tzh: 0x%p\tzhn: 0x%p\n",
-			num, size, (unsigned long) bsize, (void *) z_pad->pad, (void *) zheap, (void *) tmp_zheap);
-		return zheap->data;
+				if(tmp_zheap->next && (tmp_zheap->next->length & 1)) {
+					qht_zpad_merge(tmp_zheap);
+					continue;
+				}
+			}
+			tmp_zheap = tmp_zheap->next;
+		} while(tmp_zheap);
+		goto err_record;
 	}
+insert_in_heap:
+	zheap->length     = bsize;
+	/* Mind the parentheses... */
+	tmp_zheap         = (struct zpad_heap*)(zheap->data + bsize);
+	if(unlikely((unsigned char *)tmp_zheap < z_pad->pad))
+		die("zpad heap probably corrupted, underflow!\n");
+	if(unlikely((unsigned char *)tmp_zheap > (z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap))))
+	{
+		logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %zu + %zu - %zu = %p\n",
+		          tmp_zheap, z_pad->pad, sizeof(z_pad->pad), sizeof(z_pad->window), sizeof(*zheap),
+		          z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap));
+		exit(EXIT_FAILURE);
+	}
+	tmp_zheap->length = (org_len - bsize - sizeof(*zheap)) | 1;
+	tmp_zheap->next   = zheap->next;
+	zheap->next       = tmp_zheap;
+	z_pad->pad_free   = tmp_zheap;
+/* end lock */
+
+	logg_develd_old("zpad alloc: n: %u\ts: %u\tb: %zu\tp: %p\tzh: %p\tzhn: %p\n",
+	                num, size, bsize, z_pad->pad, zheap, tmp_zheap);
+	return zheap->data;
+
 err_record:
 	logg_develd("zpad alloc failed!! 0x%p\tn: %u\ts: %u\n", opaque, num, size);
 	return NULL;
@@ -222,14 +231,14 @@ static void qht_zpad_free(void *opaque, void *addr)
 	if(!addr || !opaque)
 		return;
 
-	/* 
+	/*
 	 * watch the parentheses (/me cuddles his new vim 7), or you
 	 * have wrong pointer-arith, and a SIGSEV on 3rd. alloc...
 	 */
 	zheap = (struct zpad_heap *) ((char *)addr - offsetof(struct zpad_heap, data));
 	zheap->length |= 1; // mark free
 
-	logg_develd_old("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, (void *)zheap);
+	logg_develd_old("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, zheap);
 
 	qht_zpad_merge(zheap);
 }
@@ -251,19 +260,18 @@ static inline struct zpad *qht_get_zpad(void)
 {
 	struct zpad *z_pad = pthread_getspecific(key2qht_zpad);
 
-	if(z_pad)
-		return z_pad;
-
-	z_pad = malloc(sizeof(*z_pad));
-	if(!z_pad) {
-		logg_errno(LOGF_DEVEL, "no z_pad");
-		return NULL;
-	}
-
-	if(pthread_setspecific(key2qht_zpad, z_pad)) {
-		logg_errno(LOGF_CRIT, "qht-zpad key not initilised?");
-		free(z_pad);
-		return NULL;
+	if(unlikely(!z_pad))
+	{
+		z_pad = malloc(sizeof(*z_pad));
+		if(!z_pad) {
+			logg_errno(LOGF_DEVEL, "no z_pad");
+			return NULL;
+		}
+		if(pthread_setspecific(key2qht_zpad, z_pad)) {
+			logg_errno(LOGF_CRIT, "qht-zpad key not initilised?");
+			free(z_pad);
+			return NULL;
+		}
 	}
 	memset(&z_pad->z, 0, sizeof(z_pad->z));
 	z_pad->pad_free         = (struct zpad_heap *)z_pad->pad;
@@ -330,8 +338,7 @@ static inline void _g2_qht_clean(struct qhtable *to_clean, bool reset_needed)
 	if(!to_clean)
 		return;
 
-	if(to_clean->fragments.data)
-		free(to_clean->fragments.data);
+	g2_qht_frag_free(to_clean->fragments);
 
 	memset(&to_clean->entries, 0, offsetof(struct qhtable, data) - offsetof(struct qhtable, entries));
 	if(reset_needed)
@@ -357,8 +364,7 @@ static void g2_qht_free_hzp(void *qtable)
 		logg_develd("qht refcnt race %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
 		return;
 	}
-	if(to_free->fragments.data)
-		free(to_free->fragments.data);
+	g2_qht_frag_free(to_free->fragments);
 	free(to_free);
 }
 
@@ -373,44 +379,33 @@ void g2_qht_put(struct qhtable *to_free)
 		logg_develd("qht refcnt below zero! %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
 }
 
-void g2_qht_frag_clean(struct qht_fragment *to_clean)
-{
-	if(!to_clean)
-		return;
-
-	if(to_clean->data)
-		free(to_clean->data);
-
-	memset(to_clean, 0, sizeof(*to_clean));
-}
-
 /* funcs */
-const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
+const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 {
-	struct qhtable *tmp_table;
 	const char *ret_val = NULL;
+	size_t pos;
 
-	if(!ttable)
+	if(!table || !frag)
 		return NULL;
 
 	/* remove qht from source while we work on it */
-	tmp_table = *ttable;
-//	*ttable = NULL;
+	/* tmp_table = *ttable;
+	   *ttable = NULL; */
 
-	if(atomic_read(&tmp_table->refcnt) > 1)
-		logg_develd("WARNING: patch called on table with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
+	if(atomic_read(&table->refcnt) > 1)
+		logg_develd("WARNING: patch called on table with refcnt > 1!! %p %i\n", (void*)table, atomic_read(&table->refcnt));
 
-	logg_develd_old("qlen: %lu\tflen: %lu\n", tmp_table->data_length, frag->length);
+	logg_develd_old("qlen: %lu\tflen: %lu\n", table->data_length, frag->length);
 
-/*	if(tmp_table->flags.reset_needed)
-		logg_develd("reset_needed qht-table passed: %p\n", (void *) tmp_table);*/
+/*	if(table->flags.reset_needed)
+		logg_develd("reset_needed qht-table passed: %p\n", (void *) table);*/
 
 	switch(frag->compressed)
 	{
 	case COMP_DEFLATE:
 		{
-			int ret_int;
-			unsigned char *tmp_ptr = qht_get_scratch1(tmp_table->data_length);
+			int res;
+			unsigned char *tmp_ptr = qht_get_scratch1(table->data_length);
 			struct zpad *zpad = qht_get_zpad();
 
 			if(!(tmp_ptr && zpad)) {
@@ -419,51 +414,212 @@ const char *g2_qht_patch(struct qhtable **ttable, struct qht_fragment *frag)
 			}
 
 			/* fix allocations... done, TLS rocks ;) */
+			zpad->z.next_out = tmp_ptr;
+			zpad->z.avail_out = table->data_length;
 			zpad->z.next_in = frag->data;
 			zpad->z.avail_in = frag->length;
-			zpad->z.next_out = tmp_ptr;
-			zpad->z.avail_out = tmp_table->data_length;
+			frag = frag->next;
 
-			if(Z_OK != inflateInit(&zpad->z))
-				logg_devel("failure initiliasing compressed patch\n");
-			else if(Z_STREAM_END != (ret_int = inflate(&zpad->z, Z_SYNC_FLUSH)))
-				logg_develd("failure decompressing patch: %i\n", ret_int);
-			else
+			if(Z_OK != inflateInit(&zpad->z)) {
+				inflateEnd(&zpad->z);
+				logg_devel("failure initiliasing patch decompressor\n");
+				break;
+			}
+			do
 			{
-				/* apply it */
-				if(tmp_table->flags.reset_needed)
-					memneg(tmp_table->data, tmp_ptr, tmp_table->data_length);
-				else
-					memxor(tmp_table->data, tmp_ptr, tmp_table->data_length);
-				ret_val = "compressed patch applied";
+				res = inflate(&zpad->z, Z_SYNC_FLUSH);
+				if(Z_OK == res && !zpad->z.avail_in)
+				{
+					if(!frag)
+						break;
+					zpad->z.next_in = frag->data;
+					zpad->z.avail_in = frag->length;
+					frag = frag->next;
+				} else if(Z_STREAM_END != res) {
+					logg_develd("failure compressing patch: %i\n", res);
+					break;
+				}
+			} while(Z_STREAM_END != res);
+			inflateEnd(&zpad->z);
+			if(Z_STREAM_END != res) {
+				logg_develd("failure decompressing patch: %i\n", res);
+				break;
 			}
 
-			inflateEnd(&zpad->z);
-			qht_dump(tmp_table->data, tmp_ptr, tmp_table->data_length);
+			/* apply it */
+			if(table->flags.reset_needed)
+				memneg(table->data, tmp_ptr, table->data_length);
+			else
+				memxor(table->data, tmp_ptr, table->data_length);
+			ret_val = "compressed patch applied";
+			qht_dump(table->data, tmp_ptr, table->data_length);
 		}
 		break;
 	case COMP_NONE:
-		if(tmp_table->flags.reset_needed)
-			memneg(tmp_table->data, frag->data, tmp_table->data_length);
-		else
-			memxor(tmp_table->data, frag->data, tmp_table->data_length);
-		qht_dump(tmp_table->data, frag->data, tmp_table->data_length);
+		for(pos = 0; frag; frag = frag->next) {
+			if(table->flags.reset_needed)
+				memneg(table->data + pos, frag->data, frag->length);
+			else
+				memxor(table->data + pos, frag->data, frag->length);
+			pos += frag->length;
+		}
+		qht_dump(table->data, frag->data, table->data_length);
 		ret_val = "patch applied";
 		break;
 	default:
 		logg_develd("funky compression: %i\n", frag->compressed);
 	}
 
-	tmp_table->time_stamp = time(NULL);
+	table->time_stamp = local_time_now;
 
-//	*ttable = tmp_table;
+/*	*ttable = tmp_table; */
 	return ret_val;
 }
 
-int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
+struct qht_fragment *g2_qht_frag_alloc(size_t len)
 {
-	uint8_t *tmp_ptr;
-	struct qht_fragment *tablef = &ttable->fragments;
+	struct qht_fragment *ret_val;
+
+	ret_val = malloc(sizeof(*ret_val) + len);
+	if(ret_val) {
+		ret_val->next   = NULL;
+		ret_val->length = len;
+	}
+	return ret_val;
+}
+
+void g2_qht_frag_free(struct qht_fragment *to_free)
+{
+	if(!to_free)
+		return;
+	g2_qht_frag_free(to_free->next);
+	free(to_free);
+}
+
+struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *org, const struct qhtable *new)
+{
+	struct qht_fragment *ret_val = NULL, *n = NULL, *t;
+	struct zpad *zpad;
+	unsigned char *tmp_ptr;
+	size_t len, pos, frag_len, frags = 0;
+	int res;
+
+	if(unlikely(!new))
+		return NULL;
+
+	len = org ? org->data_length : new->data_length;
+	len = new->data_length < len ? new->data_length : len;
+
+	switch(server.settings.qht_compression)
+	{
+	case COMP_NONE:
+		pos = 0;
+		do
+		{
+			frag_len = len > (NORM_BUFF_CAPACITY - QHT_PATCH_HEADER_BYTES) ?
+			           NORM_BUFF_CAPACITY : len + QHT_PATCH_HEADER_BYTES;
+			t = g2_qht_frag_alloc(frag_len);
+			if(!t)
+				break;
+			t->nr = ++frags;
+			tmp_ptr = t->data + QHT_PATCH_HEADER_BYTES;
+			frag_len -= QHT_PATCH_HEADER_BYTES;
+			len -= frag_len;
+
+			if(!org)
+				memneg(tmp_ptr, new->data + pos, frag_len);
+			else
+				memxorcpy(tmp_ptr, org->data + pos, new->data + pos, frag_len);
+			qht_sdump(tmp_ptr, frag_len);
+			pos += frag_len;
+			t->next = n;
+			n = t;
+		} while(len);
+		if(n) {
+			t = n->next;
+			n->next = NULL;
+			ret_val = n;
+			ret_val->count = frags;
+			ret_val->compressed = COMP_NONE;
+		}
+		while(t)
+		{
+			n = t;
+			t = t->next;
+			n->next = ret_val;
+			ret_val = n;
+			ret_val->count = frags;
+			ret_val->compressed = COMP_NONE;
+		}
+		break;
+	case COMP_DEFLATE:
+		tmp_ptr = qht_get_scratch1(len);
+		zpad = qht_get_zpad();
+
+		if(!(tmp_ptr && zpad)) {
+			logg_devel("patch mem failed\n");
+			break;
+		}
+
+		if(!org)
+			memneg(tmp_ptr, new->data, len);
+		else
+			memxorcpy(tmp_ptr, org->data, new->data, len);
+		qht_sdump(tmp_ptr, len);
+
+		zpad->z.next_in = tmp_ptr;
+		zpad->z.avail_in = len;
+
+		if(Z_OK != deflateInit(&zpad->z, Z_DEFAULT_COMPRESSION)) {
+			deflateEnd(&zpad->z);
+			logg_devel("failure initiliasing patch compressor\n");
+			break;
+		}
+		do
+		{
+			t = g2_qht_frag_alloc(NORM_BUFF_CAPACITY);
+			if(!t)
+				break;
+			t->nr = ++frags;
+
+			zpad->z.next_out = t->data + QHT_PATCH_HEADER_BYTES;
+			zpad->z.avail_out = t->length - QHT_PATCH_HEADER_BYTES;
+			res = deflate(&zpad->z, Z_FINISH);
+			if(Z_OK == res || Z_STREAM_END == res) {
+				t->length -= zpad->z.avail_out;
+				t->next = n;
+				n = t;
+			} else {
+				logg_develd("failure compressing patch: %i\n", res);
+				break;
+			}
+		} while(Z_STREAM_END != res);
+		deflateEnd(&zpad->z);
+		if(n) {
+			t = n->next;
+			n->next = NULL;
+			ret_val = n;
+			ret_val->count = frags;
+			ret_val->compressed = COMP_DEFLATE;
+		}
+		while(t)
+		{
+			n = t;
+			t = t->next;
+			n->next = ret_val;
+			ret_val = n;
+			ret_val->count = frags;
+			ret_val->compressed = COMP_DEFLATE;
+		}
+	}
+
+	return ret_val;
+}
+
+int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag, uint8_t *data)
+{
+	struct qht_fragment **t, *n;
+	size_t total_len, legal_len;
 
 	if(!ttable)
 		return -1;
@@ -473,59 +629,50 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag)
 		return -1;
 	}
 
-	if(tablef->data)
+	t = &ttable->fragments;
+	n = *t;
+	if(n)
 	{
-		if(frag->count != tablef->count) {
+		if(frag->count != n->count) {
 			logg_devel("fragment-count changed!\n");
 			return -1;
 		}
-		if(frag->compressed != tablef->compressed) {
+		if(frag->compressed != n->compressed) {
 			logg_devel("compression changed!\n");
 			return -1;
 		}
-		if(frag->nr != (tablef->nr + 1)) {
-			logg_devel("fragment missed\n");
-			return -1;
-		}
-	}
-	else if(1 == frag->nr) {
-		tablef->compressed = frag->compressed;
-		tablef->count = frag->count;
-	}
-	else {
+	} else if(1 != frag->nr) {
 		logg_devel("fragment not starting at one?\n");
 		return -1;
 	}
 
-	{
-		size_t legal_length = ttable->data_length;
+	total_len = 0;
+	for(; n; n = (*t)->next, t = &(*t)->next)
+		total_len += n->length;
+
+	if(n && frag->nr != (n->nr + 1)) {
+		logg_devel("fragment missed\n");
+		return -1;
+	}
+
+	legal_len = ttable->data_length;
 // TODO: If the patch is compressed, we are just guessing a max length
-		if(tablef->compressed)
-			legal_length /= 2;
+	if(frag->compressed)
+		legal_len /= 2;
 	/*
 	 * ATM check is sane, we are checking the real sizes of the
 	 * really recieved data, not user supplied data...
 	 */
-		if((tablef->length + frag->length) > legal_length) {
-			logg_devel("patch to big\n");
-			return -1;
-		}
-	}
-
-	tablef->nr = frag->nr;
-
-	tmp_ptr = realloc(tablef->data, tablef->length + frag->length);
-	if(!tmp_ptr) {
-		logg_errno(LOGF_DEBUG, "reallocating qht-fragments");
+	if((total_len + frag->length) > legal_len) {
+		logg_devel("patch to big\n");
 		return -1;
 	}
-	tablef->data = tmp_ptr;
 
-	memcpy(tablef->data + tablef->length, frag->data, frag->length);
-	tablef->length += frag->length;
+	memcpy(frag->data, data, frag->length);
+	*t = frag;
 
-	logg_develd_old("nr: %u\tcount: %u\n", tablef->nr, tablef->count);
-	return tablef->nr < tablef->count ? 0 : 1;
+	logg_develd_old("nr: %u\tcount: %u\n", frag->nr, frag->count);
+	return frag->nr >= frag->count;
 }
 
 bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
@@ -583,7 +730,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 			return true;
 		}
 		atomic_set(&tmp_table->refcnt, 1);
-		tmp_table->fragments.data = NULL;
+		tmp_table->fragments = NULL;
 		tmp_table->data_length = w_size;
 	}
 
@@ -597,7 +744,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent)
 }
 
 #ifdef QHT_DUMP
-static int qht_tdump_fd, qht_pdump_fd;
+static int qht_tdump_fd, qht_pdump_fd, qht_sdump_fd;
 static void qht_dump_init(void)
 {
 	char tmp_nam[sizeof("./G2QHTtdump.bin") + 12];
@@ -607,6 +754,9 @@ static void qht_dump_init(void)
 	my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTpdump%lu.bin", (unsigned long)getpid());
 	if(0 > (qht_pdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
 		logg_errno(LOGF_ERR, "opening QHT-patch-file");
+	my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2QHTsdump%lu.bin", (unsigned long)getpid());
+	if(0 > (qht_sdump_fd = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)))
+		logg_errno(LOGF_ERR, "opening QHT-spatch-file");
 }
 
 static void qht_dump_deinit(void)
@@ -615,6 +765,13 @@ static void qht_dump_deinit(void)
 		close(qht_tdump_fd);
 	if(0 <= qht_pdump_fd)
 		close(qht_pdump_fd);
+	if(0 <= qht_sdump_fd)
+		close(qht_sdump_fd);
+}
+
+static void qht_sdump(void *patch, size_t len)
+{
+	write(qht_sdump_fd, patch, len);
 }
 
 static void qht_dump(void *table, void *patch, size_t len)

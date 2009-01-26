@@ -43,7 +43,11 @@ LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(char *cpy_rest(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(char *cpy_rest_o(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(char *cpy_rest0(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
-LIB_MY_BITOPS_EXTRN(void *memxor(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len));
+static inline void *memxor(void *dst, const void *src, size_t len)
+{
+	return memxorcpy(dst, dst, src, len);
+}
 LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
@@ -72,7 +76,7 @@ char *strchrnul(const char *s, int c) GCC_ATTR_PURE;
 # endif
 
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))
-# define strplitcpy(x, y)	((char *)memcpy((x), (y), str_size(y)) + str_size(y))
+# define strplitcpy(x, y)	(((char *)memcpy((x), (y), str_size(y))) + str_size(y))
 
 static inline void strreverse(char *begin, char *end)
 {

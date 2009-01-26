@@ -232,7 +232,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		w_entry->send->pos += result;
 		w_entry->flags.has_written = true;
 		//p_entry->events |= POLLIN;
-		if(!buffer_remaining(*w_entry->send))
+		if(!buffer_remaining(*w_entry->send) && list_empty(&w_entry->packets_to_send))
 		{
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {

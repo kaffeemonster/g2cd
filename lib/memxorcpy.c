@@ -1,6 +1,6 @@
 /*
- * memxor.c
- * xor two memory region efficient
+ * memxorcpy.c
+ * xor two memory region efficient and cpy to dest
  *
  * Copyright (c) 2004-2008 Jan Seiffert
  *
@@ -27,14 +27,17 @@
 #include "my_bitopsm.h"
 
 /*
- * memxor - xor two chunks of memory
- * dst: the other chunk, result gets written to
- * src: the one chunk, only gets read
+ * memxorcpy - xor two chunks of memory and cpy to dest
+ * dst: the target result gets written to
+ * src1: the one chunk
+ * src2: the other chunk
  * len: length in bytes of smallest chunk
  *
  * return value: the pointer to dst
  *
- * the memory regions src and dst are /not/ allowed to overlap
+ * The memory regions src2 and dst are /not/ allowed to overlap.
+ * The memory regions src1 and dst are /not/ allowed to overlap,
+ *  but maybe the same.
  *
  * Note: This implementation does some overhaed to align the
  * pointer, it is optimized for large chunks, as they normaly
@@ -51,15 +54,16 @@
  * done twice.
  * So basicaly we could shrink down the funktion to:
  *
- * void *memxor(void *restrict dst,
- * 	const void *restrict src, size_t len)
+ * void *memxorcpy(void *dst, const void src1
+ * 	const void *restrict src2, size_t len)
  * {
- * 	char *restrict dst_c = dst;
- * 	const char *restrict src_c = src;
+ * 	char *dst_c = dst;
+ * 	const char *src_c1 = src1;
+ * 	const char *restrict src_c2 = src2;
  * 	void *old_dst = dst;
  *
  * 	while(len--)
- * 		*(dst_c++) ^= *(src_c++);
+ * 		*dst_c++ = *src_c1 ^ *src_c2++;
  * 	return old_dst;
  * }
  *
@@ -86,13 +90,13 @@
 #ifdef I_LIKE_ASM
 # if defined(__i386__) | defined(__x86_64__)
 	/* works for both */
-#  include "x86/memxor.c"
+#  include "x86/memxorcpy.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 	/* works for both */
-#  include "ppc/memxor.c"
+#  include "ppc/memxorcpy.c"
 # else
-#  include "generic/memxor.c"
+#  include "generic/memxorcpy.c"
 # endif
 #else
-# include "generic/memxor.c"
+# include "generic/memxorcpy.c"
 #endif

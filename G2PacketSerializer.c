@@ -1178,7 +1178,7 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	if(p->data_trunk.data == p->data)
 	{
 		size_t size_needed = p->length_length + p->type_length + 1;
-		/*OhOh, we have a Problem, data to send stored in header space */
+		/* OhOh, we have a Problem, data to send stored in header space */
 		if((sizeof(p->data) - size_needed) < buffer_remaining(p->data_trunk)) {
 			char *tmp_ptr;
 			/* totaly fucked up, header and data to big */

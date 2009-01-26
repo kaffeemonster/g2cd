@@ -41,6 +41,7 @@
 static always_inline enum loglevel get_act_loglevel(void);
 # include "G2Connection.h"
 # include "G2Packet.h"
+# include "G2QHT.h"
 # include "lib/combo_addr.h"
 # include "lib/atomic.h"
 # include "lib/log_facility.h"
@@ -123,6 +124,7 @@ _G2MAIN_EXTRNVAR(struct
 				const char *gwc_cache_fname;
 				const char *dump_fname;
 			} khl;
+			enum g2_qht_comp qht_compression;
 		} settings;
 		struct
 		{

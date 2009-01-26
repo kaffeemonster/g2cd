@@ -37,6 +37,8 @@ LIBHEADS = \
 	$(MPL)/recv_buff.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
+	$(MPL)/itoa.h \
+	$(MPL)/rbtree.h \
 	$(MPL)/list.h \
 	$(MPL)/hlist.h \
 	$(MPL)/hthash.h \
@@ -83,11 +85,11 @@ POPCOUNTSTSRC = \
 CPY_RESTSRC = \
 	$(MPL)/generic/cpy_rest.c \
 	$(MPL)/x86/cpy_rest.c
-MEMXORSRC = \
-	$(MPL)/generic/memxor.c \
-	$(MPL)/x86/memxor.c \
-	$(MPL)/x86/memxor_tmpl.c \
-	$(MPL)/ppc/memxor.c
+MEMXORCPYSRC = \
+	$(MPL)/generic/memxorcpy.c \
+	$(MPL)/x86/memxorcpy.c \
+	$(MPL)/x86/memxorcpy_tmpl.c \
+	$(MPL)/ppc/memxorcpy.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
 	$(MPL)/x86/memand.c \
@@ -136,13 +138,17 @@ LIBASRCS = \
 	$(ATOMSRC) \
 	$(FLSSTSRC) \
 	$(POPCOUNTSTSRC) \
-	$(MEMXORSRC) \
+	$(CPY_RESTSRC) \
+	$(MEMXORCPYSRC) \
 	$(MEMANDSRC) \
 	$(MEMNEGSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
+	$(STRCHRNULSRC) \
+	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
+	$(ADLER32SRC) \
 	$(MY_BITOPSSRC)
 
 # base src files
@@ -150,7 +156,7 @@ LIBSRCS = \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/cpy_rest.c \
-	$(MPL)/memxor.c \
+	$(MPL)/memxorcpy.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
 	$(MPL)/memcpy.c \
@@ -171,13 +177,14 @@ LIBSRCS = \
 	$(MPL)/inet_pton.c \
 	$(MPL)/hzp.c \
 	$(MPL)/backtrace.c \
+	$(MPL)/my_bitops.c \
 	$(MPL)/atomic.c
 
 BITOPOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/cpy_rest.o \
-	$(MPL)/memxor.o \
+	$(MPL)/memxorcpy.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
 	$(MPL)/memcpy.o \
@@ -222,7 +229,7 @@ $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/cpy_rest.o: $(CPY_RESTSRC)
-$(MPL)/memxor.o: $(MEMXORSRC)
+$(MPL)/memxorcpy.o: $(MEMXORCPYSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
@@ -248,9 +255,9 @@ $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h
 $(MPL)/combo_addr.h: $(MPL)/other.h $(MPL)/hthash.h
-$(MPL)/x86/memxor.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
+$(MPL)/x86/memxorcpy.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
-$(MPL)/x86/memxor.c: $(MPL)/x86/memxor_tmpl.c
+$(MPL)/x86/memxorcpy.c: $(MPL)/x86/memxorcpy_tmpl.c
 $(MPL)/x86/memand.c: $(MPL)/x86/memand_tmpl.c
 $(MPL)/x86/memneg.c: $(MPL)/x86/memneg_tmpl.c
 

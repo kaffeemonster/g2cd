@@ -334,6 +334,7 @@ static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, i
 			}
 			if(ENCODE_FINISHED != entry->packet_encode)
 				break;
+			logg_develd_old("removing one: %s\n", g2_ptype_names[entry->type]);
 			list_del(e);
 			g2_packet_free(entry);
 		}
@@ -484,7 +485,7 @@ retry_unpack:
 				{
 					/*
 					 * it is assumed that a package ending here has state to
-					 * be saved until next recv on the one hand, but does not 
+					 * be saved until next recv on the one hand, but does not
 					 * contain volatile data
 					 */
 					if(build_packet->packet_decode != CHECK_CONTROLL_BYTE)

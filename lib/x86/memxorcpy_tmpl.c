@@ -1,8 +1,9 @@
 /*
- * memxor.c
- * xor two memory region efficient, x86 implementation, template
+ * memxorcpy.c
+ * xor two memory region efficient and cpy to dest, x86 implementation,
+ * template
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -29,10 +30,11 @@
  * used in 32Bit & 64Bit
  */
 
-static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
+static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len)
 {
 	char *dst_char = dst;
-	const char *src_char = src;
+	const char *src_char1 = src1;
+	const char *src_char2 = src2;
 
 	/* we will access the arrays, fetch them */
 	__asm__ __volatile__(
@@ -44,10 +46,10 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		PREFETCHW(32(%1))
 		PREFETCHW(64(%1))
 		PREFETCHW(96(%1))
-		"" : /* no out */ : "r" (src), "r" (dst)
+		"" : /* no out */ : "r" (src2), "r" (dst)
 	);
 
-	if(unlikely(!dst || !src))
+	if(unlikely(!dst || !src1 || !src2))
 		return dst;
 
 	if(unlikely(SYSTEM_MIN_BYTES_WORK > len || (ALIGNMENT_WANTED*2) > len))
@@ -57,12 +59,13 @@ static void *DFUNC_NAME(memxor, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 		/* align dst, we will see what src looks like afterwards */
 		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
 		len -= i;
-		for(; i/SO32; i -= SO32, dst_char += SO32, src_char += SO32)
-			*((uint32_t *)dst_char) ^= *((const uint32_t *)src_char);
+		for(; i/SO32; i -= SO32, dst_char += SO32, src_char1 += SO32, src_char2 += SO32)
+			*((uint32_t *)dst_char) = *((const uint32_t *)src_char1) ^ *((const uint32_t *)src_char2);
 		for(; i; i--)
-			*dst_char++ ^= *src_char++;
-		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1)) ^
-		    (((intptr_t)src_char) & ((ALIGNMENT_WANTED * 2) - 1));
+			*dst_char++ = *src_char1++ ^ *src_char2++;
+		i =  (((intptr_t)dst_char)  & ((ALIGNMENT_WANTED * 2) - 1)) ^
+		    ((((intptr_t)src_char1) & ((ALIGNMENT_WANTED * 2) - 1)) |
+		     (((intptr_t)src_char2) & ((ALIGNMENT_WANTED * 2) - 1)));
 		/* x86 special:
 		 * x86 handles misalignment in hardware for ordinary ops.
 		 * It has a penalty, but to much software relies on it
@@ -125,38 +128,45 @@ alignment_size_t:
 			"1:\n\t"
 			SSE_PREFETCH(256(%1))
 			SSE_PREFETCHW(256(%2))
-			AVX_MOVE(   (%2), %%ymm0)
-			AVX_MOVE( 32(%2), %%ymm1)
-			AVX_XOR(    (%1), %%ymm0, %%ymm2)
-			AVX_XOR(  32(%1), %%ymm1, %%ymm3)
+			AVX_MOVE(   (%1), %%ymm0)
+			AVX_MOVE( 32(%1), %%ymm1)
 			"add	$64, %1\n\t"
-			AVX_STORE(%%ymm2,   (%2))
-			AVX_STORE(%%ymm3, 32(%2))
+			AVX_XOR(    (%2), %%ymm0, %%ymm2)
+			AVX_XOR(  32(%2), %%ymm1, %%ymm3)
 			"add	$64, %2\n\t"
+			AVX_STORE(%%ymm2,   (%3))
+			AVX_STORE(%%ymm3, 32(%3))
+			"add	$64, %3\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$32, %4\n\t"
+			"test	$32, %5\n\t"
 			"je	3f\n\t"
-			AVX_MOVE(   (%2), %%ymm0)
-			AVX_XOR(    (%1), %%ymm0, %%ymm2)
+			AVX_MOVE(   (%1), %%ymm0)
 			"add	$32, %1\n\t"
-			AVX_STORE(%%ymm2,  (%2))
-			"add	$32, %2\n"
+			AVX_XOR(    (%2), %%ymm0, %%ymm1)
+			"add	$32, %2\n\t"
+			AVX_STORE(%%ymm1,  (%3))
+			"add	$32, %3\n"
 			"3:\n\t"
-			"test	$16, %4\n\t"
+			"test	$16, %5\n\t"
 			"je	4f\n\t"
-			AVX_MOVE(   (%2), %%xmm0)
-			AVX_XOR(    (%1), %%xmm0, %%xmm2)
+			AVX_MOVE(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
-			AVX_STORE(%%xmm2,  (%2))
-			"add	$16, %2\n"
+			AVX_XOR(    (%2), %%xmm0, %%xmm1)
+			"add	$16, %2\n\t"
+			AVX_STORE(%%xmm1,  (%3))
+			"add	$16, %3\n"
 			"4:\n\t"
 			/* done! */
 			SSE_FENCE
-			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/64), "r" (len%64)
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 64),
+			  /* %5 */ "r" (len % 64)
 			: "cc",
 # ifdef __SSE__
 #  ifdef __avx__
@@ -187,16 +197,16 @@ alignment_16:
 		register intptr_t d0;
 
 		__asm__ __volatile__(
-			SSE_PREFETCH(  (%1))
-			SSE_PREFETCHW(  (%2))
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%3))
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
-			SSE_PREFETCH(32(%1))
-			SSE_PREFETCH(64(%1))
-			SSE_PREFETCH(96(%1))
-			SSE_PREFETCHW(32(%2))
-			SSE_PREFETCHW(64(%2))
-			SSE_PREFETCHW(96(%2))
+			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(96(%2))
+			SSE_PREFETCHW(32(%3))
+			SSE_PREFETCHW(64(%3))
+			SSE_PREFETCHW(96(%3))
 			".p2align 3\n"
 			"1:\n\t"
 			SSE_PREFETCH(128(%1))
@@ -206,25 +216,31 @@ alignment_16:
 			"add	$32, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
 			SSE_XOR(  16(%2), %%xmm1)
-			SSE_STORE(%%xmm0,   (%2))
-			SSE_STORE(%%xmm1, 16(%2))
 			"add	$32, %2\n\t"
+			SSE_STORE(%%xmm0,   (%3))
+			SSE_STORE(%%xmm1, 16(%3))
+			"add	$32, %3\n\t"
 			"dec	%0\n\t"
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %4\n\t"
+			"test	$16, %5\n\t"
 			"je	3f\n"
 			SSE_MOVE(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
-			SSE_STORE(%%xmm0,  (%2))
 			"add	$16, %2\n"
+			SSE_STORE(%%xmm0,  (%3))
+			"add	$16, %3\n"
 			"3:\n\t"
 			/* done */
 			SSE_FENCE
-			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "r" (len%32)
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 32),
+			  /* %5 */ "r" (len % 32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1",
@@ -237,6 +253,7 @@ alignment_16:
 # endif
 alignment_8:
 # ifdef HAVE_SSE2
+	if(dst_char == src_char1)
 	{
 		register intptr_t d0;
 
@@ -277,11 +294,81 @@ alignment_8:
 			"3:\n\t"
 			/* done */
 			SSE_FENCE
-			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "r" (len%32)
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char2),
+			  /* %2 */ "+&r" (dst_char)
+			: /* %3 */ "0" (len / 32),
+			  /* %4 */ "r" (len % 32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1",
+#  endif
+			  "memory"
+		);
+		src_char1 = dst_char;
+		len %= 16;
+		goto handle_remaining;
+	}
+	else
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%3))
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(96(%2))
+			SSE_PREFETCHW(32(%3))
+			SSE_PREFETCHW(64(%3))
+			SSE_PREFETCHW(96(%3))
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCH(128(%2))
+			SSE_PREFETCHW(128(%3))
+			SSE_LOAD8(  0(%1), %%xmm0)
+			SSE_LOAD8( 16(%1), %%xmm1)
+			"add	$32, %1\n\t"
+			SSE_LOAD8(  0(%2), %%xmm2)
+			SSE_LOAD8( 16(%2), %%xmm3)
+			SSE_XOR(  %%xmm0, %%xmm2)
+			SSE_XOR(  %%xmm1, %%xmm3)
+			"add	$32, %2\n\t"
+			SSE_STORE(%%xmm2,   (%3))
+			SSE_STORE(%%xmm3, 16(%3))
+			"add	$32, %3\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"je	3f\n\t"
+			SSE_LOAD8(  0(%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_LOAD8(  0(%2), %%xmm1)
+			SSE_XOR(   %%xmm0, %%xmm1)
+			"add	$16, %2\n"
+			SSE_STORE(%%xmm1,  (%3))
+			"add	$16, %3\n"
+			"3:\n\t"
+			/* done */
+			SSE_FENCE
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 32),
+			  /* %5 */ "r" (len % 32)
+			: "cc",
+#  ifdef __SSE__
+			  "xmm0", "xmm1", "xmm2", "xmm3",
 #  endif
 			  "memory"
 		);
@@ -289,6 +376,7 @@ alignment_8:
 		goto handle_remaining;
 	}
 alignment_size_t:
+	if(dst_char == src_char1)
 	{
 		register intptr_t d0;
 
@@ -329,11 +417,81 @@ alignment_size_t:
 			"3:\n\t"
 			/* done */
 			SSE_FENCE
-			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "r" (len%32)
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char2),
+			  /* %2 */ "+&r" (dst_char)
+			: /* %3 */ "0" (len / 32),
+			  /* %4 */ "r" (len % 32)
 			: "cc",
 #   ifdef __SSE__
 			  "xmm0", "xmm1",
+#   endif
+			  "memory"
+		);
+		src_char1 = dst_char;
+		len %= 16;
+		goto handle_remaining;
+	}
+	else
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCH(  (%2))
+			SSE_PREFETCHW(  (%3))
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			SSE_PREFETCH(32(%1))
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(96(%1))
+			SSE_PREFETCH(32(%2))
+			SSE_PREFETCH(64(%2))
+			SSE_PREFETCH(96(%2))
+			SSE_PREFETCHW(32(%3))
+			SSE_PREFETCHW(64(%3))
+			SSE_PREFETCHW(96(%3))
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCH(128(%2))
+			SSE_PREFETCHW(128(%3))
+			SSE_LOAD(   (%1), %%xmm0)
+			SSE_LOAD( 16(%1), %%xmm1)
+			"add	$32, %1\n\t"
+			SSE_LOAD(   (%2), %%xmm2)
+			SSE_LOAD( 16(%2), %%xmm3)
+			SSE_XOR(  %%xmm0, %%xmm2)
+			SSE_XOR(  %%xmm1, %%xmm3)
+			"add	$32, %2\n\t"
+			SSE_STORE(%%xmm2,   (%3))
+			SSE_STORE(%%xmm3, 16(%3))
+			"add	$32, %3\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"je	3f\n\t"
+			SSE_LOAD(   (%1), %%xmm0)
+			"add	$16, %1\n\t"
+			SSE_LOAD(   (%2), %%xmm1)
+			SSE_XOR(  %%xmm0, %%xmm1)
+			"add	$16, %2\n\t"
+			SSE_STORE(%%xmm1,  (%3))
+			"add	$16, %3\n"
+			"3:\n\t"
+			/* done */
+			SSE_FENCE
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 32),
+			  /* %5 */ "r" (len % 32)
+			: "cc",
+#   ifdef __SSE__
+			  "xmm0", "xmm1", "xmm2", "xmm3",
 #   endif
 			  "memory"
 		);
@@ -345,6 +503,7 @@ alignment_size_t:
 	 * xoring 8 byte on a 32Bit maschine is also atractive
 	 * __builtin_ia32_pxor
 	 */
+	if(dst_char == src_char1)
 	{
 		register intptr_t d0;
 
@@ -402,11 +561,102 @@ alignment_size_t:
 			"4:\n\t"
 			/* done */
 			MMX_FENCE
-			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "r" (len%32)
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char2),
+			  /* %2 */ "+&r" (dst_char)
+			: /* %3 */ "0" (len / 32),
+			  /* %4 */ "r" (len % 32)
 			: "cc",
 #  ifdef __MMX__
 			  "mm0", "mm1", "mm2", "mm3",
+#  endif
+			  "memory"
+		);
+		src_char1 = dst_char;
+		len %= 8;
+		goto handle_remaining;
+	}
+	else
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__ (
+			MMX_PREFETCH(  (%1))
+			MMX_PREFETCH(  (%2))
+			MMX_PREFETCHW(  (%3))
+			"test	%0, %0\n\t"
+			"jz	2f\n\t"
+			MMX_PREFETCH(32(%1))
+			MMX_PREFETCH(64(%1))
+			MMX_PREFETCH(96(%1))
+			MMX_PREFETCH(32(%2))
+			MMX_PREFETCH(64(%2))
+			MMX_PREFETCH(96(%2))
+			MMX_PREFETCHW(32(%3))
+			MMX_PREFETCHW(64(%3))
+			MMX_PREFETCHW(96(%3))
+			".p2align 3\n"
+			"1:\n\t"
+			MMX_PREFETCH(128(%1))
+			MMX_PREFETCHW(128(%2))
+			"movq	  (%1), %%mm0\n\t"
+			"movq	 8(%1), %%mm1\n\t"
+			"movq	16(%1), %%mm2\n\t"
+			"movq	24(%1), %%mm3\n\t"
+			"add	$32, %1\n\t"
+			"movq	  (%2), %%mm4\n\t"
+			"movq	 8(%2), %%mm5\n\t"
+			"movq	16(%2), %%mm6\n\t"
+			"movq	24(%2), %%mm7\n\t"
+			"add	$32, %2\n\t"
+			"pxor	%%mm0, %%mm4\n\t"
+			"pxor	%%mm1, %%mm5\n\t"
+			"pxor	%%mm2, %%mm6\n\t"
+			"pxor	%%mm3, %%mm7\n\t"
+			MMX_STORE(%%mm4,   (%3))
+			MMX_STORE(%%mm5,  8(%3))
+			MMX_STORE(%%mm6, 16(%3))
+			MMX_STORE(%%mm7, 24(%3))
+			"add	$32, %3\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$16, %5\n\t"
+			"je	3f\n\t"
+			"movq	  (%1), %%mm0\n\t"
+			"movq	 8(%1), %%mm1\n\t"
+			"add	$16, %1\n\t"
+			"movq	  (%2), %%mm2\n\t"
+			"movq	 8(%2), %%mm3\n\t"
+			"add	$16, %2\n"
+			"pxor	%%mm0, %%mm2\n\t"
+			"pxor	%%mm1, %%mm3\n\t"
+			MMX_STORE(%%mm2,  (%3))
+			MMX_STORE(%%mm3, 8(%3))
+			"add	$16, %3\n"
+			"3:\n\t"
+			"test	$8, %5\n\t"
+			"je	4f\n\t"
+			"movq	  (%1), %%mm0\n\t"
+			"add	$8, %1\n\t"
+			"movq	  (%2), %%mm1\n\t"
+			"add	$8, %2\n"
+			"pxor	%%mm0, %%mm1\n\t"
+			MMX_STORE(%%mm1,  (%3))
+			"add	$8, %3\n"
+			"4:\n\t"
+			/* done */
+			MMX_FENCE
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 32),
+			  /* %5 */ "r" (len % 32)
+			: "cc",
+#  ifdef __MMX__
+			  "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7",
 #  endif
 			  "memory"
 		);
@@ -430,11 +680,17 @@ no_alignment_wanted:
 alignment_size_t:
 #endif
 	{
-		size_t tmp1, tmp2, cnt1, cnt2, rem = len%(SOST*4);
+		size_t tmp1, tmp2, cnt2, rem = len%(SOST*4);
 
 		__asm__ __volatile__(
 			PREFETCH(  (%4))
 			PREFETCHW(  (%5))
+#if defined(__i386__) && defined(__PIC__)
+			/* fuck -fpic */
+			"mov	%2, %0\n\t"
+			"push	"PICREC"\n\t"
+			"mov	%0, "PICREG"\n\t"
+#endif
 			"test	%3, %3\n\t"
 			"jz	2f\n\t"
 			PREFETCH(32(%4))
@@ -443,28 +699,27 @@ alignment_size_t:
 			PREFETCHW(32(%5))
 			PREFETCHW(64(%5))
 			PREFETCHW(96(%5))
-			/* fuck -fpic */
-			"mov	%2, %0\n\t" /* no xchg, contains a lock */
-			"mov	"PICREG", %2\n\t"
-			"mov	%0, "PICREG"\n\t"
 			".p2align 3\n"
 			"1:\n\t"
-			PREFETCH(128(%4,PICREG_R,1))
-			PREFETCHW(128(%5,PICREG_R,1))
-			"mov	"str_it(SIZE_T_BYTE)"*0(%4,"PICREG",1), %0\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*1(%4,"PICREG",1), %1\n\t"
-			"xor	%0,"str_it(SIZE_T_BYTE)"*0(%5,"PICREG",1)\n\t"
-			"xor	%1,"str_it(SIZE_T_BYTE)"*1(%5,"PICREG",1)\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*2(%4,"PICREG",1), %0\n\t"
-			"mov	"str_it(SIZE_T_BYTE)"*3(%4,"PICREG",1), %1\n\t"
-			"xor	%0,"str_it(SIZE_T_BYTE)"*2(%5,"PICREG",1)\n\t"
-			"xor	%1,"str_it(SIZE_T_BYTE)"*3(%5,"PICREG",1)\n\t"
+			PREFETCH(128(%4))
+			PREFETCHW(128(%5))
+			"mov	"str_it(SIZE_T_BYTE)"*0(%4), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*1(%4), %1\n\t"
+			"xor	"str_it(SIZE_T_BYTE)"*0("PICREG"), %0\n\t"
+			"xor	"str_it(SIZE_T_BYTE)"*1("PICREG"), %1\n\t"
+			"mov	%0,"str_it(SIZE_T_BYTE)"*0(%5)\n\t"
+			"mov	%1,"str_it(SIZE_T_BYTE)"*1(%5)\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*2(%4), %0\n\t"
+			"mov	"str_it(SIZE_T_BYTE)"*3(%4), %1\n\t"
+			"add	$"str_it(SIZE_T_BYTE)"*4, %4\n\t"
+			"xor	"str_it(SIZE_T_BYTE)"*2("PICREG"), %0\n\t"
+			"xor	"str_it(SIZE_T_BYTE)"*3("PICREG"), %1\n\t"
 			"add	$"str_it(SIZE_T_BYTE)"*4, "PICREG"\n\t"
+			"mov	%0,"str_it(SIZE_T_BYTE)"*2(%5)\n\t"
+			"mov	%1,"str_it(SIZE_T_BYTE)"*3(%5)\n\t"
+			"add	$"str_it(SIZE_T_BYTE)"*4, %5\n\t"
 			"dec	%3\n\t"
 			"jnz	1b\n\t"
-			"lea	(%4,"PICREG",1), %4\n\t"
-			"lea	(%5,"PICREG",1), %5\n\t"
-			"mov	%2, "PICREG"\n"
 			"2:\n\t"
 		/* handle remaining in 32 bit, should be small and helps amd64 */
 			"mov	%9, %3\n\t"
@@ -473,25 +728,36 @@ alignment_size_t:
 			"jz	4f\n\t"
 			"xor	%1, %1\n"
 			"3:\n\t"
-			"mov	(%4,%1,4), %%eax\n\t"
-			"xor	%%eax,(%5,%1,4)\n\t"
+			"mov	(%4,%1,4), %k0\n\t"
+			"xor	("PICREG",%1,4), %k0\n\t"
+			"mov	%k0, (%5,%1,4)\n\t"
 			"inc	%1\n\t"
 			"dec	%3\n"
 			"jnz	3b\n\t"
 			"lea	(%4,%1,4), %4\n\t"
+			"lea	("PICREG",%1,4), "PICREG"\n"
 			"lea	(%5,%1,4), %5\n"
 			"4:\n"
+#if defined(__i386__) && defined(__PIC__)
+			"mov	"PICREG", %0\n\t"
+			"pop	"PICREG"\n\t"
+			"mov	%0, %2\n\t"
+#endif
 			: /* %0 */ "=&a" (tmp1),
 			  /* %1 */ "=&d" (tmp2),
-			  /* %2 */ "=&rm" (cnt1),
+#if defined(__i386__) && defined(__PIC__)
+			  /* %2 */ "=m" (src_char1),
+#else
+			  /* %2 */ "=&b" (src_char1),
+#endif
 			  /* %3 */ "=&c" (cnt2),
-			  /* %4 */ "+&D" (src_char),
+			  /* %4 */ "+&D" (src_char2),
 			  /* %5 */ "+&S" (dst_char),
 			  /* %6 */ "=m" (dst_char)
 			: /* %7 */ "3" (len/(SOST*4)),
-			  /* %8 */ "2" (0),
+			  /* %8 */ "2" (src_char1),
 			  /* %9 */ "m" (rem),
-			  /* %10 */ "m" (src_char)
+			  /* %10 */ "m" (src_char2)
 			: "cc"
 		);
 		len %= SO32;
@@ -500,9 +766,9 @@ alignment_size_t:
 no_alignment_possible:
 	/* xor whats left to do from alignment and other datatype */
 	while(len--)
-		*dst_char++ ^= *src_char++;
+		*dst_char++ = *src_char1++ ^ *src_char2++;
 
 	return dst;
 }
 
-static char const DVAR_NAME(rcsid_mx, ARCH_NAME_SUFFIX)[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const DVAR_NAME(rcsid_mxc, ARCH_NAME_SUFFIX)[] GCC_ATTR_USED_VAR = "$Id:$";

@@ -120,6 +120,13 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] =
 	[PT_JCT   ] = empty_action_p,
 };
 
+/* PI-childs */
+static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
+{
+	[PT_UDP   ] = unimpl_action_p,
+	[PT_RELAY ] = unimpl_action_p,
+};
+
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
@@ -300,7 +307,6 @@ static bool handle_KHL(g2_connection_t *connec, g2_packet_t *source, struct list
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec(connec, target, KHL_packet_dict, &child_p);
-//		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
@@ -544,6 +550,7 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 	bool ret_val = false, keep_decoding;
 	g2_packet_t *lni, *na, *gu, *v, *hs;
 
+	connec->flags.had_LNI_HS = false;
 	do
 	{
 		g2_packet_t child_p;
@@ -557,8 +564,14 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec(connec, target, LNI_packet_dict, &child_p);
-//		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+	if(!connec->flags.had_LNI_HS && connec->flags.upeer) {
+		/* demote connection from hub mode */
+		connec->flags.upeer = false;
+		/* connection is no hub anymore, add to QHTs */
+		g2_conreg_mark_dirty(connec);
+	}
 
 	/* time to send a packet again? */
 	if(unlikely(local_time_now < (connec->u.send_stamps.LNI + (LNI_TIMEOUT))))
@@ -664,8 +677,14 @@ static bool handle_LNI_HS(g2_connection_t *connec, g2_packet_t *source, struct l
 	logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
 			connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
 
-	connec->flags.upeer = true;
 // TODO: now this connection is a hubconnection, move it
+	if(!connec->flags.upeer) {
+		connec->flags.upeer = true;
+		/* connection is now a hub, remove from QHTs */
+		g2_conreg_mark_dirty(connec);
+	}
+	connec->flags.upeer = true;
+	connec->flags.had_LNI_HS = true;
 
 	return false;
 }
@@ -738,9 +757,25 @@ static bool handle_PI(g2_connection_t *connec, g2_packet_t *source, struct list_
 {
 	g2_packet_t *po;
 	/* simple /PI-packet */
-	if(source->is_compound) {
-		logg_packet(STDLF, "\t/PI/x", "some child");
-		return false;
+	if(source->is_compound)
+	{
+		bool ret_val = false, keep_decoding;
+
+		do
+		{
+			g2_packet_t child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "PI", "broken child");
+				connec->flags.dismissed = true;
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec(connec, target, PI_packet_dict, &child_p);
+		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+		return ret_val;
 	}
 
 	/* time to send a packet again? */
@@ -790,7 +825,7 @@ static bool handle_Q2(g2_connection_t *connec, g2_packet_t *source, struct list_
 
 static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source)
 {
-	struct qht_fragment frag;
+	struct qht_fragment *frag;
 	int ret_val;
 	const char *patch_txt;
 
@@ -800,7 +835,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		return false;
 	}
 
-	if(unlikely(5 > buffer_remaining(source->data_trunk))) {
+	if(unlikely((QHT_PATCH_HEADER_BYTES-1) > buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT-patch", "to short");
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
@@ -811,34 +846,40 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
 	}
-
-	frag.nr         = ((unsigned)*buffer_start(source->data_trunk)) & 0x00FF;
-	frag.count      = ((unsigned)*(buffer_start(source->data_trunk)+1)) & 0x00FF;
-	frag.compressed = ((unsigned)*(buffer_start(source->data_trunk)+2)) & 0x00FF;
-	frag.data       = (uint8_t *)buffer_start(source->data_trunk)+4;
-	frag.length     = buffer_remaining(source->data_trunk) - 4;
-
-	if(unlikely(!connec->flags.dismissed))
-		ret_val = g2_qht_add_frag(connec->qht, &frag);
-	else {
+	if(unlikely(connec->flags.dismissed)) {
 		logg_packet(STDLF, "/QHT-patch", "connection dissmissed");
-		ret_val = -1;
+		goto qht_patch_end;
 	}
 
-	if(likely(0 == ret_val)) { /* patch io, but need more */
-		logg_packet(STDLF, "/QHT-patch", "patch recieved");
-		return false;	
-	} else if(0 > ret_val) { /* patch nio */
+	frag            = g2_qht_frag_alloc(buffer_remaining(source->data_trunk)
+	                                    - (QHT_PATCH_HEADER_BYTES-1));
+	if(!frag) {
+		logg_packet(STDLF, "/QHT-patch", "no mem for fragment");
 		connec->flags.dismissed = true;
 		goto qht_patch_end;
 	}
+	frag->nr         = ((unsigned)*buffer_start(source->data_trunk)) & 0x00FF;
+	frag->count      = ((unsigned)*(buffer_start(source->data_trunk)+1)) & 0x00FF;
+	frag->compressed = ((unsigned)*(buffer_start(source->data_trunk)+2)) & 0x00FF;
+	source->data_trunk.pos += QHT_PATCH_HEADER_BYTES-1;
+	ret_val = g2_qht_add_frag(connec->qht, frag, (uint8_t *)buffer_start(source->data_trunk));
+
+	if(likely(0 == ret_val)) { /* patch io, but need more */
+		logg_packet(STDLF, "/QHT-patch", "patch recieved");
+		return false;
+	} else if(0 > ret_val) { /* patch nio */
+		connec->flags.dismissed = true;
+		free(frag);
+		goto qht_patch_end;
+	}
 	/* patch io and complete */
-	patch_txt = g2_qht_patch(&connec->qht, &connec->qht->fragments);
+	patch_txt = g2_qht_patch(connec->qht, connec->qht->fragments);
 	/* we patched a connection, not some free standing QHT */
 	g2_conreg_mark_dirty(connec);
 	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
-	g2_qht_frag_clean(&connec->qht->fragments);
+	g2_qht_frag_free(connec->qht->fragments);
+	connec->qht->fragments = NULL;
 	return false;
 }
 
@@ -846,7 +887,7 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 {
 	uint32_t qht_ent;
 
-	if(unlikely(5 != buffer_remaining(source->data_trunk))) {
+	if(unlikely((QHT_RESET_HEADER_BYTES-1) != buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT-reset", "to short");
 		connec->flags.dismissed = true;
 		return false;
@@ -873,7 +914,9 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 {
 	char tmp;
 	bool ret_val = false;
-	g2_packet_t *qht;
+	g2_packet_t *qht = NULL;
+	struct qht_fragment *frags;
+	struct qhtable *master_qht;
 
 	if(unlikely(!buffer_remaining(source->data_trunk))) {
 		logg_packet(STDLF, "/QHT", "without data?");
@@ -893,30 +936,69 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 	if(unlikely(ret_val || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT))))
 		return ret_val;
 
-	qht = g2_packet_calloc();
-	if(!qht)
+	master_qht = g2_qht_global_get();
+	/* "cheap" check if we have to sent the qht */
+	if(connec->sent_qht == master_qht) {
+		g2_qht_put(master_qht);
+		return false;
+	}
+
+	if(!connec->sent_qht)
+	{
+		uint32_t ent;
+
+		qht = g2_packet_calloc();
+		if(!qht)
+			goto out_fail;
+		qht->type = PT_QHT;
+		if(!g2_packet_steal_data_space(qht, QHT_RESET_HEADER_BYTES))
+			goto out_fail;
+
+		ent = (uint32_t)master_qht->entries;
+		*buffer_start(qht->data_trunk) = 0; /* command */
+		put_unaligned(ent, (uint32_t*)(buffer_start(qht->data_trunk)+1));
+		*(buffer_start(qht->data_trunk)+5) = 1; /* infinity */
+		qht->big_endian = HOST_IS_BIGENDIAN;
+		list_add_tail(&qht->list, target);
+		qht = NULL;
+	}
+
+	frags = g2_qht_diff_get_frag(connec->sent_qht, master_qht);
+	if(!frags)
 		goto out_fail;
 
-	qht->type = PT_QHT;
-// TODO: Send patches.
-//	if(!connec->flags.qht_reset_send)
+	do
 	{
-		if(g2_packet_steal_data_space(qht, 6))
-		{
-			uint32_t ent = (uint32_t)g2_qht_global_get_ent();
-			*buffer_start(qht->data_trunk) = 0; /* command */
-			put_unaligned(ent, (uint32_t*)(buffer_start(qht->data_trunk)+1));
-			*(buffer_start(qht->data_trunk)+5) = 1; /* infinity */
-			qht->big_endian = HOST_IS_BIGENDIAN;
-			connec->flags.qht_reset_send = true;
-		}
-		else
-			goto out_fail;
-	}
-	list_add_tail(&qht->list, target);
+		qht = g2_packet_calloc();
+		if(!qht)
+			goto out_fail_frags;
+		qht->type = PT_QHT;
+
+		qht->data_trunk.data = (char *)frags;
+		qht->data_trunk.capacity = sizeof(*frags) + frags->length;
+		qht->data_trunk.limit = qht->data_trunk.capacity;
+		qht->data_trunk.pos = offsetof(struct qht_fragment, data);
+		qht->data_trunk_is_freeable = true;
+
+		*buffer_start(qht->data_trunk) = 1; /* command */
+		*(buffer_start(qht->data_trunk)+1) = frags->nr; /* fragment no */
+		*(buffer_start(qht->data_trunk)+2) = frags->count; /* fragment count */
+		*(buffer_start(qht->data_trunk)+3) = frags->compressed; /* compresion */
+		*(buffer_start(qht->data_trunk)+4) = 1; /* bits */
+
+		list_add_tail(&qht->list, target);
+		frags = frags->next;
+	} while(frags);
+
+	g2_qht_put(connec->sent_qht);
+	connec->sent_qht = master_qht;
 	connec->u.send_stamps.QHT = local_time_now;
 	return true;
+
+out_fail_frags:
+	g2_qht_frag_free(frags);
 out_fail:
+	g2_qht_put(master_qht);
 	g2_packet_free(qht);
 	return false;
 }
@@ -1063,7 +1145,7 @@ static bool handle_G2CDC(g2_connection_t *connec GCC_ATTR_UNUSED_PARAM, g2_packe
 /********************************************************************
  *
  * helper-funktions
- * 
+ *
  ********************************************************************/
 g2_packet_t *g2_packet_init(g2_packet_t *p)
 {
@@ -1073,7 +1155,7 @@ g2_packet_t *g2_packet_init(g2_packet_t *p)
 	memset(p, 0, offsetof(g2_packet_t, data_trunk));
 	/* ATM they are similar to zero */
 /*	p->packet_decode = CHECK_CONTROLL_BYTE;
-	p->packet_encode = DECIDE_ENCODE;*/
+	p->packet_encode = DECIDE_ENCODE; */
 	INIT_LIST_HEAD(&p->list);
 	INIT_LIST_HEAD(&p->children);
 	return p;

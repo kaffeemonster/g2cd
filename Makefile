@@ -216,7 +216,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1 -foptimize-sibling-calls
+#OPT_FLAGS = -O0 -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -427,6 +427,7 @@ SRCS = \
 	G2PacketTyperGenerator.c \
 	ccdrv.c \
 	arflock.c \
+	bin2o.c \
 	calltree.c
 #	and again: with gmake ... $(wildcard *.c)
 #

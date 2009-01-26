@@ -42,14 +42,17 @@ enum g2_qht_comp
 
 struct qht_fragment
 {
+	struct qht_fragment *next;
 	size_t   length;
 	size_t   nr;
 	size_t   count;
 	enum g2_qht_comp compressed;
-	uint8_t  *data;
+	uint8_t  data[DYN_ARRAY_LEN];
 };
 
 # define MAX_BYTES_QHT (512 * 1024)
+# define QHT_PATCH_HEADER_BYTES 5
+# define QHT_RESET_HEADER_BYTES 6
 struct qhtable
 {
 	struct hzp_free hzp;
@@ -59,8 +62,8 @@ struct qhtable
 	size_t   entries;
 	size_t   bits;
 	time_t   time_stamp;
+	struct qht_fragment *fragments;
 	enum g2_qht_comp     compressed;
-	struct qht_fragment  fragments;
 	struct qht_flags
 	{
 		bool  reset_needed;
@@ -79,10 +82,12 @@ struct qhtable
 
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
-_G2QHT_EXTRN(void g2_qht_frag_clean(struct qht_fragment *));
-_G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable **, struct qht_fragment *));
-_G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *));
+_G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable *, struct qht_fragment *));
+_G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *, uint8_t *data));
 _G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
+_G2QHT_EXTRN(struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *, const struct qhtable *));
+_G2QHT_EXTRN(struct qht_fragment *g2_qht_frag_alloc(size_t len));
+_G2QHT_EXTRN(void g2_qht_frag_free(struct qht_fragment *));
 /* funcs for the global qht are in the G2ConRegistry */
 _G2QHT_EXTRN(size_t g2_qht_global_get_ent(void));
 _G2QHT_EXTRN(struct qhtable *g2_qht_global_get(void));

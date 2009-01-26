@@ -56,6 +56,12 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	char *restrict dst_c = dst;
 	const char *restrict src_c = src;
 
+#ifndef COMPILER_IS_STUPID
+	/* if the compiler is good, he will do the right thing(TM) */
+	for(i = (len/16)*16; i; i--)
+		*dst_c++ = *src_c++;
+	len %= 16;
+#else
 	i = ALIGN_DIFF(dst_c, SOST);
 	switch(i & SOSTM1)
 	{
@@ -114,8 +120,10 @@ alignment_failed:
 			dst_c[i] = src_c[i];
 		dst_c += i; src_c += i; len -= i;
 	}
+#endif
 
-	return cpy_rest_o(dst_c, src_c, len);
+	cpy_rest(dst_c, src_c, len);
+	return dst;
 }
 
 void *memcpy(void *restrict dst, const void *restrict src, size_t len)

@@ -1,8 +1,8 @@
 /*
- * memxor.c
- * xor two memory region efficient, ppc implementation
+ * memxorcpy.c
+ * xor two memory region efficient and cpy to dest, ppc implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,19 +49,20 @@
  * I simply assume that larger access is always better then byte
  * access, basically the x86 trick.
  */
-void *memxor(void *dst, const void *src, size_t len)
+void *memxorcpy(void *dst, const void src1, const void *src2, size_t len)
 {
 	char *dst_char = dst;
-	const char *src_char = src;
+	const char *src_char1 = src1;
+	const char *src_char2 = src2;
 
-	if(!dst || !src)
+	if(!dst || !src1 || !src2)
 		return dst;
 
 	/* we will kick this mem, fetch it... */
-	prefetch(src_char);
-	prefetch(src_char + 32);
-	prefetch(src_char + 64);
-	prefetch(src_char + 96);
+	prefetch(src_char2);
+	prefetch(src_char2 + 32);
+	prefetch(src_char2 + 64);
+	prefetch(src_char2 + 96);
 	prefetchw(dst_char);
 	prefetchw(dst_char + 32);
 	prefetchw(dst_char + 64);
@@ -77,12 +78,13 @@ void *memxor(void *dst, const void *src, size_t len)
 		i += SOVUC; /* make sure src is at least one vector in the memblock */
 #endif
 		len -= i;
-		for(; i/SO32; i -= SO32, dst_char += SO32, src_char += SO32)
-			*((uint32_t *)dst_char) ^= *((const uint32_t *)src_char);
+		for(; i/SO32; i -= SO32, dst_char += SO32, src_char1 += SO32, src_char2 += SO32)
+			*((uint32_t *)dst_char) = *((const uint32_t *)src_char1) ^ *((const uint32_t *)src_char2);
 		for(; i; i--)
-			*dst_char++ ^= *src_char++;
-		i = (((intptr_t)dst_char) & ((ALIGNMENT_WANTED * 2) - 1)) ^
-		    (((intptr_t)src_char) & ((ALIGNMENT_WANTED * 2) - 1));
+			*dst_char++ = *src_char1++ ^ *src_char2++;
+		i =  (((intptr_t)dst_char)  & ((ALIGNMENT_WANTED * 2) - 1)) ^
+		    ((((intptr_t)src_char1) & ((ALIGNMENT_WANTED * 2) - 1)) |
+		     (((intptr_t)src_char2) & ((ALIGNMENT_WANTED * 2) - 1)));
 		/*
 		 * We simply align the write side, and "don't care" for
 		 * the read side.
@@ -158,22 +160,23 @@ alignment_16:
 	if(len / SOVUC)
 	{
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
-		register vector const unsigned char *src_vec = (vector const unsigned char *) src_char;
+		register vector const unsigned char *src_vec1 = (vector const unsigned char *) src_char1;
+		register vector const unsigned char *src_vec2 = (vector const unsigned char *) src_char2;
 		register vector unsigned char v[8];
 		size_t small_len = len / SOVUC;
 		register size_t smaller_len = small_len / 4;
 		small_len %= 4;
 
-		for(; smaller_len--; dst_vec += 4, src_vec += 4)
+		for(; smaller_len--; dst_vec += 4, src_vec1 += 4, src_vec2 += 4)
 		{
-			v[0] = vec_ldl(0 * SOVUC, src_vec);
-			v[4] = vec_ldl(0 * SOVUC, dst_vec);
-			v[1] = vec_ldl(1 * SOVUC, src_vec);
-			v[5] = vec_ldl(1 * SOVUC, dst_vec);
-			v[2] = vec_ldl(2 * SOVUC, src_vec);
-			v[6] = vec_ldl(2 * SOVUC, dst_vec);
-			v[3] = vec_ldl(3 * SOVUC, src_vec);
-			v[7] = vec_ldl(3 * SOVUC, dst_vec);
+			v[0] = vec_ldl(0 * SOVUC, src_vec2);
+			v[4] = vec_ldl(0 * SOVUC, src_vec1);
+			v[1] = vec_ldl(1 * SOVUC, src_vec2);
+			v[5] = vec_ldl(1 * SOVUC, src_vec1);
+			v[2] = vec_ldl(2 * SOVUC, src_vec2);
+			v[6] = vec_ldl(2 * SOVUC, src_vec1);
+			v[3] = vec_ldl(3 * SOVUC, src_vec2);
+			v[7] = vec_ldl(3 * SOVUC, src_vec1);
 			v[0] = vec_xor(v[0], v[4]);
 			v[1] = vec_xor(v[1], v[5]);
 			v[2] = vec_xor(v[2], v[6]);
@@ -183,18 +186,19 @@ alignment_16:
 			vec_stl(v[2], 2 * SOVUC, dst_vec);
 			vec_stl(v[3], 3 * SOVUC, dst_vec);
 		}
-		for(; small_len--; dst_vec++, src_vec++)
+		for(; small_len--; dst_vec++, src_vec1++, src_vec2++)
 		{
 			vector unsigned char d, s;
-			s = vec_ldl(0 * SOVUC, src_vec);
-			d = vec_ldl(0 * SOVUC, dst_vec);
+			s = vec_ldl(0 * SOVUC, src_vec2);
+			d = vec_ldl(0 * SOVUC, src_vec1);
 			d = vec_xor(d, s);
 			vec_stl(d, 0 * SOVUC, dst_vec);
 		}
 
 		len %= SOVUC;
-		dst_char  = (char *) dst_vec;
-		src_char  = (const char *) src_vec;
+		dst_char   = (char *) dst_vec;
+		src_char1  = (const char *) src_vec1;
+		src_char2  = (const char *) src_vec2;
 		goto handle_remaining;
 	}
 alignment_8:
@@ -209,12 +213,32 @@ no_alignment_wanted:
 	 * And to make it efficient you better unrool your loop quite
 	 * agressively.
 	 */
+	{
+		unsigned a, b;
+
+		/* check who's unaligned */
+		a = (intptr_t)src_char1 & (ALIGNMENT_WANTED - 1);
+		b = (intptr_t)src_char2 & (ALIGNMENT_WANTED - 1);
+		if(a && b)
+			goto both_unaligned;
+		else
+		{
+			if(a && !b) {
+				/* swap input operands */
+				const char *t = src_char2;
+				src_char2 = src_char1;
+				src_char1 = t;
+			}
+			/* fallthrough */
+		}
+	}
 	if(len/(4*SOVUC))
 	{
-		/* dst is aligned */
+		/* dst and src1 is aligned */
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
-		/* only src sucks */
-		register vector const unsigned char *src_vec;
+		/* only src2 sucks */
+		register vector const unsigned char *src_vec1;
+		register vector const unsigned char *src_vec2;
 		vector unsigned char v[9];          /* 0-8 */
 		vector unsigned char vd[8];         /* 9-16 */
 		vector unsigned char fix_alignment; /* 17 */
@@ -222,32 +246,33 @@ no_alignment_wanted:
 		register size_t smaller_len = small_len / 8;
 		small_len %= 8;
 
-		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
-		src_vec = (vector const unsigned char *) src_char;
-		v[8] = vec_ldl(0, src_vec);
+		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char2);
+		src_vec1 = (vector const unsigned char *) src_char1;
+		src_vec2 = (vector const unsigned char *) src_char2;
+		v[8] = vec_ldl(0, src_vec2);
 		while(smaller_len--)
 		{
 			/* load src */
 			v[0] = v[8];
-			v[1] = vec_ldl(1 * SOVUC, src_vec); /* load always rounds address down */
-			v[2] = vec_ldl(2 * SOVUC, src_vec);
-			v[3] = vec_ldl(3 * SOVUC, src_vec);
-			v[4] = vec_ldl(4 * SOVUC, src_vec);
-			v[5] = vec_ldl(5 * SOVUC, src_vec);
-			v[6] = vec_ldl(6 * SOVUC, src_vec);
-			v[7] = vec_ldl(7 * SOVUC, src_vec);
-			v[8] = vec_ldl(8 * SOVUC, src_vec);
+			v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
+			v[2] = vec_ldl(2 * SOVUC, src_vec2);
+			v[3] = vec_ldl(3 * SOVUC, src_vec2);
+			v[4] = vec_ldl(4 * SOVUC, src_vec2);
+			v[5] = vec_ldl(5 * SOVUC, src_vec2);
+			v[6] = vec_ldl(6 * SOVUC, src_vec2);
+			v[7] = vec_ldl(7 * SOVUC, src_vec2);
+			v[8] = vec_ldl(8 * SOVUC, src_vec2);
 			src_vec += 8;
 
 			/* load dest */
-			vd[0] = vec_ldl(0 * SOVUC, dst_vec);
-			vd[1] = vec_ldl(1 * SOVUC, dst_vec);
-			vd[2] = vec_ldl(2 * SOVUC, dst_vec);
-			vd[3] = vec_ldl(3 * SOVUC, dst_vec);
-			vd[4] = vec_ldl(4 * SOVUC, dst_vec);
-			vd[5] = vec_ldl(5 * SOVUC, dst_vec);
-			vd[6] = vec_ldl(6 * SOVUC, dst_vec);
-			vd[7] = vec_ldl(7 * SOVUC, dst_vec);
+			vd[0] = vec_ldl(0 * SOVUC, src_vec1);
+			vd[1] = vec_ldl(1 * SOVUC, src_vec1);
+			vd[2] = vec_ldl(2 * SOVUC, src_vec1);
+			vd[3] = vec_ldl(3 * SOVUC, src_vec1);
+			vd[4] = vec_ldl(4 * SOVUC, src_vec1);
+			vd[5] = vec_ldl(5 * SOVUC, src_vec1);
+			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
+			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
 
 			/* permutate src for alignment */
 			v[0] = vec_perm(v[0], v[1], fix_alignment);
@@ -284,11 +309,115 @@ no_alignment_wanted:
 		{
 			vector unsigned char d;
 			v[0] = v[8];
-			v[8] = vec_ldl(1 * SOVUC, src_vec);
-			d    = vec_ldl(0 * SOVUC, dst_vec);
+			v[8] = vec_ldl(1 * SOVUC, src_vec2);
+			d    = vec_ldl(0 * SOVUC, src_vec1);
 			v[0] = vec_perm(v[0], v[8], fix_alignment);
 			d    = vec_xor(d, v[0]);
 			vec_stl(d, 0 * SOVUC, dst_vec);
+		}
+
+// TODO: Hmmm, how many bytes are left???
+		len %= SOVUC;
+		dst_char  = (char *) dst_vec;
+		src_char  = (const char *) src_vec;
+		goto handle_remaining;
+	}
+both_unaligned:
+	if(len/(4*SOVUC))
+	{
+		/* dst is aligned */
+		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
+		/* both src'es suck */
+		register vector const unsigned char *src_vec1;
+		register vector const unsigned char *src_vec2;
+		vector unsigned char v[9];          /* 0-8 */
+		vector unsigned char vd[9];         /* 9-17 */
+		vector unsigned char fix_alignment1; /* 18 */
+		vector unsigned char fix_alignment2; /* 19 */
+		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
+		register size_t smaller_len = small_len / 8;
+		small_len %= 8;
+
+		fix_alignment1 = vec_lvsl(0, (const volatile unsigned char *)src_char1);
+		fix_alignment2 = vec_lvsl(0, (const volatile unsigned char *)src_char2);
+		src_vec1 = (vector const unsigned char *) src_char1;
+		src_vec2 = (vector const unsigned char *) src_char2;
+		vd[8] = vec_ldl(0, src_vec1);
+		v[8]  = vec_ldl(0, src_vec2);
+		while(smaller_len--)
+		{
+			/* load src2 */
+			v[0] = v[8];
+			v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
+			v[2] = vec_ldl(2 * SOVUC, src_vec2);
+			v[3] = vec_ldl(3 * SOVUC, src_vec2);
+			v[4] = vec_ldl(4 * SOVUC, src_vec2);
+			v[5] = vec_ldl(5 * SOVUC, src_vec2);
+			v[6] = vec_ldl(6 * SOVUC, src_vec2);
+			v[7] = vec_ldl(7 * SOVUC, src_vec2);
+			v[8] = vec_ldl(8 * SOVUC, src_vec2);
+			src_vec += 8;
+
+			/* load src1 */
+			vd[0] = v[8];
+			vd[1] = vec_ldl(1 * SOVUC, src_vec1);
+			vd[2] = vec_ldl(2 * SOVUC, src_vec1);
+			vd[3] = vec_ldl(3 * SOVUC, src_vec1);
+			vd[4] = vec_ldl(4 * SOVUC, src_vec1);
+			vd[5] = vec_ldl(5 * SOVUC, src_vec1);
+			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
+			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
+			vd[8] = vec_ldl(8 * SOVUC, src_vec1);
+
+			/* permutate src for alignment */
+			v[0]  = vec_perm( v[0],  v[1], fix_alignment2);
+			v[1]  = vec_perm( v[1],  v[2], fix_alignment2);
+			v[2]  = vec_perm( v[2],  v[3], fix_alignment2);
+			v[3]  = vec_perm( v[3],  v[4], fix_alignment2);
+			v[4]  = vec_perm( v[4],  v[5], fix_alignment2);
+			v[5]  = vec_perm( v[5],  v[6], fix_alignment2);
+			v[6]  = vec_perm( v[6],  v[7], fix_alignment2);
+			v[7]  = vec_perm( v[7],  v[8], fix_alignment2);
+			vd[0] = vec_perm(vd[0], vd[1], fix_alignment1);
+			vd[1] = vec_perm(vd[1], vd[2], fix_alignment1);
+			vd[2] = vec_perm(vd[2], vd[3], fix_alignment1);
+			vd[3] = vec_perm(vd[3], vd[4], fix_alignment1);
+			vd[4] = vec_perm(vd[4], vd[5], fix_alignment1);
+			vd[5] = vec_perm(vd[5], vd[6], fix_alignment1);
+			vd[6] = vec_perm(vd[6], vd[7], fix_alignment1);
+			vd[7] = vec_perm(vd[7], vd[8], fix_alignment1);
+
+			/* xor it */
+			vd[0] = vec_xor(vd[0], v[0]);
+			vd[1] = vec_xor(vd[1], v[1]);
+			vd[2] = vec_xor(vd[2], v[2]);
+			vd[3] = vec_xor(vd[3], v[3]);
+			vd[4] = vec_xor(vd[4], v[4]);
+			vd[5] = vec_xor(vd[5], v[5]);
+			vd[6] = vec_xor(vd[6], v[6]);
+			vd[7] = vec_xor(vd[7], v[7]);
+
+			/* store it */
+			vec_stl(vd[0], 0 * SOVUC, dst_vec);
+			vec_stl(vd[1], 1 * SOVUC, dst_vec);
+			vec_stl(vd[2], 2 * SOVUC, dst_vec);
+			vec_stl(vd[3], 3 * SOVUC, dst_vec);
+			vec_stl(vd[4], 4 * SOVUC, dst_vec);
+			vec_stl(vd[5], 5 * SOVUC, dst_vec);
+			vec_stl(vd[6], 6 * SOVUC, dst_vec);
+			vec_stl(vd[7], 7 * SOVUC, dst_vec);
+			dst_vec += 8;
+		}
+		for(; small_len--; dst_vec++, src_vec++)
+		{
+			v[0]  = v[8];
+			vd[0] = vd[8]
+			v[8]  = vec_ldl(1 * SOVUC, src_vec2);
+			vd[8] = vec_ldl(1 * SOVUC, src_vec1);
+			v[0]  = vec_perm( v[0],  v[8], fix_alignment2);
+			vd[0] = vec_perm(vd[0], vd[8], fix_alignment1);
+			vd[0] = vec_xor(vd[0], v[0]);
+			vec_stl(vd[0], 0 * SOVUC, dst_vec);
 		}
 
 // TODO: Hmmm, how many bytes are left???
@@ -310,15 +439,17 @@ no_alignment_wanted:
 	if(len/SOST)
 	{
 		register size_t *dst_sizet = (size_t *)dst_char;
-		register const size_t *src_sizet = (const size_t *)src_char;
+		register const size_t *src_sizet1 = (const size_t *)src_char1;
+		register const size_t *src_sizet2 = (const size_t *)src_char2;
 		register size_t small_len = len / SOST;
 		len %= SOST;
 
 		while(small_len--)
-			*dst_sizet++ ^= *src_sizet++;
+			*dst_sizet++ = *src_sizet1++ ^ *src_sizet2++;
 
-		dst_char = (char *) dst_sizet;
-		src_char = (const char *) src_sizet;
+		dst_char  = (char *) dst_sizet;
+		src_char1 = (const char *) src_sizet1;
+		src_char2 = (const char *) src_sizet2;
 		goto handle_remaining;
 	}
 #endif
@@ -327,21 +458,23 @@ handle_remaining:
 	if(len/4)
 	{
 		register uint32_t *dst_u32 = (uint32_t *)dst_char;
-		register const uint32_t *src_u32 = (const uint32_t *)src_char;
+		register const uint32_t *src_u321 = (const uint32_t *)src_char1;
+		register const uint32_t *src_u322 = (const uint32_t *)src_char2;
 		register size_t small_len = len / 4;
 		len %= 4;
 
 		while(small_len--)
-			*dst_u32++ ^= *src_u32++;
+			*dst_u32++ = *src_u321++ ^ *src_u322++;
 
-		dst_char = (char *) dst_u32;
-		src_char = (const char *) src_u32;
+		dst_char  = (char *) dst_u32;
+		src_char1 = (const char *) src_u321;
+		src_char2 = (const char *) src_u322;
 	}
 
 no_alignment_possible:
 	/* xor whats left to do from alignment and other datatype */
 	while(len--)
-		*dst_char++ ^= *src_char++;
+		*dst_char++ = *src_char1++ ^ *src_char2++;
 
 	return dst;
 }

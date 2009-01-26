@@ -729,8 +729,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 				value.dptr  = (char *) &new_gwc;
 				value.dsize = sizeof(new_gwc);
 			}
-			else
-			{
+			else {
 				struct gwc *known_gwc = (void *) value.dptr;
 				known_gwc->seen_last = lnow;
 			}
@@ -895,9 +894,7 @@ static int gwc_receive(void)
 	case 0:
 		if(buffer_remaining(*buff)-1)
 		{
-			if(EAGAIN != errno)
-			{
-				/* we have reached EOF */
+			if(EAGAIN != errno) { /* we have reached EOF */
 				close(act_gwc.socket);
 				act_gwc.socket = -1;
 				ret_val = 0;
@@ -1251,7 +1248,7 @@ life_tree_error:
 	t = rbtree_cache_lowest(&cache.tree);
 	if(likely(t) && t->e.when < when && KHL_CACHE_SIZE <= cache.num)
 	{
-		logg_devel("found older entry\n");
+		logg_devel_old("found older entry\n");
 		if(!(t = rbtree_cache_remove(&cache.tree, t)))
 			goto out_unlock; /* the tree is amiss? */
 		cache_ht_del(t);
