@@ -224,8 +224,8 @@
 struct g2_ht_chain
 {
 	struct hlist_head list;
-	struct qhtable    *qht;
-	pthread_mutex_t   lock;
+	struct qhtable   *qht;
+	pthread_rwlock_t  lock;
 	bool dirty;
 };
 
@@ -274,7 +274,7 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 		{
 			INIT_HLIST_HEAD(&f_c->list);
 			f_c->qht = NULL;
-			pthread_mutex_init(&f_c->lock, NULL);
+			pthread_rwlock_init(&f_c->lock, NULL);
 			f_c->dirty = false;
 			fill->d.c[i] = f_c;
 		}
@@ -377,9 +377,9 @@ void g2_conreg_mark_dirty(g2_connection_t *connec)
 		return;
 
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	pthread_mutex_lock(&c->lock);
+	pthread_rwlock_rdlock(&c->lock);
 	c->dirty = true;
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 }
 
 bool g2_conreg_add(g2_connection_t *connec)
@@ -390,10 +390,10 @@ bool g2_conreg_add(g2_connection_t *connec)
 		return false;
 
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	pthread_mutex_lock(&c->lock);
+	pthread_rwlock_wrlock(&c->lock);
 	c->dirty = true;
 	hlist_add_head(&connec->registry, &c->list);
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 
 	return true;
 }
@@ -406,10 +406,10 @@ bool g2_conreg_remove(g2_connection_t *connec)
 		return false;
 
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	pthread_mutex_lock(&c->lock);
+	pthread_rwlock_wrlock(&c->lock);
 	c->dirty = true;
 	hlist_del(&connec->registry);
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 
 	INIT_HLIST_NODE(&connec->registry);
 
@@ -423,15 +423,15 @@ g2_connection_t *g2_conreg_search_addr(union combo_addr *addr)
 	g2_connection_t *ret_val;
 
 	c = g2_conreg_find_chain(addr);
-	pthread_mutex_lock(&c->lock);
+	pthread_rwlock_rdlock(&c->lock);
 	hlist_for_each_entry(ret_val, n, &c->list, registry)
 	{
 		if(combo_addr_eq(&ret_val->remote_host, addr)) {
-			pthread_mutex_unlock(&c->lock);
+			pthread_rwlock_unlock(&c->lock);
 			return ret_val;
 		}
 	}
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 
 	return NULL;
 }
@@ -443,15 +443,15 @@ g2_connection_t *g2_conreg_search_ip(union combo_addr *addr)
 	g2_connection_t *ret_val;
 
 	c = g2_conreg_find_chain(addr);
-	pthread_mutex_lock(&c->lock);
+	pthread_rwlock_rdlock(&c->lock);
 	hlist_for_each_entry(ret_val, n, &c->list, registry)
 	{
 		if(combo_addr_eq_ip(&ret_val->remote_host, addr)) {
-			pthread_mutex_unlock(&c->lock);
+			pthread_rwlock_unlock(&c->lock);
 			return ret_val;
 		}
 	}
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 
 	return NULL;
 }
@@ -468,7 +468,7 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 {
 	struct qhtable *new_sub = NULL, *old_sub = NULL;
 
-	if(pthread_mutex_lock(&c->lock))
+	if(pthread_rwlock_rdlock(&c->lock))
 		return;
 	/*
 	 * now no connection can vanish under us,
@@ -520,7 +520,7 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 		new_sub = c->qht;
 
 out_unlock:
-	pthread_mutex_unlock(&c->lock);
+	pthread_rwlock_unlock(&c->lock);
 
 	/* bring out the gimp */
 	g2_qht_put(old_sub);
