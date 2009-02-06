@@ -124,7 +124,11 @@ _G2MAIN_EXTRNVAR(struct
 				const char *gwc_cache_fname;
 				const char *dump_fname;
 			} khl;
-			enum g2_qht_comp qht_compression;
+			struct
+			{
+				enum g2_qht_comp compression;
+				bool compress_internal;
+			} qht;
 		} settings;
 		struct
 		{

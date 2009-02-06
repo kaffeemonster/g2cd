@@ -155,6 +155,7 @@ LIBASRCS = \
 LIBSRCS = \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
+	$(MPL)/bitfield_rle.c \
 	$(MPL)/cpy_rest.c \
 	$(MPL)/memxorcpy.c \
 	$(MPL)/memand.c \
@@ -183,6 +184,7 @@ LIBSRCS = \
 BITOPOBJS = \
 	$(MPL)/flsst.o \
 	$(MPL)/popcountst.o \
+	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
 	$(MPL)/memxorcpy.o \
 	$(MPL)/memand.o \

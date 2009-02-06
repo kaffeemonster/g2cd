@@ -105,6 +105,15 @@
 #define HAVE_BIT_INSTR
 
 /*
+ * Does your arch has a fast multiplication?
+ * We misuse the multiplication as a fast mixing func for
+ * hashes. A slow mull or an hardware emulated (old sparc
+ * and its hw aided mull) does not help in this case and
+ * another aproach (add, shifts, xor, etc.) can be faster.
+ */
+#define HAVE_HW_MULT
+
+/*
  * Is __thread keyword for thread local storage available?
  * This option is unused ATM, since __thread has its share
  * of problems (no descructors, portability).

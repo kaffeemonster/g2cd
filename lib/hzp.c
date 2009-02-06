@@ -234,7 +234,7 @@ static inline bool hzp_fs_contains(struct hzp_fs *head, const void *data)
 
 /*
  * hzp_scan - scan the freelist
- * 
+ *
  *
  */
 int hzp_scan(int threshold)
@@ -285,7 +285,7 @@ int hzp_scan(int threshold)
 		struct hzp_free *mentry = container_of(whead, struct hzp_free, st);
 		if(hzp_fs_contains(uhead, mentry->data))
 		{
-			/* readd to atomic context */
+			/* re-add to atomic context */
 			atomic_push(&hzp_freelist.head, whead);
 			atomic_inc(&nr_free);
 		}

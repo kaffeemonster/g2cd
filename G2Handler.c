@@ -463,6 +463,7 @@ retry_unpack:
 						}
 					}
 
+					save_build_packet = false;
 					/* !!! packet is seen as finished here !!! */
 					if(build_packet->is_freeable)
 						logg_devel("freeing durable packet\n");

@@ -302,7 +302,7 @@ static void g2_conreg_init(void)
 	ht_seed = (uint32_t) time(NULL);
 
 	/* our ht_root carries the global master QHT */
-	if(g2_qht_reset(&ht_root.qht, 1<<20))
+	if(g2_qht_reset(&ht_root.qht, 1<<20, false))
 		diedie("couldn't create global QHT");
 	/* the only qht where lazy init harms (at least ATM) */
 	memset(ht_root.qht->data, ~0, ht_root.qht->data_length);
@@ -491,7 +491,7 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 		struct hlist_node *n;
 		g2_connection_t *connec;
 
-		if(g2_qht_reset(&new_sub, 1<<20)) {
+		if(g2_qht_reset(&new_sub, 1<<20, false)) {
 			logg_devel("preparing a new chain qht failed?");
 			goto out_unlock;
 		}
@@ -505,13 +505,7 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 			/* keep empty qht out of master qht */
 			/* keep other hubs out of master qht */
 			if(!connec->qht->flags.reset_needed && !connec->flags.upeer)
-			{
-				if(new_sub->flags.reset_needed) {
-					memcpy(new_sub->data, connec->qht->data, new_sub->data_length);
-					new_sub->flags.reset_needed = false;
-				} else
-					memand(new_sub->data, connec->qht->data, new_sub->data_length);
-			}
+				g2_qht_aggregate(new_sub, connec->qht);
 		}
 		old_sub = c->qht;
 		c->qht = new_sub;
@@ -543,7 +537,8 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 	{
 		struct qhtable *old_sub;
 
-		g2_qht_reset(&new_sub, 1<<20);
+// TODO: error handling
+		g2_qht_reset(&new_sub, 1<<20, false);
 
 		/*
 		 * resetting the dirty state is racy,

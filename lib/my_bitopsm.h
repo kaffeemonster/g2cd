@@ -58,6 +58,9 @@
 	/* and the diff to it */
 #define ALIGN_DOWN_DIFF(x, n) \
 	(((intptr_t)(x)) & ((intptr_t)(n) - 1L))
+	/* divide while always rounding up */
+#define DIV_ROUNDUP(a, b) \
+	(((a) + (b) - 1) / (b))
 	/* some magic to build a constant for 32 & 64 bit, without
 	 * the need for LL suffix
 	 */

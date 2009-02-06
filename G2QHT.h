@@ -37,7 +37,8 @@
 enum g2_qht_comp
 {
 	COMP_NONE    = 0,
-	COMP_DEFLATE = 1
+	COMP_DEFLATE = 1,
+	COMP_RLE     = 2,
 };
 
 struct qht_fragment
@@ -69,7 +70,7 @@ struct qhtable
 		bool  reset_needed;
 	} flags;
 /* ----- Everthing above this gets simply wiped ------ */
-	uint8_t  data[DYN_ARRAY_LEN] GCC_ATTR_ALIGNED(16);
+	uint8_t  *data;
 };
 
 # ifndef _G2QHT_C
@@ -83,8 +84,9 @@ struct qhtable
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable *, struct qht_fragment *));
+_G2QHT_EXTRN(void g2_qht_aggregate(struct qhtable *, struct qhtable *));
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *, uint8_t *data));
-_G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent));
+_G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent, bool try_compress));
 _G2QHT_EXTRN(struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *, const struct qhtable *));
 _G2QHT_EXTRN(struct qht_fragment *g2_qht_frag_alloc(size_t len));
 _G2QHT_EXTRN(void g2_qht_frag_free(struct qht_fragment *));

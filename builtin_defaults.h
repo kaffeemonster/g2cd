@@ -44,6 +44,7 @@
 #define DEFAULT_GWC_DB	"gwc_cache"
 #define DEFAULT_KHL_DUMP	"khl.dump"
 #define DEFAULT_QHT_COMPRESSION COMP_DEFLATE
+#define DEFAULT_QHT_COMPRESS_INTERNAL true
 
 #define DEFAULT_FILE_GUID		"guid.txt"
 #define DEFAULT_FILE_PROFILE	"profile.xml"

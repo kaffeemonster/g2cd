@@ -484,7 +484,8 @@ static inline void handle_config(void)
 	server.settings.khl.gwc_boot_url = DEFAULT_GWC_BOOT;
 	server.settings.khl.gwc_cache_fname = DEFAULT_GWC_DB;
 	server.settings.khl.dump_fname = DEFAULT_KHL_DUMP;
-	server.settings.qht_compression = DEFAULT_QHT_COMPRESSION;
+	server.settings.qht.compression = DEFAULT_QHT_COMPRESSION;
+	server.settings.qht.compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL;
 
 	/* set the GUID */
 	if(!(config = fopen(guid_file_name, "r")))

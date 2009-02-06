@@ -566,11 +566,18 @@ static bool handle_LNI(g2_connection_t *connec, g2_packet_t *source, struct list
 			ret_val |= g2_packet_decide_spec(connec, target, LNI_packet_dict, &child_p);
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
-	if(!connec->flags.had_LNI_HS && connec->flags.upeer) {
+	if(!connec->flags.had_LNI_HS && connec->flags.upeer)
+	{
 		/* demote connection from hub mode */
 		connec->flags.upeer = false;
+// TODO: remove from hub connections
 		/* connection is no hub anymore, add to QHTs */
 		g2_conreg_mark_dirty(connec);
+		if(connec->sent_qht) {
+			struct qhtable *t = connec->sent_qht;
+			connec->sent_qht = NULL;
+			g2_qht_put(t);
+		}
 	}
 
 	/* time to send a packet again? */
@@ -677,8 +684,8 @@ static bool handle_LNI_HS(g2_connection_t *connec, g2_packet_t *source, struct l
 	logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
 			connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
 
-// TODO: now this connection is a hubconnection, move it
 	if(!connec->flags.upeer) {
+// TODO: now this connection is a hub connection, add it there
 		connec->flags.upeer = true;
 		/* connection is now a hub, remove from QHTs */
 		g2_conreg_mark_dirty(connec);
@@ -822,7 +829,6 @@ static bool handle_Q2(g2_connection_t *connec, g2_packet_t *source, struct list_
 	return ret_val;
 }
 
-
 static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source)
 {
 	struct qht_fragment *frag;
@@ -851,8 +857,8 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		goto qht_patch_end;
 	}
 
-	frag            = g2_qht_frag_alloc(buffer_remaining(source->data_trunk)
-	                                    - (QHT_PATCH_HEADER_BYTES-1));
+	frag = g2_qht_frag_alloc(buffer_remaining(source->data_trunk)
+	                         - (QHT_PATCH_HEADER_BYTES-1));
 	if(!frag) {
 		logg_packet(STDLF, "/QHT-patch", "no mem for fragment");
 		connec->flags.dismissed = true;
@@ -875,7 +881,8 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	/* patch io and complete */
 	patch_txt = g2_qht_patch(connec->qht, connec->qht->fragments);
 	/* we patched a connection, not some free standing QHT */
-	g2_conreg_mark_dirty(connec);
+	if(!connec->flags.upeer)
+		g2_conreg_mark_dirty(connec);
 	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_free(connec->qht->fragments);
@@ -901,9 +908,9 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 
 	get_unaligned_endian(qht_ent, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
 	
-	if(unlikely(g2_qht_reset(&connec->qht, qht_ent)))
+	if(unlikely(g2_qht_reset(&connec->qht, qht_ent, server.settings.qht.compress_internal)))
 		connec->flags.dismissed = true;
-	else
+	else if(!connec->flags.upeer)
 		g2_conreg_mark_dirty(connec);
 
 	logg_packet(STDSF, "/QHT-reset");
@@ -933,7 +940,7 @@ static bool handle_QHT(g2_connection_t *connec, g2_packet_t *source, struct list
 	else
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
-	if(unlikely(ret_val || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT))))
+	if(unlikely(ret_val) || !connec->flags.upeer || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT)))
 		return ret_val;
 
 	master_qht = g2_qht_global_get();
@@ -1188,6 +1195,8 @@ g2_packet_t *g2_packet_clone(g2_packet_t *p)
 	if(!t)
 		return t;
 	*t = *p;
+	INIT_LIST_HEAD(&t->list);
+	INIT_LIST_HEAD(&t->children);
 	t->is_freeable = true;
 	return t;
 }
