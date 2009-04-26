@@ -42,6 +42,12 @@
  * instructions.
  * This is dirty and shurely violates everything, but as the functions
  * says, "I'm for ascii data".
+ *
+ * We don't use any fancy tricks like (a[i] ^ b[i]) & ~0x20, because
+ * this would be a sledgehammer tolower(). We only want to get rid
+ * of locale foo and vectorize it, not making the use of this funktion
+ * a PITA (caller must garantee input is ONLY printable characters,
+ * otherwise it matches bullsh^weverything and the kitchen sink).
  */
 
 #define IN_STRWHATEVER

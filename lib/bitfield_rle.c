@@ -194,7 +194,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 				  /* %6 */ "1" (data)
 			);
 #else
-			f_row = 0
+			f_row = 0;
 			if(s_len >= sizeof(uint32_t))
 			{
 				if(!UNALIGNED_OK)
@@ -207,7 +207,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 				}
 				for(; likely(s_len >= sizeof(uint32_t)); s_len -= sizeof(uint32_t),
 				    data += sizeof(uint32_t), f_row += sizeof(uint32_t)) {
-					if(unlikely(0xFFFFFFFF != *(uint32_t *)data))
+					if(unlikely(0xFFFFFFFF != *(const uint32_t *)data))
 						break;
 				}
 			}
@@ -341,7 +341,7 @@ write_out_manual:
 		}
 		for(; s_len >= sizeof(uint16_t); s_len -= sizeof(uint16_t),
 		    data += sizeof(uint16_t), o_row += sizeof(uint16_t)) {
-			if(0xFFFF == *(uint16_t *)data)
+			if(0xFFFF == *(const uint16_t *)data)
 				break;
 		}
 #endif

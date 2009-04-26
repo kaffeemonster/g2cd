@@ -119,7 +119,6 @@ enum length_mod
 struct format_spec
 {
 	const char *fmt_start;
-	va_list *ap;
 	char *wptr;
 	size_t len;
 	size_t maxlen;
@@ -139,6 +138,7 @@ struct format_spec
 		} flags;
 		int xyz;
 	} u;
+	va_list ap;
 	char conv_buf[(type_log10_aprox(intmax_t) * 2) + 4];
 };
 
@@ -215,7 +215,7 @@ OUT_CPY:
 #define MAKE_SFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n = va_arg(*spec->ap, type); \
+	type n = va_arg(spec->ap, type); \
 	char *wptr; \
 	wptr = spec->conv_buf; \
 	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
@@ -242,7 +242,7 @@ MAKE_SFUNC( t, ptrdiff_t)
 #define MAKE_UFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n = va_arg(*spec->ap, type); \
+	type n = va_arg(spec->ap, type); \
 	char *wptr; \
 	wptr = spec->conv_buf; \
 	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
@@ -315,7 +315,7 @@ OUT_CPY:
 #define MAKE_XFUNC(prfx, type) \
 static const char *v##prfx##toxa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n = va_arg(*spec->ap, type); \
+	type n = va_arg(spec->ap, type); \
 	const char *hexchar = 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING; \
 	char *wptr; \
 	wptr = spec->conv_buf; \
@@ -337,7 +337,7 @@ MAKE_XFUNC( ut, ptrdiff_t)
 #define MAKE_OFUNC(prfx, type) \
 static const char *v##prfx##tooa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n = va_arg(*spec->ap, type); \
+	type n = va_arg(spec->ap, type); \
 	char *wptr; \
 	wptr = spec->conv_buf; \
 	do { *wptr++ = (n % 8) + '0'; n /= 8; } while(n); \
@@ -377,7 +377,7 @@ static noinline const char *nop_finish(char *buf, const char *fmt, struct format
 #define MAKE_NFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n GCC_ATTRIB_UNUSED = va_arg(*spec->ap, type); \
+	type n GCC_ATTRIB_UNUSED = va_arg(spec->ap, type); \
 	return nop_finish(buf, fmt, spec); \
 } \
 
@@ -402,12 +402,12 @@ static noinline const char *fp_finish(char *buf, const char *fmt, struct format_
 
 static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	double GCC_ATTRIB_UNUSED n = va_arg(*spec->ap, double);
+	double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, double);
 	return fp_finish(buf, fmt, spec);
 }
 static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	long double GCC_ATTRIB_UNUSED n = va_arg(*spec->ap, long double);
+	long double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
 
@@ -546,7 +546,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	size_t len = 0, diff;
 	size_t maxlen = spec->maxlen - spec->len;
 
-	s = va_arg(*spec->ap, const char *);
+	s = va_arg(spec->ap, const char *);
 
 	if(unlikely('S' == *(fmt-1)))
 		spec->mod = MOD_LONG;
@@ -644,7 +644,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 
 	if(likely(MOD_LONG != spec->mod))
 	{
-		int x = va_arg(*spec->ap, int);
+		int x = va_arg(spec->ap, int);
 		if(spec->maxlen - spec->len)
 			*buf = (char)x;
 		buf++;
@@ -654,7 +654,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 	{
 #ifndef WANT_WCHAR
 // TODO: popping an int may be wrong
-		int x GCC_ATTRIB_UNUSED = va_arg(*spec->ap, int);
+		int x GCC_ATTRIB_UNUSED = va_arg(spec->ap, int);
 		if(spec->maxlen - spec->len)
 			*buf = '?';
 		buf++;
@@ -662,7 +662,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 #else
 		mbstate_t ps;
 		char tbuf[MB_CUR_MAX];
-		wint_t wc = va_arg(*spec->ap, wint_t);
+		wint_t wc = va_arg(spec->ap, wint_t);
 		size_t ret_val;
 
 		memset(&ps, 0, sizeof(ps));
@@ -685,7 +685,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
  */
 static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 {
-	void *ptr = va_arg(*spec->ap, void *);
+	void *ptr = va_arg(spec->ap, void *);
 	char *ret_val;
 	size_t len = 0;
 	char c;
@@ -758,7 +758,7 @@ OUT_MORE:
  */
 static const char *widths(char *buf, const char *fmt, struct format_spec *spec)
 {
-	int w = va_arg(*spec->ap, int);
+	int w = va_arg(spec->ap, int);
 	if(w < 0) {
 		spec->u.flags.left = true;
 		w = -w;
@@ -787,7 +787,7 @@ static const char *prec_p(char *buf, const char *fmt, struct format_spec *spec)
 	unsigned p = 0;
 	char c = *fmt++;
 	if('*' == c) {
-		int t = va_arg(*spec->ap, int);
+		int t = va_arg(spec->ap, int);
 		if(t > 0)
 			p = (unsigned)t;
 	} else {
@@ -886,7 +886,7 @@ static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
-	int *n = va_arg(*spec->ap, int *);
+	int *n = va_arg(spec->ap, int *);
 	*n = (int) spec->len;
 	return end_format(buf, fmt, spec);
 }
@@ -946,7 +946,7 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 	size_t diff;
 	const char *m;
 
-	cur_fmt.ap = &ap;
+	va_copy(cur_fmt.ap, ap);
 	cur_fmt.len = 0;
 	cur_fmt.maxlen = maxlen;
 	do
@@ -970,6 +970,7 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 		} else
 			break;
 	} while(1);
+	va_end(cur_fmt.ap);
 
 	if(likely(cur_fmt.len < maxlen))
 		*buf = '\0';

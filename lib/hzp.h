@@ -35,6 +35,7 @@
 enum hzps
 {
 	HZP_EPOLL,
+	HZP_QHT,
 	/* keep this the last entry!! */
 	HZP_MAX
 };

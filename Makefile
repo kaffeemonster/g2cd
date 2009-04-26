@@ -118,11 +118,12 @@ CFLAGS += $(WARN_FLAGS)
 # !! mashine-dependent !! non-x86 please see here
 #
 # choose your cpu
-ARCH = athlon64
+ARCH = athlon64-sse3
 #ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
 #ARCH = G4
+#ARCH = G3
 #ARCH = ultrasparc
 #ARCH = niagara
 # set the march
@@ -131,13 +132,13 @@ ARCH_FLAGS += -march=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
-ARCH_FLAGS += -momit-leaf-frame-pointer
+#ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors
 # unfortunatly second class citizians
 #ARCH_FLAGS += -minline-all-stringops
 #ARCH_FLAGS += -minline-stringops-dynamically
 # gcc 4.3??
-ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
+#ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
 #ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT

@@ -1,5 +1,5 @@
 /*
- * my_epoll_kepoll.c
+ * my_epoll_devpoll.c
  * wrapper to get epoll on solaris with /dev/poll
  *
  * Copyright (c) 2005,2006 Jan Seiffert
@@ -9,12 +9,12 @@
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -28,7 +28,7 @@
  * basicaly works, minor TODOs, testig and bug-fixing.
  */
 
-/* 
+/*
  * for info view manpage: poll(7d), for those having a
  * Solaris-system
  * or online: http://docs.sun.com/app/docs/doc/817-5430/ \
@@ -127,7 +127,7 @@ static void my_epoll_init(void)
 		diedie("allocating my_epoll memory");
 	
 	for(tmp_fd = 0; tmp_fd <= EPOLL_QUEUES * 20; tmp_fd++)
-		fds->data[tmp_fd].u64 = EPDATA_POISON;	
+		fds->data[tmp_fd].u64 = EPDATA_POISON;
 	fds->max_fd = EPOLL_QUEUES * 20;
 }
 
@@ -143,21 +143,19 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
 	int ret_val = 0;
 
-	if(0 > epfd)
-	{
+	if(0 > epfd) {
 		errno = EBADF;
 		return -1;
 	}
 	
-	if(!event)
-	{
+	if(!event) {
 		errno = EFAULT;
 		return -1; 
 	}
 
 	/* check for sane op before accuaring the lock */
-	if(epfd == fd || !(EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op || EPOLL_CTL_DEL == op))
-	{
+	if(epfd == fd ||
+	   !(EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op || EPOLL_CTL_DEL == op)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -166,13 +164,10 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	{
 		if(fd > fds->max_fd)
 		{
-			if(EPOLL_CTL_ADD == op)
-			{
+			if(EPOLL_CTL_ADD == op) {
 					if(realloc_fddata(fd + CAPACITY_INCREMENT))
 						goto UNLOCK;
-			}
-			else
-			{
+			} else {
 				errno   = ENOENT;
 				ret_val = -1;
 				goto UNLOCK;
@@ -193,22 +188,19 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 				while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 				if(sizeof(tmp_poll) == w_val)
 					fds->data[fd] = event->data;
-				else
-				{
+				else {
 					logg_errno(LOGF_ERR, "adding new fd to /dev/poll");
 					ret_val = -1;
 				}
 			}
-			else
-			{
+			else {
 				errno   = ENOENT;
 				ret_val = -1;
 			}
 		}
 		else
 		{
-			if(EPOLL_CTL_ADD == op)
-			{
+			if(EPOLL_CTL_ADD == op) {
 				errno = EEXIST;
 				ret_val = -1;
 			}
@@ -225,8 +217,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 				while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 				if(sizeof(tmp_poll) == w_val)
 					fds->data[fd].u64 = EPDATA_POISON;
-				else
-				{
+				else {
 					logg_errno(LOGF_ERR, "removing fd to /dev/poll");
 					ret_val = -1;
 				}
@@ -237,8 +228,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 					while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 					if(sizeof(tmp_poll) == w_val)
 						fds->data[fd] = event->data;
-					else
-					{
+					else {
 						logg_errno(LOGF_ERR, "readding modified fd to /dev/poll");
 						ret_val = -1;
 					}
@@ -252,8 +242,7 @@ UNLOCK:
 		if(pthread_mutex_unlock(&my_epoll_wmutex))
 			diedie("unlocking my_epoll writers mutex");
 	}
-	else
-	{
+	else {
 		logg_errno(LOGF_ERR, "locking my_epoll writers mutex");
 		ret_val = -1;
 	}
@@ -268,20 +257,17 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	struct dvpoll do_poll;
 	int num_poll, ret_val = 0;
 
-	if(0 > epfd)
-	{
+	if(0 > epfd) {
 		errno = EBADF;
 		return -1;
 	}
 
-	if(!events)
-	{
+	if(!events) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	if(!(poll_buf = alloca((size_t)maxevents * sizeof(*poll_buf))))
-	{
+	if(!(poll_buf = alloca((size_t)maxevents * sizeof(*poll_buf)))) {
 		logg_errno(LOGF_CRIT, "alloca for poll_buf failed");
 		return -1;
 	}
@@ -303,13 +289,12 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		for(; num_poll; num_poll--, wptr++, poll_buf++)
 		{
 			/* totaly bogus fd, close it */
-			if(poll_buf->fd > loc_data->max_fd)
-			{
+			if(poll_buf->fd > loc_data->max_fd) {
 				close(poll_buf->fd);
 				logg_pos(LOGF_INFO, "hit FD out of lockup arry?")
 				continue;
 			}
-// TODO: handle POLLNVAL, epoll does not deliver it 
+// TODO: handle POLLNVAL, epoll does not deliver it
 //			if(!(p_wptr->revents & POLLNVAL))
 
 			wptr->data = loc_data->data[poll_buf->fd];
@@ -348,8 +333,7 @@ int my_epoll_create(int size)
 
 	if(!pthread_mutex_lock(&my_epoll_wmutex))
 	{
-		if(realloc_fddata(fds->max_fd + size))
-		{
+		if(realloc_fddata(fds->max_fd + size)) {
 			close(dpfd);
 			dpfd = -1;
 		}
@@ -357,8 +341,7 @@ int my_epoll_create(int size)
 		if(pthread_mutex_unlock(&my_epoll_wmutex))
 			diedie("unlocking my_epoll writes mutex");
 	}
-	else
-	{
+	else {
 		logg_errno(LOGF_ERR, "locking my_epoll writes mutex");
 		close(dpfd);
 		return -1;
@@ -370,8 +353,7 @@ int my_epoll_create(int size)
 int my_epoll_close(int epfd)
 {
 	
-	if(0 > epfd)
-	{
+	if(0 > epfd) {
 		errno = EBADF;
 		return -1;
 	}

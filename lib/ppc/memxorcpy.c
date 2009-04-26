@@ -49,7 +49,7 @@
  * I simply assume that larger access is always better then byte
  * access, basically the x86 trick.
  */
-void *memxorcpy(void *dst, const void src1, const void *src2, size_t len)
+void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
 {
 	char *dst_char = dst;
 	const char *src_char1 = src1;
@@ -262,7 +262,7 @@ no_alignment_wanted:
 			v[6] = vec_ldl(6 * SOVUC, src_vec2);
 			v[7] = vec_ldl(7 * SOVUC, src_vec2);
 			v[8] = vec_ldl(8 * SOVUC, src_vec2);
-			src_vec += 8;
+			src_vec2 += 8;
 
 			/* load dest */
 			vd[0] = vec_ldl(0 * SOVUC, src_vec1);
@@ -273,6 +273,7 @@ no_alignment_wanted:
 			vd[5] = vec_ldl(5 * SOVUC, src_vec1);
 			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
 			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
+			src_vec1 += 8;
 
 			/* permutate src for alignment */
 			v[0] = vec_perm(v[0], v[1], fix_alignment);
@@ -305,7 +306,7 @@ no_alignment_wanted:
 			vec_stl(vd[7], 7 * SOVUC, dst_vec);
 			dst_vec += 8;
 		}
-		for(; small_len--; dst_vec++, src_vec++)
+		for(; small_len--; dst_vec++, src_vec2++, src_vec1++)
 		{
 			vector unsigned char d;
 			v[0] = v[8];
@@ -319,7 +320,8 @@ no_alignment_wanted:
 // TODO: Hmmm, how many bytes are left???
 		len %= SOVUC;
 		dst_char  = (char *) dst_vec;
-		src_char  = (const char *) src_vec;
+		src_char1  = (const char *) src_vec1;
+		src_char2  = (const char *) src_vec2;
 		goto handle_remaining;
 	}
 both_unaligned:
@@ -356,7 +358,7 @@ both_unaligned:
 			v[6] = vec_ldl(6 * SOVUC, src_vec2);
 			v[7] = vec_ldl(7 * SOVUC, src_vec2);
 			v[8] = vec_ldl(8 * SOVUC, src_vec2);
-			src_vec += 8;
+			src_vec2 += 8;
 
 			/* load src1 */
 			vd[0] = v[8];
@@ -368,6 +370,7 @@ both_unaligned:
 			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
 			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
 			vd[8] = vec_ldl(8 * SOVUC, src_vec1);
+			src_vec1 += 8;
 
 			/* permutate src for alignment */
 			v[0]  = vec_perm( v[0],  v[1], fix_alignment2);
@@ -408,10 +411,10 @@ both_unaligned:
 			vec_stl(vd[7], 7 * SOVUC, dst_vec);
 			dst_vec += 8;
 		}
-		for(; small_len--; dst_vec++, src_vec++)
+		for(; small_len--; dst_vec++, src_vec2++, src_vec1++)
 		{
 			v[0]  = v[8];
-			vd[0] = vd[8]
+			vd[0] = vd[8];
 			v[8]  = vec_ldl(1 * SOVUC, src_vec2);
 			vd[8] = vec_ldl(1 * SOVUC, src_vec1);
 			v[0]  = vec_perm( v[0],  v[8], fix_alignment2);
@@ -423,7 +426,8 @@ both_unaligned:
 // TODO: Hmmm, how many bytes are left???
 		len %= SOVUC;
 		dst_char  = (char *) dst_vec;
-		src_char  = (const char *) src_vec;
+		src_char1  = (const char *) src_vec1;
+		src_char2  = (const char *) src_vec2;
 		goto handle_remaining;
 	}
 #else

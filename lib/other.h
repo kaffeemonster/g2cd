@@ -115,6 +115,12 @@
 # define GCC_ATTR_CONST
 #endif /* _GNUC_PREREQ (2,5) */
 
+#if _GNUC_PREREQ (2,6)
+# define GCC_ATTR_SECTION(x) GCC_ATTRIB(__section__(x))
+#else
+# define GCC_ATTR_SECTION(x)
+#endif /* _GNUC_PREREQ (2,5) */
+
 #if _GNUC_PREREQ (2,96)
 # define GCC_ATTR_PURE GCC_ATTRIB(__pure__)
 #else
@@ -192,6 +198,12 @@
  */
 # include "my_bitops.h"
 #endif /* HAVE_STRNLEN || HAVE_MEMPCPY */
+
+#ifdef GOT_GOT
+# define SECTION_GOT GCC_ATTR_SECTION(".got")
+#else
+# define SECTION_GOT
+#endif
 
 /*
  * if we are on a SMP-System (also HT) take a spinlock for

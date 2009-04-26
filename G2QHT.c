@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -454,6 +454,7 @@ static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_
 				hzp_deferfree(t_x, t_x, free);
 			else
 				free(t_x);
+// TODO: use after free is possible here
 		}
 		table->compressed = COMP_RLE;
 		table->data_length = res;

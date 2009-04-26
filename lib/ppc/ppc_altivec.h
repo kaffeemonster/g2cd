@@ -70,7 +70,7 @@ static inline vector unsigned int vec_mullw(vector unsigned int a, vector unsign
 static inline vector unsigned int vec_mullwh(vector unsigned int a, vector unsigned int b)
 {
 	vector unsigned int v16   = vec_splat_u32(-16);
-	vector unsigned int v0_32 = vec_splat_u32(0);
+//	vector unsigned int v0_32 = vec_splat_u32(0);
 	vector unsigned int swap, low, high;
 
 	swap = vec_rl(b, v16);
@@ -92,17 +92,18 @@ static inline uint32_t vec_pmovmskb(vector bool char vr)
 //	vector unsigned char swap_ident;
 	vector unsigned char factor;
 	vector unsigned int vri;
+	vector int vr_hi, vr_li, v0 = vec_splat_u8(0);
 	vector unsigned short vr_h, vr_l;
-
-// TODO: Transfer variable aligned to 16???
 	uint32_t r;
 
 	vr = vec_and(vr, vec_splat_u8(1)); /* single bit */
 	factor = vec_ident_rev(); /* get reverse ident */
 	vr_h = vec_sl((vector unsigned short)vec_unpackh(vr), (vector unsigned short)vec_unpackh((vector signed char)factor)); /* shift */
 	vr_l = vec_sl((vector unsigned short)vec_unpackl(vr), (vector unsigned short)vec_unpackl((vector signed char)factor));
-	vri = (vector unsigned int)vec_sums((vector int)vr_l, (vector int)vec_splat_u8(0)); /* consolidate */
-	vri = (vector unsigned int)vec_sums((vector int)vr_h, (vector int)vri);
+	vr_li = vec_sum4s((vector short) vr_l, v0); /* consolidate words to dwords */
+	vr_hi = vec_sum4s((vector short) vr_h, v0);
+	vri = (vector unsigned int)vec_sums(vr_li, v0); /* consolidate dwords on low dword */
+	vri = (vector unsigned int)vec_sums(vr_hi, (vector int)vri);
 	vri = vec_splat(vri, 3); /* splat */
 	vec_ste(vri, 0, &r); /* transfer */
 	return r;
