@@ -37,6 +37,8 @@ LIBHEADS = \
 	$(MPL)/recv_buff.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
+	$(MPL)/ansi_prng.h \
+	$(MPL)/aes.h \
 	$(MPL)/itoa.h \
 	$(MPL)/rbtree.h \
 	$(MPL)/list.h \
@@ -153,6 +155,7 @@ LIBASRCS = \
 
 # base src files
 LIBSRCS = \
+	$(MPL)/ansi_prng.c \
 	$(MPL)/flsst.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/bitfield_rle.c \
@@ -212,7 +215,8 @@ LIBOBJS = \
 	$(MPL)/inet_pton.o \
 	$(MPL)/hzp.o \
 	$(MPL)/backtrace.o \
-	$(MPL)/atomic.o
+	$(MPL)/atomic.o \
+	$(MPL)/ansi_prng.o
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a
@@ -241,6 +245,7 @@ $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/adler32.o: $(ADLER32SRC)
+$(MPL)/ansi_prng.o: $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h

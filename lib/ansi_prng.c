@@ -1,0 +1,170 @@
+/*
+ * ansi_prng.c
+ * Pseudo random number generator according to ANSI X9.31
+ *
+ * Copyright (c) 2009 Jan Seiffert
+ *
+ * enlighted by the Linux kernel ansi_cprng.c which is GPL2:
+ * (C) Neil Horman <nhorman@tuxdriver.com>
+ *
+ * This file is part of g2cd.
+ *
+ * g2cd is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
+ *
+ * g2cd is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public
+ * License along with g2cd; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA  02111-1307  USA
+ *
+ * $Id: $
+ */
+
+/*
+ * Pseudo random number generator according to ANSI X9.31
+ * Appendix A.2.4 Using AES
+ * http://csrc.nist.gov/groups/STM/cavp/documents/rng/931rngext.pdf
+ *
+ * Recrypt somthing with it self with AES in CTR mode to
+ * get pseudo random bytes.
+ */
+
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <pthread.h>
+#include "my_bitopsm.h"
+#include "other.h"
+#include "aes.h"
+#include "ansi_prng.h"
+
+union dvector
+{
+	size_t s[RAND_BLOCK_BYTE/SOST];
+	uint32_t u[RAND_BLOCK_BYTE/SO32];
+	unsigned char c[RAND_BLOCK_BYTE];
+} GCC_ATTR_ALIGNED(RAND_BLOCK_BYTE);
+
+static struct
+{
+	union dvector rand_data;
+	union dvector DT;
+	union dvector I;
+	union dvector V;
+	struct aes_encrypt_ctx actx;
+	pthread_mutex_t lock;
+	unsigned bytes_used;
+} ctx;
+
+/* our memxor is a little over engenered for this... */
+static void xor_vectors(const union dvector *in1, const union dvector *in2, union dvector *out)
+{
+	unsigned i;
+
+	for(i = 0; i < anum(out->s); i++)
+		out->s[i] = in1->s[i] ^ in2->s[i];
+}
+
+/* generate more random bytes */
+static noinline void more_random_bytes(void)
+{
+	union dvector tmp;
+	unsigned i;
+
+	/* encrypt counter, get intermediate I */
+	memcpy(&tmp, &ctx.DT, sizeof(tmp));
+	aes_ecb_encrypt(&ctx.actx, &ctx.I, &tmp);
+
+	/* xor I with V, encrypt to get output */
+	xor_vectors(&ctx.I, &ctx.V, &tmp);
+	aes_ecb_encrypt(&ctx.actx, &ctx.rand_data, &tmp);
+
+	/* xor random data with I, encrypt to get new V */
+	xor_vectors(&ctx.rand_data, &ctx.I, &tmp);
+	aes_ecb_encrypt(&ctx.actx, &ctx.V, &tmp);
+
+	/* update counter */
+	for(i = 0; i < anum(ctx.DT.s); i++) {
+		if(++ctx.DT.s[i])
+			break;
+	}
+
+	ctx.bytes_used = 0;
+}
+
+void random_bytes_get(void *ptr, size_t len)
+{
+	unsigned char *buf = ptr;
+
+	pthread_mutex_lock(&ctx.lock);
+
+	do
+	{
+		if(ctx.bytes_used >= RAND_BLOCK_BYTE)
+			more_random_bytes();
+
+		if(len < RAND_BLOCK_BYTE)
+		{
+			for(; ctx.bytes_used < RAND_BLOCK_BYTE; ctx.bytes_used++) {
+				*buf++ = ctx.rand_data.c[ctx.bytes_used];
+				if(!--len)
+					break;
+			}
+		}
+
+		/* consume whole blocks */
+		for(; len >= RAND_BLOCK_BYTE; len -= RAND_BLOCK_BYTE)
+		{
+			more_random_bytes();
+			memcpy(buf, &ctx.rand_data, RAND_BLOCK_BYTE);
+			ctx.bytes_used += RAND_BLOCK_BYTE;
+			buf += RAND_BLOCK_BYTE;
+		}
+	} while(len);
+
+	pthread_mutex_unlock(&ctx.lock);
+}
+
+void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
+{
+	union dvector td;
+	struct timeval now;
+	uint32_t t;
+
+	pthread_mutex_init(&ctx.lock, NULL);
+	ctx.bytes_used = RAND_BLOCK_BYTE;
+
+	aes_encrypt_key128(&ctx.actx, data);
+
+	t = getpid() | (getppid() << 16);
+	ctx.DT.u[3] = t;
+
+	memcpy(&ctx.V, data + RAND_BLOCK_BYTE, RAND_BLOCK_BYTE);
+/*	unsigned i;
+	for(i = 0; i < anum(ctx.V.u); i++) {
+		ctx.V.u[i] = t;
+		t = ((t >> 13) ^ (t << 7)) + 65521;
+	}*/
+
+	gettimeofday(&now, 0);
+	memcpy(ctx.DT.c, &now.tv_usec, sizeof(now.tv_usec));
+	memcpy(ctx.DT.c + sizeof(now.tv_usec), &now.tv_sec, sizeof(now.tv_sec));
+
+	/* initialise clib rands */
+	random_bytes_get(&td, sizeof(td));
+	srand(td.s[0]);
+	random_bytes_get(&td, sizeof(td));
+	srandom(td.s[1]);
+}
+
+/*@unused@*/
+static char const rcsid_aprng[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */
