@@ -58,6 +58,7 @@
 #include "lib/hlist.h"
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"
+#include "lib/ansi_prng.h"
 
 #define KHL_CACHE_SHIFT 8
 #define KHL_CACHE_SIZE (1 << KHL_CACHE_SHIFT)
@@ -233,8 +234,7 @@ init_next:
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
 	}
-	cache.ht_seed = (uint32_t) time(NULL);
-	srand(cache.ht_seed);
+	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;

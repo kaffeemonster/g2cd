@@ -92,6 +92,7 @@ _G2MAIN_EXTRNVAR(struct
 			volatile int max_connection_sum;
 			pthread_attr_t t_def_attr;
 			const char *data_root_dir;
+			const char *entropy_source;
 			int nice_adjust;
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;

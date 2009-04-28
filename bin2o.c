@@ -77,6 +77,7 @@ static char **i_file_name;
 static int num_i_file;
 static const char *opt_pack = NULL;
 static int verbose;
+static int export_base_data;
 #define PBUF_SIZE (1<<15)
 static char pbuf[PBUF_SIZE];
 
@@ -134,6 +135,8 @@ int main(int argc, char **argv)
 				}
 				else if('v' == argv[i][1])
 					verbose = true;
+				else if('e' == argv[i][1])
+					export_base_data = true;
 				else
 					fprintf(stderr, "unknown option: '-%c'\n", argv[i][1]);
 				continue;
@@ -288,6 +291,8 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		opt_pack = NULL;
 	}
 
+	if(export_base_data)
+		w_ptr += sprintf(w_ptr, ".globl %s_base_data\n", buf->name);
 	w_ptr += sprintf(w_ptr, "\t.type %s_base_data,@object\n%s_base_data:\n", buf->name, buf->name);
 	for(pos = 0; (pos + 16) < buf->len; pos += 16)
 	{
@@ -485,6 +490,7 @@ static int invokation(char *prg_name)
 	fputs("\t-a as\t- assembler-bin to use\t(d: as)\n",stderr);
 	fputs("\t-d [gas|sun]\t- assembler dialekt\t(d: gas)\n", stderr);
 	fputs("\t-o outfile\t- output filename\t(d: what as takes)\n", stderr);
+	fputs("\t-e\t- also export the base data as symbol\n", stderr);
 	fputs("\t-v\t- dump text written to assambler\n", stderr);
 	fputs("\tfile\t- the filename to \n", stderr);
 	return EXIT_FAILURE;

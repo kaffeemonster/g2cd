@@ -111,12 +111,9 @@ void random_bytes_get(void *ptr, size_t len)
 		if(ctx.bytes_used >= RAND_BLOCK_BYTE)
 			more_random_bytes();
 
-		if(len < RAND_BLOCK_BYTE)
-		{
-			for(; ctx.bytes_used < RAND_BLOCK_BYTE; ctx.bytes_used++) {
+		if(len < RAND_BLOCK_BYTE) {
+			for(; ctx.bytes_used < RAND_BLOCK_BYTE && len; ctx.bytes_used++, len--) {
 				*buf++ = ctx.rand_data.c[ctx.bytes_used];
-				if(!--len)
-					break;
 			}
 		}
 

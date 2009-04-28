@@ -2,8 +2,17 @@
 #	normaly this would be set in the root Makefile and always called
 #	MP, but for compatibilitis sake, i can not use the needed :=
 MPL = lib
+
+AES_TABS = \
+	$(MPL)/aes_ft_tab.bin \
+	$(MPL)/aes_fl_tab.bin \
+	$(MPL)/aes_it_tab.bin \
+	$(MPL)/aes_il_tab.bin
+
 TARED_FILES += \
 	$(MPL)/module.make \
+	$(MPL)/aes_tab_gen.c \
+	$(AES_TABS) \
 	$(LIBHEADS) \
 	$(LIBASRCS)
 
@@ -155,68 +164,71 @@ LIBASRCS = \
 
 # base src files
 LIBSRCS = \
+	$(MPL)/adler32.c \
+	$(MPL)/aes.c \
 	$(MPL)/ansi_prng.c \
-	$(MPL)/flsst.c \
-	$(MPL)/popcountst.c \
+	$(MPL)/atomic.c \
+	$(MPL)/backtrace.c \
 	$(MPL)/bitfield_rle.c \
 	$(MPL)/cpy_rest.c \
+	$(MPL)/flsst.c \
+	$(MPL)/hzp.c \
+	$(MPL)/inet_ntop.c \
+	$(MPL)/inet_pton.c \
+	$(MPL)/log_facility.c \
 	$(MPL)/memxorcpy.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
 	$(MPL)/memcpy.c \
 	$(MPL)/mempcpy.c \
 	$(MPL)/mem_searchrn.c \
+	$(MPL)/my_epoll.c \
+	$(MPL)/my_bitops.c \
+	$(MPL)/popcountst.c \
+	$(MPL)/recv_buff.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
 	$(MPL)/strchrnul.c \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
-	$(MPL)/my_epoll.c \
-	$(MPL)/log_facility.c \
-	$(MPL)/vsnprintf.c \
-	$(MPL)/adler32.c \
-	$(MPL)/recv_buff.c \
-	$(MPL)/inet_ntop.c \
-	$(MPL)/inet_pton.c \
-	$(MPL)/hzp.c \
-	$(MPL)/backtrace.c \
-	$(MPL)/my_bitops.c \
-	$(MPL)/atomic.c
+	$(MPL)/vsnprintf.c
 
 BITOPOBJS = \
-	$(MPL)/flsst.o \
-	$(MPL)/popcountst.o \
+	$(MPL)/adler32.o \
 	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
+	$(MPL)/flsst.o \
 	$(MPL)/memxorcpy.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
 	$(MPL)/memcpy.o \
 	$(MPL)/mempcpy.o \
 	$(MPL)/mem_searchrn.o \
+	$(MPL)/popcountst.o \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
 	$(MPL)/strchrnul.o \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
-	$(MPL)/adler32.o \
 	$(MPL)/my_bitops.o
 
 # base objectfiles
 LIBOBJS = \
 	$(BITOPOBJS) \
-	$(MPL)/my_epoll.o \
-	$(MPL)/log_facility.o \
-	$(MPL)/vsnprintf.o \
-	$(MPL)/recv_buff.o \
+	$(MPL)/aes.o \
+	$(MPL)/aes_tab.o \
+	$(MPL)/atomic.o \
+	$(MPL)/ansi_prng.o \
+	$(MPL)/backtrace.o \
+	$(MPL)/hzp.o \
 	$(MPL)/inet_ntop.o \
 	$(MPL)/inet_pton.o \
-	$(MPL)/hzp.o \
-	$(MPL)/backtrace.o \
-	$(MPL)/atomic.o \
-	$(MPL)/ansi_prng.o
+	$(MPL)/log_facility.o \
+	$(MPL)/my_epoll.o \
+	$(MPL)/recv_buff.o \
+	$(MPL)/vsnprintf.o
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a
@@ -229,6 +241,15 @@ alll:
 $(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 	$(RANLIB) $@
 $(LIBCOMMON)($(LIBOBJS)): arflock
+
+$(MPL)/aes_tab_gen: $(MPL)/aes_tab_gen.c ccdrv $(MPL)/module.make Makefile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/aes_tab_gen.c -o $@
+
+$(AES_TABS): $(MPL)/aes_tab_gen
+	@./ccdrv -s$(VERBOSE) "TAB[aes]" $(MPL)/aes_tab_gen ./$(MPL)/
+
+$(MPL)/aes_tab.o: $(AES_TABS) bin2o
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(AES_TABS)
 
 # Dependencies
 $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
@@ -273,7 +294,7 @@ $(MPL)/x86/memneg.c: $(MPL)/x86/memneg_tmpl.c
 $(LIBOBJS): $(LIB_STD_DEPS)
 
 libclean:
-	$(RM) $(LIBCOMMON) $(LIBOBJS)
+	$(RM) $(LIBCOMMON) $(LIBOBJS) $(MPL)/aes_tab_gen
 
 libdclean: libclean
-	$(RM) $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.bin $(MPL)/*.rtl
+	$(RM) $(AES_TABS) $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.bin $(MPL)/*.rtl

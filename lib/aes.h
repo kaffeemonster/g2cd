@@ -45,7 +45,6 @@ struct aes_encrypt_ctx
 };
 
 void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *);
-
 void aes_ecb_encrypt(const struct aes_encrypt_ctx *, void *out, const void *in);
 
 #endif

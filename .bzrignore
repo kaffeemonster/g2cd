@@ -31,3 +31,4 @@ zlib/contrib
 .finalwithzlib686
 .files
 .arflockgate
+lib/aes_tab_gen

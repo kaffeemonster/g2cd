@@ -60,6 +60,7 @@
 #include "lib/hzp.h"
 #include "lib/atomic.h"
 #include "lib/backtrace.h"
+#include "lib/ansi_prng.h"
 #include "version.h"
 #include "builtin_defaults.h"
 
@@ -86,6 +87,7 @@ static inline void fork_to_background(void);
 static inline void handle_config(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
+static void init_prng(void);
 static noinline void read_uprofile(void);
 static void adjust_our_niceness(int);
 static void sig_stop_func(int signr, siginfo_t *, void *);
@@ -143,6 +145,12 @@ int main(int argc, char **args)
 	adjust_our_niceness(server.settings.nice_adjust);
 
 	g2_set_thread_name(OUR_PROC " main");
+
+	/*
+	 * Init our prng, also init the clib prng.
+	 * DO NOT USE rand()/random() before this...
+	 */
+	init_prng();
 
 	/* init khl system */
 	if(!g2_khl_init())
@@ -463,6 +471,7 @@ static inline void handle_config(void)
 // TODO: read from config files
 	/* var settings */
 	server.settings.data_root_dir = DEFAULT_DATA_ROOT_DIR;
+	server.settings.entropy_source = DEFAULT_ENTROPY_SOURCE;
 	server.settings.nice_adjust = DEFAULT_NICE_ADJUST;
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
@@ -695,6 +704,36 @@ static inline void setup_resources(void)
 		sock_poll[i].fd = sock_com[i][OUT];
 		sock_poll[i].events = POLLIN;
 	}	
+}
+
+static void init_prng(void)
+{
+	char rd[RAND_BLOCK_BYTE * 2];
+	FILE *fin;
+
+	fin = fopen(server.settings.entropy_source, "rb");
+	if(!fin) {
+		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
+		            server.settings.entropy_source);
+	} else if(1 != fread(rd, sizeof(rd), 1, fin)) {
+		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
+		            server.settings.entropy_source);
+	}
+	fclose(fin);
+
+// TODO: warn more prominent when we can not gather entropy
+// TODO: install some bogus sheme to set up the buffer with entropy
+
+	/*
+	 * Even if we could not get entropy, feed fd into the prng
+	 * if everything failes, its "random" stack data, undefined
+	 * behaivior for the rescue...
+	 */
+
+	logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
+	     server.settings.entropy_source);
+
+	random_bytes_init(rd);
 }
 
 static void read_uprofile(void)
