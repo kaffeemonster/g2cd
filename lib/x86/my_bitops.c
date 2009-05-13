@@ -69,7 +69,7 @@ struct cpuinfo
 	uint32_t max_ext;
 	int count;
 	int num_cores;
-	bool features[128];
+	uint32_t features[5];
 	bool init_done;
 };
 
@@ -195,6 +195,11 @@ static inline bool is_486(void)
 	return toggle_eflags_test(1 << 18);
 }
 
+static bool cpu_feature(int f)
+{
+	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
+}
+
 static void identify_cpu(void)
 {
 	union cpuid_regs a;
@@ -283,14 +288,8 @@ static void identify_cpu(void)
 		our_cpu.family += CPUID_XFAMILY((uint32_t)a.r.eax);
 
 	/* and finaly: get the features */
-	for(i = 0; i < 32; i++) {
-		if(a.r.edx & (1 << i))
-			our_cpu.features[i] = true;
-	}
-	for(i = 0; i < 32; i++) {
-		if(a.r.ecx & (1 << i))
-			our_cpu.features[i + 32] = true;
-	}
+	our_cpu.features[0] = a.r.edx;
+	our_cpu.features[1] = a.r.ecx;
 
 	/*
 	 * We simply try the extented (AMD)flags, seems this is OK and uses
@@ -305,14 +304,8 @@ static void identify_cpu(void)
 	if(our_cpu.max_ext >= 0x80000001)
 	{
 		cpuids(&a, 0x80000001UL);
-		for(i = 0; i < 32; i++) {
-			if(a.r.edx & (1 << i))
-				our_cpu.features[i + 64] = true;
-		}
-		for(i = 0; i < 32; i++) {
-			if(a.r.ecx & (1 << i))
-				our_cpu.features[i + 96] = true;
-		}
+		our_cpu.features[2] = a.r.edx;
+		our_cpu.features[3] = a.r.ecx;
 	}
 
 	/* Hmmm, do we have a extended model string? */
@@ -337,6 +330,14 @@ static void identify_cpu(void)
 			while(q <= &our_cpu.model_str.s[48])
 				*q++ = '\0';
 		}
+	}
+
+	/* poke on the centauer extendet feature flags */
+// TODO: only do this on centauer?
+	cpuids(&a, 0xC0000000UL);
+	if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
+		cpuids(&a, 0xC0000001UL);
+		our_cpu.features[4] = a.r.edx;
 	}
 
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
@@ -468,7 +469,7 @@ static void identify_vendor(struct cpuinfo *cpu)
  */
 int test_cpu_feature_3dnow_callback(void)
 {
-	return our_cpu.features[CFEATURE_3DNOW];
+	return cpu_feature(CFEATURE_3DNOW);
 }
 
 /*
@@ -635,7 +636,7 @@ int test_cpu_feature_avx_callback(void)
 {
 	uint32_t low, high;
 
-	if(!our_cpu.features[CFEATURE_OSXSAVE])
+	if(!cpu_feature(CFEATURE_OSXSAVE))
 		return 0;
 
 	asm volatile(
@@ -678,7 +679,7 @@ void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 	for(i = 0; i < l; i++)
 	{
 		if(-1 == t[i].flags_needed ||
-		   our_cpu.features[t[i].flags_needed]) {
+		   cpu_feature(t[i].flags_needed)) {
 			if(t[i].callback && !t[i].callback())
 				continue;
 			return t[i].func;

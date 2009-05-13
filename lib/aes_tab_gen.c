@@ -60,7 +60,7 @@
  * and/or fitness for purpose.
  * ---------------------------------------------------------------------------
  *
- * $Id: $
+ * $Id$
  */
 
 #include <stdint.h>
@@ -93,21 +93,14 @@ static inline uint8_t f_mult(uint8_t a, uint8_t b)
 
 #define ff_mult(a, b)	(a && b ? f_mult(a, b) : 0)
 
+static int output_tab(uint32_t tab[4][256], const char *of_name);
+
 int main(int argc, char *argv[])
 {
-	size_t ret;
 	uint32_t i, t;
 	uint8_t p, q;
-	FILE *fout;
-	char *o_path;
-	const char *pref;
 
-	if(argc > 1)
-		pref = argv[1];
-	else
-		pref = "./";
-	o_path = malloc(strlen(pref) + strlen("aes_fl_tab.bin") + 1);
-	if(!o_path)
+	if(argc < 2)
 		return EXIT_FAILURE;
 
 	/*
@@ -137,6 +130,8 @@ int main(int argc, char *argv[])
 		isb_tab[p] = (uint8_t) i;
 	}
 
+//TODO: the table generation is endian dependent?
+	/* we need to use the target endianess?? */
 	for (i = 0; i < 256; ++i)
 	{
 		p = sbx_tab[i];
@@ -174,47 +169,30 @@ int main(int argc, char *argv[])
 		aes_it_tab[3][i] = rol32(t, 24);
 	}
 
-	strcat(strcpy(o_path, pref), "aes_ft_tab.bin");
-	fout = fopen(o_path, "wb");
-	if(!fout)
+	if(strstr(argv[1], "ft_tab"))
+		return output_tab(aes_ft_tab, argv[1]);
+	else if(strstr(argv[1], "fl_tab"))
+		return output_tab(aes_fl_tab, argv[1]);
+	else if(strstr(argv[1], "it_tab"))
+		return output_tab(aes_it_tab, argv[1]);
+	else if(strstr(argv[1], "il_tab"))
+		return output_tab(aes_il_tab, argv[1]);
+	else
 		return EXIT_FAILURE;
-	ret = fwrite(aes_ft_tab, 1, sizeof(aes_ft_tab), fout);
-	fclose(fout);
-	if(sizeof(aes_ft_tab) != ret) {
-		remove(o_path);
-		return EXIT_FAILURE;
-	}
+}
 
-	strcat(strcpy(o_path, pref), "aes_fl_tab.bin");
-	fout = fopen(o_path, "wb");
-	if(!fout)
-		return EXIT_FAILURE;
-	ret = fwrite(aes_fl_tab, 1, sizeof(aes_fl_tab), fout);
-	fclose(fout);
-	if(sizeof(aes_fl_tab) != ret) {
-		remove(o_path);
-		return EXIT_FAILURE;
-	}
+static int output_tab(uint32_t tab[4][256], const char *of_name)
+{
+	FILE *fout;
+	size_t ret;
 
-	strcat(strcpy(o_path, pref), "aes_it_tab.bin");
-	fout = fopen(o_path, "wb");
+	fout = fopen(of_name, "wb");
 	if(!fout)
 		return EXIT_FAILURE;
-	ret = fwrite(aes_it_tab, 1, sizeof(aes_it_tab), fout);
+	ret = fwrite(tab, 1, sizeof(tab), fout);
 	fclose(fout);
-	if(sizeof(aes_it_tab) != ret) {
-		remove(o_path);
-		return EXIT_FAILURE;
-	}
-
-	strcat(strcpy(o_path, pref), "aes_il_tab.bin");
-	fout = fopen(o_path, "wb");
-	if(!fout)
-		return EXIT_FAILURE;
-	ret = fwrite(aes_il_tab, 1, sizeof(aes_il_tab), fout);
-	fclose(fout);
-	if(sizeof(aes_il_tab) != ret) {
-		remove(o_path);
+	if(sizeof(tab) != ret) {
+		remove(of_name);
 		return EXIT_FAILURE;
 	}
 

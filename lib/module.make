@@ -79,6 +79,9 @@ ATOMSRC = \
 	$(MPL)/arm/atomic.h
 
 # arch src files
+AESSRC = \
+	$(MPL)/generic/aes.c \
+	$(MPL)/x86/aes.c
 FLSSTSRC = \
 	$(MPL)/generic/flsst.c \
 	$(MPL)/x86/flsst.c \
@@ -147,6 +150,7 @@ LIBASRCS = \
 	$(LIBSRCS) \
 	$(EPOLLSRS) \
 	$(ATOMSRC) \
+	$(AESSRC) \
 	$(FLSSTSRC) \
 	$(POPCOUNTSTSRC) \
 	$(CPY_RESTSRC) \
@@ -246,7 +250,7 @@ $(MPL)/aes_tab_gen: $(MPL)/aes_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/aes_tab_gen.c -o $@
 
 $(AES_TABS): $(MPL)/aes_tab_gen
-	@./ccdrv -s$(VERBOSE) "TAB[aes]" $(MPL)/aes_tab_gen ./$(MPL)/
+	@./ccdrv -s$(VERBOSE) "TAB[aes]" $(MPL)/aes_tab_gen $@
 
 $(MPL)/aes_tab.o: $(AES_TABS) bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(AES_TABS)
@@ -266,7 +270,8 @@ $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/adler32.o: $(ADLER32SRC)
-$(MPL)/ansi_prng.o: $(MPL)/aes.h
+$(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
+$(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h

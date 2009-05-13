@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * $Id: $
+ * $Id$
  */
 
 /*
@@ -91,7 +91,23 @@ static noinline void more_random_bytes(void)
 	xor_vectors(&ctx.rand_data, &ctx.I, &tmp);
 	aes_ecb_encrypt(&ctx.actx, &ctx.V, &tmp);
 
-	/* update counter */
+	/*
+	 * update counter
+	 *
+	 * This counter is endian dependent!
+	 *
+	 * ! ! ! ------------------------------------------------ ! ! !
+	 * ! Don't use this to encrypt communication with other hosts !
+	 * ! ! ! ------------------------------------------------ ! ! !
+	 *
+	 * This is no problem here, since it is internal to
+	 * our prng and not part of a world faceing lib function
+	 * for AES-CTR mode.
+	 * Its also no problem for the correctness, counter
+	 * mode only wants a counter which "advances", it's
+	 * not said which bit pattern the counter has to have
+	 * (can be seen as a f(x) with a long period).
+	 */
 	for(i = 0; i < anum(ctx.DT.s); i++) {
 		if(++ctx.DT.s[i])
 			break;
@@ -163,5 +179,5 @@ void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 }
 
 /*@unused@*/
-static char const rcsid_aprng[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_aprng[] GCC_ATTR_USED_VAR = "$Id$";
 /* EOF */

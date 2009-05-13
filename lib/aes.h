@@ -20,12 +20,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * $Id: $
+ * $Id$
  */
 
 #ifndef LIB_AES_H
 #define LIB_AES_H
-
+# include "other.h"
 /*
  * list of AES key lengths
  * key length in bit | num 16 byte blocks
@@ -37,14 +37,14 @@
  * so for 128-bit atm we only need 11x16 byte
  * blocks
  */
-#define AES_MAX_KEY_LEN (11 * 16)
+# define AES_MAX_KEY_LEN (11 * 16)
 
 struct aes_encrypt_ctx
 {
 	uint32_t k[AES_MAX_KEY_LEN/4];
-};
+} GCC_ATTR_ALIGNED(16);
 
 void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *);
-void aes_ecb_encrypt(const struct aes_encrypt_ctx *, void *out, const void *in);
+void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in);
 
 #endif

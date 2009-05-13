@@ -22,7 +22,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston,
 # MA  02111-1307  USA
 #
-# $Id: Makefile,v 1.38 2005/11/05 18:25:48 redbully Exp redbully $
+# $Id$
 #
 # ! USE SPACES AT = AND += OPERATION ! The solaris 5.7 'make'
 # is a little ...
@@ -217,7 +217,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O0 -foptimize-sibling-calls
+OPT_FLAGS = -O1 -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
