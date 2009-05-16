@@ -411,13 +411,13 @@ static void print_table_ll_r(unsigned index, unsigned level)
 		for(t = 0; t < level; t++)
 			putc('\t', out);
 		if(!table_hl[i].last && !table_hl[i].last_table)
-			fprintf(out, "T_NEXT('%s',% 3d), \n", c, table_hl[i].delta);
+			fprintf(out, "T_NEXT('%s',% 3d),\n", c, table_hl[i].delta);
 		else if(!table_hl[i].last && table_hl[i].last_table)
-			fprintf(out, "T_TEND('%s',% 3d), \n", c, table_hl[i].delta);
+			fprintf(out, "T_TEND('%s',% 3d),\n", c, table_hl[i].delta);
 		else if(table_hl[i].last && !table_hl[i].last_table)
-			fprintf(out, "T_LAST('%s', PT_%s), \n", c, p_names[table_hl[i].type].c);
+			fprintf(out, "T_LAST('%s', PT_%s),\n", c, p_names[table_hl[i].type].c);
 		else
-			fprintf(out, "T_LEND('%s', PT_%s), \n", c, p_names[table_hl[i].type].c);
+			fprintf(out, "T_LEND('%s', PT_%s),\n", c, p_names[table_hl[i].type].c);
 	} while(!table_hl[i++].last_table);
 
 	i = index;
@@ -460,7 +460,7 @@ static void print_trailer(void)
 	}
 	fprintf(out, "/*\n"
 		" * %s\n"
-		" * automatic generated parser dict for for G2-packets\n"
+		" * automatic generated parser dict for G2-packets\n"
 		" *\n"
 		" * Copyright (c) 2004-%u Jan Seiffert\n"
 		" *\n"
@@ -491,9 +491,9 @@ static void print_trailer(void)
 		"\n"
 		"#define T_IS_END(x)	((x) & T_END_FLAG)\n"
 		"#define T_IS_LAST(x)	((x) & T_LAST_FLAG)\n"
-		"#define T_GET_CHAR(x)	((char)((x)&0x7F))\n"
-		"#define T_GET_TYPE(x)	((enum g2_ptype)((x)&0x7F))\n"
-		"#define T_GET_DELTA(x)	((unsigned char)((x)&0x7F))\n"
+		"#define T_GET_CHAR(x)	((char)((x) & 0x7F))\n"
+		"#define T_GET_TYPE(x)	((enum g2_ptype)((x) & 0x7F))\n"
+		"#define T_GET_DELTA(x)	((unsigned char)((x) & 0x7F))\n"
 		"\n"
 		"#define T_LEND(x, y) \\\n"
 		"	{ .c = (x)|T_LAST_FLAG, .u = { .t = y|T_END_FLAG }}\n"

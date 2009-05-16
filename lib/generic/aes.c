@@ -60,7 +60,7 @@
  * and/or fitness for purpose.
  * ---------------------------------------------------------------------------
  *
- * $Id$
+ * $Id: $
  */
 
 /*
@@ -187,5 +187,5 @@ F_NAME(void, aes_ecb_encrypt, _generic) (const struct aes_encrypt_ctx *ctx, void
 }
 
 /*@unused@*/
-static char const rcsid_aesg[] GCC_ATTR_USED_VAR = "$Id$";
+static char const rcsid_aesg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

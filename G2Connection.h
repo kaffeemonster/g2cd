@@ -95,7 +95,6 @@ typedef struct g2_connection
 		bool          firewalled;
 		bool          query_key_cache;
 		bool          t1;
-		bool          had_LNI_HS;
 	} flags;
 	union
 	{

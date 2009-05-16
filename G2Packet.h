@@ -113,17 +113,19 @@
 	ENUM_CMD( UDP    , 1 ), /* Q2 PI */ \
 	ENUM_CMD( D      , 1 ), /* QA */ \
 	ENUM_CMD( FR     , 1 ), /* QA */ \
-	ENUM_CMD( RA     , 1 ), /* QA */ \
+	ENUM_CMD( RA     , 3 ), /* QA */ \
 	ENUM_CMD( S      , 1 ), /* QA */ \
 	ENUM_CMD( NICK   , 1 ), /* QH2/UPRO */ \
-	ENUM_CMD( SNA    , 1 ), /* QKA */ \
-	ENUM_CMD( QNA    , 1 ), /* QKA */ \
+	ENUM_CMD( SNA    , 1 ), /* QKA/QKR */ \
+	ENUM_CMD( QNA    , 1 ), /* QKA/QKR */ \
 	ENUM_CMD( QK     , 1 ), /* QKA */ \
+	ENUM_CMD( CACHED , 1 ), /* QKA */ \
 	ENUM_CMD( RNA    , 1 ), /* QKR */ \
-	ENUM_CMD( RLEAF  , 1 ), /* CRAWLR */ \
-	ENUM_CMD( RNAME  , 1 ), /* CRAWLR */ \
-	ENUM_CMD( RGPS   , 1 ), /* CRAWLR */ \
-	ENUM_CMD( REXT   , 1 ), /* CRAWLR */ \
+	ENUM_CMD( REF    , 2 ), /* QKR */ \
+	ENUM_CMD( RLEAF  , 4 ), /* CRAWLR */ \
+	ENUM_CMD( RNAME  , 4 ), /* CRAWLR */ \
+	ENUM_CMD( RGPS   , 4 ), /* CRAWLR */ \
+	ENUM_CMD( REXT   , 4 ), /* CRAWLR */ \
 	ENUM_CMD( CH     , 1 ), \
 	ENUM_CMD( RELAY  , 1 ), /* PI PO */ \
 	ENUM_CMD( TO     , 1 ), \
@@ -169,7 +171,7 @@ typedef struct g2_packet
 
 # ifndef _G2PACKET_C
 #  define _G2PACK_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
-#  define _G2PACK_EXTRNVAR(x) extern x;
+#  define _G2PACK_EXTRNVAR(x) extern x GCC_ATTR_VIS("hidden");
 # else
 #  define _G2PACK_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #  define _G2PACK_EXTRNVAR(x)
@@ -206,11 +208,21 @@ _G2PACK_EXTRNVAR(const uint8_t g2_ptype_names_length[PT_MAXIMUM])
 # ifndef _HAVE_G2_P_TYPE
 #  define _HAVE_G2_P_TYPE
 #  include "G2Connection.h"
+#  include "lib/combo_addr.h"
 
-typedef bool (*g2_ptype_action_func) (g2_connection_t *, g2_packet_t *, struct list_head *) ;
+struct ptype_action_args
+{
+	g2_connection_t *connec;
+	g2_packet_t *source;
+	union combo_addr *src_addr;
+	struct list_head *target;
+	void *opaque;
+};
+
+typedef bool (*g2_ptype_action_func) (struct ptype_action_args *) ;
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM])
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM])
-_G2PACK_EXTRN(bool g2_packet_decide_spec(g2_connection_t *, struct list_head *, g2_ptype_action_func const*, g2_packet_t *));
+_G2PACK_EXTRN(bool g2_packet_decide_spec(struct ptype_action_args *, g2_ptype_action_func const *));
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */
 

@@ -24,10 +24,14 @@
  */
 
 #ifndef LIB_ANSI_PRNG_H
-#define LIB_ANSI_PRNG_H
+# define LIB_ANSI_PRNG_H
 
-#define RAND_BLOCK_BYTE 16
+# include "other.h"
 
-void random_bytes_get(void *ptr, size_t len);
-void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2]);
+# define LIB_ANSI_PRNG_EXTRN(x) x GCC_ATTR_VIS("hidden")
+
+# define RAND_BLOCK_BYTE 16
+
+LIB_ANSI_PRNG_EXTRN(void random_bytes_get(void *ptr, size_t len));
+LIB_ANSI_PRNG_EXTRN(void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2]));
 #endif

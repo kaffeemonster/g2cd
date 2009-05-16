@@ -20,12 +20,16 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * $Id$
+ * $Id: $
  */
 
 #ifndef LIB_AES_H
-#define LIB_AES_H
+# define LIB_AES_H
+
 # include "other.h"
+
+# define LIB_AES_EXTRN(x) x GCC_ATTR_VIS("hidden")
+
 /*
  * list of AES key lengths
  * key length in bit | num 16 byte blocks
@@ -44,7 +48,6 @@ struct aes_encrypt_ctx
 	uint32_t k[AES_MAX_KEY_LEN/4];
 } GCC_ATTR_ALIGNED(16);
 
-void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *);
-void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in);
-
+LIB_AES_EXTRN(void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *));
+LIB_AES_EXTRN(void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
 #endif

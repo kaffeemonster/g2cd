@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include <errno.h>
 #include <unistd.h>
 /* System net-includes */
@@ -51,6 +52,7 @@
 #include "G2PacketSerializer.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/recv_buff.h"
 
 #define UDP_MTU        500
 #define UDP_RELIABLE_LENGTH 8
@@ -60,7 +62,7 @@
 #define FLAG_CRITICAL  ((~(FLAG_DEFLATE|FLAG_ACK)) & 0x0F)
 
 /* internal prototypes */
-static inline ssize_t udp_sock_send(struct norm_buff *, union combo_addr *, int);
+static inline ssize_t udp_sock_send(struct norm_buff *, const union combo_addr *, int);
 static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, union combo_addr *);
 static noinline void handle_udp_packet(struct norm_buff *, union combo_addr *, int);
 //static inline bool init_memory();
@@ -71,6 +73,8 @@ static inline void clean_up_u(int, struct pollfd[2]);
 
 /* data-structures */
 static int out_file;
+static int udp_outfd_ipv4;
+static int udp_outfd_ipv6;
 static struct pollfd poll_me[G2UDP_FD_SUM];
 static struct worker_sync {
 	pthread_mutex_t lock;
@@ -78,6 +82,63 @@ static struct worker_sync {
 	volatile bool wait;
 	volatile bool keep_going;
 } worker;
+
+
+#ifndef HAVE___THREAD
+static pthread_key_t key2udp_lsb;
+/* protos */
+	/* you better not kill this prot, our it won't work ;) */
+static void udp_init(void) GCC_ATTR_CONSTRUCT;
+static void udp_deinit(void) GCC_ATTR_DESTRUCT;
+
+static void udp_init(void)
+{
+	if(pthread_key_create(&key2udp_lsb, recv_buff_free))
+		diedie("couln't create TLS key for logging");
+}
+
+static void udp_deinit(void)
+{
+	struct norm_buff *tmp_buf;
+
+	if((tmp_buf = pthread_getspecific(key2udp_lsb))) {
+		recv_buff_free(tmp_buf);
+		pthread_setspecific(key2udp_lsb, NULL);
+	}
+	pthread_key_delete(key2udp_lsb);
+}
+#else
+static __thread struct norm_buff *udp_lsbuffer;
+#endif
+
+static struct norm_buff *udp_get_lsbuf(void)
+{
+	struct norm_buff *ret_buf;
+#ifndef HAVE___THREAD
+	ret_buf = pthread_getspecific(key2udp_lsb);
+	if(likely(ret_buf))
+		return ret_buf;
+#else
+	ret_buf = udp_lsbuffer;
+	if(likely(ret_buf))
+		return ret_buf;
+#endif
+
+	ret_buf = recv_buff_alloc();
+
+	if(!ret_buf) {
+		logg_devel("no local udp send buffer\n");
+		return NULL;
+	}
+
+#ifndef HAVE___THREAD
+	pthread_setspecific(key2udp_lsb, ret_buf);
+#else
+	udp_lsbuffer = ret_buf;
+#endif
+
+	return ret_buf;
+}
 
 static void *G2UDP_loop(void *param)
 {
@@ -209,6 +270,8 @@ void *G2UDP(void *param)
 		/* Setting up the UDP Socket */
 		ipv4_ready = server.settings.bind.use_ip4 ? init_con_u(&poll_me[1].fd, &server.settings.bind.ip4) : false;
 		ipv6_ready = server.settings.bind.use_ip6 ? init_con_u(&poll_me[2].fd, &server.settings.bind.ip6) : false;
+		udp_outfd_ipv4 = poll_me[1].fd;
+		udp_outfd_ipv6 = poll_me[2].fd;
 	
 		if(server.settings.bind.use_ip4 && !ipv4_ready)
 			goto out;
@@ -295,7 +358,7 @@ static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t pa
 	return num_ptr;
 }
 
-static void udp_writeout_packet(union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold)
+static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold)
 {
 	static uint16_t internal_sequence;
 	ssize_t result;
@@ -331,6 +394,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 {
 	gnd_packet_t tmp_packet;
 	g2_packet_t g_packet;
+	struct ptype_action_args parg;
 	struct list_head answer;
 	size_t res_byte;
 	uint8_t tmp_byte;
@@ -480,20 +544,25 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		goto out_free;
 	}
 
-	/* What to do with it? */
 	INIT_LIST_HEAD(&answer);
-	if(g2_packet_decide_spec(NULL, &answer, g2_packet_dict_udp, &g_packet))
+	parg.connec   = NULL;
+	parg.source   = &g_packet;
+	parg.src_addr = from;
+	parg.target   = &answer;
+	parg.opaque   = NULL;
+	if(g2_packet_decide_spec(&parg, g2_packet_dict_udp))
 	{
 		struct list_head *e, *n;
-		/*
-		 * The input packet is seen as consumed after this point !!!
-		 */
+		struct norm_buff *s_buff;
 
+// TODO: check for failure
+		s_buff = udp_get_lsbuf();
 		 /* try to answer */
 		list_for_each_safe(e, n, &answer)
 		{
 			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-			udp_writeout_packet(from, answer_fd, entry, d_hold);
+			buffer_clear(*s_buff);
+			udp_writeout_packet(from, answer_fd, entry, s_buff);
 			list_del(e);
 			g2_packet_free(entry);
 		}
@@ -510,7 +579,42 @@ out:
 	return;
 }
 
-static inline ssize_t udp_sock_send(struct norm_buff *d_hold, union combo_addr *to, int fd)
+void g2_udp_send(const union combo_addr *to, struct list_head *answer)
+{
+	struct list_head *e, *n;
+	struct norm_buff *d_hold;
+	int answer_fd = AF_INET == to->s_fam ? udp_outfd_ipv4 : udp_outfd_ipv6;
+
+	if(-1 == answer_fd) {
+		logg_devel("trying to send to a address we have no fd for!?");
+		goto out_err;
+	}
+
+	d_hold = udp_get_lsbuf();
+	if(!d_hold)
+		goto out_err;
+
+	 /* try to send answer */
+	list_for_each_safe(e, n, answer)
+	{
+		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+		buffer_clear(*d_hold);
+		udp_writeout_packet(to, answer_fd, entry, d_hold);
+		list_del(e);
+		g2_packet_free(entry);
+	}
+	return;
+
+out_err:
+	list_for_each_safe(e, n, answer)
+	{
+		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+		list_del(e);
+		g2_packet_free(entry);
+	}
+}
+
+static inline ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_addr *to, int fd)
 {
 	ssize_t result;
 
@@ -665,11 +769,12 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 		OUR_ERR("udp non-blocking");
 #endif
 	return true;
+
 out_err:
-		logg_errno(LOGF_ERR, e);
-		close(*udp_so);
-		*udp_so = -1;
-		return false;
+	logg_errno(LOGF_ERR, e);
+	close(*udp_so);
+	*udp_so = -1;
+	return false;
 }
 
 static inline void clean_up_u(int who_to_say, struct pollfd udp_so[2])
@@ -688,5 +793,6 @@ static inline void clean_up_u(int who_to_say, struct pollfd udp_so[2])
 	server.status.all_abord[THREAD_UDP] = false;
 }
 
+/*@unsused@*/
 static char const rcsid_u[] GCC_ATTR_USED_VAR = "$Id: G2UDP.c,v 1.16 2005/11/05 10:03:50 redbully Exp redbully $";
-//EOF
+/* EOF */

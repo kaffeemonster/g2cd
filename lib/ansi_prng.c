@@ -23,7 +23,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * $Id$
+ * $Id: $
  */
 
 /*
@@ -109,14 +109,14 @@ static noinline void more_random_bytes(void)
 	 * (can be seen as a f(x) with a long period).
 	 */
 	for(i = 0; i < anum(ctx.DT.s); i++) {
-		if(++ctx.DT.s[i])
+		if(likely(++ctx.DT.s[i]))
 			break;
 	}
 
 	ctx.bytes_used = 0;
 }
 
-void random_bytes_get(void *ptr, size_t len)
+void noinline random_bytes_get(void *ptr, size_t len)
 {
 	unsigned char *buf = ptr;
 
@@ -179,5 +179,5 @@ void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 }
 
 /*@unused@*/
-static char const rcsid_aprng[] GCC_ATTR_USED_VAR = "$Id$";
+static char const rcsid_aprng[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

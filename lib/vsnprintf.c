@@ -112,19 +112,19 @@ enum length_mod
 	MOD_SIZE_T,
 	MOD_PTRDIFF_T,
 	MOD_MAX_NUM
-} GCC_ATTRIB_PACKED;
+} GCC_ATTR_PACKED;
 
 #define type_log10_aprox(x) (((((sizeof(x) * BITS_PER_CHAR)+1)*1233)>>12)+1)
 
 struct format_spec
 {
+	va_list ap;
 	const char *fmt_start;
 	char *wptr;
 	size_t len;
 	size_t maxlen;
 	unsigned precision;
 	unsigned width;
-	enum length_mod mod;
 	union
 	{
 		struct
@@ -138,7 +138,7 @@ struct format_spec
 		} flags;
 		int xyz;
 	} u;
-	va_list ap;
+	enum length_mod mod;
 	char conv_buf[(type_log10_aprox(intmax_t) * 2) + 4];
 };
 

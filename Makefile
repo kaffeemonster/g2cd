@@ -22,7 +22,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston,
 # MA  02111-1307  USA
 #
-# $Id$
+# $Id: Makefile,v 1.38 2005/11/05 18:25:48 redbully Exp redbully $
 #
 # ! USE SPACES AT = AND += OPERATION ! The solaris 5.7 'make'
 # is a little ...
@@ -217,7 +217,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -O1 -foptimize-sibling-calls
+#OPT_FLAGS = -O1 -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -404,6 +404,7 @@ HEADS = \
 	G2PacketSerializerStates.h \
 	G2QHT.h \
 	G2KHL.h \
+	G2QueryKey.h \
 	builtin_defaults.h \
 	timeout.h
 #	whith gmake all could be so simple $(wildcard *.h)
@@ -422,6 +423,7 @@ MSRCS = \
 	G2PacketSerializer.c \
 	G2QHT.c \
 	G2KHL.c \
+	G2QueryKey.c \
 	timeout.c
 SRCS = \
 	$(MSRCS) \
@@ -464,6 +466,7 @@ OBJS = \
 	G2PacketSerializer.o \
 	G2QHT.o \
 	G2KHL.o \
+	G2QueryKey.o \
 	data.o \
 	timeout.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
@@ -480,9 +483,12 @@ RTL_DUMPS = \
 	G2UDP.rtl \
 	G2Connection.rtl \
 	G2ConHelper.rtl \
+	G2ConRegistry.rtl \
 	G2Packet.rtl \
 	G2PacketSerializer.rtl \
 	G2QHT.rtl \
+	G2KHL.rtl \
+	G2QueryKey.rtl \
 	timeout.rtl
 # Insert all rule high enoug, so it gets the default rule
 #	std. all-taget
@@ -770,23 +776,25 @@ data.o: sbox.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
-G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
+G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h
-G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2QHT.h
+G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2QHT.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
 G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
+G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
 G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h lib/list.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
 G2ConRegistry.h: G2Connection.h lib/combo_addr.h
+G2QueryKey.h: lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
 G2QHT.h: lib/hzp.h lib/atomic.h

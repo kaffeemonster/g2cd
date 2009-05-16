@@ -291,8 +291,11 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		opt_pack = NULL;
 	}
 
-	if(export_base_data)
+	if(export_base_data) {
+		if(GAS == as_dia)
+			w_ptr += sprintf(w_ptr, "\t.hidden %s_base_data\n", buf->name);
 		w_ptr += sprintf(w_ptr, ".globl %s_base_data\n", buf->name);
+	}
 	w_ptr += sprintf(w_ptr, "\t.type %s_base_data,@object\n%s_base_data:\n", buf->name, buf->name);
 	for(pos = 0; (pos + 16) < buf->len; pos += 16)
 	{
@@ -312,6 +315,8 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
 		return false;
 	w_ptr = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
+	if(GAS == as_dia)
+		w_ptr += sprintf(w_ptr, "\t.hidden %s\n", buf->name);
 	w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
 	w_ptr += sprintf(w_ptr, "\t.type %s,@object\n%s:\n", buf->name, buf->name);
 	w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);

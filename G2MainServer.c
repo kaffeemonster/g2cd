@@ -55,6 +55,7 @@
 #include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "G2KHL.h"
+#include "G2QueryKey.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
@@ -152,6 +153,7 @@ int main(int argc, char **args)
 	 */
 	init_prng();
 
+	g2_qk_init();
 	/* init khl system */
 	if(!g2_khl_init())
 		return EXIT_FAILURE;
@@ -236,6 +238,7 @@ int main(int argc, char **args)
 		int num_poll = poll(sock_poll,
 				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
 				long_poll ? 60300 : 1100);
+		local_time_now = time(NULL);
 		switch(num_poll)
 		{
 		/* Normally: see what has happened */
@@ -274,6 +277,8 @@ int main(int argc, char **args)
 				 * more round)
 				 */
 				g2_qht_global_update();
+				/* Check if the query key salt needs service */
+				g2_qk_tick();
 			}
 			break;
 		/* Something bad happened */

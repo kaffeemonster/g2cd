@@ -180,6 +180,30 @@ static inline uint32_t hthash_1words(uint32_t a, uint32_t seed)
 	return h;
 }
 
+# undef MMHASH_MIX
+# undef MMHASH_FINAL
+# define MMHASH_MIX(h, k, mul)	{ k *= mul; k ^= k >> MSHIFT; k *= mul; h *= mul; h ^= k; }
+# define MMHASH_FINAL(h, mul)	{ h ^= h >> 13; h *= mul; h ^= h >> 15; }
+static inline uint32_t hthash32_mod(const uint32_t *key, size_t len, uint32_t seed, uint32_t mul)
+{
+	/* Initialise hash */
+	uint32_t h = seed ^ len * 4;
+	size_t i;
+
+	/* Mix 4 bytes at a time into the hash */
+	for(i = 0; i < len; i++) {
+		uint32_t k = key[i];
+		MMHASH_MIX(h, k, mul);
+	}
+
+	/*
+	 * Do a few final mixes of the hash to ensure the last few
+	 * bytes are well-incorporated.
+	 */
+	MMHASH_FINAL(h, mul)
+	return h;
+}
+
 # undef MSHIFT
 # undef MRATIO
 # undef MMHASH_MIX

@@ -2,7 +2,7 @@
  * G2Handler.c
  * thread to handle G2-Protocol
  *
- * Copyright (c) 2004,2006,2007 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -443,12 +443,18 @@ retry_unpack:
 				if(DECODE_FINISHED == build_packet->packet_decode ||
 				   PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
+					struct ptype_action_args parg;
 					if(ENC_DEFLATE == w_entry->encoding_out)
 						d_target = w_entry->send_u;
 					else
 						d_target = w_entry->send;
 
-					if(g2_packet_decide_spec(w_entry, &w_entry->packets_to_send, g2_packet_dict, build_packet))
+					parg.connec   = w_entry;
+					parg.src_addr = NULL;
+					parg.source   = build_packet;
+					parg.target   = &w_entry->packets_to_send;
+					parg.opaque   = NULL;
+					if(g2_packet_decide_spec(&parg, g2_packet_dict))
 					{
 						if(!(w_entry->poll_interrests & (uint32_t)EPOLLOUT))
 						{

@@ -1,8 +1,8 @@
 /*
- * G2UDP.h
- * header-file for G2UDP.c
+ * G2QueryKey.h
+ * header for the query key stuff
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2008 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -20,37 +20,23 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * $Id: G2UDP.h,v 1.8 2005/11/05 10:40:01 redbully Exp redbully $
+ * $Id:$
  */
 
-#ifndef G2UDP_H
-# define G2UDP_H
+#ifndef _G2QUERYKEY_H
+# define _G2QUERYKEY_H
 
-# include "lib/other.h"
-# include <stdbool.h>
 # include "lib/combo_addr.h"
 
-typedef struct
-{
-	uint16_t	sequence;
-	uint8_t	part;
-	uint8_t	count;
-	struct
-	{
-		bool deflate;
-		bool ack_me;
-	} flags;
-} gnd_packet_t;
-
-
-# ifndef _G2UDP_C
-#  define _G2UDP_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+# ifndef _G2QUERYKEY_C
+#  define _G2QUERYKEY_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 # else
-#  define _G2UDP_EXTRN(x) x GCC_ATTR_VIS("hidden")
-# endif /* _G2UDP_C */
+#  define _G2QUERYKEY_EXTRN(x) x GCC_ATTR_VIS("hidden")
+# endif
 
-_G2UDP_EXTRN(void *G2UDP(void *));
-_G2UDP_EXTRN(void g2_udp_send(const union combo_addr *, struct list_head *));
+_G2QUERYKEY_EXTRN(void g2_qk_init(void));
+_G2QUERYKEY_EXTRN(void g2_qk_tick(void));
+_G2QUERYKEY_EXTRN(uint32_t g2_qk_generate(const union combo_addr *source));
 
-#endif /* G2UDP_H */
+#endif
 /* EOF */

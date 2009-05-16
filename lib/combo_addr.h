@@ -129,7 +129,7 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
 # ifndef HAVE_INET_PTON
 int inet_pton(int af, const char *src, void *dst)
 # endif
-char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt);
+char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt) GCC_ATTR_VIS("hidden");
 
 /*
  * Comboaddress to represent IPv4 & IPv6
@@ -287,6 +287,26 @@ static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo
 		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr;
 	} else {
 		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
+	}
+}
+
+static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
+{
+// TODO: when ipv6 is common, change it
+	if(likely(AF_INET == a->s_fam))
+	{
+		buf[0] = a->in.sin_addr.s_addr;
+		buf[1] = a->in.sin_port;
+		return 2;
+	}
+	else
+	{
+		buf[0] = a->in6.sin6_addr.s6_addr32[0];
+		buf[1] = a->in6.sin6_addr.s6_addr32[1];
+		buf[2] = a->in6.sin6_addr.s6_addr32[2];
+		buf[3] = a->in6.sin6_addr.s6_addr32[3];
+		buf[4] = a->in6.sin6_port;
+		return 5;
 	}
 }
 
