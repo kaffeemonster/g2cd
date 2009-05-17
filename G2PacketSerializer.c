@@ -61,7 +61,7 @@ static const char *g2_packet_encoder_states_txt[] =
 // #define DEBUG_SERIALIZER
 #ifdef DEBUG_SERIALIZER
 /********************************************************************
- * 
+ *
  * helper
  *
  ********************************************************************/
@@ -373,7 +373,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
  * Its suited to be called with the Packet extracted from a stream to recive the children.
  * It will return for every children to the caller. So call it until PACKED_FINISHED.
  * After that look for additional data in packet.
- * 
+ *
  * !! Only feed it with complete Packtes !!
  * It assumes the Packet is complete.
  *
@@ -382,7 +382,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
  * target - The (child)packet where the info is stored
  * level - the maximal recursion allowed, old parameter, once func recursed atomatically
  * 	now only used for debuging, but maybe again of use. Simply pass 0.
- * 
+ *
  * RetVal:
  *  true - everything within normal parameters, all systems go.
  *  false - unrecoverable error (or illegal data), just dump the source of this
@@ -425,7 +425,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 			}
 			else
 			{
-				/* 
+				/*
 				 * we have one or more bytes left, check if the child terminator
 				 * is in place
 				 */
@@ -561,7 +561,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			   !target->data_trunk.data)
 			{
 				/* we do not seem to have a trunk, try to attach the read buffer */
-	/* 
+	/*
 	 * We are playing with fire here!
 	 * data < pos is seen as free, but we linked it to this packet
 	 * as long as we do not compact this buffer, data < pos

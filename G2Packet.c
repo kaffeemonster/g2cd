@@ -74,7 +74,9 @@ static bool unimpl_action_p(struct ptype_action_args *);
 static bool handle_KHL(struct ptype_action_args *);
 static bool handle_KHL_TS(struct ptype_action_args *);
 static bool handle_KHL_NH(struct ptype_action_args *);
+static bool handle_KHL_NH_GU(struct ptype_action_args *);
 static bool handle_KHL_CH(struct ptype_action_args *);
+static bool handle_KHL_CH_GU(struct ptype_action_args *);
 static bool handle_LNI(struct ptype_action_args *);
 static bool handle_LNI_FW(struct ptype_action_args *);
 static bool handle_LNI_HS(struct ptype_action_args *);
@@ -158,6 +160,24 @@ static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 	[PT_TS] = handle_KHL_TS,
 	[PT_NH] = handle_KHL_NH,
 	[PT_CH] = handle_KHL_CH,
+};
+
+/* KHL/NH-childs */
+static const g2_ptype_action_func KHL_NH_packet_dict[PT_MAXIMUM] =
+{
+	[PT_GU] = handle_KHL_NH_GU,
+	[PT_V ] = empty_action_p,
+	[PT_LS] = empty_action_p,
+	[PT_HS] = empty_action_p,
+};
+
+/* KHL/CH-childs */
+static const g2_ptype_action_func KHL_CH_packet_dict[PT_MAXIMUM] =
+{
+	[PT_GU] = handle_KHL_CH_GU,
+	[PT_V ] = empty_action_p,
+	[PT_LS] = empty_action_p,
+	[PT_HS] = empty_action_p,
 };
 
 /* Q2-childs */
@@ -335,7 +355,36 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 	return true;
 }
 
-static bool unexpected_child(g2_packet_t *s, const char *name)
+static noinline bool skip_child(g2_packet_t *s, const char *name)
+{
+	bool ret_val = false;
+
+	do
+	{
+		g2_packet_t child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		ret_val = g2_packet_decode_from_packet(s, &child_p, 0);
+		if(!ret_val) {
+			logg_packet(STDLF, name, "broken child");
+			break;
+		}
+		logg_packet("%s -> */%s additinaly found\n", name, g2_ptype_names[child_p.type]);
+	} while(ret_val && s->packet_decode != DECODE_FINISHED);
+
+//TODO: handle "reserverd" (important even if unknown) packets?
+
+	return ret_val;
+}
+
+static bool skip_unexpected_child(g2_packet_t *s, const char *name)
+{
+	if(unlikely(s->is_compound))
+		return skip_child(s, name);
+	return true;
+}
+
+static inline bool unexpected_child(g2_packet_t *s, const char *name)
 {
 	if(s->is_compound) {
 		logg_packet("%s\twith child! len: %zu\n", name, buffer_remaining(s->data_trunk));
@@ -343,6 +392,7 @@ static bool unexpected_child(g2_packet_t *s, const char *name)
 	}
 	return false;
 }
+
 
 /*
  * Packet handler functions
@@ -465,7 +515,7 @@ static bool handle_KHL_TS(struct ptype_action_args *parg)
 	time_t local_time;
 	foreign_time = local_time = local_time_now;
 
-	if(unlikely(unexpected_child(source, "/KHL/TS")))
+	if(unlikely(!skip_unexpected_child(source, "/KHL/TS")))
 		goto out;
 
 	if(unlikely(4 != buffer_remaining(source->data_trunk) &&
@@ -509,23 +559,82 @@ out:
 	return false;
 }
 
+struct KHL_NH_data
+{
+	char *guid;
+	/*
+	 * Vendor code
+	 * Hub status
+	 * Library statistics (ignore it, we are not in for casual talk...)
+	 */
+};
+
 static bool handle_KHL_NH(struct ptype_action_args *parg)
 {
-	g2_packet_t *source = parg->source;
+	struct ptype_action_args cparg;
 	union combo_addr addr;
+	struct KHL_NH_data rdata;
+	g2_packet_t *source = parg->source;
+	bool ret_val = false, keep_decoding;
 
-	/* we can not read a address in this case ATM */
-// TODO: read/remove child packets (guid, ts, qk, etc.)
-	if(unexpected_child(source, "/KHL/NH"))
+	cparg = *parg;
+	rdata.guid = NULL;
+	cparg.opaque = &rdata;
+	do
+	{
+		g2_packet_t child_p;
+		cparg.source = &child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+		if(!keep_decoding) {
+			logg_packet(STDLF, "KHL/NH", "broken child");
+			parg->connec->flags.dismissed = true;
+			break;
+		}
+		if(likely(child_p.packet_decode == DECODE_FINISHED))
+			ret_val |= g2_packet_decide_spec(&cparg, KHL_NH_packet_dict);
+	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+// TODO: do something with read guid
+
+// TODO: a neighbouring hub is different: cluster and routing and foo
+
+	if(source->packet_decode == DECODE_FINISHED &&
+	   read_na_from_packet(source, &addr, "/KHL/NH"))
+		g2_khl_add(&addr, local_time_now, true);
+	return ret_val;
+}
+
+static bool handle_KHL_NH_GU(struct ptype_action_args *parg)
+{
+	struct KHL_NH_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/KHL/NH/GU")))
 		return false;
 
-	if(read_na_from_packet(source, &addr, "/KHL/NH"))
-		g2_khl_add(&addr, local_time_now, true);
+	if(16 == buffer_remaining(parg->source->data_trunk))
+		rdata->guid = buffer_start(parg->source->data_trunk);
+	else
+		logg_packet(STDLF, "/KHL/NH/GU", "GU not a valid GUID");
+
 	return false;
 }
 
+struct KHL_CH_data
+{
+	char *guid;
+	/*
+	 * Vendor code
+	 * Hub status
+	 * Library statistics (ignore it, we are not in for casual talk...)
+	 */
+};
+
 static bool handle_KHL_CH(struct ptype_action_args *parg)
 {
+	struct ptype_action_args cparg;
+	struct KHL_CH_data rdata;
 	g2_packet_t *source = parg->source;
 	g2_connection_t *connec = parg->connec;
 	char *src = buffer_start(source->data_trunk);
@@ -533,6 +642,33 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	union combo_addr addr;
 	time_t when;
 	uint16_t tmp_port;
+	bool ret_val = false, keep_decoding;
+
+
+	cparg = *parg;
+	rdata.guid = NULL;
+	cparg.opaque = &rdata;
+	do
+	{
+		g2_packet_t child_p;
+		cparg.source = &child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+		if(!keep_decoding) {
+			logg_packet(STDLF, "KHL/NH/CH", "broken child");
+			connec->flags.dismissed = true;
+			break;
+		}
+		if(likely(child_p.packet_decode == DECODE_FINISHED))
+			ret_val |= g2_packet_decide_spec(&cparg, KHL_CH_packet_dict);
+	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+	/* something wrong with the decoding? */
+	if(source->packet_decode != DECODE_FINISHED)
+		return ret_val; /* in that case we can not continue */
+
+// TODO: do something with read guid
 
 	/*
 	 * who thought of that shit???
@@ -548,10 +684,6 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	 * and the docs say nothing about endianess...
 	 * looks like ip in net byte order, rest in host byte order
 	 */
-	/* we can not read a address in this case ATM */
-// TODO: read/remove child packets (guid, ts, qk, etc.)
-	if(unexpected_child(source, "/KHL/CH"))
-		return false;
 
 	memset(&addr, 0, sizeof(addr));
 	if(8 == sizeof(time_t))
@@ -609,8 +741,25 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	combo_addr_set_port(&addr, tmp_port);
 	g2_khl_add(&addr, when, false);
 out:
+	return ret_val;
+}
+
+static bool handle_KHL_CH_GU(struct ptype_action_args *parg)
+{
+	struct KHL_CH_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/KHL/CH/GU")))
+		return false;
+
+	if(16 == buffer_remaining(parg->source->data_trunk))
+		rdata->guid = buffer_start(parg->source->data_trunk);
+	else
+		logg_packet(STDLF, "/KHL/CH/GU", "GU not a valid GUID");
+
 	return false;
 }
+
+
 
 static bool handle_LNI(struct ptype_action_args *parg)
 {
@@ -750,7 +899,7 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 	size_t rem = buffer_remaining(source->data_trunk);
 
 	/* we can not read any info in this case */
-	if(likely(!unexpected_child(source, "/LNI/HS")))
+	if(likely(skip_unexpected_child(source, "/LNI/HS")))
 	{
 		/* sometimes Shareaza only sends 2 bytes, thats only the leaf count */
 		if(2 <= rem)
@@ -776,7 +925,7 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 
 static bool handle_LNI_GU(struct ptype_action_args *parg)
 {
-	if(unlikely(unexpected_child(parg->source, "/LNI/GU")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/LNI/GU")))
 		return false;
 
 // TODO: add guid to routing/known guid cache
@@ -797,8 +946,7 @@ static bool handle_LNI_QK(struct ptype_action_args *parg)
 
 static bool handle_LNI_NA(struct ptype_action_args *parg)
 {
-	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/LNI/NA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/LNI/NA")))
 		return false;
 
 	read_na_from_packet(parg->source, &parg->connec->sent_addr, "/LNI/NA");
@@ -811,8 +959,7 @@ static bool handle_LNI_V(struct ptype_action_args *parg)
 	g2_packet_t *source = parg->source;
 	size_t min_length;
 
-	/* we can not read an vendor code in this case ATM */
-	if(unlikely(unexpected_child(source, "/LNI/V")))
+	if(unlikely(!skip_unexpected_child(source, "/LNI/V")))
 		return false;
 
 	min_length =
@@ -1002,8 +1149,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 	char tmp;
 	bool ret_val = false;
 
-	/* we can not read the qht in this case ATM */
-	if(unlikely(unexpected_child(source, "/QHT")))
+	if(unlikely(!skip_unexpected_child(source, "/QHT")))
 		return false;
 
 	if(unlikely(!buffer_remaining(source->data_trunk))) {
@@ -1139,8 +1285,7 @@ static bool handle_QKR_RNA(struct ptype_action_args *parg)
 {
 	struct QKR_data *rdata = parg->opaque;
 
-	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKR/RNA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKR/RNA")))
 		return false;
 
 	rdata->requesting_na_valid =
@@ -1153,7 +1298,7 @@ static bool handle_QKR_QNA(struct ptype_action_args *parg)
 	struct QKR_data *rdata = parg->opaque;
 
 	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKR/QNA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKR/QNA")))
 		return false;
 
 	rdata->queried_na_valid =
@@ -1165,8 +1310,7 @@ static bool handle_QKR_SNA(struct ptype_action_args *parg)
 {
 	struct QKR_data *rdata = parg->opaque;
 
-	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKR/SNA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKR/SNA")))
 		return false;
 
 	rdata->sending_na_valid =
@@ -1230,8 +1374,7 @@ static bool handle_QKA_QK(struct ptype_action_args *parg)
 	g2_packet_t *source = parg->source;
 	struct QKA_data *rdata = parg->opaque;
 
-	/* we can not read an qk in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKA/QK")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKA/QK")))
 		return false;
 
 	if(4 != buffer_remaining(source->data_trunk)) {
@@ -1248,8 +1391,7 @@ static bool handle_QKA_QNA(struct ptype_action_args *parg)
 {
 	struct QKA_data *rdata = parg->opaque;
 
-	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKA/QNA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKA/QNA")))
 		return false;
 
 	rdata->queried_na_valid =
@@ -1261,8 +1403,7 @@ static bool handle_QKA_SNA(struct ptype_action_args *parg)
 {
 	struct QKA_data *rdata = parg->opaque;
 
-	/* we can not read an address in this case ATM */
-	if(unlikely(unexpected_child(parg->source, "/QKR/SNA")))
+	if(unlikely(!skip_unexpected_child(parg->source, "/QKR/SNA")))
 		return false;
 
 	rdata->sending_na_valid =
