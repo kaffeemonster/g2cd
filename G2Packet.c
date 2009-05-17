@@ -44,6 +44,7 @@
 #include "G2PacketSerializer.h"
 #include "G2QHT.h"
 #include "G2KHL.h"
+#include "G2UDP.h"
 #include "G2MainServer.h"
 #include "G2ConRegistry.h"
 #include "G2QueryKey.h"
@@ -85,6 +86,8 @@ static bool handle_LNI_GU(struct ptype_action_args *);
 static bool handle_LNI_QK(struct ptype_action_args *);
 static bool handle_LNI_V(struct ptype_action_args *);
 static bool handle_PI(struct ptype_action_args *);
+static bool handle_PI_UDP(struct ptype_action_args *);
+static bool handle_PI_RELAY(struct ptype_action_args *);
 static bool handle_Q2(struct ptype_action_args *);
 static bool handle_QHT(struct ptype_action_args *);
 static bool handle_QKR(struct ptype_action_args *);
@@ -138,8 +141,8 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 /* PI-childs */
 static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 {
-	[PT_UDP   ] = unimpl_action_p,
-	[PT_RELAY ] = unimpl_action_p,
+	[PT_UDP   ] = handle_PI_UDP,
+	[PT_RELAY ] = handle_PI_RELAY,
 };
 
 /* LNI-childs */
@@ -499,6 +502,8 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	}
 	khl->big_endian = HOST_IS_BIGENDIAN;
 
+// TODO: fill in our neighbouring hubs
+
 	list_add_tail(&khl->list, parg->target);
 	parg->connec->u.send_stamps.KHL = local_time_now;
 	return true;
@@ -571,30 +576,35 @@ struct KHL_NH_data
 
 static bool handle_KHL_NH(struct ptype_action_args *parg)
 {
-	struct ptype_action_args cparg;
 	union combo_addr addr;
 	struct KHL_NH_data rdata;
 	g2_packet_t *source = parg->source;
-	bool ret_val = false, keep_decoding;
+	bool ret_val = false;
 
-	cparg = *parg;
 	rdata.guid = NULL;
-	cparg.opaque = &rdata;
-	do
+	if(source->is_compound)
 	{
-		g2_packet_t child_p;
-		cparg.source = &child_p;
-		child_p.more_bytes_needed = false;
-		child_p.packet_decode = CHECK_CONTROLL_BYTE;
-		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
-		if(!keep_decoding) {
-			logg_packet(STDLF, "KHL/NH", "broken child");
-			parg->connec->flags.dismissed = true;
-			break;
-		}
-		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, KHL_NH_packet_dict);
-	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+		struct ptype_action_args cparg;
+		bool keep_decoding;
+
+		cparg = *parg;
+		cparg.opaque = &rdata;
+		do
+		{
+			g2_packet_t child_p;
+			cparg.source = &child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "KHL/NH", "broken child");
+				parg->connec->flags.dismissed = true;
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec(&cparg, KHL_NH_packet_dict);
+		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+	}
 
 // TODO: do something with read guid
 
@@ -633,7 +643,6 @@ struct KHL_CH_data
 
 static bool handle_KHL_CH(struct ptype_action_args *parg)
 {
-	struct ptype_action_args cparg;
 	struct KHL_CH_data rdata;
 	g2_packet_t *source = parg->source;
 	g2_connection_t *connec = parg->connec;
@@ -642,31 +651,37 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	union combo_addr addr;
 	time_t when;
 	uint16_t tmp_port;
-	bool ret_val = false, keep_decoding;
+	bool ret_val = false;
 
-
-	cparg = *parg;
 	rdata.guid = NULL;
-	cparg.opaque = &rdata;
-	do
+	if(source->is_compound)
 	{
-		g2_packet_t child_p;
-		cparg.source = &child_p;
-		child_p.more_bytes_needed = false;
-		child_p.packet_decode = CHECK_CONTROLL_BYTE;
-		keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
-		if(!keep_decoding) {
-			logg_packet(STDLF, "KHL/NH/CH", "broken child");
-			connec->flags.dismissed = true;
-			break;
-		}
-		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, KHL_CH_packet_dict);
-	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+		struct ptype_action_args cparg;
+		bool keep_decoding;
+
+		cparg = *parg;
+		cparg.opaque = &rdata;
+		do
+		{
+			g2_packet_t child_p;
+			cparg.source = &child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "KHL/NH/CH", "broken child");
+				connec->flags.dismissed = true;
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec(&cparg, KHL_CH_packet_dict);
+		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+	}
 
 	/* something wrong with the decoding? */
 	if(source->packet_decode != DECODE_FINISHED)
 		return ret_val; /* in that case we can not continue */
+
 
 // TODO: do something with read guid
 
@@ -973,54 +988,128 @@ static bool handle_LNI_V(struct ptype_action_args *parg)
 	return false;
 }
 
+struct PI_data
+{
+	union combo_addr addr;
+	bool addr_valid;
+	bool relay;
+};
+
 static bool handle_PI(struct ptype_action_args *parg)
 {
-	g2_packet_t *po;
+	struct PI_data rdata;
+	g2_packet_t *source = parg->source;
+	g2_connection_t *connec = parg->connec;
+	bool ret_val = false;
 
 	/* not simple /PI-packet? */
-	if(parg->source->is_compound)
+	rdata.addr_valid = false;
+	rdata.relay = false;
+	if(source->is_compound)
 	{
 		struct ptype_action_args cparg;
-		bool ret_val = false, keep_decoding;
+		bool keep_decoding;
 
 		cparg = *parg;
+		cparg.opaque = &rdata;
 		do
 		{
 			g2_packet_t child_p;
 			cparg.source = &child_p;
 			child_p.more_bytes_needed = false;
 			child_p.packet_decode = CHECK_CONTROLL_BYTE;
-			keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
+			keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
 			if(!keep_decoding) {
 				logg_packet(STDLF, "PI", "broken child");
-				if(parg->connec)
-					parg->connec->flags.dismissed = true;
+				if(connec)
+					connec->flags.dismissed = true;
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
 				ret_val |= g2_packet_decide_spec(&cparg, PI_packet_dict);
-		} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
-		return ret_val;
+		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+		if(source->packet_decode != DECODE_FINISHED)
+			return ret_val;
+
+		/* broken packet? punish sender */
+		if(connec && rdata.relay && !rdata.addr_valid) {
+			connec->flags.dismissed = true;
+			return ret_val;
+		}
 	}
 
-	/* time to send a packet again? */
-	if(parg->connec) {
-		if(local_time_now < (parg->connec->u.send_stamps.PI + (PI_TIMEOUT)))
-			return false;
+	/* tcp connection and not a relay request? */
+	if(connec && !rdata.addr_valid) {
+		/* check if time to send a packet again? */
+		if(local_time_now < (connec->u.send_stamps.PI + (PI_TIMEOUT)))
+			return ret_val;
 	}
 
-	po = g2_packet_calloc();
-	if(!po) {
-		logg_packet(STDLF, "\t/PI", "alloc failed");
+	/* from a tcp connection and a udp addr? */
+	if(connec && rdata.addr_valid)
+	{
+		/* should we answer, or relay it */
+		if(rdata.relay)
+		{
+			struct list_head answer;
+			g2_packet_t po, relay;
+
+			INIT_LIST_HEAD(&answer);
+			g2_packet_init_on_stack(&po);
+			g2_packet_init_on_stack(&relay);
+
+			po.type = PT_PO;
+			relay.type = PT_RELAY;
+			list_add_tail(&relay.list, &po.children);
+			list_add_tail(&po.list, &answer);
+
+			g2_udp_send(&rdata.addr, &answer);
+		}
+		else
+		{
+// TODO: relay it to NH
+			logg_packet(STDLF, "\t/PI", "relay not implemented!");
+		}
+	}
+	else
+	{
+		g2_packet_t *po = g2_packet_calloc();
+		if(!po) {
+			logg_packet(STDLF, "\t/PI", "alloc failed");
+			return ret_val;
+		}
+		po->type = PT_PO;
+
+		list_add_tail(&po->list, parg->target);
+		if(connec)
+			connec->u.send_stamps.PI = local_time_now;
+		ret_val = true;
+	}
+
+	return ret_val;
+}
+
+static bool handle_PI_UDP(struct ptype_action_args *parg)
+{
+	struct PI_data *rdata = parg->opaque;
+
+	logg_packet(STDSF, "/PI/UDP\n");
+	if(unlikely(!skip_unexpected_child(parg->source, "/PI/UDP")))
 		return false;
-	}
-	po->type = PT_PO;
-	list_add_tail(&po->list, parg->target);
-	if(parg->connec)
-		parg->connec->u.send_stamps.PI = local_time_now;
-	logg_packet_old(STDSF, "\t/PI");
 
-	return true;
+	rdata->addr_valid =
+		read_na_from_packet(parg->source, &rdata->addr, "/PI/UDP");
+	return false;
+}
+
+static bool handle_PI_RELAY(struct ptype_action_args *parg)
+{
+	struct PI_data *rdata = parg->opaque;
+
+	logg_packet(STDSF, "/PI/RELAY\n");
+	rdata->relay = true;
+	return false;
 }
 
 static bool handle_Q2(struct ptype_action_args *parg)
