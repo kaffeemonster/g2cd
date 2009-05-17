@@ -1145,9 +1145,13 @@ static void khl_cache_entry_free(struct khl_cache_entry *e)
 	cache.num--;
 }
 
-static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr)
+static uint32_t cache_ht_hash(const union combo_addr *addr)
 {
-	uint32_t h = combo_addr_hash(addr, cache.ht_seed);
+	return combo_addr_hash(addr, cache.ht_seed);
+}
+
+static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint32_t h)
+{
 	struct hlist_node *n;
 	struct khl_cache_entry *e;
 
@@ -1250,6 +1254,7 @@ RBTREE_MAKE_FUNCS(cache, struct khl_cache_entry, rb);
 void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 {
 	struct khl_cache_entry *e, *t;
+	uint32_t h;
 
 	/* check for bogus addresses */
 	if(unlikely(!combo_addr_is_public(addr))) {
@@ -1258,12 +1263,13 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 	}
 	logg_develd_old("adding: %p#I, %u\n", addr, (unsigned)when);
 
+	h = cache_ht_hash(addr);
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;
 
 	/* already in the cache? */
-	e = cache_ht_lookup(addr);
+	e = cache_ht_lookup(addr, h);
 	if(e)
 	{
 		/* entry newer? */
@@ -1309,6 +1315,7 @@ life_tree_error:
 		khl_cache_entry_free(e);
 		goto out_unlock;
 	}
+// TODO: can we reuse the hash calculated above?
 	cache_ht_add(e);
 
 out_unlock:
