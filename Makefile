@@ -777,7 +777,7 @@ data.o: sbox.bin bin2o
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h lib/recv_buff.h lib/my_epoll.h lib/atomic.h lib/itoa.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h lib/recv_buff.h lib/atomic.h lib/hzp.h

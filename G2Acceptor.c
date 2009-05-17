@@ -403,7 +403,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 			OUT_ERR("setsockopt V6ONLY");
 	}
 
-	if(bind(*accept_so, &our_addr->sa, sizeof(*our_addr)))
+	if(bind(*accept_so, casa(our_addr), sizeof(*our_addr)))
 		OUT_ERR("binding accept fd");
 
 	if(listen(*accept_so, BACKLOG))
@@ -455,7 +455,7 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 		union combo_addr our_local_addr;
 		socklen_t sin_size = sizeof(our_local_addr);
 
-		getsockname(work_entry->com_socket, &our_local_addr.sa, &sin_size);
+		getsockname(work_entry->com_socket, casa(&our_local_addr), &sin_size);
 		logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
 		     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
 	}
@@ -473,7 +473,7 @@ static bool handle_accept_in(
 	int fd_flags;
 
 	do {
-		tmp_fd = accept(accept_so, &work_entry->remote_host.sa, &sin_size);
+		tmp_fd = accept(accept_so, casa(&work_entry->remote_host), &sin_size);
 	} while(0 > tmp_fd && EINTR == errno);
 	if(-1 == tmp_fd) {
 		logg_errno(LOGF_NOTICE, "accepting");
@@ -981,7 +981,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				 * get our ip the remote host connected to from
 				 * our socket handle
 				 */
-				if(unlikely(getsockname(to_con->com_socket, &local_addr.sa, &sin_size))) {
+				if(unlikely(getsockname(to_con->com_socket, casa(&local_addr), &sin_size))) {
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
 					local_addr = AF_INET == to_con->remote_host.s_fam ?
 						server.settings.bind.ip4 : server.settings.bind.ip6;

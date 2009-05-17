@@ -676,7 +676,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 		union combo_addr local_addr;
 		socklen_t sin_size = sizeof(local_addr);
 
-		if(getsockname(connec->com_socket, &local_addr.sa, &sin_size))
+		if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
 			goto out_fail;
 		addr = local_addr.in.sin_addr.s_addr;
 		port = combo_addr_port(&local_addr);

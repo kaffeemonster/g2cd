@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -136,15 +136,52 @@ char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt) GCC_ATTR_VI
  */
 union combo_addr
 {
-	/* dirty deads done dirt cheap,
+	/*
+	 * dirty deads done dirt cheap,
 	 * sa_fam should alias with the first member
 	 * off all struct: *_family
 	 */
 	sa_family_t         s_fam;
-	struct sockaddr     sa;
+/*	struct sockaddr     sa; */
+	/*
+	 * struct sockaddr is normaly unusable. It is a kind
+	 * of "virtual" baseclass, which only usefull member is
+	 * the sa_family element. Still its the type every socket
+	 * api function takes. Evertime you want to do something
+	 * usefull: cast your real implementation like sockaddr_in
+	 * to sockaddr or the other way round, everytime you get
+	 * one (resolv etc.) cast it to the implementation.
+	 *
+	 * With this member in the union things are neat: work with
+	 * the implementations, pass the sa element into the api.
+	 * No lengthy casts.
+	 *
+	 * Unfortunatly they decided that struct sockaddr should
+	 * be able to represent every implementation, "physically"/
+	 * memorywise, even if not usable (only after a cast).
+	 * struct sockaddr is as large as the largest sockaddr_*
+	 * which is round about 140 byte for AF_UNIX, which contain
+	 * a large char array (path to the socket).
+	 * And that SUCKS memorywise!
+	 * sockaddr_in6 is not small, but smaller than this.
+	 * GCC can not save us, AFAIK there is no attribute which
+	 * can make this member virtual/weak/immaterial/no space
+	 * allocated, only symbol.
+	 * So we leave it out again, back to casts...
+	 */
 	struct sockaddr_in  in;
 	struct sockaddr_in6 in6;
 };
+
+static inline struct sockaddr *casa(union combo_addr *in)
+{
+	return (struct sockaddr *)in;
+}
+
+static inline const struct sockaddr *casac(const union combo_addr *in)
+{
+	return (const struct sockaddr *)in;
+}
 
 static inline const char *combo_addr_print(const union combo_addr *src, char *dst, socklen_t cnt)
 {

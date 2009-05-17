@@ -627,7 +627,7 @@ static inline ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_
 			buffer_start(*d_hold),
 			buffer_remaining(*d_hold),
 			0,
-			&to->sa,
+			casac(to),
 			sizeof(*to));
 	} while(-1 == result && EINTR == errno);
 
@@ -694,7 +694,7 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 			buffer_start(*d_hold),
 			buffer_remaining(*d_hold),
 			0,
-			&from->sa,
+			casa(from),
 			&from_len);
 	} while(-1 == result && EINTR == errno);
 
@@ -750,7 +750,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 			OUT_ERR("setsockopt V6ONLY");
 	}
 
-	if(bind(*udp_so, &our_addr->sa, sizeof(*our_addr)))
+	if(bind(*udp_so, casa(our_addr), sizeof(*our_addr)))
 		OUT_ERR("bindding udp fd");
 
 	/* Get our own IP? */

@@ -538,7 +538,7 @@ static int gwc_connect(void)
 
 	do {
 		errno = 0;
-		ret_val = connect(fd, &addr->sa, tai->ai_addrlen);
+		ret_val = connect(fd, casa(addr), tai->ai_addrlen);
 	} while(ret_val && EINTR == errno);
 	time(&act_gwc.data.access_last);
 	if(!ret_val)
