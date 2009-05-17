@@ -132,7 +132,9 @@
  * be implemented by hubs (us...). And boy, this sucks big time...
  */
 
+/* 8 == 3 bit of key */
 #define TIME_SLOT_COUNT 8
+#define TIME_SLOT_COUNT_MASK (~(TIME_SLOT_COUNT - 1UL))
 /* 8 slots at 1hour per slot == 8 hours key dekay */
 #define TIME_SLOT_SECS 60 * 60
 #define TIME_SLOT_ELEM 64
@@ -189,9 +191,7 @@ void g2_qk_tick(void)
 	if(t_diff < TIME_SLOT_SECS)
 		return;
 
-	n_salt = g2_qk_s.act_salt + 1;
-	if(n_salt >= TIME_SLOT_COUNT)
-		n_salt = 0;
+	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));
 	check_salt_vals(n_salt);
@@ -200,28 +200,44 @@ void g2_qk_tick(void)
 	g2_qk_s.last_update = local_time_now;
 }
 
-uint32_t g2_qk_generate(const union combo_addr *source)
+static uint32_t addr_hash_generate(const union combo_addr *source, unsigned salt2use)
 {
 	uint32_t h, s1, s2, w[5]; // 10
-	unsigned act_salt, len = 0;
+	unsigned len = 0;
 
 	len += combo_addr_lin(&w[len], source);
 //	len += combo_addr_lin(&w[len], host);
 
-	act_salt = g2_qk_s.act_salt;
-	s1 = g2_qk_s.salts[act_salt][TIME_SLOT_ELEM][0];
-	s2 = g2_qk_s.salts[act_salt][TIME_SLOT_ELEM][1];
+	s1 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][0];
+	s2 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][1];
 	h = hthash32_mod(w, len, s1, s2);
 	/* move entropy to low nibble */
 	h ^= h >> 16;
 	h ^= h >>  8;
 	h ^= h >>  4;
 	h %= TIME_SLOT_ELEM;
-	s1 = g2_qk_s.salts[act_salt][h][0];
-	s2 = g2_qk_s.salts[act_salt][h][1];
+	s1 = g2_qk_s.salts[salt2use][h][0];
+	s2 = g2_qk_s.salts[salt2use][h][1];
 	h = hthash32_mod(w, len, s1, s2);
 
 	return h;
+}
+
+uint32_t g2_qk_generate(const union combo_addr *source)
+{
+	unsigned act_salt = g2_qk_s.act_salt;
+	uint32_t h;
+
+	h = addr_hash_generate(source, act_salt);
+	return (h & TIME_SLOT_COUNT_MASK) | act_salt;
+}
+
+bool g2_qk_check(const union combo_addr *source, uint32_t key)
+{
+	uint32_t h;
+
+	h = addr_hash_generate(source, key & ~TIME_SLOT_COUNT_MASK);
+	return (h & TIME_SLOT_COUNT_MASK) == (key & TIME_SLOT_COUNT_MASK);
 }
 
 /*@unused@*/

@@ -46,6 +46,7 @@ struct khl_entry
 
 _G2KHL_EXTRN(void g2_khl_add(const union combo_addr *, time_t, bool));
 _G2KHL_EXTRN(size_t g2_khl_fill_p(struct khl_entry [], size_t, int));
+_G2KHL_EXTRN(const char *g2_khl_get_url(void));
 _G2KHL_EXTRN(bool g2_khl_init(void));
 _G2KHL_EXTRN(bool g2_khl_tick(int *));
 _G2KHL_EXTRN(void g2_khl_end(void));

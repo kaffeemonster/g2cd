@@ -72,6 +72,9 @@ static inline bool g2_packet_steal_data_space(g2_packet_t *, size_t);
 /* packet handler */
 static bool empty_action_p(struct ptype_action_args *);
 static bool unimpl_action_p(struct ptype_action_args *);
+static bool handle_KHLR(struct ptype_action_args *);
+static bool handle_KHLR_UKHLID(struct ptype_action_args *);
+static bool handle_KHLR_QK(struct ptype_action_args *);
 static bool handle_KHL(struct ptype_action_args *);
 static bool handle_KHL_TS(struct ptype_action_args *);
 static bool handle_KHL_NH(struct ptype_action_args *);
@@ -111,8 +114,6 @@ static bool handle_G2CDC(struct ptype_action_args *);
 /* main dict */
 const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 {
-	[PT_CRAWLA] = empty_action_p,
-	[PT_CRAWLR] = unimpl_action_p,
 	[PT_G2CDc ] = handle_G2CDC,
 	[PT_KHL   ] = handle_KHL,
 	[PT_LNI   ] = handle_LNI,
@@ -131,9 +132,12 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 
 const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 {
-	[PT_KHLR  ] = unimpl_action_p,
+	[PT_CRAWLA] = empty_action_p,
+	[PT_CRAWLR] = unimpl_action_p,
+	[PT_KHLR  ] = handle_KHLR,
 	[PT_PI    ] = handle_PI,
 	[PT_JCT   ] = empty_action_p,
+	[PT_Q2    ] = unimpl_action_p,
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
 };
@@ -155,6 +159,17 @@ static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 	[PT_NA] = handle_LNI_NA,
 	[PT_QK] = handle_LNI_QK,
 	[PT_V ] = handle_LNI_V,
+};
+
+/* KHLR-childs */
+/*
+ * This is speculation, this packet is not documented, only
+ * the answer...
+ */
+static const g2_ptype_action_func KHLR_packet_dict[PT_MAXIMUM] =
+{
+	[PT_UKHLID] = handle_KHLR_UKHLID,
+	[PT_QK    ] = handle_KHLR_QK,
 };
 
 /* KHL-childs */
@@ -416,6 +431,249 @@ static bool unimpl_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM
 	return false;
 }
 
+struct KHLR_data
+{
+	char *id;
+	uint32_t query_key;
+	bool query_key_valid;
+};
+
+static bool handle_KHLR(struct ptype_action_args *parg)
+{
+	struct khl_entry khle[8];
+	struct KHLR_data rdata;
+	g2_packet_t *khla, *ts, *yourip, *url;
+	size_t res;
+	bool ret_val = false;
+
+	rdata.id = NULL;
+	rdata.query_key_valid = false;
+	if(parg->source->is_compound)
+	{
+		struct ptype_action_args cparg;
+		bool keep_decoding;
+
+		cparg = *parg;
+		cparg.opaque = &rdata;
+		do
+		{
+			g2_packet_t child_p;
+			cparg.source = &child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "KHLR", "broken child");
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec(&cparg, KHLR_packet_dict);
+		} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+		/* punishment for broken packets: no answer */
+		if(parg->source->packet_decode != DECODE_FINISHED)
+			return ret_val;
+	}
+
+	/*
+	 * ------======******** HINT HINT HINT ********======------
+	 * <<<<(((({{{{{{[[[[  IMPORTANT NOTICE  ]]]]}}}}}}))))>>>>
+	 *
+	 * ! ! ! ! there is no query key for KHLR in the spec ! ! ! !
+	 *
+	 * But this is madness, someone not carefully read the comment
+	 * about search security and did not understand why query keys
+	 * are needed for UDP querys.
+	 * (poisening the sender is a minor problem, harming unrelated
+	 * internet nodes is (traffic amplification attack))
+	 *
+	 * Since we already have a query key infrastructure (and KHLRs
+	 * are not supposed for UDP challenged nodes...), use it, to
+	 * prevent flooding other/the wrong nodes.
+	 *
+	 * This is a deviation and so no client will get a KHLA from
+	 * us, till they also see a need for this, but till then
+	 * i wont be the one who sends unsolicied UDP to a sender
+	 * address, which can be spoofed.
+	 *
+	 * ^+++EOM
+	 */
+	if(!rdata.query_key_valid)
+		return ret_val;
+
+	if(!g2_qk_check(parg->src_addr, rdata.query_key))
+		return ret_val;
+// TODO: maybe send a query key renewel...
+
+		/* build package */
+	khla   = g2_packet_calloc();
+	ts     = g2_packet_calloc();
+	yourip = g2_packet_calloc();
+	url    = g2_packet_calloc();
+
+	if(!(khla && ts))
+		goto out_fail;
+
+	khla->type = PT_KHL;
+	ts->type   = PT_TS;
+	if(g2_packet_steal_data_space(ts, sizeof(time_t)))
+	{
+		time_t now = local_time_now;
+		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
+		ts->big_endian = HOST_IS_BIGENDIAN;
+		list_add_tail(&ts->list, &khla->children);
+	}
+	else
+		goto out_fail;
+
+	if(yourip)
+	{
+		union combo_addr *src_addr = parg->src_addr;
+		yourip->type = PT_YOURIP;
+
+		if(g2_packet_steal_data_space(yourip,
+		    (AF_INET == src_addr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN) + 2))
+		{
+			uint16_t port;
+			size_t old_pos;
+
+			old_pos = yourip->data_trunk.pos;
+			if(AF_INET == src_addr->s_fam) {
+				put_unaligned(src_addr->in.sin_addr.s_addr,
+				              (uint32_t *)(buffer_start(yourip->data_trunk)));
+				yourip->data_trunk.pos += sizeof(uint32_t);
+			} else {
+				memcpy(buffer_start(yourip->data_trunk),
+				       &src_addr->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+				yourip->data_trunk.pos += INET6_ADDRLEN;
+			}
+			port = combo_addr_port(src_addr);
+			port = ntohs(port);
+			put_unaligned(port, (uint16_t *)buffer_start(yourip->data_trunk));
+			yourip->data_trunk.pos = old_pos;
+			yourip->big_endian = HOST_IS_BIGENDIAN;
+			list_add_tail(&yourip->list, &khla->children);
+		}
+		else
+			g2_packet_free(yourip);
+	}
+
+	if(url)
+	{
+		const char *url_str;
+
+		url_str = g2_khl_get_url();
+		if(url_str && g2_packet_steal_data_space(url, strlen(url_str)))
+		{
+			url->type = PT_URL;
+			memcpy(buffer_start(yourip->data_trunk), url_str, strlen(url_str));
+			url->big_endian = HOST_IS_BIGENDIAN;
+			list_add_tail(&url->list, &khla->children);
+		}
+		else
+			g2_packet_free(url);
+	}
+
+	if(rdata.id)
+	{
+		g2_packet_t *ukhlid = g2_packet_calloc();
+		if(ukhlid)
+		{
+			if(g2_packet_steal_data_space(yourip, 16))
+			{
+				ukhlid->type = PT_UKHLID;
+				memcpy(buffer_start(ukhlid->data_trunk), rdata.id, 16);
+				ukhlid->big_endian = HOST_IS_BIGENDIAN;
+				list_add_tail(&ukhlid->list, &khla->children);
+			}
+			else
+				g2_packet_free(ukhlid);
+		}
+	}
+
+	res = g2_khl_fill_p(khle, anum(khle), parg->src_addr->s_fam);
+	while(res--)
+	{
+		g2_packet_t *ch = g2_packet_calloc();
+		size_t old_pos;
+		unsigned i;
+		uint16_t port;
+
+		if(!ch)
+			break;
+		ch->type = PT_CH;
+		i  =  sizeof(time_t) + sizeof(uint16_t);
+		i +=  AF_INET == khle[res].na.s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+		if(!g2_packet_steal_data_space(ch, i)) {
+			g2_packet_free(ch);
+			break;
+		}
+
+		old_pos = ch->data_trunk.pos;
+		if(AF_INET == khle[res].na.s_fam) {
+			put_unaligned(khle[res].na.in.sin_addr.s_addr, (uint32_t *)(buffer_start(ch->data_trunk)));
+			ch->data_trunk.pos += sizeof(uint32_t);
+		} else {
+			memcpy(buffer_start(ch->data_trunk), &khle[res].na.in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+			ch->data_trunk.pos += INET6_ADDRLEN;
+		}
+		port = combo_addr_port(&khle[res].na);
+		port = ntohs(port);
+		put_unaligned(port, (uint16_t *)buffer_start(ch->data_trunk));
+		ch->data_trunk.pos += sizeof(uint16_t);
+		put_unaligned(khle[res].when, (time_t *)buffer_start(ch->data_trunk));
+
+		ch->data_trunk.pos = old_pos;
+		ch->big_endian = HOST_IS_BIGENDIAN;
+		list_add_tail(&ch->list, &khla->children);
+	}
+	khla->big_endian = HOST_IS_BIGENDIAN;
+
+// TODO: fill in our neighbouring hubs
+
+	list_add_tail(&khla->list, parg->target);
+	return true;
+out_fail:
+	g2_packet_free(ts);
+	g2_packet_free(khla);
+	g2_packet_free(yourip);
+	g2_packet_free(url);
+	return false;
+}
+
+static bool handle_KHLR_UKHLID(struct ptype_action_args *parg)
+{
+	struct KHLR_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/KHLR/UKHLID")))
+		return false;
+
+	if(16 == buffer_remaining(parg->source->data_trunk))
+		rdata->id = buffer_start(parg->source->data_trunk);
+	else
+		logg_packet(STDLF, "/KHLR/UKHLID", "UKHLID not a valid ID");
+
+	return false;
+}
+
+static bool handle_KHLR_QK(struct ptype_action_args *parg)
+{
+	g2_packet_t *source = parg->source;
+	struct KHLR_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/KHLR/QK")))
+		return false;
+
+	if(4 != buffer_remaining(source->data_trunk)) {
+		logg_packet(STDLF, "/KHLR/QK", "funny length");
+		return false;
+	}
+
+	get_unaligned_endian(rdata->query_key, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
+	rdata->query_key_valid = true;
+	return false;
+}
+
 static bool handle_KHL(struct ptype_action_args *parg)
 {
 	struct khl_entry khle[16];
@@ -487,7 +745,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 			put_unaligned(khle[res].na.in.sin_addr.s_addr, (uint32_t *)(buffer_start(ch->data_trunk)));
 			ch->data_trunk.pos += sizeof(uint32_t);
 		} else {
-			memcpy(&khle[res].na.in6.sin6_addr.s6_addr, buffer_start(ch->data_trunk), INET6_ADDRLEN);
+			memcpy(buffer_start(ch->data_trunk), &khle[res].na.in6.sin6_addr.s6_addr, INET6_ADDRLEN);
 			ch->data_trunk.pos += INET6_ADDRLEN;
 		}
 		port = combo_addr_port(&khle[res].na);
@@ -612,7 +870,8 @@ static bool handle_KHL_NH(struct ptype_action_args *parg)
 
 	if(source->packet_decode == DECODE_FINISHED &&
 	   read_na_from_packet(source, &addr, "/KHL/NH"))
-		g2_khl_add(&addr, local_time_now, true);
+		g2_khl_add(&addr, local_time_now, parg->connec->flags.upeer);
+		/* only the NH of our connected hubs are in our cluster */
 	return ret_val;
 }
 

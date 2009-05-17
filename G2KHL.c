@@ -60,9 +60,9 @@
 #include "lib/my_bitops.h"
 #include "lib/ansi_prng.h"
 
-#define KHL_CACHE_SHIFT 8
+#define KHL_CACHE_SHIFT 12
 #define KHL_CACHE_SIZE (1 << KHL_CACHE_SHIFT)
-#define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/4)
+#define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
 #define KHL_CACHE_HTMASK (KHL_CACHE_HTSIZE-1)
 #define KHL_CACHE_FILL 8
 
@@ -406,6 +406,46 @@ retry:
 	act_gwc.data.url = url;
 
 	return true;
+}
+
+const char *g2_khl_get_url(void)
+{
+	int retry_count = 0;
+	unsigned cycling;
+	datum key, value;
+
+retry:
+	retry_count++;
+	cycling = (unsigned)((((unsigned long long)rand())*8)/((unsigned long long)RAND_MAX));
+	do
+	{
+		key = dbm_nextkey(gwc_db);
+		if(!key.dptr)
+			key = dbm_firstkey(gwc_db);
+		if(!key.dptr) {
+			/* uhm, no key? this should not happen */
+			return NULL;
+		}
+	} while(cycling--);
+
+	value = dbm_fetch(gwc_db, key);
+	if(!value.dptr) { /* huh? key but no data? */
+		if(5 < retry_count)
+			return NULL;
+		goto retry;
+	}
+	if(sizeof(struct gwc) != value.dsize)
+	{
+		/* what to do on error? */
+		if(dbm_delete(gwc_db, key))
+			logg_errno(LOGF_WARN, "not able to remove broken GWC from db");
+		if(5 < retry_count)
+			return NULL;
+		goto retry;
+	}
+
+// TODO: is this save? or will the db remove the data? and when?
+	return key.dptr;
 }
 
 static bool gwc_resolv(void)
@@ -1232,8 +1272,10 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 		if(!(e = rbtree_cache_remove(&cache.tree, e))) {
 			logg_devel("remove failed\n");
 			goto life_tree_error; /* something went wrong... */
+// TODO: Autschn! NULL deref...
 		}
 		e->e.when = when;
+// TODO: cluster state changes??
 		if(!rbtree_cache_insert(&cache.tree, e)) {
 			logg_devel("insert failed\n");
 			goto life_tree_error;
@@ -1293,7 +1335,7 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 
 		for(; i < KHL_CACHE_SIZE; i++)
 		{
-			if(likely(e->used && e->e.na.s_fam == s_fam))
+			if(likely(e->used && e->e.na.s_fam == s_fam && !e->cluster))
 				w = e;
 			if(++e >= &cache.entrys[KHL_CACHE_SIZE])
 				e = &cache.entrys[0];

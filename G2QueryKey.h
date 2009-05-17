@@ -26,6 +26,7 @@
 #ifndef _G2QUERYKEY_H
 # define _G2QUERYKEY_H
 
+# include <stdbool.h>
 # include "lib/combo_addr.h"
 
 # ifndef _G2QUERYKEY_C
@@ -37,6 +38,7 @@
 _G2QUERYKEY_EXTRN(void g2_qk_init(void));
 _G2QUERYKEY_EXTRN(void g2_qk_tick(void));
 _G2QUERYKEY_EXTRN(uint32_t g2_qk_generate(const union combo_addr *source));
+_G2QUERYKEY_EXTRN(bool g2_qk_check(const union combo_addr *source, uint32_t key));
 
 #endif
 /* EOF */
