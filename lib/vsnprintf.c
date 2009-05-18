@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -135,6 +135,7 @@ struct format_spec
 			bool left:1;
 			bool alternate:1;
 			bool ip:1;
+			bool guid:1;
 		} flags;
 		int xyz;
 	} u;
@@ -690,24 +691,40 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 	size_t len = 0;
 	char c;
 
-	for(c = *fmt++; '#' == c || 'I' == c; c = *fmt++)
+	for(c = *fmt++; '#' == c || 'I' == c || 'G' == c; c = *fmt++)
 	{
 		if('#' == c)
 			spec->u.flags.alternate = true;
 		if('I' == c)
 			spec->u.flags.ip = true;
+		if('G' == c)
+			spec->u.flags.guid = true;
 	}
 	fmt--;
 
-	if(!spec->u.flags.ip)
+	if(spec->u.flags.guid)
 	{
-		if((sizeof(void *) * 2) + 2 > spec->maxlen)
-			len = (sizeof(void *) * 2) + 2;
+		len = 32;
+		if(spec->u.flags.alternate)
+			len += 15;
+		if(len <= spec->maxlen)
+		{
+			unsigned i;
+			unsigned char *g = ptr;
+
+			for(i = 0; i < 16; i++) {
+				*buf++ = HEXUC_STRING[(g[i] >> 4) & 0x0F];
+				*buf++ = HEXUC_STRING[ g[i]       & 0x0F];
+				if(spec->u.flags.alternate)
+					*buf++ = ':';
+			}
+			if(spec->u.flags.alternate)
+				buf--;
+		}
 		else
-			len = ptoa(buf, ptr) - buf;
-		buf += len;
+			buf += len;
 	}
-	else
+	else if(spec->u.flags.ip)
 	{
 		union combo_addr *addr = ptr;
 		if(!addr) {
@@ -740,6 +757,14 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 			len += ret_val - buf;
 			buf = ret_val;
 		}
+	}
+	else
+	{
+		if((sizeof(void *) * 2) + 2 > spec->maxlen)
+			len = (sizeof(void *) * 2) + 2;
+		else
+			len = ptoa(buf, ptr) - buf;
+		buf += len;
 	}
 
 OUT_MORE:

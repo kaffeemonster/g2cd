@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -60,7 +60,7 @@
 #include "lib/my_bitops.h"
 #include "lib/ansi_prng.h"
 
-#define KHL_CACHE_SHIFT 12
+#define KHL_CACHE_SHIFT 11
 #define KHL_CACHE_SIZE (1 << KHL_CACHE_SHIFT)
 #define KHL_CACHE_HTSIZE (KHL_CACHE_SIZE/8)
 #define KHL_CACHE_HTMASK (KHL_CACHE_HTSIZE-1)

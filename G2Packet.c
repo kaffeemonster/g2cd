@@ -44,6 +44,7 @@
 #include "G2PacketSerializer.h"
 #include "G2QHT.h"
 #include "G2KHL.h"
+#include "G2GUIDCache.h"
 #include "G2UDP.h"
 #include "G2MainServer.h"
 #include "G2ConRegistry.h"
@@ -824,7 +825,7 @@ out:
 
 struct KHL_NH_data
 {
-	char *guid;
+	uint8_t *guid;
 	/*
 	 * Vendor code
 	 * Hub status
@@ -864,14 +865,15 @@ static bool handle_KHL_NH(struct ptype_action_args *parg)
 		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 	}
 
-// TODO: do something with read guid
-
 // TODO: a neighbouring hub is different: cluster and routing and foo
 
 	if(source->packet_decode == DECODE_FINISHED &&
-	   read_na_from_packet(source, &addr, "/KHL/NH"))
+	   read_na_from_packet(source, &addr, "/KHL/NH")) {
+		if(rdata.guid)
+			g2_guid_add(rdata.guid, &addr, local_time_now);
 		g2_khl_add(&addr, local_time_now, parg->connec->flags.upeer);
 		/* only the NH of our connected hubs are in our cluster */
+	}
 	return ret_val;
 }
 
@@ -883,7 +885,7 @@ static bool handle_KHL_NH_GU(struct ptype_action_args *parg)
 		return false;
 
 	if(16 == buffer_remaining(parg->source->data_trunk))
-		rdata->guid = buffer_start(parg->source->data_trunk);
+		rdata->guid = (uint8_t *)buffer_start(parg->source->data_trunk);
 	else
 		logg_packet(STDLF, "/KHL/NH/GU", "GU not a valid GUID");
 
@@ -892,7 +894,7 @@ static bool handle_KHL_NH_GU(struct ptype_action_args *parg)
 
 struct KHL_CH_data
 {
-	char *guid;
+	uint8_t *guid;
 	/*
 	 * Vendor code
 	 * Hub status
@@ -940,9 +942,6 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	/* something wrong with the decoding? */
 	if(source->packet_decode != DECODE_FINISHED)
 		return ret_val; /* in that case we can not continue */
-
-
-// TODO: do something with read guid
 
 	/*
 	 * who thought of that shit???
@@ -1014,6 +1013,8 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
 	combo_addr_set_port(&addr, tmp_port);
 	g2_khl_add(&addr, when, false);
+	if(rdata.guid)
+		g2_guid_add(rdata.guid, &addr, when);
 out:
 	return ret_val;
 }
@@ -1026,14 +1027,18 @@ static bool handle_KHL_CH_GU(struct ptype_action_args *parg)
 		return false;
 
 	if(16 == buffer_remaining(parg->source->data_trunk))
-		rdata->guid = buffer_start(parg->source->data_trunk);
+		rdata->guid = (uint8_t *)buffer_start(parg->source->data_trunk);
 	else
 		logg_packet(STDLF, "/KHL/CH/GU", "GU not a valid GUID");
 
 	return false;
 }
 
-
+struct LNI_data
+{
+	bool had_LNI_HS;
+	bool had_LNI_GU;
+};
 
 static bool handle_LNI(struct ptype_action_args *parg)
 {
@@ -1041,10 +1046,12 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	struct ptype_action_args cparg;
 	g2_packet_t *lni, *na, *gu, *v, *hs;
 	bool ret_val = false, keep_decoding;
-	bool had_LNI_HS = false;
+	struct LNI_data rdata;
 
+	rdata.had_LNI_HS = false;
+	rdata.had_LNI_GU = false;
 	cparg = *parg;
-	cparg.opaque = &had_LNI_HS;
+	cparg.opaque = &rdata;
 	do
 	{
 		g2_packet_t child_p;
@@ -1061,7 +1068,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 			ret_val |= g2_packet_decide_spec(&cparg, LNI_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
-	if(!had_LNI_HS && connec->flags.upeer)
+	if(!rdata.had_LNI_HS && connec->flags.upeer)
 	{
 		/* demote connection from hub mode */
 		connec->flags.upeer = false;
@@ -1074,6 +1081,12 @@ static bool handle_LNI(struct ptype_action_args *parg)
 			g2_qht_put(t);
 		}
 	}
+
+// TODO: update less often?
+	/* conreg and guid update only in timeout intervals? */
+	if(rdata.had_LNI_GU)
+		g2_guid_add(connec->guid, &connec->remote_host, local_time_now);
+		/* using remote_host because we registered it with this in the registry */
 
 	/* time to send a packet again? */
 	if(unlikely(local_time_now < (connec->u.send_stamps.LNI + (LNI_TIMEOUT))))
@@ -1192,7 +1205,7 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 		g2_conreg_mark_dirty(connec);
 	}
 	connec->flags.upeer = true;
-	*(bool *)parg->opaque = true;
+	((struct LNI_data *)(parg->opaque))->had_LNI_HS = true;
 
 	return false;
 }
@@ -1202,9 +1215,10 @@ static bool handle_LNI_GU(struct ptype_action_args *parg)
 	if(unlikely(!skip_unexpected_child(parg->source, "/LNI/GU")))
 		return false;
 
-// TODO: add guid to routing/known guid cache
-	if(sizeof(parg->connec->guid) == buffer_remaining(parg->source->data_trunk))
+	if(sizeof(parg->connec->guid) == buffer_remaining(parg->source->data_trunk)) {
 		memcpy(parg->connec->guid, buffer_start(parg->source->data_trunk), sizeof(parg->connec->guid));
+		((struct LNI_data *)(parg->opaque))->had_LNI_GU = true;
+	}
 	else
 		logg_packet(STDLF, "/LNI/GU", "GU not a valid GUID");
 
@@ -1798,11 +1812,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 		hops = *(buffer_start(source->data_trunk) + 1);
 		memcpy(guid, buffer_start(source->data_trunk) + 2, sizeof(guid));
 
-		logg_packet("/HAW\tttl: %u hops: %u guid: "
-			"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n",
-				ttl, hops, guid[0], guid[1], guid[2], guid[3], guid[4], guid[5],
-				guid[6], guid[7], guid[8], guid[9], guid[10], guid[11], guid[12],
-				guid[13], guid[14], guid[15]);
+		logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", ttl, hops, guid);
 		source->data_trunk.pos += 18;
 // TODO: fill in routing/known guids cache
 	}

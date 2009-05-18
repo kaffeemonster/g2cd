@@ -147,6 +147,19 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 	return h;
 }
 
+static inline uint32_t hthash_4words(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t seed)
+{
+	uint32_t h = seed ^ 16;
+
+	MMHASH_MIX(h, a);
+	MMHASH_MIX(h, b);
+	MMHASH_MIX(h, c);
+	MMHASH_MIX(h, d);
+
+	MMHASH_FINAL(h);
+	return h;
+}
+
 static inline uint32_t hthash_3words(uint32_t a, uint32_t b, uint32_t c, uint32_t seed)
 {
 	uint32_t h = seed ^ 12;

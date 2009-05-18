@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -55,6 +55,7 @@
 #include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "G2KHL.h"
+#include "G2GUIDCache.h"
 #include "G2QueryKey.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
@@ -156,6 +157,9 @@ int main(int argc, char **args)
 	g2_qk_init();
 	/* init khl system */
 	if(!g2_khl_init())
+		return EXIT_FAILURE;
+	/* init guid cache */
+	if(!g2_guid_init())
 		return EXIT_FAILURE;
 
 /* ANYTHING what need any priviledges should be done before */
@@ -351,6 +355,12 @@ int main(int argc, char **args)
 	 * want atexit()...)
 	 */
 	g2_khl_end();
+	/*
+	 * we also try to save guids, since they are essential for
+	 * "routing". They also will age and get stall, but beneficial
+	 * to save over a short restart.
+	 */
+	g2_guid_end();
 	g2_conreg_cleanup();
 
 	clean_up_m();
@@ -498,6 +508,7 @@ static inline void handle_config(void)
 	server.settings.khl.gwc_boot_url = DEFAULT_GWC_BOOT;
 	server.settings.khl.gwc_cache_fname = DEFAULT_GWC_DB;
 	server.settings.khl.dump_fname = DEFAULT_KHL_DUMP;
+	server.settings.guid.dump_fname = DEFAULT_GUID_DUMP;
 	server.settings.qht.compression = DEFAULT_QHT_COMPRESSION;
 	server.settings.qht.compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL;
 

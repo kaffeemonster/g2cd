@@ -2,7 +2,7 @@
  * G2MainServer.h
  * header-file for G2MainServer.c and global informations
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -125,6 +125,10 @@ _G2MAIN_EXTRNVAR(struct
 				const char *gwc_cache_fname;
 				const char *dump_fname;
 			} khl;
+			struct
+			{
+				const char *dump_fname;
+			} guid;
 			struct
 			{
 				enum g2_qht_comp compression;
