@@ -202,11 +202,11 @@ void g2_qk_tick(void)
 
 static uint32_t addr_hash_generate(const union combo_addr *source, unsigned salt2use)
 {
-	uint32_t h, s1, s2, w[5]; // 10
+	uint32_t h, s1, s2, w[4]; // 8
 	unsigned len = 0;
 
-	len += combo_addr_lin(&w[len], source);
-//	len += combo_addr_lin(&w[len], host);
+	len += combo_addr_lin_s(&w[len], source);
+//	len += combo_addr_lin_s(&w[len], host);
 
 	s1 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][0];
 	s2 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][1];

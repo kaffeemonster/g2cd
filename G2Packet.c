@@ -121,7 +121,7 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_HAW   ] = handle_HAW,
 	[PT_PI    ] = handle_PI,
 	[PT_PO    ] = unimpl_action_p,
-	[PT_PUSH  ] = unimpl_action_p,
+	[PT_PUSH  ] = empty_action_p, /* we do not push */
 	[PT_Q2    ] = handle_Q2,
 	[PT_QA    ] = unimpl_action_p,
 	[PT_QHT   ] = handle_QHT,
@@ -133,14 +133,16 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 
 const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 {
-	[PT_CRAWLA] = empty_action_p,
+	[PT_CRAWLA] = empty_action_p, /* we don't request crawls */
 	[PT_CRAWLR] = unimpl_action_p,
+	[PT_KHLA  ] = empty_action_p, /* we don't request khls by udp */
 	[PT_KHLR  ] = handle_KHLR,
 	[PT_PI    ] = handle_PI,
-	[PT_JCT   ] = empty_action_p,
+	[PT_JCT   ] = empty_action_p, /* no answer needed, it's ACKed */
 	[PT_Q2    ] = unimpl_action_p,
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
+	[PT_PUSH  ] = empty_action_p, /* we do not push */
 };
 
 /* PI-childs */
@@ -374,6 +376,118 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 	return true;
 }
 
+/*
+ * sna are na without port
+ */
+static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, const char *name)
+{
+	size_t rem = buffer_remaining(source->data_trunk);
+
+	if(4 != rem && INET6_ADDRLEN != rem) {
+		logg_packet(STDLF, name, "SNA not an IPv4 or IPv6 address");
+		return false;
+	}
+
+	memset(target, 0, sizeof(*target));
+	/* We Assume network byte order for the IP */
+	if(4 == rem) {
+		target->s_fam = AF_INET;
+		get_unaligned(target->in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
+		source->data_trunk.pos += sizeof(uint32_t);
+	} else {
+		target->s_fam = AF_INET6;
+		memcpy(&target->in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
+		source->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	logg_packet("%s:\t%p#I\n", name, target);
+	return true;
+}
+
+static bool write_na_to_packet(g2_packet_t *target, union combo_addr *source)
+{
+	uint16_t port;
+	size_t len, old_pos;
+
+	len  = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len += sizeof(port);
+
+	if(!g2_packet_steal_data_space(target, len))
+		return false;
+
+	old_pos = target->data_trunk.pos;
+	/* We Assume network byte order for the IP */
+	if(AF_INET == source->s_fam) {
+		put_unaligned(source->in.sin_addr.s_addr,
+		              (uint32_t *)buffer_start(target->data_trunk));
+		target->data_trunk.pos += sizeof(uint32_t);
+	} else {
+		memcpy(buffer_start(target->data_trunk),
+		       &source->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+		target->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	/*  and use host byte order for the port */
+	port = combo_addr_port(source);
+	port = ntohs(port);
+	put_unaligned(port, (uint16_t *)(buffer_start(target->data_trunk)));
+
+	target->data_trunk.pos = old_pos;
+	target->big_endian = HOST_IS_BIGENDIAN;
+	return true;
+}
+
+static bool write_nats_to_packet(g2_packet_t *target, union combo_addr *source, time_t when)
+{
+	size_t len, old_pos;
+	uint16_t port;
+
+	len  = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len += sizeof(time_t) + sizeof(uint16_t);
+
+	if(!g2_packet_steal_data_space(target, len))
+		return false;
+
+	old_pos = target->data_trunk.pos;
+	/* We Assume network byte order for the IP */
+	if(AF_INET == source->s_fam) {
+		put_unaligned(source->in.sin_addr.s_addr,
+		              (uint32_t *)buffer_start(target->data_trunk));
+		target->data_trunk.pos += sizeof(uint32_t);
+	} else {
+		memcpy(buffer_start(target->data_trunk),
+		       &source->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+		target->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	/*  and use host byte order for the port */
+	port = combo_addr_port(source);
+	port = ntohs(port);
+	put_unaligned(port, (uint16_t *)(buffer_start(target->data_trunk)));
+	target->data_trunk.pos += sizeof(uint16_t);
+
+	/* now the time stamp */
+	put_unaligned(when, (time_t *)buffer_start(target->data_trunk));
+
+	target->data_trunk.pos = old_pos;
+	target->big_endian = HOST_IS_BIGENDIAN;
+	return true;
+}
+
+static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
+{
+	/* We Assume network byte order for the IP */
+	if(AF_INET == source->s_fam){
+		target->data_trunk.data = (void *)&source->in.sin_addr.s_addr;
+		target->data_trunk.capacity = sizeof(uint32_t);
+	} else {
+		target->data_trunk.data = (void *)source->in6.sin6_addr.s6_addr;
+		target->data_trunk.capacity = INET6_ADDRLEN;
+	}
+	buffer_clear(target->data_trunk);
+	target->big_endian = HOST_IS_BIGENDIAN;
+}
+
 static noinline bool skip_child(g2_packet_t *s, const char *name)
 {
 	bool ret_val = false;
@@ -529,32 +643,9 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 
 	if(yourip)
 	{
-		union combo_addr *src_addr = parg->src_addr;
 		yourip->type = PT_YOURIP;
-
-		if(g2_packet_steal_data_space(yourip,
-		    (AF_INET == src_addr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN) + 2))
-		{
-			uint16_t port;
-			size_t old_pos;
-
-			old_pos = yourip->data_trunk.pos;
-			if(AF_INET == src_addr->s_fam) {
-				put_unaligned(src_addr->in.sin_addr.s_addr,
-				              (uint32_t *)(buffer_start(yourip->data_trunk)));
-				yourip->data_trunk.pos += sizeof(uint32_t);
-			} else {
-				memcpy(buffer_start(yourip->data_trunk),
-				       &src_addr->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
-				yourip->data_trunk.pos += INET6_ADDRLEN;
-			}
-			port = combo_addr_port(src_addr);
-			port = ntohs(port);
-			put_unaligned(port, (uint16_t *)buffer_start(yourip->data_trunk));
-			yourip->data_trunk.pos = old_pos;
-			yourip->big_endian = HOST_IS_BIGENDIAN;
+		if(write_na_to_packet(yourip, parg->src_addr))
 			list_add_tail(&yourip->list, &khla->children);
-		}
 		else
 			g2_packet_free(yourip);
 	}
@@ -596,36 +687,14 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 	while(res--)
 	{
 		g2_packet_t *ch = g2_packet_calloc();
-		size_t old_pos;
-		unsigned i;
-		uint16_t port;
 
 		if(!ch)
 			break;
 		ch->type = PT_CH;
-		i  =  sizeof(time_t) + sizeof(uint16_t);
-		i +=  AF_INET == khle[res].na.s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
-		if(!g2_packet_steal_data_space(ch, i)) {
+		if(!write_nats_to_packet(ch, &khle[res].na, khle[res].when)) {
 			g2_packet_free(ch);
 			break;
 		}
-
-		old_pos = ch->data_trunk.pos;
-		if(AF_INET == khle[res].na.s_fam) {
-			put_unaligned(khle[res].na.in.sin_addr.s_addr, (uint32_t *)(buffer_start(ch->data_trunk)));
-			ch->data_trunk.pos += sizeof(uint32_t);
-		} else {
-			memcpy(buffer_start(ch->data_trunk), &khle[res].na.in6.sin6_addr.s6_addr, INET6_ADDRLEN);
-			ch->data_trunk.pos += INET6_ADDRLEN;
-		}
-		port = combo_addr_port(&khle[res].na);
-		port = ntohs(port);
-		put_unaligned(port, (uint16_t *)buffer_start(ch->data_trunk));
-		ch->data_trunk.pos += sizeof(uint16_t);
-		put_unaligned(khle[res].when, (time_t *)buffer_start(ch->data_trunk));
-
-		ch->data_trunk.pos = old_pos;
-		ch->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&ch->list, &khla->children);
 	}
 	khla->big_endian = HOST_IS_BIGENDIAN;
@@ -727,36 +796,14 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	while(res--)
 	{
 		g2_packet_t *ch = g2_packet_calloc();
-		size_t old_pos;
-		unsigned i;
-		uint16_t port;
 
 		if(!ch)
 			break;
 		ch->type = PT_CH;
-		i  =  sizeof(time_t) + sizeof(uint16_t);
-		i +=  AF_INET == khle[res].na.s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
-		if(!g2_packet_steal_data_space(ch, i)) {
+		if(!write_nats_to_packet(ch, &khle[res].na, khle[res].when)) {
 			g2_packet_free(ch);
 			break;
 		}
-
-		old_pos = ch->data_trunk.pos;
-		if(AF_INET == khle[res].na.s_fam) {
-			put_unaligned(khle[res].na.in.sin_addr.s_addr, (uint32_t *)(buffer_start(ch->data_trunk)));
-			ch->data_trunk.pos += sizeof(uint32_t);
-		} else {
-			memcpy(buffer_start(ch->data_trunk), &khle[res].na.in6.sin6_addr.s6_addr, INET6_ADDRLEN);
-			ch->data_trunk.pos += INET6_ADDRLEN;
-		}
-		port = combo_addr_port(&khle[res].na);
-		port = ntohs(port);
-		put_unaligned(port, (uint16_t *)buffer_start(ch->data_trunk));
-		ch->data_trunk.pos += sizeof(uint16_t);
-		put_unaligned(khle[res].when, (time_t *)buffer_start(ch->data_trunk));
-
-		ch->data_trunk.pos = old_pos;
-		ch->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&ch->list, &khl->children);
 	}
 	khl->big_endian = HOST_IS_BIGENDIAN;
@@ -1042,9 +1089,11 @@ struct LNI_data
 
 static bool handle_LNI(struct ptype_action_args *parg)
 {
-	g2_connection_t *connec = parg->connec;
+	union combo_addr local_addr;
 	struct ptype_action_args cparg;
 	g2_packet_t *lni, *na, *gu, *v, *hs;
+	g2_connection_t *connec = parg->connec;
+	socklen_t sin_size = sizeof(local_addr);
 	bool ret_val = false, keep_decoding;
 	struct LNI_data rdata;
 
@@ -1104,26 +1153,12 @@ static bool handle_LNI(struct ptype_action_args *parg)
 
 	lni->type = PT_LNI;
 	na->type = PT_NA;
-// TODO: handle IPv6
-	if(g2_packet_steal_data_space(na, 6))
-	{
-		uint16_t port;
-		uint32_t addr;
-		union combo_addr local_addr;
-		socklen_t sin_size = sizeof(local_addr);
 
-		if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
-			goto out_fail;
-		addr = local_addr.in.sin_addr.s_addr;
-		port = combo_addr_port(&local_addr);
-		port = ntohs(port);
-		put_unaligned(addr, (uint32_t *)buffer_start(na->data_trunk));
-		put_unaligned(port, (uint16_t *)(buffer_start(na->data_trunk)+4));
-		na->big_endian = HOST_IS_BIGENDIAN;
-		list_add_tail(&na->list, &lni->children);
-	}
-	else
+	if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
 		goto out_fail;
+	if(!write_na_to_packet(na, &local_addr))
+		goto out_fail;
+	list_add_tail(&na->list, &lni->children);
 
 	if(v)
 	{
@@ -1406,7 +1441,6 @@ static bool handle_Q2(struct ptype_action_args *parg)
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
 			ret_val |= g2_packet_decide_spec(&cparg, Q2_packet_dict);
-//		source->num_child++; // put within if
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	return ret_val;
@@ -1612,33 +1646,101 @@ struct QKR_data
 
 static bool handle_QKR(struct ptype_action_args *parg)
 {
-	struct ptype_action_args cparg;
 	struct QKR_data rdata;
-	union combo_addr *src_addr = parg->connec ? &parg->connec->remote_host : parg->src_addr;
+	struct list_head answer;
 	bool ret_val = false, keep_decoding;
 
-	/* packet should be handled,  */
-	logg_packet("QKR from %pI\tC: %s -> \n", src_addr, parg->source->is_compound ? "true" : "false");
-
 	memset(&rdata.refresh, 0, offsetof(struct QKR_data, sending_na_valid) - offsetof(struct QKR_data, refresh));
-	cparg = *parg;
-	cparg.opaque = &rdata;
-	do
+	if(parg->source->is_compound)
 	{
-		g2_packet_t child_p;
-		cparg.source = &child_p;
-		child_p.more_bytes_needed = false;
-		child_p.packet_decode = CHECK_CONTROLL_BYTE;
-		keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
-		if(!keep_decoding) {
-			logg_packet(STDLF, "QKR", "broken child");
-			if(parg->connec)
-				parg->connec->flags.dismissed = true;
-			break;
+		struct ptype_action_args cparg = *parg;
+		cparg.opaque = &rdata;
+		do
+		{
+			g2_packet_t child_p;
+			cparg.source = &child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "QKR", "broken child");
+				if(parg->connec)
+					parg->connec->flags.dismissed = true;
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec(&cparg, QKR_packet_dict);
+		} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+	}
+
+	/* something wrong with the decoding? */
+	if(parg->source->packet_decode != DECODE_FINISHED)
+		return ret_val; /* in that case we can not continue */
+
+	logg_packet("QKR from %pI\tC: %s -> \n",
+		parg->connec ? &parg->connec->remote_host : parg->src_addr,
+		parg->source->is_compound ? "true" : "false");
+
+	if(parg->connec)
+	{
+		g2_packet_t qkr, sna;
+
+		if(!rdata.queried_na_valid)
+			return ret_val;
+
+		if(!rdata.refresh)
+		{
+//TODO: look into query cache
 		}
-		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, QKR_packet_dict);
-	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+		g2_packet_init_on_stack(&qkr);
+		g2_packet_init_on_stack(&sna);
+
+		link_sna_to_packet(&sna, &rdata.sending_na);
+		list_add_tail(&sna.list, &qkr.children);
+
+		qkr.type = PT_QKR;
+		qkr.big_endian = HOST_IS_BIGENDIAN;
+
+		INIT_LIST_HEAD(&answer);
+		list_add_tail(&qkr.list, &answer);
+		g2_udp_send(&rdata.queried_na, &answer);
+	}
+	else
+	{
+		g2_packet_t qka, qk, sna;
+		union combo_addr *req_addr;
+		uint32_t key;
+
+		g2_packet_init_on_stack(&qka);
+		g2_packet_init_on_stack(&qk);
+
+		/* should not fail */
+		if(!g2_packet_steal_data_space(&qk, sizeof(uint32_t)))
+			return ret_val;
+
+		req_addr = !rdata.requesting_na_valid ? parg->src_addr : &rdata.requesting_na;
+		if(rdata.sending_na_valid &&
+		   !combo_addr_eq_s(req_addr, &rdata.sending_na))
+		{
+			g2_packet_init_on_stack(&sna);
+			link_sna_to_packet(&sna, &rdata.sending_na);
+			list_add_tail(&sna.list, &qka.children);
+		}
+
+		key = g2_qk_generate(req_addr);
+		qk.type = PT_QK;
+		put_unaligned(key, (uint32_t *)buffer_start(qk.data_trunk));
+		qk.big_endian = HOST_IS_BIGENDIAN;
+		list_add_tail(&qk.list, &qka.children);
+
+		qka.big_endian = HOST_IS_BIGENDIAN;
+		qka.type = PT_QKA;
+
+		INIT_LIST_HEAD(&answer);
+		list_add_tail(&qka.list, &answer);
+		g2_udp_send(req_addr, &answer);
+	}
 
 	return ret_val;
 }
@@ -1676,7 +1778,7 @@ static bool handle_QKR_SNA(struct ptype_action_args *parg)
 		return false;
 
 	rdata->sending_na_valid =
-		read_na_from_packet(parg->source, &rdata->sending_na, "/QKR/SNA");
+		read_sna_from_packet(parg->source, &rdata->sending_na, "/QKR/SNA");
 	return false;
 }
 
@@ -1702,11 +1804,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 {
 	struct ptype_action_args cparg;
 	struct QKA_data rdata;
-	union combo_addr *src_addr = parg->connec ? &parg->connec->remote_host : parg->src_addr;
 	bool ret_val = false, keep_decoding;
-
-	/* packet should be handled,  */
-	logg_packet("QKA from %pI\tC: %s -> \n", src_addr, parg->source->is_compound ? "true" : "false");
 
 	memset(&rdata.cached, 0, offsetof(struct QKA_data, sending_na_valid) - offsetof(struct QKA_data, cached));
 	cparg = *parg;
@@ -1727,6 +1825,14 @@ static bool handle_QKA(struct ptype_action_args *parg)
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec(&cparg, QKA_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+	/* something wrong with the decoding? */
+	if(parg->source->packet_decode != DECODE_FINISHED)
+		return ret_val; /* in that case we can not continue */
+
+	logg_packet("QKA from %pI\tC: %s -> \n",
+		parg->connec ? &parg->connec->remote_host : parg->src_addr,
+		parg->source->is_compound ? "true" : "false");
 
 	return ret_val;
 }
@@ -1769,7 +1875,7 @@ static bool handle_QKA_SNA(struct ptype_action_args *parg)
 		return false;
 
 	rdata->sending_na_valid =
-		read_na_from_packet(parg->source, &rdata->sending_na, "/QKA/SNA");
+		read_sna_from_packet(parg->source, &rdata->sending_na, "/QKA/SNA");
 	return false;
 }
 

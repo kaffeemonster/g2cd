@@ -299,6 +299,19 @@ static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t se
 	return h;
 }
 
+static inline bool combo_addr_eq_s(const union combo_addr *a, const union combo_addr *b)
+{
+	bool ret = a->s_fam == a->s_fam;
+	if(!ret)
+		return ret;
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->s_fam)) {
+		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr;
+	} else {
+		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
+	}
+}
+
 static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
 {
 	bool ret = a->s_fam == a->s_fam;
@@ -346,5 +359,24 @@ static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
 		return 5;
 	}
 }
+
+static inline unsigned combo_addr_lin_s(uint32_t *buf, const union combo_addr *a)
+{
+// TODO: when ipv6 is common, change it
+	if(likely(AF_INET == a->s_fam))
+	{
+		buf[0] = a->in.sin_addr.s_addr;
+		return 1;
+	}
+	else
+	{
+		buf[0] = a->in6.sin6_addr.s6_addr32[0];
+		buf[1] = a->in6.sin6_addr.s6_addr32[1];
+		buf[2] = a->in6.sin6_addr.s6_addr32[2];
+		buf[3] = a->in6.sin6_addr.s6_addr32[3];
+		return 4;
+	}
+}
+
 
 #endif /* COMBO_ADDR_H */
