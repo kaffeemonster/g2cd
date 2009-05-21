@@ -70,6 +70,7 @@
  * Internal Prototypes
  */
 static inline bool g2_packet_steal_data_space(g2_packet_t *, size_t);
+static bool g2_packet_decide_spec_int(struct ptype_action_args *, g2_ptype_action_func const *);
 /* packet handler */
 static bool empty_action_p(struct ptype_action_args *);
 static bool unimpl_action_p(struct ptype_action_args *);
@@ -148,6 +149,7 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 /* PI-childs */
 static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO    ] = empty_action_p,
 	[PT_UDP   ] = handle_PI_UDP,
 	[PT_RELAY ] = handle_PI_RELAY,
 };
@@ -155,6 +157,7 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO] = empty_action_p,
 	[PT_FW] = handle_LNI_FW,
 	[PT_GU] = handle_LNI_GU,
 	[PT_HS] = handle_LNI_HS,
@@ -171,6 +174,7 @@ static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
  */
 static const g2_ptype_action_func KHLR_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO    ] = empty_action_p,
 	[PT_UKHLID] = handle_KHLR_UKHLID,
 	[PT_QK    ] = handle_KHLR_QK,
 };
@@ -178,6 +182,7 @@ static const g2_ptype_action_func KHLR_packet_dict[PT_MAXIMUM] =
 /* KHL-childs */
 static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO] = empty_action_p,
 	[PT_TS] = handle_KHL_TS,
 	[PT_NH] = handle_KHL_NH,
 	[PT_CH] = handle_KHL_CH,
@@ -204,6 +209,7 @@ static const g2_ptype_action_func KHL_CH_packet_dict[PT_MAXIMUM] =
 /* Q2-childs */
 static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO ] = empty_action_p,
 	[PT_UDP] = unimpl_action_p,
 	[PT_URN] = unimpl_action_p,
 	[PT_DN ] = unimpl_action_p,
@@ -215,6 +221,7 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 /* QA-childs */
 static const g2_ptype_action_func QA_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO] = empty_action_p,
 	[PT_TS] = unimpl_action_p,
 	[PT_D ] = unimpl_action_p,
 	[PT_S ] = unimpl_action_p,
@@ -225,6 +232,7 @@ static const g2_ptype_action_func QA_packet_dict[PT_MAXIMUM] =
 /* QH2-childs */
 static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO  ] = empty_action_p,
 	[PT_GU  ] = unimpl_action_p,
 	[PT_NA  ] = unimpl_action_p,
 	[PT_NH  ] = unimpl_action_p,
@@ -240,6 +248,7 @@ static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
 /* QKR-childs */
 static const g2_ptype_action_func QKR_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO ] = empty_action_p,
 	[PT_RNA] = handle_QKR_RNA,
 	[PT_QNA] = handle_QKR_QNA,
 	[PT_SNA] = handle_QKR_SNA,
@@ -249,6 +258,7 @@ static const g2_ptype_action_func QKR_packet_dict[PT_MAXIMUM] =
 /* QKA-childs */
 static const g2_ptype_action_func QKA_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO    ] = empty_action_p,
 	[PT_QK    ] = handle_QKA_QK,
 	[PT_QNA   ] = handle_QKA_QNA,
 	[PT_SNA   ] = handle_QKA_SNA,
@@ -258,6 +268,7 @@ static const g2_ptype_action_func QKA_packet_dict[PT_MAXIMUM] =
 /* CRAWLR-childs */
 static const g2_ptype_action_func CRAWLR_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO   ] = empty_action_p,
 	[PT_REXT ] = unimpl_action_p,
 	[PT_RGPS ] = unimpl_action_p,
 	[PT_RLEAF] = unimpl_action_p,
@@ -267,6 +278,7 @@ static const g2_ptype_action_func CRAWLR_packet_dict[PT_MAXIMUM] =
 /* HAW-childs */
 static const g2_ptype_action_func HAW_packet_dict[PT_MAXIMUM] =
 {
+	[PT_TO] = empty_action_p,
 	[PT_HS] = unimpl_action_p,
 	[PT_NA] = unimpl_action_p,
 	[PT_V ] = unimpl_action_p,
@@ -526,6 +538,58 @@ static inline bool unexpected_child(g2_packet_t *s, const char *name)
 	return false;
 }
 
+static bool g2_packet_has_TO(g2_packet_t *src, uint8_t **guid)
+{
+	char *data;
+
+	/*
+	 * This is a utterly dirty Hack
+	 * we skim the start of the packet buffer for a TO packet,
+	 * without proper decoding.
+	 * This allows us to decide to route on a generic level, without
+	 * going into the details of all packets, and without repeating
+	 * code over and over again.
+	 * Shareaza does the same (maybe with a little more checking
+	 * hidden in C++ fluff).
+	 * Thats also the reason why the TO packet has to be the first
+	 * child packet.
+	 */
+
+	/* child packets? */
+	if(!src->is_compound)
+		return false;
+
+	/* enough space for TO packet + guid? */
+	if(buffer_remaining(src->data_trunk) < 4 + 16)
+		return false;
+
+	/* TO signature? */
+	data = buffer_start(src->data_trunk);
+	if(data[0] != 0x48)
+		return false;
+	if(data[1] != 0x10)
+		return false;
+	if(data[2] != 'T')
+		return false;
+	if(data[3] != 'O')
+		return false;
+
+	*guid = (uint8_t *)&data[4];
+	return true;
+}
+
+static bool g2_packet_needs_routing(g2_packet_t *src, uint8_t **guid)
+{
+	/* do we have a to? */
+	if(!g2_packet_has_TO(src, guid))
+		return false;
+
+	/* is it addressed to us? */
+	if(0 == memcmp(server.settings.our_guid, *guid, 16))
+		return false; /* handle localy */
+
+	return true;
+}
 
 /*
  * Packet handler functions
@@ -582,7 +646,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
-				ret_val |= g2_packet_decide_spec(&cparg, KHLR_packet_dict);
+				ret_val |= g2_packet_decide_spec_int(&cparg, KHLR_packet_dict);
 		} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 		/* punishment for broken packets: no answer */
@@ -766,7 +830,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 			break;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, KHL_packet_dict);
+			ret_val |= g2_packet_decide_spec_int(&cparg, KHL_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
@@ -908,7 +972,7 @@ static bool handle_KHL_NH(struct ptype_action_args *parg)
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
-				ret_val |= g2_packet_decide_spec(&cparg, KHL_NH_packet_dict);
+				ret_val |= g2_packet_decide_spec_int(&cparg, KHL_NH_packet_dict);
 		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 	}
 
@@ -982,7 +1046,7 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
-				ret_val |= g2_packet_decide_spec(&cparg, KHL_CH_packet_dict);
+				ret_val |= g2_packet_decide_spec_int(&cparg, KHL_CH_packet_dict);
 		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 	}
 
@@ -1114,7 +1178,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 			break;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, LNI_packet_dict);
+			ret_val |= g2_packet_decide_spec_int(&cparg, LNI_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	if(!rdata.had_LNI_HS && connec->flags.upeer)
@@ -1334,7 +1398,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
-				ret_val |= g2_packet_decide_spec(&cparg, PI_packet_dict);
+				ret_val |= g2_packet_decide_spec_int(&cparg, PI_packet_dict);
 		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 		if(source->packet_decode != DECODE_FINISHED)
@@ -1440,7 +1504,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 			break;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
-			ret_val |= g2_packet_decide_spec(&cparg, Q2_packet_dict);
+			ret_val |= g2_packet_decide_spec_int(&cparg, Q2_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	return ret_val;
@@ -1669,7 +1733,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 				break;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
-				ret_val |= g2_packet_decide_spec(&cparg, QKR_packet_dict);
+				ret_val |= g2_packet_decide_spec_int(&cparg, QKR_packet_dict);
 		} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 	}
 
@@ -1823,7 +1887,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 			break;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
-			ret_val |= g2_packet_decide_spec(&cparg, QKA_packet_dict);
+			ret_val |= g2_packet_decide_spec_int(&cparg, QKA_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	/* something wrong with the decoding? */
@@ -1906,7 +1970,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 			break;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
-			ret_val |= g2_packet_decide_spec(&cparg, HAW_packet_dict);
+			ret_val |= g2_packet_decide_spec_int(&cparg, HAW_packet_dict);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
@@ -2137,8 +2201,7 @@ must_malloc:
 	return true;
 }
 
-
-bool g2_packet_decide_spec(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)
+static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)
 {
 	g2_packet_t *packs = parg->source;
 	prefetch(&work_type[packs->type]);
@@ -2157,6 +2220,26 @@ bool g2_packet_decide_spec(struct ptype_action_args *parg, g2_ptype_action_func 
 
 	logg_packet("*/%s\tC: %s -> No action\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 	return false;
+}
+
+static bool magic_route(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM, uint8_t *guid GCC_ATTR_UNUSED_PARAM)
+{
+// TODO: route it
+	/*
+	 * INSERT INTO code VALUES (wonder)
+	 */
+	logg_packet("/%s -> wants routing\n", g2_ptype_names[parg->source->type]);
+	return false;
+}
+
+bool g2_packet_decide_spec(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)
+{
+	uint8_t *guid;
+	/* if we are called from external (for a root packet), check for routing */
+	if(g2_packet_needs_routing(parg->source, &guid))
+		return magic_route(parg, guid);
+
+	return g2_packet_decide_spec_int(parg, work_type);
 }
 
 /*inline bool g2_packet_decide(g2_connection_t *connec, struct list_head *target, const g2_p_type_t *work_type)
