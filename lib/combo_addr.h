@@ -294,22 +294,28 @@ static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t se
 	if(likely(addr->s_fam == AF_INET))
 		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, seed);
 	else
-		h = hthash_3words(addr->in6.sin6_addr.s6_addr32[0], addr->in6.sin6_addr.s6_addr32[3],
+		h = hthash_5words(addr->in6.sin6_addr.s6_addr32[0],
+		                  addr->in6.sin6_addr.s6_addr32[1],
+		                  addr->in6.sin6_addr.s6_addr32[2],
+		                  addr->in6.sin6_addr.s6_addr32[3],
 		                  addr->in6.sin6_port, seed);
 	return h;
 }
 
-static inline bool combo_addr_eq_s(const union combo_addr *a, const union combo_addr *b)
+static inline uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
 {
-	bool ret = a->s_fam == a->s_fam;
-	if(!ret)
-		return ret;
+	uint32_t h;
+
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->s_fam)) {
-		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr;
-	} else {
-		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
-	}
+	if(likely(addr->s_fam == AF_INET))
+		h = hthash_1words(addr->in.sin_addr.s_addr, seed);
+	else
+		h = hthash_4words(addr->in6.sin6_addr.s6_addr32[0],
+		                  addr->in6.sin6_addr.s6_addr32[1],
+		                  addr->in6.sin6_addr.s6_addr32[2],
+		                  addr->in6.sin6_addr.s6_addr32[3],
+		                  seed);
+	return h;
 }
 
 static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
@@ -360,7 +366,7 @@ static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
 	}
 }
 
-static inline unsigned combo_addr_lin_s(uint32_t *buf, const union combo_addr *a)
+static inline unsigned combo_addr_lin_ip(uint32_t *buf, const union combo_addr *a)
 {
 // TODO: when ipv6 is common, change it
 	if(likely(AF_INET == a->s_fam))

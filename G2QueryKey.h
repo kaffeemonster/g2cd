@@ -40,6 +40,7 @@ _G2QUERYKEY_EXTRN(void g2_qk_tick(void));
 _G2QUERYKEY_EXTRN(uint32_t g2_qk_generate(const union combo_addr *source));
 _G2QUERYKEY_EXTRN(bool g2_qk_check(const union combo_addr *source, uint32_t key));
 _G2QUERYKEY_EXTRN(bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr));
+_G2QUERYKEY_EXTRN(void g2_qk_add(uint32_t qk, const union combo_addr *addr));
 
 #endif
 /* EOF */

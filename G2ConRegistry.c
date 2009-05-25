@@ -296,7 +296,7 @@ static void g2_conreg_init(void)
 	if(!(raw_bucket_storage && raw_chain_storage))
 		diedie("allocating connection registry bucket mem");
 
-	logg_develd("Buckets: %zu\tChains: %zu\n", count_b, count_c);
+	logg_develd_old("Buckets: %zu\tChains: %zu\n", count_b, count_c);
 	tc = raw_chain_storage;
 	init_alloc_bucket(&ht_root, raw_bucket_storage, &tc, 0);
 	ht_seed = (uint32_t) time(NULL);
@@ -350,7 +350,7 @@ static void g2_conreg_deinit(void)
 static struct g2_ht_chain *g2_conreg_find_chain(union combo_addr *addr)
 {
 	struct g2_ht_bucket *b = &ht_root;
-	uint32_t h = combo_addr_hash(addr, ht_seed);
+	uint32_t h = combo_addr_hash_ip(addr, ht_seed);
 	unsigned i = 0;
 
 	for(; i < (LEVEL_COUNT-1); i++, h >>= LEVEL_SHIFT)
@@ -361,7 +361,7 @@ static struct g2_ht_chain *g2_conreg_find_chain(union combo_addr *addr)
 static struct g2_ht_chain *g2_conreg_find_chain_and_mark_dirty(union combo_addr *addr)
 {
 	struct g2_ht_bucket *b = &ht_root;
-	uint32_t h = combo_addr_hash(addr, ht_seed);
+	uint32_t h = combo_addr_hash_ip(addr, ht_seed);
 	unsigned i = 0;
 
 	for(b->dirty = true; i < (LEVEL_COUNT-1); i++, h >>= LEVEL_SHIFT, b->dirty = true)
@@ -416,6 +416,7 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
+// TODO: we need a clever way to lock the retval
 g2_connection_t *g2_conreg_search_addr(union combo_addr *addr)
 {
 	struct g2_ht_chain *c;

@@ -1831,8 +1831,9 @@ out_fail:
 			return ret_val;
 
 		req_addr = !rdata.requesting_na_valid ? parg->src_addr : &rdata.requesting_na;
+// TODO: check for our own IP
 		if(rdata.sending_na_valid &&
-		   !combo_addr_eq_s(req_addr, &rdata.sending_na))
+		   !combo_addr_eq_ip(req_addr, &rdata.sending_na))
 		{
 			g2_packet_init_on_stack(&sna);
 			link_sna_to_packet(&sna, &rdata.sending_na);
@@ -1917,6 +1918,13 @@ static bool handle_QKA(struct ptype_action_args *parg)
 	struct QKA_data rdata;
 	bool ret_val = false, keep_decoding;
 
+// TODO: punish sender for sending bullshit?
+	if(!parg->source->is_compound)
+		return ret_val;
+
+	if(parg->connec && !parg->connec->flags.upeer)
+		return ret_val;
+
 	memset(&rdata.cached, 0, offsetof(struct QKA_data, sending_na_valid) - offsetof(struct QKA_data, cached));
 	cparg = *parg;
 	cparg.opaque = &rdata;
@@ -1941,9 +1949,35 @@ static bool handle_QKA(struct ptype_action_args *parg)
 	if(parg->source->packet_decode != DECODE_FINISHED)
 		return ret_val; /* in that case we can not continue */
 
-	logg_packet("QKA from %pI\tC: %s -> \n",
+// TODO: punish sender for sending bullshit?
+	if(!rdata.query_key_valid)
+		return ret_val;
+
+	logg_packet("QKA from %pI for %pI\tkey: %#x\n",
 		parg->connec ? &parg->connec->remote_host : parg->src_addr,
-		parg->source->is_compound ? "true" : "false");
+		rdata.queried_na_valid ? &rdata.queried_na :
+			parg->connec ? &parg->connec->remote_host : parg->src_addr,
+		rdata.query_key);
+
+// TODO: check for our own IP
+	if(parg->connec) {
+		if(rdata.queried_na_valid)
+			g2_qk_add(rdata.query_key, &rdata.queried_na);
+	}
+	else
+	{
+		g2_connection_t *remote_con;
+		g2_qk_add(rdata.query_key, parg->src_addr);
+
+		if(!rdata.sending_na_valid)
+			return ret_val;
+
+		remote_con = g2_conreg_search_ip(&rdata.sending_na);
+		if(!remote_con)
+			return ret_val;
+
+// TODO: forward qka
+	}
 
 	return ret_val;
 }

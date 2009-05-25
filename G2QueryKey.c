@@ -205,8 +205,8 @@ static uint32_t addr_hash_generate(const union combo_addr *source, unsigned salt
 	uint32_t h, s1, s2, w[4]; // 8
 	unsigned len = 0;
 
-	len += combo_addr_lin_s(&w[len], source);
-//	len += combo_addr_lin_s(&w[len], host);
+	len += combo_addr_lin_ip(&w[len], source);
+//	len += combo_addr_lin_ip(&w[len], host);
 
 	s1 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][0];
 	s2 = g2_qk_s.salts[salt2use][TIME_SLOT_ELEM][1];
@@ -243,6 +243,10 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
 {
 	return false;
+}
+
+void g2_qk_add(uint32_t qk, const union combo_addr *addr)
+{
 }
 
 /*@unused@*/
