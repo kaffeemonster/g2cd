@@ -1183,9 +1183,8 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr, uin
 	return NULL;
 }
 
-static void cache_ht_add(struct khl_cache_entry *e)
+static void cache_ht_add(struct khl_cache_entry *e, uint32_t h)
 {
-	uint32_t h = combo_addr_hash(&e->e.na, cache.ht_seed);
 	hlist_add_head(&e->node, &cache.ht[h & KHL_CACHE_HTMASK]);
 }
 
@@ -1245,8 +1244,37 @@ static inline int rbnode_cache_lt(struct khl_cache_entry *a, struct khl_cache_en
 
 static inline void rbnode_cache_cp(struct khl_cache_entry *dest, struct khl_cache_entry *src)
 {
-	memcpy(&dest->used, &src->used,
-	       sizeof(struct khl_cache_entry) - offsetof(struct khl_cache_entry, used));
+	/*
+	 * The whole trick here is:
+	 * source is the physical entry which gets removed from the rb-tree,
+	 * but still it may not be the logical entry which should get removed,
+	 * so maybe the data from source have to be copied to dest.
+	 * So we either have to remove src from the Hashtable, or
+	 * we have to remove src & dest, move the data from src to dest,
+	 * and finally reinsert dest into the hashtable.
+	 */
+	if(dest != src)
+	{
+/*		struct hlist_node *prev = (struct hlist_node *)src->node.pprev; */
+
+		__hlist_del(&src->node);
+		INIT_HLIST_NODE(&src->node);
+		__hlist_del(&dest->node);
+		memcpy(&dest->used, &src->used,
+		       sizeof(struct khl_cache_entry) - offsetof(struct khl_cache_entry, used));
+		/* reinsert dest, src is now "removed" */
+/*		hlist_add_after(prev, &dest->node);*/
+// TODO: fix reinsertion
+		/*
+		 * we can not cheaply reinsert dest, somehow we are fucking
+		 * up the hashtable (or more precise: the linked list).
+		 * So pay CPU-cycles for our stupidness: cleanly reinsert
+		 * from the start
+		 */
+		cache_ht_add(dest, cache_ht_hash(&dest->e.na));
+	}
+	else
+		cache_ht_del(src);
 }
 
 RBTREE_MAKE_FUNCS(cache, struct khl_cache_entry, rb);
@@ -1265,6 +1293,12 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 
 	h = cache_ht_hash(addr);
 
+	/*
+	 * Prevent the compiler from moving the calcs into
+	 * the critical section
+	 */
+	barrier();
+
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;
 
@@ -1275,48 +1309,50 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
-		if(!(e = rbtree_cache_remove(&cache.tree, e))) {
+		t = rbtree_cache_remove(&cache.tree, e);
+		if(t)
+			e = t;
+		else {
 			logg_devel("remove failed\n");
 			goto life_tree_error; /* something went wrong... */
-// TODO: Autschn! NULL deref...
 		}
-		e->e.when = when;
+		/*
+		 * The (physical) entry removed is maybe not the
+		 * one we asked for, it is just an entry. We have to
+		 * reinit it to reinsert it.
+		 */
 // TODO: cluster state changes??
-		if(!rbtree_cache_insert(&cache.tree, e)) {
-			logg_devel("insert failed\n");
-			goto life_tree_error;
-		}
-		goto out_unlock;
-life_tree_error:
-		cache_ht_del(e);
-		khl_cache_entry_free(e);
-		goto out_unlock;
-	}
-
-	t = rbtree_cache_lowest(&cache.tree);
-	if(likely(t) && t->e.when < when && KHL_CACHE_SIZE <= cache.num)
-	{
-		logg_devel_old("found older entry\n");
-		if(!(t = rbtree_cache_remove(&cache.tree, t)))
-			goto out_unlock; /* the tree is amiss? */
-		cache_ht_del(t);
-		e = t;
+		e->cluster = cluster;
 	}
 	else
-		e = khl_cache_entry_alloc();
-	if(!e)
-		goto out_unlock;
+	{
+		t = rbtree_cache_lowest(&cache.tree);
+		if(likely(t) &&
+		   t->e.when < when &&
+		   KHL_CACHE_SIZE <= cache.num)
+		{
+			logg_devel_old("found older entry\n");
+			if(!(t = rbtree_cache_remove(&cache.tree, t)))
+				goto out_unlock; /* the tree is amiss? */
+			e = t;
+		}
+		else
+			e = khl_cache_entry_alloc();
+		if(!e)
+			goto out_unlock;
 
+		e->cluster = cluster;
+	}
 	e->e.na = *addr;
 	e->e.when = when;
-	e->cluster = cluster;
 
 	if(!rbtree_cache_insert(&cache.tree, e)) {
+		logg_devel("insert failed\n");
+life_tree_error:
 		khl_cache_entry_free(e);
-		goto out_unlock;
 	}
-// TODO: can we reuse the hash calculated above?
-	cache_ht_add(e);
+	else
+		cache_ht_add(e, h);
 
 out_unlock:
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))

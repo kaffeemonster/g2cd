@@ -106,6 +106,7 @@ static bool handle_QKA_SNA(struct ptype_action_args *);
 static bool handle_QKA_QNA(struct ptype_action_args *);
 static bool handle_QKA_CACHED(struct ptype_action_args *);
 static bool handle_HAW(struct ptype_action_args *);
+static bool handle_HAW_NA(struct ptype_action_args *);
 static bool handle_UPROC(struct ptype_action_args *);
 static bool handle_UPROD(struct ptype_action_args *);
 static bool handle_G2CDC(struct ptype_action_args *);
@@ -279,9 +280,9 @@ static const g2_ptype_action_func CRAWLR_packet_dict[PT_MAXIMUM] =
 static const g2_ptype_action_func HAW_packet_dict[PT_MAXIMUM] =
 {
 	[PT_TO] = empty_action_p,
-	[PT_HS] = unimpl_action_p,
-	[PT_NA] = unimpl_action_p,
-	[PT_V ] = unimpl_action_p,
+	[PT_HS] = empty_action_p, /* not interresting */
+	[PT_NA] = handle_HAW_NA,
+	[PT_V ] = empty_action_p, /* not interresting */
 };
 
 #define ENUM_CMD(x, y) str_it(x)
@@ -981,7 +982,7 @@ static bool handle_KHL_NH(struct ptype_action_args *parg)
 	if(source->packet_decode == DECODE_FINISHED &&
 	   read_na_from_packet(source, &addr, "/KHL/NH")) {
 		if(rdata.guid)
-			g2_guid_add(rdata.guid, &addr, local_time_now);
+			g2_guid_add(rdata.guid, &addr, local_time_now, GT_KHL_NEIGHBOUR);
 		g2_khl_add(&addr, local_time_now, parg->connec->flags.upeer);
 		/* only the NH of our connected hubs are in our cluster */
 	}
@@ -1026,7 +1027,8 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	bool ret_val = false;
 
 	rdata.guid = NULL;
-	if(source->is_compound)
+	/* revalute unlikely with real network connection */
+	if(unlikely(source->is_compound))
 	{
 		struct ptype_action_args cparg;
 		bool keep_decoding;
@@ -1125,7 +1127,7 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	combo_addr_set_port(&addr, tmp_port);
 	g2_khl_add(&addr, when, false);
 	if(rdata.guid)
-		g2_guid_add(rdata.guid, &addr, when);
+		g2_guid_add(rdata.guid, &addr, when, GT_KHL);
 out:
 	return ret_val;
 }
@@ -1198,7 +1200,8 @@ static bool handle_LNI(struct ptype_action_args *parg)
 // TODO: update less often?
 	/* conreg and guid update only in timeout intervals? */
 	if(rdata.had_LNI_GU)
-		g2_guid_add(connec->guid, &connec->remote_host, local_time_now);
+		g2_guid_add(connec->guid, &connec->remote_host, local_time_now,
+		            connec->flags.upeer ? GT_NEIGHBOUR : GT_LEAF);
 		/* using remote_host because we registered it with this in the registry */
 
 	/* time to send a packet again? */
@@ -1950,13 +1953,26 @@ static bool handle_QKA_CACHED(struct ptype_action_args *parg)
 	return false;
 }
 
+struct HAW_data
+{
+	union combo_addr na;
+	bool na_valid;
+};
+
 static bool handle_HAW(struct ptype_action_args *parg)
 {
+	struct HAW_data rdata;
 	struct ptype_action_args cparg;
 	g2_packet_t *source = parg->source;
+	uint8_t *ttl, *hops, *guid;
 	bool ret_val = false, keep_decoding;
 
+	if(!source->is_compound)
+		return ret_val;
+
+	rdata.na_valid = false;
 	cparg = *parg;
+	cparg.opaque = &rdata;
 	do
 	{
 		g2_packet_t child_p;
@@ -1967,29 +1983,64 @@ static bool handle_HAW(struct ptype_action_args *parg)
 		if(!keep_decoding) {
 			logg_packet(STDLF, "HAW", "broken child");
 			parg->connec->flags.dismissed = true;
-			break;
+			return ret_val;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
 			ret_val |= g2_packet_decide_spec_int(&cparg, HAW_packet_dict);
 //		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
-	if(18 <= buffer_remaining(source->data_trunk))
-	{
-		uint8_t ttl, hops, guid[16];
+	if(!rdata.na_valid)
+		return ret_val;
 
-		ttl  = *buffer_start(source->data_trunk);
-		hops = *(buffer_start(source->data_trunk) + 1);
-		memcpy(guid, buffer_start(source->data_trunk) + 2, sizeof(guid));
-
-		logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", ttl, hops, guid);
-		source->data_trunk.pos += 18;
-// TODO: fill in routing/known guids cache
-	}
-	else
+	if(18 < buffer_remaining(source->data_trunk)) {
 		logg_packet(STDLF, "HAW", "no ttl, hops, guid?");
+		return ret_val;
+	}
+
+	ttl  = (uint8_t *)buffer_start(source->data_trunk);
+	hops = (uint8_t *)(buffer_start(source->data_trunk) + 1);
+	guid = (uint8_t *)buffer_start(source->data_trunk) + 2;
+// TODO: check ttl/hops for validity
+
+// TODO: check if neigbour
+	g2_khl_add(&rdata.na, local_time_now, false);
+
+	/*
+	 * sh** f***ing guids...
+	 * HAWs have their own guid, not to confuse with all the
+	 * others, to identify THIS HAW (???). It's not the guid
+	 * of the node sending a HAW.
+	 * Save it, for whatever purpose...
+	 */
+	g2_guid_add(guid, &rdata.na, local_time_now, GT_HAW);
+
+	logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", *ttl, *hops, guid);
+	if(*ttl > 0 && *hops < 255)
+	{
+		*ttl  -= 1;
+		*hops += 1;
+
+// TODO: grep a random neighbouring hub, forward
+	/*
+	 * receiver is not the owner of the guid, foward packet
+	 * literatly (we already altered the ttl/hops), needs code
+	 */
+	}
 
 	return ret_val;
+}
+
+static bool handle_HAW_NA(struct ptype_action_args *parg)
+{
+	struct HAW_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/HAW/NA")))
+		return false;
+
+	rdata->na_valid =
+		read_na_from_packet(parg->source, &rdata->na, "/HAW/NA");
+	return false;
 }
 
 static bool handle_UPROC(struct ptype_action_args *parg)
@@ -2213,7 +2264,8 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 	if(work_type[packs->type])
 	{
 		prefetch(*work_type[packs->type]);
-		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]))
+		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]) &&
+			PT_CH != packs->type)
 			logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 		return work_type[packs->type](parg);
 	}

@@ -162,7 +162,7 @@ bool g2_guid_init(void)
 		struct guid_entry *e = (void *) buff;
 		name_len = fread(e, sizeof(*e), 1, guid_dump);
 		if(name_len)
-			g2_guid_add(e->guid, &e->na, e->when);
+			g2_guid_add(e->guid, &e->na, e->when, e->type);
 	} while(name_len);
 
 out:
@@ -261,17 +261,16 @@ static void guid_cache_entry_free(struct guid_cache_entry *e)
 	cache.num--;
 }
 
-static uint32_t cache_ht_hash(const uint8_t guid[GUID_SIZE])
+// TODO: put type within hashtable?
+static uint32_t cache_ht_hash(const union guid_fast *g)
 {
-	const union guid_fast *g = (const union guid_fast *)guid;
 	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], cache.ht_seed);
 }
 
-static struct guid_cache_entry *cache_ht_lookup(const uint8_t guid[GUID_SIZE], uint32_t h)
+static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, uint32_t h)
 {
 	struct hlist_node *n;
 	struct guid_cache_entry *e;
-	const union guid_fast *g = (const union guid_fast *)guid;
 
 	hlist_for_each_entry(e, n, &cache.ht[h & GUID_CACHE_HTMASK], node)
 	{
@@ -291,9 +290,8 @@ static struct guid_cache_entry *cache_ht_lookup(const uint8_t guid[GUID_SIZE], u
 	return NULL;
 }
 
-static void cache_ht_add(struct guid_cache_entry *e)
+static void cache_ht_add(struct guid_cache_entry *e, uint32_t h)
 {
-	uint32_t h = cache_ht_hash(e->e.guid);
 	hlist_add_head(&e->node, &cache.ht[h & GUID_CACHE_HTMASK]);
 }
 
@@ -306,19 +304,27 @@ static inline int rbnode_cache_eq(struct guid_cache_entry *a, struct guid_cache_
 {
 	union guid_fast *ga = (union guid_fast *)a->e.guid;
 	union guid_fast *gb = (union guid_fast *)b->e.guid;
-	return ga->d[0]   == gb->d[0] && ga->d[1]   == gb->d[1] &&
-	       ga->d[2]   == gb->d[2] && ga->d[3]   == gb->d[3] &&
-	        a->e.when ==  b->e.when;
+	return ga->d[0]   == gb->d[0]   && ga->d[1]   == gb->d[1] &&
+	       ga->d[2]   == gb->d[2]   && ga->d[3]   == gb->d[3] &&
+	        a->e.type ==  b->e.type &&  a->e.when ==  b->e.when;
 }
 
 static inline int rbnode_cache_lt(struct guid_cache_entry *a, struct guid_cache_entry *b)
 {
 	union guid_fast *ga, *gb;
-	/* we want to torder by age foremost */
+
+	/* we want to order by age  foremost*/
 	int ret = a->e.when < b->e.when;
 	if(ret)
 		return ret;
 	ret = a->e.when > b->e.when;
+	if(ret)
+		return !ret;
+
+	ret = a->e.type > b->e.type;
+	if(ret)
+		return ret;
+	ret = a->e.type < b->e.type;
 	if(ret)
 		return !ret;
 
@@ -387,22 +393,68 @@ static inline int rbnode_cache_lt(struct guid_cache_entry *a, struct guid_cache_
 
 static inline void rbnode_cache_cp(struct guid_cache_entry *dest, struct guid_cache_entry *src)
 {
-	memcpy(&dest->used, &src->used,
-	       sizeof(struct guid_cache_entry) - offsetof(struct guid_cache_entry, used));
+	/*
+	 * The whole trick here is:
+	 * source is the physical entry which gets removed from the rb-tree,
+	 * but still it may not be the logical entry which should get removed,
+	 * so maybe the data from source has to be copied to dest.
+	 * So we either have to remove src from the Hashtable, or
+	 * we have to remove src & dest, move the data from src to dest,
+	 * and finally reinsert dest into the hashtable.
+	 */
+	if(dest != src)
+	{
+/*		struct hlist_node *prev = (struct hlist_node *)src->node.pprev;*/
+
+		__hlist_del(&src->node);
+		INIT_HLIST_NODE(&src->node);
+		__hlist_del(&dest->node);
+		memcpy(&dest->used, &src->used,
+		       sizeof(struct guid_cache_entry) - offsetof(struct guid_cache_entry, used));
+		/* reinsert dest, src is now "removed" */
+/*		hlist_add_after(prev, &dest->node);*/
+// TODO: fix reinsertion
+		/*
+		 * we can not cheaply reinsert dest, somehow we are fucking
+		 * up the hashtable (or more precise: the linked list).
+		 * So pay CPU-cycles for our stupidness: cleanly reinsert
+		 * from the start
+		 */
+		cache_ht_add(dest, cache_ht_hash((union guid_fast *)dest->e.guid));
+	}
+	else
+		cache_ht_del(src);
 }
 
 RBTREE_MAKE_FUNCS(cache, struct guid_cache_entry, rb);
 
-void g2_guid_add(const uint8_t guid[GUID_SIZE], const union combo_addr *addr, time_t when)
+void g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, time_t when, enum guid_type gt)
 {
 	struct guid_cache_entry *e, *t;
 	uint32_t h;
+#ifndef UNALIGNED_OK
+	union guid_fast guid_t;
+	const union guid_fast *guid = &guid_t;
+	memcpy(&guid_t, guid_a, GUID_SIZE);
+#else
+	const union guid_fast *guid = (const union guid_fast *)guid_a;
+#endif
 
-	/* check for own guid?? */
+	/* check for bogus addresses */
+	if(unlikely(!combo_addr_is_public(addr))) {
+		logg_develd("addr %pI is privat, not added\n", addr);
+		return;
+	}
+//TODO: check for own guid
 	logg_develd("adding: %p#G -> %p#I, %u\n", guid, addr, (unsigned)when);
 
 	h = cache_ht_hash(guid);
-	/* sh** f****** compiler moves the hash calc into the critical section... */
+
+	/*
+	 * Prevent the compiler from moving the calcs
+	 * into the critical section
+	 */
+	barrier();
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return;
@@ -414,48 +466,52 @@ void g2_guid_add(const uint8_t guid[GUID_SIZE], const union combo_addr *addr, ti
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
-		if(!(e = rbtree_cache_remove(&cache.tree, e))) {
+		t = rbtree_cache_remove(&cache.tree, e);
+		if(t)
+			e = t;
+		else {
 			logg_devel("remove failed\n");
 			goto life_tree_error; /* something went wrong... */
-// TODO: Autschn! NULL deref...
 		}
-		e->e.when = when;
-		e->e.na = *addr;
-		if(!rbtree_cache_insert(&cache.tree, e)) {
-			logg_devel("insert failed\n");
-			goto life_tree_error;
-		}
-		goto out_unlock;
-life_tree_error:
-		cache_ht_del(e);
-		guid_cache_entry_free(e);
-		goto out_unlock;
-	}
-
-	t = rbtree_cache_lowest(&cache.tree);
-	if(likely(t) && t->e.when < when && GUID_CACHE_SIZE <= cache.num)
-	{
-		logg_devel_old("found older entry\n");
-		if(!(t = rbtree_cache_remove(&cache.tree, t)))
-			goto out_unlock; /* the tree is amiss? */
-		cache_ht_del(t);
-		e = t;
+		/*
+		 * The (physical) entry removed is maybe not the
+		 * one we asked for, it is just an entry. We have to
+		 * reinit it to reinsert it.
+		 */
+// TODO: what to do on type change?
+		e->e.type = gt;
 	}
 	else
-		e = guid_cache_entry_alloc();
-	if(!e)
-		goto out_unlock;
+	{
+		t = rbtree_cache_lowest(&cache.tree);
+		if(likely(t) &&
+		   t->e.when < when &&
+		   t->e.type > gt &&
+		   GUID_CACHE_SIZE <= cache.num)
+		{
+			logg_devel_old("found older entry\n");
+			if(!(t = rbtree_cache_remove(&cache.tree, t)))
+				goto out_unlock; /* the tree is amiss? */
+			e = t;
+		}
+		else
+			e = guid_cache_entry_alloc();
+		if(!e)
+			goto out_unlock;
 
+		e->e.type = gt;
+	}
 	memcpy(e->e.guid, guid, sizeof(e->e.guid));
 	e->e.na = *addr;
 	e->e.when = when;
 
 	if(!rbtree_cache_insert(&cache.tree, e)) {
+		logg_devel("insert failed\n");
+life_tree_error:
 		guid_cache_entry_free(e);
-		goto out_unlock;
 	}
-// TODO: can we reuse the hash calculated above?
-	cache_ht_add(e);
+	else
+		cache_ht_add(e, h);
 
 out_unlock:
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))

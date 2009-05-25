@@ -38,15 +38,34 @@
 
 # define GUID_SIZE 16
 
+/*
+ * this enum is sorted by "importance" of
+ * the guid, lower is more important.
+ * Not so important guids will get kicked
+ * earlier when the space is needed.
+ */
+enum guid_type
+{
+	GT_NEIGHBOUR,
+	GT_LEAF,
+	GT_KHL_NEIGHBOUR,
+	GT_KHL,
+	GT_PEER,
+	GT_SEARCH,
+	GT_HAW,
+	GT_UNKNOWN,
+} GCC_ATTR_PACKED;
+
 /* increment version on change */
 struct guid_entry
 {
 	union combo_addr na;
 	time_t when;
 	uint8_t guid[GUID_SIZE];
+	enum guid_type type;
 };
 
-_G2GUIDC_EXTRN(void g2_guid_add(const uint8_t [GUID_SIZE], const union combo_addr *, time_t));
+_G2GUIDC_EXTRN(void g2_guid_add(const uint8_t [GUID_SIZE], const union combo_addr *, time_t, enum guid_type));
 _G2GUIDC_EXTRN(bool g2_guid_init(void));
 _G2GUIDC_EXTRN(void g2_guid_end(void));
 
