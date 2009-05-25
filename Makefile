@@ -161,7 +161,7 @@ CFLAGS += $(ARCH_FLAGS)
 #
 # stuff it here, were -save-temps is
 #	this hopefully makes compilation faster, gcc-specific?
-#CFLAGS += -pipe
+CFLAGS += -pipe
 #CFLAGS += -save-temps
 CFLAGS += -g3 # -pg
 #	sun studio
@@ -217,7 +217,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -O1 -foptimize-sibling-calls
+#OPT_FLAGS = -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the

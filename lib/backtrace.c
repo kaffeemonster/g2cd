@@ -267,6 +267,18 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 			isl = "Unknown SIGFPE problem"; break;
 		}
 		break;
+	case SIGTRAP:
+		osl = "SIGTRAP -> Boom!\nBan land mines.";
+		switch(si->si_code)
+		{
+		case TRAP_BRKPT:
+			isl = "Breakpoint"; break;
+		case TRAP_TRACE:
+			isl = "trace trap"; break;
+		default:
+			isl = "Unknown SIGTRAP cause"; break;
+		}
+		break;
 	default:
 		pthread_mutex_unlock(&bt_mutex);
 		return;
@@ -445,6 +457,8 @@ out:
 			exit(EXIT_FAILURE);
 		if(sigaction(SIGFPE, &sas, NULL))
 			exit(EXIT_FAILURE);
+		if(sigaction(SIGTRAP, &sas, NULL))
+			exit(EXIT_FAILURE);
 	}
 }
 
@@ -463,5 +477,7 @@ void backtrace_init(void)
 		logg_pos(LOGF_NOTICE, "Unable to register SIGBUS-handler\n");
 	if(sigaction(SIGFPE, &sas, NULL))
 		logg_pos(LOGF_NOTICE, "Unable to register SIGFPE-handler\n");
+	if(sigaction(SIGTRAP, &sas, NULL))
+		logg_pos(LOGF_NOTICE, "Unable to register SIGTRAP-handler\n");
 }
 #endif

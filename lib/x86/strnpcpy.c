@@ -95,7 +95,7 @@ static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 			"jnz	1f\n\t" \
 			"movq	%%mm1, %3\n" \
 			"1:\n" \
-		: /* %0 */ "=r" (rsse), \
+		: /* %0 */ "=&r" (rsse), \
 		  /* %1 */ "=m" (*dst) \
 		: /* %2 */ "m" (*src), \
 		  /* %3 */ "m" (*dst) \

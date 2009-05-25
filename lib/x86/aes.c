@@ -97,17 +97,35 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #define PL_K128 (0 << 10)
 #define PL_K192 (1 << 10)
 #define PL_K256 (2 << 10)
-static void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+/*
+ * gcc has a hard time to digest this inline asm.
+ * If no optimization is in effect (like for debuging),
+ * it is not capable of assigning registers.
+ * The compiler has eax ebp esp, but still:
+ * "Wuah! No more reg in class GENERAL REG"
+ *
+ * -O1 is enough to fix this, but unfortunatly maybe
+ * makes debugging already impossible because to much
+ * is removed (internal symbols & small funcs vanish,
+ * which would be OK, but you can not see the args
+ * anymore).
+ *
+ * And as always, you can not fold this back to a single/
+ * set of gcc option which fixes this (-foo-bla-blub)
+ * because -O1 enables more than what is selectable with
+ * command line switches (basic code analysis steps).
+ *
+ * GCC 4.4 and up has a attribute to override optimization
+ * levels on a function by function basis, but its fresh,
+ * at least for some time...
+ */
+static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	static const uint32_t control_word[4] GCC_ATTR_ALIGNED(16) =
 		{PL_R128 | PL_KEYGN | PL_K128, 0, 0, 0};
+#if _GNUC_PREREQ (4,4) || defined(__OPTIMIZE__)
 	size_t c, S, D;
 
-	/*
-	 * Does not compile with -O0
-	 * The compiler has eax ebp esp, but still:
-	 * "Wuah! No more reg in class GENERAL REG"
-	 */
 	asm(
 #if defined(__i386__) && defined(__PIC__)
 		"xchg	%5, %%ebx\n\t"
@@ -131,6 +149,38 @@ static void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *ctx, void *out
 		  /* %8 */ "1" (out),
 		  /* %9 */ "m" (*(const char *)in)
 	);
+#else
+	const void *ptr = ctx->k;
+	/*
+	 * we simply assume 32 bit for this fallback, which will
+	 * break on 64 bit. Hopefully debugging 64 bit Centauers
+	 * are rare...
+	 */
+	asm(
+		"push	%%esi\n\t"
+		"push	%%edi\n\t"
+		"push	%%ecx\n\t"
+		"push	%%edx\n\t"
+		"push	%%ebx\n\t"
+		"mov	%3, %%esi\n\t"
+		"mov	%4, %%edi\n\t"
+		"mov	%1, %%edx\n\t"
+		"mov	%2, %%ebx\n\t"
+		"mov	$1, %%ecx\n\t"
+		"rep xcryptecb\n\t"
+		"pop	%%ebx\n\t"
+		"pop	%%edx\n\t"
+		"pop	%%ecx\n\t"
+		"pop	%%edi\n\t"
+		"pop	%%esi\n\t"
+		: /* %0 */ "=m" (*(char *)out)
+		: /* %1 */ "m" (*control_word),
+		  /* %2 */ "m" (ptr),
+		  /* %3 */ "m" (in),
+		  /* %4 */ "m" (out),
+		  /* %5 */ "m" (*(const char *)in)
+	);
+#endif
 }
 
 static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)

@@ -318,17 +318,13 @@ static inline int IS_RED(struct rbnode *node)
 #define RBTREE_MAKE_FUNCS(fname, type, member) \
 static inline int rbtree_##fname##_insert(struct rbtree *tree, type *data) \
 { \
-	int ret_val = 0; \
 	if(!tree) \
 		return 0; \
 	if(!data) \
 		return 0; \
 	rbnode_init(&data->member); \
-	if(!tree->root) \
-	{ /* empty tree */ \
+	if(!tree->root) /* empty tree */ \
 		tree->root = &data->member; \
-		ret_val = 1; \
-	} \
 	else \
 	{ \
 		struct rbnode head = {{NULL, NULL}, RB_BLACK}; /* fake tree root */ \
@@ -341,10 +337,9 @@ static inline int rbtree_##fname##_insert(struct rbtree *tree, type *data) \
 		q = t->child[RB_RIGHT] = tree->root; \
 		while(1) \
 		{ /* Search down the tree */ \
-			if(!q) { /* Insert new node at the bottom */ \
+			if(!q) /* Insert new node at the bottom */ \
 				p->child[dir] = q = &data->member; \
-				ret_val = 1; \
-			} else if(IS_RED(q->child[RB_LEFT]) && \
+			else if(IS_RED(q->child[RB_LEFT]) && \
 			        IS_RED(q->child[RB_RIGHT])) \
 			{ /* Color flip */ \
 				q->color = RB_RED; \
@@ -358,12 +353,11 @@ static inline int rbtree_##fname##_insert(struct rbtree *tree, type *data) \
 				if(q == p->child[last]) { \
 					t->child[dir2] = rbnode_rsingle(g, !last); \
 					print_tree_dot(mtree.root); \
-				} else { \
+				} else \
 				   t->child[dir2] = rbnode_rdouble(g, !last); \
-				} \
 			} \
 			d = container_of(q, type, member); \
-			if(rbnode_##fname##_eq(d, data)) /* stop if found */ \
+			if(d == data || rbnode_##fname##_eq(d, data)) /* stop if found */ \
 				break; \
 			last = dir; \
 			dir = rbnode_##fname##_lt(d, data); \
@@ -376,7 +370,7 @@ static inline int rbtree_##fname##_insert(struct rbtree *tree, type *data) \
 		tree->root = head.child[RB_RIGHT]; 	/* Update root */ \
 	} \
 	tree->root->color = RB_BLACK; /* Make root black */ \
-	return ret_val; \
+	return 1; \
 } \
 static inline type *rbtree_##fname##_remove(struct rbtree *tree, type *data) \
 { \
@@ -402,7 +396,7 @@ static inline type *rbtree_##fname##_remove(struct rbtree *tree, type *data) \
 			q = q->child[dir]; \
 			d = container_of(q, type, member); \
 			dir = rbnode_##fname##_lt(d, data); \
-			if(rbnode_##fname##_eq(d, data)) /* Save found node */ \
+			if(d == data || rbnode_##fname##_eq(d, data)) /* Save found node */ \
 				f = q; \
 			if(!IS_RED(q) && !IS_RED(q->child[dir])) /* Push the red node down */ \
 			{ \

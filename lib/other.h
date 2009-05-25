@@ -84,6 +84,12 @@
 # define GCC_ATTR_USED_VAR
 #endif /* _GNUC_PREREQ (3,3) */
 
+#if _GNUC_PREREQ (4,4)
+# define GCC_ATTR_OPTIMIZE(x) GCC_ATTRIB(__optimize__ (x))
+#else
+# define GCC_ATTR_OPTIMIZE(x)
+#endif /* _GNUC_PREREQ (3,3) */
+
 #if _GNUC_PREREQ (3,1)
 # define GCC_ATTRIB_UNUSED GCC_ATTRIB(__unused__)
 #else
