@@ -240,6 +240,11 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 	return (h & TIME_SLOT_COUNT_MASK) == (key & TIME_SLOT_COUNT_MASK);
 }
 
+bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
+{
+	return false;
+}
+
 /*@unused@*/
 static char const rcsid_qk[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

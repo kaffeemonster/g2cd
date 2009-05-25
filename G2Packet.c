@@ -497,6 +497,7 @@ static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 		target->data_trunk.data = (void *)source->in6.sin6_addr.s6_addr;
 		target->data_trunk.capacity = INET6_ADDRLEN;
 	}
+	target->data_trunk_is_freeable = false;
 	buffer_clear(target->data_trunk);
 	target->big_endian = HOST_IS_BIGENDIAN;
 }
@@ -1750,28 +1751,71 @@ static bool handle_QKR(struct ptype_action_args *parg)
 
 	if(parg->connec)
 	{
-		g2_packet_t qkr, sna;
+		uint32_t key;
 
 		if(!rdata.queried_na_valid)
 			return ret_val;
 
-		if(!rdata.refresh)
+		if(!rdata.refresh && g2_qk_lookup(&key, &rdata.queried_na))
 		{
-//TODO: look into query cache
+			g2_packet_t *qka, *qna, *qk, *cached;
+
+			qka    = g2_packet_calloc();
+			qna    = g2_packet_calloc();
+			qk     = g2_packet_calloc();
+			cached = g2_packet_calloc();
+
+			if(!(qka && qna && qk))
+				goto out_fail;
+
+			qna->type = PT_QNA;
+			if(!write_na_to_packet(qna, &rdata.queried_na))
+				goto out_fail;
+
+			qk->type = PT_QK;
+			qk->big_endian = HOST_IS_BIGENDIAN;
+			/* should not fail */
+			if(!g2_packet_steal_data_space(qk, sizeof(uint32_t)))
+				goto out_fail;
+			put_unaligned(key, (uint32_t *)buffer_start(qk->data_trunk));
+
+			list_add_tail(&qna->list, &qka->children);
+			list_add_tail(&qk->list, &qka->children);
+
+			if(cached) {
+				cached->type = PT_CACHED;
+				cached->big_endian = HOST_IS_BIGENDIAN;
+				list_add_tail(&cached->list, &qka->children);
+			}
+
+			qka->type = PT_QKA;
+			qka->big_endian = HOST_IS_BIGENDIAN;
+			list_add_tail(&qka->list, parg->target);
+
+			return true;
+out_fail:
+			g2_packet_free(qka);
+			g2_packet_free(qna);
+			g2_packet_free(qk);
+			g2_packet_free(cached);
 		}
+		else
+		{
+			g2_packet_t qkr, sna;
 
-		g2_packet_init_on_stack(&qkr);
-		g2_packet_init_on_stack(&sna);
+			g2_packet_init_on_stack(&qkr);
+			g2_packet_init_on_stack(&sna);
 
-		link_sna_to_packet(&sna, &rdata.sending_na);
-		list_add_tail(&sna.list, &qkr.children);
+			link_sna_to_packet(&sna, &rdata.sending_na);
+			list_add_tail(&sna.list, &qkr.children);
 
-		qkr.type = PT_QKR;
-		qkr.big_endian = HOST_IS_BIGENDIAN;
+			qkr.type = PT_QKR;
+			qkr.big_endian = HOST_IS_BIGENDIAN;
 
-		INIT_LIST_HEAD(&answer);
-		list_add_tail(&qkr.list, &answer);
-		g2_udp_send(&rdata.queried_na, &answer);
+			INIT_LIST_HEAD(&answer);
+			list_add_tail(&qkr.list, &answer);
+			g2_udp_send(&rdata.queried_na, &answer);
+		}
 	}
 	else
 	{
@@ -2168,6 +2212,7 @@ g2_packet_t *g2_packet_alloc(void)
 	return t;
 }
 
+// TODO: write a TLS boosted allocator
 g2_packet_t *g2_packet_calloc(void)
 {
 	g2_packet_t *t = g2_packet_init(g2_packet_alloc());

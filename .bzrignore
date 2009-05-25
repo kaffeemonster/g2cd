@@ -10,6 +10,7 @@ bin2o
 G2PacketTyperGenerator
 G2PacketTyper.h
 khl.dump
+guid.dump
 gwc_cache.db
 calltree
 guid.txt
