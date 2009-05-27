@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogerated
 #
-# Copyright (c) 2004 - 2008 Jan Seiffert
+# Copyright (c) 2004 - 2009 Jan Seiffert
 #
 # This file is part of g2cd.
 #

@@ -261,13 +261,12 @@ static void guid_cache_entry_free(struct guid_cache_entry *e)
 	cache.num--;
 }
 
-// TODO: put type within hashtable?
-static uint32_t cache_ht_hash(const union guid_fast *g)
+static uint32_t cache_ht_hash(const union guid_fast *g, enum guid_type gt)
 {
-	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], cache.ht_seed);
+	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], cache.ht_seed ^ gt);
 }
 
-static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, uint32_t h)
+static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, enum guid_type gt, uint32_t h)
 {
 	struct hlist_node *n;
 	struct guid_cache_entry *e;
@@ -283,6 +282,8 @@ static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, uint32
 		if(g->d[2] != x->d[2])
 			continue;
 		if(g->d[3] != x->d[3])
+			continue;
+		if(gt != e->e.type)
 			continue;
 		return e;
 	}
@@ -420,7 +421,7 @@ static inline void rbnode_cache_cp(struct guid_cache_entry *dest, struct guid_ca
 		 * So pay CPU-cycles for our stupidness: cleanly reinsert
 		 * from the start
 		 */
-		cache_ht_add(dest, cache_ht_hash((union guid_fast *)dest->e.guid));
+		cache_ht_add(dest, cache_ht_hash((union guid_fast *)dest->e.guid, dest->e.type));
 	}
 	else
 		cache_ht_del(src);
@@ -428,10 +429,50 @@ static inline void rbnode_cache_cp(struct guid_cache_entry *dest, struct guid_ca
 
 RBTREE_MAKE_FUNCS(cache, struct guid_cache_entry, rb);
 
-void g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, time_t when, enum guid_type gt)
+bool g2_guid_lookup(const uint8_t guid_a[GUID_SIZE], enum guid_type gt, union combo_addr *addr)
+{
+	struct guid_cache_entry *e;
+	uint32_t h;
+	bool ret_val = false;
+#ifndef UNALIGNED_OK
+	union guid_fast guid_t;
+	const union guid_fast *guid = &guid_t;
+	memcpy(&guid_t, guid_a, GUID_SIZE);
+#else
+	const union guid_fast *guid = (const union guid_fast *)guid_a;
+#endif
+
+	h = cache_ht_hash(guid, gt);
+	/*
+	 * Prevent the compiler from moving the calcs
+	 * into the critical section
+	 */
+	barrier();
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return false;
+
+	/* already in the cache? */
+	e = cache_ht_lookup(guid, gt, h);
+	if(!e)
+		goto out_unlock;
+
+	if(addr)
+		*addr = e->e.na;
+	ret_val = true;
+
+out_unlock:
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("gnarf, GUID cache lock stuck, bye!");
+
+	return ret_val;
+}
+
+bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, time_t when, enum guid_type gt)
 {
 	struct guid_cache_entry *e, *t;
 	uint32_t h;
+	bool ret_val = false;
 #ifndef UNALIGNED_OK
 	union guid_fast guid_t;
 	const union guid_fast *guid = &guid_t;
@@ -443,12 +484,12 @@ void g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 	/* check for bogus addresses */
 	if(unlikely(!combo_addr_is_public(addr))) {
 		logg_develd("addr %pI is privat, not added\n", addr);
-		return;
+		return ret_val;
 	}
 //TODO: check for own guid
 	logg_develd("adding: %p#G -> %p#I, %u\n", guid, addr, (unsigned)when);
 
-	h = cache_ht_hash(guid);
+	h = cache_ht_hash(guid, gt);
 
 	/*
 	 * Prevent the compiler from moving the calcs
@@ -457,12 +498,13 @@ void g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 	barrier();
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
-		return;
+		return ret_val;
 
 	/* already in the cache? */
-	e = cache_ht_lookup(guid, h);
+	e = cache_ht_lookup(guid, gt, h);
 	if(e)
 	{
+		ret_val = true;
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
@@ -516,6 +558,7 @@ life_tree_error:
 out_unlock:
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))
 		diedie("gnarf, GUID cache lock stuck, bye!");
+	return ret_val;
 }
 
 /*@unused@*/

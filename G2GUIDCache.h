@@ -51,7 +51,7 @@ enum guid_type
 	GT_KHL_NEIGHBOUR,
 	GT_KHL,
 	GT_PEER,
-	GT_SEARCH,
+	GT_QUERY,
 	GT_HAW,
 	GT_UNKNOWN,
 } GCC_ATTR_PACKED;
@@ -65,7 +65,8 @@ struct guid_entry
 	enum guid_type type;
 };
 
-_G2GUIDC_EXTRN(void g2_guid_add(const uint8_t [GUID_SIZE], const union combo_addr *, time_t, enum guid_type));
+_G2GUIDC_EXTRN(bool g2_guid_lookup(const uint8_t [GUID_SIZE], enum guid_type, union combo_addr *));
+_G2GUIDC_EXTRN(bool g2_guid_add(const uint8_t [GUID_SIZE], const union combo_addr *, time_t, enum guid_type));
 _G2GUIDC_EXTRN(bool g2_guid_init(void));
 _G2GUIDC_EXTRN(void g2_guid_end(void));
 

@@ -346,6 +346,17 @@ static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo
 	}
 }
 
+static inline bool combo_addr_eq_any(const union combo_addr *a)
+{
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == a->s_fam)) {
+		return INADDR_ANY == a->in.sin_addr.s_addr;
+	} else {
+		return 0 == a->in6.sin6_addr.s6_addr32[0] && 0 == a->in6.sin6_addr.s6_addr32[1] &&
+		       0 == a->in6.sin6_addr.s6_addr32[2] && 0 == a->in6.sin6_addr.s6_addr32[3];
+	}
+}
+
 static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
 {
 // TODO: when ipv6 is common, change it

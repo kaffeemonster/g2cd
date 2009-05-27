@@ -451,6 +451,7 @@ retry_unpack:
 
 					parg.connec   = w_entry;
 					parg.src_addr = NULL;
+					parg.dst_addr = NULL;
 					parg.source   = build_packet;
 					parg.target   = &w_entry->packets_to_send;
 					parg.opaque   = NULL;

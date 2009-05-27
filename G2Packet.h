@@ -74,7 +74,7 @@
 	ENUM_CMD( QA     , 1 ), \
 	ENUM_CMD( QH2    , 1 ), \
 	ENUM_CMD( QHT    , 1 ), \
-	ENUM_CMD( QKR    , 1 ), \
+	ENUM_CMD( QKR    , 3 ), \
 	ENUM_CMD( QKA    , 1 ), \
 	ENUM_CMD( UPROC  , 1 ), \
 	ENUM_CMD( UPROD  , 1 ), \
@@ -98,6 +98,9 @@
 	ENUM_CMD( V      , 1 ), /* commom child packets */ \
 	ENUM_CMD( FW     , 1 ), /* LNI? */ \
 	ENUM_CMD( BUP    , 1 ), /* QH2 */ \
+	ENUM_CMD( BH     , 1 ), /* QH2 */ \
+	ENUM_CMD( BUSY   , 1 ), /* QH2 */ \
+	ENUM_CMD( UNSTA  , 1 ), /* QH2 */ \
 	ENUM_CMD( H      , 1 ), /* QH2 */ \
 	ENUM_CMD( HG     , 1 ), /* QH2 */ \
 	ENUM_CMD( PCH    , 1 ), /* QH2 */ \
@@ -111,6 +114,7 @@
 	ENUM_CMD( SZ     , 1 ), /* QH2/H */ \
 	ENUM_CMD( URL    , 1 ), /* QH2/H */ \
 	ENUM_CMD( SS     , 1 ), /* QH2/HG */ \
+	ENUM_CMD( QKY    , 1 ), /* Q2 extention, + key & no addr */ \
 	ENUM_CMD( I      , 1 ), /* Q2 */ \
 	ENUM_CMD( SZR    , 1 ), /* Q2 */ \
 	ENUM_CMD( UDP    , 1 ), /* Q2 PI */ \
@@ -217,6 +221,7 @@ struct ptype_action_args
 	g2_connection_t *connec;
 	g2_packet_t *source;
 	union combo_addr *src_addr;
+	union combo_addr *dst_addr;
 	struct list_head *target;
 	void *opaque;
 };

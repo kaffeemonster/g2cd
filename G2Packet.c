@@ -94,6 +94,15 @@ static bool handle_PI(struct ptype_action_args *);
 static bool handle_PI_UDP(struct ptype_action_args *);
 static bool handle_PI_RELAY(struct ptype_action_args *);
 static bool handle_Q2(struct ptype_action_args *);
+static bool handle_Q2_UDP(struct ptype_action_args *);
+static bool handle_Q2_QKY(struct ptype_action_args *);
+static bool handle_QA(struct ptype_action_args *);
+static bool handle_QA_TS(struct ptype_action_args *);
+static bool handle_QA_D(struct ptype_action_args *);
+static bool handle_QA_S(struct ptype_action_args *);
+static bool handle_QH2(struct ptype_action_args *);
+static bool handle_QH2_GU(struct ptype_action_args *);
+static bool handle_QH2_NA(struct ptype_action_args *);
 static bool handle_QHT(struct ptype_action_args *);
 static bool handle_QKR(struct ptype_action_args *);
 static bool handle_QKR_RNA(struct ptype_action_args *parg);
@@ -125,7 +134,8 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_PO    ] = unimpl_action_p,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
 	[PT_Q2    ] = handle_Q2,
-	[PT_QA    ] = unimpl_action_p,
+	[PT_QA    ] = handle_QA,
+	[PT_QH2   ] = handle_QH2,
 	[PT_QHT   ] = handle_QHT,
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
@@ -141,7 +151,9 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_KHLR  ] = handle_KHLR,
 	[PT_PI    ] = handle_PI,
 	[PT_JCT   ] = empty_action_p, /* no answer needed, it's ACKed */
-	[PT_Q2    ] = unimpl_action_p,
+	[PT_Q2    ] = handle_Q2,
+	[PT_QA    ] = handle_QA,
+	[PT_QH2   ] = handle_QH2,
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
@@ -211,7 +223,8 @@ static const g2_ptype_action_func KHL_CH_packet_dict[PT_MAXIMUM] =
 static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 {
 	[PT_TO ] = empty_action_p,
-	[PT_UDP] = unimpl_action_p,
+	[PT_UDP] = handle_Q2_UDP,
+	[PT_QKY] = handle_Q2_QKY,
 	[PT_URN] = unimpl_action_p,
 	[PT_DN ] = unimpl_action_p,
 	[PT_MD ] = unimpl_action_p,
@@ -219,32 +232,67 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_I  ] = unimpl_action_p,
 };
 
+/* QH2-childs */
+/*
+ * These packets are a nightmare...
+ * Since we do not search, all QH2 which pass us are:
+ * a) not for us
+ * or
+ * b) spam, malicious
+ * maybe both at the same time.
+ *
+ * The NA is useless, if we do not intend to know every client there is
+ * (but we have to to provide routing...)
+ * we could look at the other packets to guess if the node is firewalled,
+ * the NH are only interresting as a route back to the client
+ * (taking them as khl is to dangerous...)
+ * and the guid is only good for this routing, which is important, since
+ * the node could be firewalled.
+ *
+ * BULLSHIT! Everything.
+ *
+ * At least the guid is a must-have field, check it, so we
+ * can drop broken packets before forwarding.
+ */
+static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
+{
+	[PT_TO   ] = empty_action_p,
+	[PT_GU   ] = handle_QH2_GU,
+	[PT_NA   ] = handle_QH2_NA,
+	[PT_NH   ] = unimpl_action_p,
+	[PT_V    ] = empty_action_p, /* not interresting */
+	[PT_FW   ] = empty_action_p,
+	[PT_BH   ] = empty_action_p,
+	[PT_BUP  ] = empty_action_p,
+	[PT_BUSY ] = empty_action_p,
+	[PT_UNSTA] = empty_action_p,
+	[PT_PCH  ] = empty_action_p,
+	[PT_HG   ] = empty_action_p,
+	[PT_H    ] = empty_action_p,
+	[PT_MD   ] = empty_action_p,
+	[PT_UPRO ] = empty_action_p,
+	[PT_SS   ] = empty_action_p,
+};
+
 /* QA-childs */
+/*
+ * The same is true for QA, but they are trusted a little bit more,
+ * since they come from hubs...
+ * Check that? How? By knowing every Hub at every corner of
+ * the Network?
+ * We simply take whats delivered there (as Shareaza), actually we
+ * don't care for the khl that much.
+ */
 static const g2_ptype_action_func QA_packet_dict[PT_MAXIMUM] =
 {
 	[PT_TO] = empty_action_p,
-	[PT_TS] = unimpl_action_p,
-	[PT_D ] = unimpl_action_p,
-	[PT_S ] = unimpl_action_p,
-	[PT_RA] = unimpl_action_p,
+	[PT_TS] = handle_QA_TS,
+	[PT_D ] = handle_QA_D,
+	[PT_S ] = handle_QA_S,
+	[PT_RA] = empty_action_p,
 	[PT_FR] = unimpl_action_p,
 };
 
-/* QH2-childs */
-static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
-{
-	[PT_TO  ] = empty_action_p,
-	[PT_GU  ] = unimpl_action_p,
-	[PT_NA  ] = unimpl_action_p,
-	[PT_NH  ] = unimpl_action_p,
-	[PT_V   ] = unimpl_action_p,
-	[PT_BUP ] = unimpl_action_p,
-	[PT_PCH ] = unimpl_action_p,
-	[PT_HG  ] = unimpl_action_p,
-	[PT_H   ] = unimpl_action_p,
-	[PT_MD  ] = unimpl_action_p,
-	[PT_UPRO] = unimpl_action_p,
-};
 
 /* QKR-childs */
 static const g2_ptype_action_func QKR_packet_dict[PT_MAXIMUM] =
@@ -357,6 +405,44 @@ static const char packet_uproc[] = { 0x20, 'U', 'P', 'R', 'O', 'C' };
  * Packet handler helper
  *
  */
+static noinline bool skip_child(g2_packet_t *s, const char *name)
+{
+	bool ret_val = false;
+
+	do
+	{
+		g2_packet_t child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		ret_val = g2_packet_decode_from_packet(s, &child_p, 0);
+		if(!ret_val) {
+			logg_packet(STDLF, name, "broken child");
+			break;
+		}
+		logg_packet("%s -> */%s additinaly found\n", name, g2_ptype_names[child_p.type]);
+	} while(ret_val && s->packet_decode != DECODE_FINISHED);
+
+//TODO: handle "reserverd" (important even if unknown) packets?
+
+	return ret_val;
+}
+
+static bool skip_unexpected_child(g2_packet_t *s, const char *name)
+{
+	if(unlikely(s->is_compound))
+		return skip_child(s, name);
+	return true;
+}
+
+static inline bool unexpected_child(g2_packet_t *s, const char *name)
+{
+	if(s->is_compound) {
+		logg_packet("%s\twith child! len: %zu\n", name, buffer_remaining(s->data_trunk));
+		return true;
+	}
+	return false;
+}
+
 static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, const char *name)
 {
 	size_t rem = buffer_remaining(source->data_trunk);
@@ -390,7 +476,7 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 }
 
 /*
- * sna are na without port
+ * sna are a na without port
  */
 static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, const char *name)
 {
@@ -415,6 +501,57 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 
 	logg_packet("%s:\t%p#I\n", name, target);
 	return true;
+}
+
+static bool read_ts_from_packet(g2_packet_t *source, time_t *tio, const char *name)
+{
+	time_t foreign_time;
+
+	foreign_time = local_time_now;
+	if(unlikely(!skip_unexpected_child(source, name)))
+		goto out;
+
+	if(unlikely(4 != buffer_remaining(source->data_trunk) &&
+	            8 != buffer_remaining(source->data_trunk))) {
+		logg_packet(STDLF, name, "not 4 or 8 byte");
+		goto out;
+	}
+
+	/* fill the upper bit of time_t if we need more than the recvd 32 bit */
+	if(8 == sizeof(time_t))
+		foreign_time &= (time_t)0xFFFFFFFF00000000;
+	else
+		foreign_time  = 0;
+
+	/* the most commen case 32-bit time_t and little endian (all the Win-Clients) */
+	if(likely(4 == buffer_remaining(source->data_trunk)))
+	{
+		uint32_t t;
+		get_unaligned_endian(t, (uint32_t *)buffer_start(source->data_trunk),
+		                     source->big_endian);
+		foreign_time |= (time_t)t;
+	}
+	else
+	{
+		uint64_t t;
+		logg_packet(STDLF, name, "with 8 byte! Ola, a 64-bit OS?");
+		/*
+		 * Lets try too cludge it together, if we also have a 64-bit OS,
+		 * everything will be fine, if not, we hopefully get the lower 32 bit,
+		 * and if we don't test at the moment of overflow in 2013 (or when ever)
+		 * it should work
+		 */
+		get_unaligned_endian(t, (uint64_t *)buffer_start(source->data_trunk),
+		                     source->big_endian);
+		foreign_time = (time_t)t;
+	}
+
+	*tio = foreign_time;
+
+	return true;
+out:
+	return false;
+
 }
 
 static bool write_na_to_packet(g2_packet_t *target, union combo_addr *source)
@@ -502,44 +639,6 @@ static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 	target->big_endian = HOST_IS_BIGENDIAN;
 }
 
-static noinline bool skip_child(g2_packet_t *s, const char *name)
-{
-	bool ret_val = false;
-
-	do
-	{
-		g2_packet_t child_p;
-		child_p.more_bytes_needed = false;
-		child_p.packet_decode = CHECK_CONTROLL_BYTE;
-		ret_val = g2_packet_decode_from_packet(s, &child_p, 0);
-		if(!ret_val) {
-			logg_packet(STDLF, name, "broken child");
-			break;
-		}
-		logg_packet("%s -> */%s additinaly found\n", name, g2_ptype_names[child_p.type]);
-	} while(ret_val && s->packet_decode != DECODE_FINISHED);
-
-//TODO: handle "reserverd" (important even if unknown) packets?
-
-	return ret_val;
-}
-
-static bool skip_unexpected_child(g2_packet_t *s, const char *name)
-{
-	if(unlikely(s->is_compound))
-		return skip_child(s, name);
-	return true;
-}
-
-static inline bool unexpected_child(g2_packet_t *s, const char *name)
-{
-	if(s->is_compound) {
-		logg_packet("%s\twith child! len: %zu\n", name, buffer_remaining(s->data_trunk));
-		return true;
-	}
-	return false;
-}
-
 static bool g2_packet_has_TO(g2_packet_t *src, uint8_t **guid)
 {
 	char *data;
@@ -591,6 +690,42 @@ static bool g2_packet_needs_routing(g2_packet_t *src, uint8_t **guid)
 		return false; /* handle localy */
 
 	return true;
+}
+
+static void g2_packet_send_qka(union combo_addr *req_addr, union combo_addr *send_addr)
+{
+	struct list_head answer;
+	g2_packet_t qka, qk, sna;
+	uint32_t key;
+
+	g2_packet_init_on_stack(&qka);
+	g2_packet_init_on_stack(&qk);
+
+	/* should not fail */
+	if(!g2_packet_steal_data_space(&qk, sizeof(uint32_t)))
+		return;
+
+// TODO: check for our own IP
+	if(send_addr &&
+	   !combo_addr_eq_ip(req_addr, send_addr))
+	{
+		g2_packet_init_on_stack(&sna);
+		link_sna_to_packet(&sna, send_addr);
+		list_add_tail(&sna.list, &qka.children);
+	}
+
+	key = g2_qk_generate(req_addr);
+	qk.type = PT_QK;
+	put_unaligned(key, (uint32_t *)buffer_start(qk.data_trunk));
+	qk.big_endian = HOST_IS_BIGENDIAN;
+	list_add_tail(&qk.list, &qka.children);
+
+	qka.big_endian = HOST_IS_BIGENDIAN;
+	qka.type = PT_QKA;
+
+	INIT_LIST_HEAD(&answer);
+	list_add_tail(&qka.list, &answer);
+	g2_udp_send(req_addr, &answer);
 }
 
 /*
@@ -836,7 +971,8 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
 	/* time to send a packet again? */
-	if(local_time_now < (parg->connec->u.send_stamps.KHL + (KHL_TIMEOUT)))
+	if(local_time_now <
+	   (parg->connec->u.send_stamps.KHL + (KHL_TIMEOUT * parg->connec->flags.upeer ? 1 : 3)))
 		return ret_val;
 
 	/* build package */
@@ -887,52 +1023,16 @@ out_fail:
 
 static bool handle_KHL_TS(struct ptype_action_args *parg)
 {
-	g2_packet_t *source = parg->source;
 	time_t foreign_time;
 	time_t local_time;
-	foreign_time = local_time = local_time_now;
 
-	if(unlikely(!skip_unexpected_child(source, "/KHL/TS")))
-		goto out;
+	local_time = local_time_now;
 
-	if(unlikely(4 != buffer_remaining(source->data_trunk) &&
-	            8 != buffer_remaining(source->data_trunk))) {
-		logg_packet(STDLF, "/KHL/TS", "TS not 4 or 8 byte");
-		goto out;
+	if(read_ts_from_packet(parg->source, &foreign_time, "/KHL/TS")) {
+		logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
+		parg->connec->time_diff = (long)local_time - (long)foreign_time;
 	}
 
-	/* fill the upper bit of time_t if we need more than the recvd 32 bit */
-	if(8 == sizeof(time_t))
-		foreign_time &= (time_t)0xFFFFFFFF00000000;
-	else
-		foreign_time = 0;
-
-	/* the most commen case 32-bit time_t and little endian (all the Win-Clients) */
-	if(likely(4 == buffer_remaining(source->data_trunk)))
-	{
-		uint32_t t;
-		get_unaligned_endian(t, (uint32_t *)buffer_start(source->data_trunk),
-		                     source->big_endian);
-		foreign_time |= (time_t)t;
-	}
-	else
-	{
-		uint64_t t;
-		logg_packet(STDLF, "/KHL", "TS with 8 byte! Ola, a 64-bit OS?");
-		/*
-		 * Lets try too cludge it together, if we also have a 64-bit OS,
-		 * everything will be fine, if not, we hopefully get the lower 32 bit,
-		 * and if we don't test at the moment of overflow in 2013 (or when ever)
-		 * it should work
-		 */
-		get_unaligned_endian(t, (uint64_t *)buffer_start(source->data_trunk),
-		                     source->big_endian);
-		foreign_time = (time_t)t;
-	}
-	logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
-
-out:
-	parg->connec->time_diff = (long)local_time - (long)foreign_time;
 	return false;
 }
 
@@ -1020,11 +1120,9 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	struct KHL_CH_data rdata;
 	g2_packet_t *source = parg->source;
 	g2_connection_t *connec = parg->connec;
-	char *src = buffer_start(source->data_trunk);
-	size_t remaining = buffer_remaining(source->data_trunk);
+	size_t remaining;
 	union combo_addr addr;
 	time_t when;
-	uint16_t tmp_port;
 	bool ret_val = false;
 
 	rdata.guid = NULL;
@@ -1064,71 +1162,49 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 	 *
 	 *	IP	Port	TS
 	 *	4	2	4	= 10 winblow
-	 *	16	2	4	= 20 IPv6
-	 *	16	2	8	= 24 IPv6 + 64bit time_t
+	 *	16	2	4	= 22 IPv6
+	 *	16	2	8	= 26 IPv6 + 64bit time_t
 	 *	4	2	8	= 14 64bit time_t
 	 *
 	 * and the docs say nothing about endianess...
 	 * looks like ip in net byte order, rest in host byte order
 	 */
 
-	memset(&addr, 0, sizeof(addr));
+	remaining = buffer_remaining(source->data_trunk);
+
 	if(8 == sizeof(time_t))
-		when = local_time_now & (time_t)0xFFFFFFFF00000000;
+		when = local_time_now & (time_t)0xFFFFFFFF00000000ULL;
 	else
 		when = 0;
-	if(likely(10 == remaining))
-	{
-		uint32_t t;
-		addr.s_fam = AF_INET;
-		get_unaligned(addr.in.sin_addr.s_addr, (uint32_t *) src);
-		src += sizeof(uint32_t);
-		get_unaligned(tmp_port, (uint16_t *) src);
-		src += sizeof(uint16_t);
-		get_unaligned_endian(t, (uint32_t *) src, source->big_endian);
-		when |= (time_t)(t + connec->time_diff);
-	}
-	else if(20 == remaining)
-	{
-		uint32_t t;
-		addr.s_fam = AF_INET6;
-		memcpy(&addr.in6.sin6_addr.s6_addr, src, INET6_ADDRLEN);
-		src += INET6_ADDRLEN;
-		get_unaligned(tmp_port, (uint16_t *) src);
-		src += sizeof(uint16_t);
-		get_unaligned_endian(t, (uint32_t *) src, source->big_endian);
-		when |= (time_t)(t + connec->time_diff);
-	}
-	else if(24 == remaining)
-	{
-		uint64_t t;
-		addr.s_fam = AF_INET6;
-		memcpy(&addr.in6.sin6_addr.s6_addr, src, INET6_ADDRLEN);
-		src += INET6_ADDRLEN;
-		get_unaligned(tmp_port, (uint16_t *) src);
-		src += sizeof(uint16_t);
-		get_unaligned_endian(t, (uint64_t *) src, source->big_endian);
-		when = (time_t)(t + connec->time_diff);
-	}
-	else if(14 == remaining)
-	{
-		uint64_t t;
-		addr.s_fam = AF_INET;
-		get_unaligned(addr.in.sin_addr.s_addr, (uint32_t *) src);
-		src += sizeof(uint32_t);
-		get_unaligned(tmp_port, (uint16_t *) src);
-		src += sizeof(uint16_t);
-		get_unaligned_endian(t, (uint64_t *) src, source->big_endian);
-		when = (time_t)(t + connec->time_diff);
-	} else
-		goto out;
 
-	if(likely(!source->big_endian))
-		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
-	combo_addr_set_port(&addr, tmp_port);
-	g2_khl_add(&addr, when, false);
-	if(rdata.guid)
-		g2_guid_add(rdata.guid, &addr, when, GT_KHL);
+	if(10 == remaining || /* IPv4 */
+	   22 == remaining    /* IPv6 */)
+	{
+		char *data = buffer_start(source->data_trunk) + remaining - 4;
+		uint32_t t;
+		get_unaligned_endian(t, (uint32_t *)data, source->big_endian);
+		source->data_trunk.limit -= 4;
+		when |= (time_t)(t + connec->time_diff);
+	}
+	else if(26 == remaining || /* IPv6 + 64Bit time_t */
+	        14 == remaining    /*        64Bit time_t */)
+	{
+		char *data = buffer_start(source->data_trunk) + remaining - 8;
+		uint64_t t;
+		get_unaligned_endian(t, (uint64_t *)data, source->big_endian);
+		source->data_trunk.limit -= 8;
+		when = (time_t)(t + connec->time_diff);
+	} else {
+		logg_packet(STDLF, "/KHL/CH", "funny length");
+		goto out;
+	}
+
+	if(read_na_from_packet(source, &addr, "/KHL/CH")) {
+		g2_khl_add(&addr, when, false);
+		if(rdata.guid)
+			g2_guid_add(rdata.guid, &addr, when, GT_KHL);
+	}
+
 out:
 	return ret_val;
 }
@@ -1488,12 +1564,26 @@ static bool handle_PI_RELAY(struct ptype_action_args *parg)
 	return false;
 }
 
+struct Q2_data
+{
+	union combo_addr udp_na;
+	uint32_t qk;
+	bool udp_na_valid;
+	bool qk_valid;
+};
+
 static bool handle_Q2(struct ptype_action_args *parg)
 {
+	struct Q2_data rdata;
 	struct ptype_action_args cparg;
 	bool ret_val = false, keep_decoding;
 
+	if(!parg->source->is_compound)
+		return ret_val;
+
+	memset(&rdata.udp_na_valid, 0, offsetof(struct Q2_data, udp_na_valid) - offsetof(struct Q2_data, qk_valid) + 1);
 	cparg = *parg;
+	cparg.opaque = &rdata;
 	do
 	{
 		g2_packet_t child_p;
@@ -1501,17 +1591,499 @@ static bool handle_Q2(struct ptype_action_args *parg)
 		child_p.more_bytes_needed = false;
 		child_p.packet_decode = CHECK_CONTROLL_BYTE;
 		keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
-		if(!keep_decoding)
-		{
+		if(!keep_decoding) {
 			logg_packet(STDLF, "Q2", "broken child");
-			parg->connec->flags.dismissed = true;
-			break;
+			if(parg->connec)
+				parg->connec->flags.dismissed = true;
+			return ret_val;
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
 			ret_val |= g2_packet_decide_spec_int(&cparg, Q2_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
 
+	if(16 < buffer_remaining(parg->source->data_trunk)) {
+		logg_packet(STDLF, "Q2", "no guid?");
+		return ret_val;
+	}
+
+	if(parg->connec)
+	{
+// TODO: query limit one connection
+
+		if(!parg->connec->flags.upeer && rdata.udp_na_valid &&
+		   !combo_addr_eq_ip(&parg->connec->remote_host, &rdata.udp_na))
+			return ret_val;
+
+		if(g2_guid_add((uint8_t *)buffer_start(parg->source->data_trunk),
+		               rdata.udp_na_valid ? &rdata.udp_na : &parg->connec->remote_host,
+		               local_time_now, GT_QUERY))
+			return ret_val;
+
+		if(parg->connec->flags.upeer)
+		{
+// TODO: forward query to any match in the QHT, leafs only
+		}
+		else
+		{
+// TODO: forward query to any match in the QHT, leaf & hub
+		}
+	}
+	else
+	{
+		if(!(rdata.udp_na_valid && rdata.qk_valid))
+			return ret_val;
+
+		if(!g2_qk_check(&rdata.udp_na, rdata.qk)) {
+			g2_packet_send_qka(&rdata.udp_na, parg->src_addr);
+			return ret_val;
+		}
+
+		if(g2_guid_add((uint8_t *)buffer_start(parg->source->data_trunk),
+		               &rdata.udp_na, local_time_now, GT_QUERY))
+		{
+			/* already in the cache */
+			g2_packet_t qa, d;
+			struct list_head answer;
+			union combo_addr *our_addr;
+			size_t len, old_pos;
+			uint16_t port, leafs;
+
+			our_addr = parg->dst_addr;
+			if(!our_addr)
+				return ret_val;
+
+			len  = AF_INET == our_addr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+			len += sizeof(port) + sizeof(uint16_t);
+
+			g2_packet_init_on_stack(&d);
+			if(!g2_packet_steal_data_space(&d, len))
+				return ret_val;
+
+			g2_packet_init_on_stack(&qa);
+			if(!g2_packet_steal_data_space(&qa, 16)) {
+				g2_packet_free(&d);
+				return ret_val;
+			}
+
+			d.type = PT_D;
+			d.big_endian = HOST_IS_BIGENDIAN;
+
+			old_pos = d.data_trunk.pos;
+			/* We Assume network byte order for the IP */
+			if(AF_INET == our_addr->s_fam) {
+				put_unaligned(our_addr->in.sin_addr.s_addr,
+				              (uint32_t *)buffer_start(d.data_trunk));
+				d.data_trunk.pos += sizeof(uint32_t);
+			} else {
+				memcpy(buffer_start(d.data_trunk),
+				       &our_addr->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+				d.data_trunk.pos += INET6_ADDRLEN;
+			}
+
+			/* and use host byte order for the port and leaf count */
+			port = combo_addr_port(our_addr);
+			port = ntohs(port);
+			put_unaligned(port, (uint16_t *)(buffer_start(d.data_trunk)));
+			d.data_trunk.pos += sizeof(port);
+
+			leafs = 0;
+			put_unaligned(leafs, (uint16_t *)(buffer_start(d.data_trunk)));
+			d.data_trunk.pos = old_pos;
+
+			list_add_tail(&d.list, &qa.children);
+			qa.type = PT_QA;
+			qa.big_endian = HOST_IS_BIGENDIAN;
+			memcpy(buffer_start(qa.data_trunk),
+			       buffer_start(parg->source->data_trunk), 16);
+
+			INIT_LIST_HEAD(&answer);
+			list_add_tail(&qa.list, &answer);
+			g2_udp_send(&rdata.udp_na, &answer);
+			return ret_val;
+		}
+// TODO: forward query to any match in the QHT, leaf & hub
+	}
+
 	return ret_val;
+}
+
+static bool handle_Q2_UDP(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+	char *data;
+	size_t remaining;
+
+	if(unlikely(!skip_unexpected_child(source, "/Q2/UDP")))
+		return false;
+
+	remaining = buffer_remaining(source->data_trunk);
+
+	if( 6 != remaining || /* IPv4 */
+	   10 != remaining || /* IPv4 + key */
+	   18 != remaining || /* IPv6 */
+	   22 != remaining    /* IPv6 + key */) {
+		logg_packet(STDLF, "/Q2/UDP", "funny length");
+		return false;
+	}
+
+	if(10 == remaining ||
+	   22 == remaining) {
+		data = buffer_start(source->data_trunk) + remaining - 4;
+		get_unaligned_endian(rdata->qk, (uint32_t *)data, source->big_endian);
+		source->data_trunk.limit -= 4;
+		rdata->qk_valid = true;
+	}
+
+	rdata->udp_na_valid =
+		read_na_from_packet(source, &rdata->udp_na, "/Q2/UDP");
+	if(rdata->udp_na_valid && combo_addr_eq_any(&rdata->udp_na)) {
+		if(parg->src_addr)
+			memcpy(&rdata->udp_na, parg->src_addr, sizeof(rdata->udp_na));
+		else
+			rdata->udp_na_valid = false;
+	}
+	return false;
+}
+
+static bool handle_Q2_QKY(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+
+	if(unlikely(!skip_unexpected_child(source, "/Q2/QKY")))
+		return false;
+
+	if(4 != buffer_remaining(source->data_trunk)) {
+		logg_packet(STDLF, "/Q2/QKY", "funny length");
+		return false;
+	}
+
+	get_unaligned_endian(rdata->qk, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
+	rdata->qk_valid = true;
+
+	if(!rdata->udp_na_valid) {
+		if(parg->src_addr) {
+			memcpy(&rdata->udp_na, parg->src_addr, sizeof(rdata->udp_na));
+			rdata->udp_na_valid = true;
+		}
+	}
+	else if(combo_addr_eq_any(&rdata->udp_na)) {
+		if(parg->src_addr)
+			memcpy(&rdata->udp_na, parg->src_addr, sizeof(rdata->udp_na));
+		else
+			rdata->udp_na_valid = false;
+	}
+	return false;
+}
+
+struct QA_data
+{
+	long td;
+	bool td_valid;
+};
+
+static bool handle_QA(struct ptype_action_args *parg)
+{
+	struct QA_data rdata;
+	struct ptype_action_args cparg;
+	g2_packet_t *source = parg->source;
+	uint8_t *guid;
+	size_t old_pos;
+	bool ret_val = false, keep_decoding;
+
+	if(!source->is_compound)
+		return ret_val;
+
+	/*
+	 * Kamikaze!
+	 * We try to fish for the GUID which is the payload somewhere
+	 * behind any childs, so we can match it to our cache, see if
+	 * we want to parse the packet and trust its content.
+	 */
+	/* guid + 0 byte + shortest packet */
+	if(16 + 1 + 3 > buffer_remaining(source->data_trunk)) {
+		logg_packet(STDLF, "/QA", "to short");
+		return ret_val;
+	}
+
+	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
+	if(!g2_guid_lookup(guid, GT_QUERY, NULL))
+		return ret_val;
+
+	old_pos = source->data_trunk.pos;
+	rdata.td_valid = false;
+	cparg = *parg;
+	cparg.opaque = &rdata;
+	do
+	{
+		g2_packet_t child_p;
+		cparg.source = &child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
+		if(!keep_decoding) {
+			logg_packet(STDLF, "QA", "broken child");
+			if(parg->connec)
+				parg->connec->flags.dismissed = true;
+			return ret_val;
+		}
+		if(child_p.packet_decode == DECODE_FINISHED)
+			ret_val |= g2_packet_decide_spec_int(&cparg, QA_packet_dict);
+	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+	/*
+	 * this should not happen, if it happens, someone
+	 * had a funny plan, faking a guid and then creating
+	 * some broken packet.
+	 */
+	if(16 != buffer_remaining(source->data_trunk))
+		return ret_val;
+
+	/* rewind buffer */
+	source->data_trunk.pos = old_pos;
+
+// TODO: forward resulting packet to who it may concern
+
+	return ret_val;
+}
+
+static bool handle_QA_TS(struct ptype_action_args *parg)
+{
+	struct QA_data *rdata = parg->opaque;
+	time_t foreign_time;
+	time_t local_time;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/QA/TS")))
+		return false;
+
+	local_time = local_time_now;
+
+	if(read_ts_from_packet(parg->source, &foreign_time, "/QA/TS")) {
+		logg_packet("/QA/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
+		rdata->td = (long)local_time - (long)foreign_time;
+		rdata->td_valid = true;
+	}
+
+	return false;
+}
+
+static bool handle_QA_D(struct ptype_action_args *parg)
+{
+	union combo_addr addr;
+	size_t remaining = buffer_remaining(parg->source->data_trunk);
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/QA/D")))
+		return false;
+
+	/*
+	 * some idiot thought it would be funny to cram data in
+	 * here "on demand"...
+	 * SAY NO TO WACKY BINARY PROTOCOLS!
+	 * So we maybe only have an ip, ip + port, ip + port + leafs.
+	 * Now mix in IPv6...
+	 * Thank god we do not have a time stamp here...
+	 */
+
+	if( 6 + 2 != remaining &&
+	   18 + 2 != remaining &&
+	    6     != remaining &&
+	   18     != remaining)
+		return false;
+
+	if( 6 + 2 == remaining ||
+	   18 + 2 == remaining)
+		parg->source->data_trunk.limit -= 2;
+
+	if(read_na_from_packet(parg->source, &addr, "/QA/D"))
+		g2_khl_add(&addr, local_time_now, false);
+
+	return false;
+}
+
+static bool handle_QA_S(struct ptype_action_args *parg)
+{
+	union combo_addr addr;
+	g2_packet_t *source = parg->source;
+	size_t remaining = buffer_remaining(source->data_trunk);
+	time_t when;
+	struct QA_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/QA/S")))
+		return false;
+
+	if( 6     != remaining &&
+	   18     != remaining &&
+	    6 + 4 != remaining &&
+	   18 + 4 != remaining &&
+	    6 + 8 != remaining &&
+	   18 + 8 != remaining)
+		return false;
+
+	when = local_time_now;
+	if( 6  == remaining ||
+	   18  == remaining) {
+		if(!read_na_from_packet(source, &addr, "/QA/S"))
+			return false;
+	}
+	else
+	{
+		if(!rdata->td_valid)
+			return false;
+
+		if(8 == sizeof(time_t))
+			when &= (time_t)0xFFFFFFFF00000000ULL;
+		else
+			when  = 0;
+
+		if( 6 + 4 == remaining || /* IPv4 */
+		   18 + 4 == remaining    /* IPv6 */)
+		{
+			char *data = buffer_start(source->data_trunk) + remaining - 4;
+			uint32_t t;
+			get_unaligned_endian(t, (uint32_t *)data, source->big_endian);
+			source->data_trunk.limit -= 4;
+			when |= (time_t)(t + rdata->td);
+		}
+		else if(18 + 8 == remaining || /* IPv6 + 64Bit time_t */
+		         6 + 8 == remaining    /*        64Bit time_t */)
+		{
+			char *data = buffer_start(source->data_trunk) + remaining - 8;
+			uint64_t t;
+			get_unaligned_endian(t, (uint64_t *)data, source->big_endian);
+			source->data_trunk.limit -= 8;
+			when = (time_t)(t + rdata->td);
+		}
+
+		if(!read_na_from_packet(source, &addr, "/QA/S"))
+			return false;
+	}
+
+	g2_khl_add(&addr, when, false);
+	return false;
+}
+
+struct QH2_data
+{
+	union combo_addr na;
+	uint8_t *guid;
+	bool na_valid;
+};
+
+static bool handle_QH2(struct ptype_action_args *parg)
+{
+	struct QH2_data rdata;
+	struct ptype_action_args cparg;
+	g2_packet_t *source = parg->source;
+	uint8_t *hop_count, *guid;
+	size_t old_pos;
+	bool ret_val = false, keep_decoding;
+
+	if(!source->is_compound)
+		return ret_val;
+
+	/*
+	 * Kamikaze!
+	 * We try to fish for the GUID which is the payload somewhere
+	 * behind any childs, so we can match it to our cache, see if
+	 * we want to parse the packet and trust its content.
+	 */
+	/* guid & hopcnt + 0 byte + GU */
+	if(17 + 1 + 4 + 16 > buffer_remaining(source->data_trunk)) {
+		logg_packet(STDLF, "/QH2", "to short");
+		return ret_val;
+	}
+
+	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
+	if(!g2_guid_lookup(guid, GT_QUERY, NULL))
+		return ret_val;
+
+	old_pos = source->data_trunk.pos;
+	rdata.guid = NULL;
+	rdata.na_valid = false;
+	cparg = *parg;
+	cparg.opaque = &rdata;
+	do
+	{
+		g2_packet_t child_p;
+		cparg.source = &child_p;
+		child_p.more_bytes_needed = false;
+		child_p.packet_decode = CHECK_CONTROLL_BYTE;
+		keep_decoding = g2_packet_decode_from_packet(parg->source, &child_p, 0);
+		if(!keep_decoding) {
+			logg_packet(STDLF, "QH2", "broken child");
+			if(parg->connec)
+				parg->connec->flags.dismissed = true;
+			return ret_val;
+		}
+		if(child_p.packet_decode == DECODE_FINISHED)
+			ret_val |= g2_packet_decide_spec_int(&cparg, QH2_packet_dict);
+	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+	/*
+	 * this should not happen, if it happens, someone
+	 * had a funny plan, faking a guid and then creating
+	 * some broken packet.
+	 */
+	if(17 != buffer_remaining(source->data_trunk) || !rdata.guid)
+		return ret_val;
+
+	hop_count = (uint8_t *)buffer_start(source->data_trunk);
+	if(*hop_count >= 254)
+		return ret_val;
+
+	/* rewind buffer */
+	source->data_trunk.pos = old_pos;
+
+	/* increment hop count */
+	*hop_count += 1;
+
+	/*
+	 * We normaly would have to tear apart a fucking lot
+	 * of this package, to understand it, to decide if
+	 * it's "good" or "bad".
+	 *
+	 * This includes parsing and frobnicating XML (ahhhh),
+	 * looking over all Hits/HitGroups (alloc galore), only
+	 * to have a glimpse idea that the packet is not uterly
+	 * crap.
+	 *
+	 * When it is "good", we can use the guid, na, etc...
+	 *
+	 * And all this checking would be beneficial not to
+	 * forward junk.
+	 */
+
+//TODO: forward resulting packet to who it may concern
+
+	return ret_val;
+}
+
+static bool handle_QH2_GU(struct ptype_action_args *parg)
+{
+	struct QH2_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/QH2/GU")))
+		return false;
+
+	if(16 == buffer_remaining(parg->source->data_trunk))
+		rdata->guid = (uint8_t *)buffer_start(parg->source->data_trunk);
+	else
+		logg_packet(STDLF, "/QH2/GU", "GU not a valid GUID");
+
+	return false;
+}
+
+static bool handle_QH2_NA(struct ptype_action_args *parg)
+{
+	struct QH2_data *rdata = parg->opaque;
+
+	if(unlikely(!skip_unexpected_child(parg->source, "/QH2/NA")))
+		return false;
+
+	rdata->na_valid =
+		read_na_from_packet(parg->source, &rdata->na, "/QH2/NA");
+	return false;
 }
 
 static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source)
@@ -1592,7 +2164,7 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 	}
 
 	get_unaligned_endian(qht_ent, (uint32_t *)buffer_start(source->data_trunk), source->big_endian);
-	
+
 	if(unlikely(g2_qht_reset(&connec->qht, qht_ent, server.settings.qht.compress_internal)))
 		connec->flags.dismissed = true;
 	else if(!connec->flags.upeer)
@@ -1718,7 +2290,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 	struct list_head answer;
 	bool ret_val = false, keep_decoding;
 
-	memset(&rdata.refresh, 0, offsetof(struct QKR_data, sending_na_valid) - offsetof(struct QKR_data, refresh));
+	memset(&rdata.refresh, 0, offsetof(struct QKR_data, sending_na_valid) - offsetof(struct QKR_data, refresh) + 1);
 	if(parg->source->is_compound)
 	{
 		struct ptype_action_args cparg = *parg;
@@ -1818,41 +2390,8 @@ out_fail:
 		}
 	}
 	else
-	{
-		g2_packet_t qka, qk, sna;
-		union combo_addr *req_addr;
-		uint32_t key;
-
-		g2_packet_init_on_stack(&qka);
-		g2_packet_init_on_stack(&qk);
-
-		/* should not fail */
-		if(!g2_packet_steal_data_space(&qk, sizeof(uint32_t)))
-			return ret_val;
-
-		req_addr = !rdata.requesting_na_valid ? parg->src_addr : &rdata.requesting_na;
-// TODO: check for our own IP
-		if(rdata.sending_na_valid &&
-		   !combo_addr_eq_ip(req_addr, &rdata.sending_na))
-		{
-			g2_packet_init_on_stack(&sna);
-			link_sna_to_packet(&sna, &rdata.sending_na);
-			list_add_tail(&sna.list, &qka.children);
-		}
-
-		key = g2_qk_generate(req_addr);
-		qk.type = PT_QK;
-		put_unaligned(key, (uint32_t *)buffer_start(qk.data_trunk));
-		qk.big_endian = HOST_IS_BIGENDIAN;
-		list_add_tail(&qk.list, &qka.children);
-
-		qka.big_endian = HOST_IS_BIGENDIAN;
-		qka.type = PT_QKA;
-
-		INIT_LIST_HEAD(&answer);
-		list_add_tail(&qka.list, &answer);
-		g2_udp_send(req_addr, &answer);
-	}
+		g2_packet_send_qka(!rdata.requesting_na_valid ? parg->src_addr : &rdata.requesting_na,
+		                    rdata.sending_na_valid ? &rdata.sending_na : NULL);
 
 	return ret_val;
 }
@@ -1925,7 +2464,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 	if(parg->connec && !parg->connec->flags.upeer)
 		return ret_val;
 
-	memset(&rdata.cached, 0, offsetof(struct QKA_data, sending_na_valid) - offsetof(struct QKA_data, cached));
+	memset(&rdata.cached, 0, offsetof(struct QKA_data, sending_na_valid) - offsetof(struct QKA_data, cached) + 1);
 	cparg = *parg;
 	cparg.opaque = &rdata;
 	do

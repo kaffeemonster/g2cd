@@ -2,7 +2,7 @@
  * config.h
  * the configurable compatibility-options
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -69,6 +69,14 @@
 
 /* do you have db.h or ndbm.h? */
 #define HAVE_DB
+
+/*
+ * we want to recv the recv addr on udp
+ * for Linux we need:
+ */
+#define HAVE_IP_PKTINFO
+/* and on BSD we need: */
+//#define HAVE_IP_RECVDSTADDR
 
 /*
  * are we on an multi-processor-mashine
