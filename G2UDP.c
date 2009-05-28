@@ -20,9 +20,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
- * Thanks for how a recvfromto works go out to:
- * Copyright (C) 2002 Miquel van Smoorenburg.
- *
  * $Id: G2UDP.c,v 1.16 2005/11/05 10:03:50 redbully Exp redbully $
  */
 
@@ -56,6 +53,7 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
+#include "lib/udpfromto.h"
 
 #define UDP_MTU        500
 #define UDP_RELIABLE_LENGTH 8
@@ -68,9 +66,6 @@
 static inline ssize_t udp_sock_send(struct norm_buff *, const union combo_addr *, int);
 static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, union combo_addr *, union combo_addr *);
 static noinline void handle_udp_packet(struct norm_buff *, union combo_addr *, union combo_addr *, int);
-static int fromto_init(int, int);
-static noinline ssize_t recvfromto(int s, void *buf, size_t len, int flags, struct sockaddr *from,
-                                   socklen_t *fromlen, struct sockaddr *to, socklen_t *tolen);
 //static inline bool init_memory();
 static inline bool init_con_u(int *, union combo_addr *);
 static inline void clean_up_u(int, struct pollfd[2]);
@@ -743,7 +738,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 		return false;
 	}
 
-	if(fromto_init(*udp_so, our_addr->s_fam))
+	if(udpfromto_init(*udp_so, our_addr->s_fam))
 		logg_errno(LOGF_ERR, "preparing UDP ip recv");
 
 	/* lose the pesky "address already in use" error message */
@@ -773,129 +768,6 @@ out_err:
 	close(*udp_so);
 	*udp_so = -1;
 	return false;
-}
-
-static int fromto_init(int s, int fam)
-{
-	int err = -1, opt = 1;
-	errno = ENOSYS;
-
-#ifdef HAVE_IP_PKTINFO
-	if(AF_INET == fam)
-		err = setsockopt(s, SOL_IP, IP_PKTINFO, &opt, sizeof(opt));
-	else
-		err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
-#elif defined(HAVE_IP_RECVDSTADDR)
-	if(AF_INET == fam)
-		err = setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
-	else
-		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
-// TODO: IPv6? Does someone has a bsd at hand?
-#endif
-	return err;
-}
-
-static noinline ssize_t recvfromto(int s, void *buf, size_t len, int flags, struct sockaddr *from,
-                                   socklen_t *fromlen, struct sockaddr *to, socklen_t *tolen)
-{
-#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR)
-	struct msghdr msgh;
-	struct iovec iov;
-	struct cmsghdr *cmsg;
-	char cbuf[256];
-#endif
-	ssize_t err;
-
-	/*
-	 * IP_PKTINFO / IP_RECVDSTADDR don't provide sin_port so we have to
-	 * retrieve it using getsockname(). Even when we can not receive the
-	 * sender, we have to provide something.
-	 * This also "primes" the buffer.
-	 */
-	if(to && (err = getsockname(s, to, tolen)) < 0)
-		return err;
-
-#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR)
-	/* Set up iov and msgh structures. */
-	memset(&msgh, 0, sizeof(msgh));
-	iov.iov_base        = buf;
-	iov.iov_len         = len;
-	msgh.msg_control    = cbuf;
-	msgh.msg_controllen = sizeof(cbuf);
-	msgh.msg_name       = from;
-	msgh.msg_namelen    = fromlen ? *fromlen : 0;
-	msgh.msg_iov        = &iov;
-	msgh.msg_iovlen     = 1;
-	msgh.msg_flags      = 0;
-
-	/* Receive one packet. */
-	err = recvmsg(s, &msgh, flags);
-	if(err < 0)
-		return err;
-
-	if(fromlen)
-		*fromlen = msgh.msg_namelen;
-
-	if(!to)
-		return err;
-
-	/* Process auxiliary received data in msgh */
-	for(cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh,cmsg))
-	{
-# ifdef HAVE_IP_PKTINFO
-		if(SOL_IP      == cmsg->cmsg_level &&
-		    IP_PKTINFO == cmsg->cmsg_type)
-		{
-			struct sockaddr_in *toi = (struct sockaddr_in *)to;
-			struct in_pktinfo *ip = (struct in_pktinfo *)CMSG_DATA(cmsg);
-
-			toi->sin_family = AF_INET;
-			toi->sin_addr = ip->ipi_addr;
-			*tolen = sizeof(*toi);
-			break;
-		}
-		if(SOL_IPV6         == cmsg->cmsg_level &&
-		   IPV6_RECVPKTINFO == cmsg->cmsg_type)
-		{
-			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
-			struct in6_pktinfo *ipv6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
-
-			toi6->sin6_family = AF_INET6;
-			memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, INET6_ADDRLEN);
-			*tolen = sizeof(*toi6);
-			break;
-		}
-# elif defined HAVE_IP_RECVDSTADDR
-		if(IPPROTO_IP     == cmsg->cmsg_level &&
-		   IP_RECVDSTADDR == cmsg->cmsg_type)
-		{
-			struct sockaddr_in *toi = (struct sockaddr_in *)to;
-			struct in_addr *ip = (struct in_addr *)CMSG_DATA(cmsg);
-
-			toi->sin_family = AF_INET;
-			toi->sin_addr = *ip;
-			*tolen = sizeof(*toi);
-			break;
-		}
-		if(IPPROTO_IPV6     == cmsg->cmsg_level &&
-		   IPV6_RECVDSTADDR == cmsg->cmsg_type)
-		{
-// TODO: IPv6?? How does BSD do it
-			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
-			struct in6_addr *ipv6 = (struct in6_addr *)CMSG_DATA(cmsg);
-
-			toi->sin_family = AF_INET6;
-			memcpy(&toi6->sin6_addr, ipv6, INET6_ADDRLEN);
-			*tolen = sizeof(*toi6);
-			break;
-		}
-# endif
-	}
-	return err;
-#else
-	/* fallback: call recvfrom */
-	return recvfrom(s, buf, len, flags, from, fromlen);
-#endif /* defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR) */
 }
 
 static inline void clean_up_u(int who_to_say, struct pollfd udp_so[2])

@@ -44,6 +44,7 @@ LIBHEADS = \
 	$(MPL)/sec_buffer.h \
 	$(MPL)/combo_addr.h \
 	$(MPL)/recv_buff.h \
+	$(MPL)/udpfromto.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
 	$(MPL)/ansi_prng.h \
@@ -190,6 +191,7 @@ LIBSRCS = \
 	$(MPL)/my_bitops.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/recv_buff.c \
+	$(MPL)/udpfromto.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
 	$(MPL)/strchrnul.c \
@@ -232,6 +234,7 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/recv_buff.o \
+	$(MPL)/udpfromto.o \
 	$(MPL)/vsnprintf.o
 
 # target for this module

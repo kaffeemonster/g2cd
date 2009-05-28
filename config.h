@@ -77,6 +77,8 @@
 #define HAVE_IP_PKTINFO
 /* and on BSD we need: */
 //#define HAVE_IP_RECVDSTADDR
+//#define HAVE_IP_SENDSRCADDR
+//#define HAVE_SYS_UIO_H
 
 /*
  * are we on an multi-processor-mashine
