@@ -191,6 +191,7 @@ LIBSRCS = \
 	$(MPL)/my_bitops.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/recv_buff.c \
+	$(MPL)/rbtree.c \
 	$(MPL)/udpfromto.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
@@ -234,6 +235,7 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/recv_buff.o \
+	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
 	$(MPL)/vsnprintf.o
 

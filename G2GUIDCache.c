@@ -64,14 +64,15 @@ union guid_fast
 {
 	uint8_t g[GUID_SIZE];
 	uint32_t d[GUID_SIZE/4];
+	int64_t x[GUID_SIZE/8];
 };
 
 struct guid_cache_entry
 {
-	struct rbnode rb; /* keep first */
-	bool used; /* fill possible hole */
+	struct rb_node rb; /* keep first */
 	struct hlist_node node;
 	struct guid_entry e;
+	bool used; /* fill possible hole */
 };
 
 static struct {
@@ -80,7 +81,7 @@ static struct {
 	uint32_t ht_seed;
 	struct guid_cache_entry *next_free;
 	struct guid_cache_entry *last_search;
-	struct rbtree tree;
+	struct rb_root tree;
 	struct hlist_head ht[GUID_CACHE_HTSIZE];
 	struct guid_cache_entry entrys[GUID_CACHE_SIZE];
 } cache;
@@ -110,7 +111,6 @@ bool g2_guid_init(void)
 		data_root_dir = server.settings.data_root_dir;
 	else
 		data_root_dir = "./";
-
 
 	name_len  = strlen(data_root_dir);
 	name_len += strlen(server.settings.guid.dump_fname);
@@ -249,6 +249,7 @@ check_next_free:
 			if(!e[1].used)
 				cache.next_free = &e[1];
 		}
+		RB_CLEAR_NODE(&e->rb);
 	}
 	return e;
 }
@@ -275,13 +276,9 @@ static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, enum g
 	{
 		union guid_fast *x = (union guid_fast *)e->e.guid;
 
-		if(g->d[0] != x->d[0])
+		if(g->x[0] != x->x[0])
 			continue;
-		if(g->d[1] != x->d[1])
-			continue;
-		if(g->d[2] != x->d[2])
-			continue;
-		if(g->d[3] != x->d[3])
+		if(g->x[1] != x->x[1])
 			continue;
 		if(gt != e->e.type)
 			continue;
@@ -301,133 +298,86 @@ static void cache_ht_del(struct guid_cache_entry *e)
 	hlist_del(&e->node);
 }
 
-static inline int rbnode_cache_eq(struct guid_cache_entry *a, struct guid_cache_entry *b)
-{
-	union guid_fast *ga = (union guid_fast *)a->e.guid;
-	union guid_fast *gb = (union guid_fast *)b->e.guid;
-	return ga->d[0]   == gb->d[0]   && ga->d[1]   == gb->d[1] &&
-	       ga->d[2]   == gb->d[2]   && ga->d[3]   == gb->d[3] &&
-	        a->e.type ==  b->e.type &&  a->e.when ==  b->e.when;
-}
-
-static inline int rbnode_cache_lt(struct guid_cache_entry *a, struct guid_cache_entry *b)
+static int guid_entry_cmp(struct guid_cache_entry *a, struct guid_cache_entry *b)
 {
 	union guid_fast *ga, *gb;
-
-	/* we want to order by age  foremost*/
-	int ret = a->e.when < b->e.when;
+	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	ret = a->e.when > b->e.when;
-	if(ret)
-		return !ret;
-
-	ret = a->e.type > b->e.type;
-	if(ret)
+	if((ret = (int)a->e.type - (int)b->e.type))
 		return ret;
-	ret = a->e.type < b->e.type;
-	if(ret)
-		return !ret;
-
 	ga = (union guid_fast *)a->e.guid;
 	gb = (union guid_fast *)b->e.guid;
-	ret = ga->d[0] < gb->d[0];
-	if(ret)
+	if((ret = ga->x[0] - gb->x[0]))
 		return ret;
-	ret = ga->d[0] > gb->d[0];
-	if(ret)
-		return !ret;
-	ret = ga->d[1] < gb->d[1];
-	if(ret)
+	if((ret = ga->x[1] - gb->x[1]))
 		return ret;
-	ret = ga->d[1] > gb->d[1];
-	if(ret)
-		return !ret;
-	ret = ga->d[2] < gb->d[2];
-	if(ret)
+	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
 		return ret;
-	ret = ga->d[2] > gb->d[2];
-	if(ret)
-		return !ret;
-	ret = ga->d[3] < gb->d[3];
-	if(ret)
-		return ret;
-	ret = ga->d[3] > gb->d[3];
-	if(ret)
-		return !ret;
-
-	ret = a->e.na.s_fam < b->e.na.s_fam;
-	if(ret)
-		return ret;
-	ret = a->e.na.s_fam > b->e.na.s_fam;
-	if(ret)
-		return !ret;
-
 // TODO: when IPv6 is common, change it
 	if(likely(AF_INET == a->e.na.s_fam))
 	{
-		ret = a->e.na.in.sin_addr.s_addr < b->e.na.in.sin_addr.s_addr;
-		if(ret)
+		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;
-		ret = a->e.na.in.sin_addr.s_addr > b->e.na.in.sin_addr.s_addr;
-		if(ret)
-			return !ret;
-		return a->e.na.in.sin_port < b->e.na.in.sin_port;
+		return (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port;
 	}
 	else
 	{
-		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] < b->e.na.in6.sin6_addr.s6_addr32[0] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[1] < b->e.na.in6.sin6_addr.s6_addr32[1] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[2] < b->e.na.in6.sin6_addr.s6_addr32[2] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[3] < b->e.na.in6.sin6_addr.s6_addr32[3];
-		if(ret)
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
 			return ret;
-		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] > b->e.na.in6.sin6_addr.s6_addr32[0] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[1] > b->e.na.in6.sin6_addr.s6_addr32[1] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[2] > b->e.na.in6.sin6_addr.s6_addr32[2] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[3] > b->e.na.in6.sin6_addr.s6_addr32[3];
-		if(ret)
-			return !ret;
-		return a->e.na.in6.sin6_port < b->e.na.in6.sin6_port;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
+			return ret;
+		return (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port;
 	}
 }
 
-static inline void rbnode_cache_cp(struct guid_cache_entry *dest, struct guid_cache_entry *src)
+static noinline bool guid_rb_cache_insert(struct guid_cache_entry *e)
 {
-	/*
-	 * The whole trick here is:
-	 * source is the physical entry which gets removed from the rb-tree,
-	 * but still it may not be the logical entry which should get removed,
-	 * so maybe the data from source has to be copied to dest.
-	 * So we either have to remove src from the Hashtable, or
-	 * we have to remove src & dest, move the data from src to dest,
-	 * and finally reinsert dest into the hashtable.
-	 */
-	if(dest != src)
-	{
-/*		struct hlist_node *prev = (struct hlist_node *)src->node.pprev;*/
+	struct rb_node **p = &cache.tree.rb_node;
+	struct rb_node *parent = NULL;
 
-		__hlist_del(&src->node);
-		INIT_HLIST_NODE(&src->node);
-		__hlist_del(&dest->node);
-		memcpy(&dest->used, &src->used,
-		       sizeof(struct guid_cache_entry) - offsetof(struct guid_cache_entry, used));
-		/* reinsert dest, src is now "removed" */
-/*		hlist_add_after(prev, &dest->node);*/
-// TODO: fix reinsertion
-		/*
-		 * we can not cheaply reinsert dest, somehow we are fucking
-		 * up the hashtable (or more precise: the linked list).
-		 * So pay CPU-cycles for our stupidness: cleanly reinsert
-		 * from the start
-		 */
-		cache_ht_add(dest, cache_ht_hash((union guid_fast *)dest->e.guid, dest->e.type));
+	while(*p)
+	{
+		struct guid_cache_entry *n = rb_entry(*p, struct guid_cache_entry, rb);
+		int result = guid_entry_cmp(e, n);
+
+		parent = *p;
+		if(result < 0)
+			p = &((*p)->rb_left);
+		else if(result > 0)
+			p = &((*p)->rb_right);
+		else
+			return false;
 	}
-	else
-		cache_ht_del(src);
+	rb_link_node(&e->rb, parent, p);
+	rb_insert_color(&e->rb, &cache.tree);
+
+	return true;
 }
 
-RBTREE_MAKE_FUNCS(cache, struct guid_cache_entry, rb);
+static noinline bool guid_rb_cache_remove(struct guid_cache_entry *e)
+{
+	struct rb_node *n = &e->rb;
+
+	if(RB_EMPTY_NODE(n))
+		return false;
+
+	rb_erase(n, &cache.tree);
+	RB_CLEAR_NODE(n);
+	cache_ht_del(e);
+
+	return true;
+}
+
+static struct guid_cache_entry *guid_cache_last(void)
+{
+	struct rb_node *n = rb_last(&cache.tree);
+	return rb_entry(n, struct guid_cache_entry, rb);
+}
 
 bool g2_guid_lookup(const uint8_t guid_a[GUID_SIZE], enum guid_type gt, union combo_addr *addr)
 {
@@ -470,7 +420,7 @@ out_unlock:
 
 bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, time_t when, enum guid_type gt)
 {
-	struct guid_cache_entry *e, *t;
+	struct guid_cache_entry *e;
 	uint32_t h;
 	bool ret_val = false;
 #ifndef UNALIGNED_OK
@@ -508,46 +458,37 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
-		t = rbtree_cache_remove(&cache.tree, e);
-		if(t)
-			e = t;
-		else {
+		if(!guid_rb_cache_remove(e)) {
 			logg_devel("remove failed\n");
 			goto life_tree_error; /* something went wrong... */
 		}
-		/*
-		 * The (physical) entry removed is maybe not the
-		 * one we asked for, it is just an entry. We have to
-		 * reinit it to reinsert it.
-		 */
 // TODO: what to do on type change?
 		e->e.type = gt;
 	}
 	else
 	{
-		t = rbtree_cache_lowest(&cache.tree);
-		if(likely(t) &&
-		   t->e.when < when &&
-		   t->e.type > gt &&
+		e = guid_cache_last();
+		if(likely(e) &&
+		   e->e.when < when &&
+		   e->e.type > gt &&
 		   GUID_CACHE_SIZE <= cache.num)
 		{
 			logg_devel_old("found older entry\n");
-			if(!(t = rbtree_cache_remove(&cache.tree, t)))
+			if(!guid_rb_cache_remove(e))
 				goto out_unlock; /* the tree is amiss? */
-			e = t;
 		}
 		else
 			e = guid_cache_entry_alloc();
 		if(!e)
 			goto out_unlock;
 
+		memcpy(e->e.guid, guid, sizeof(e->e.guid));
 		e->e.type = gt;
+		e->e.na = *addr;
 	}
-	memcpy(e->e.guid, guid, sizeof(e->e.guid));
-	e->e.na = *addr;
 	e->e.when = when;
 
-	if(!rbtree_cache_insert(&cache.tree, e)) {
+	if(!guid_rb_cache_insert(e)) {
 		logg_devel("insert failed\n");
 life_tree_error:
 		guid_cache_entry_free(e);

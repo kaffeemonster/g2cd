@@ -114,11 +114,11 @@ struct gwc
 
 struct khl_cache_entry
 {
-	struct rbnode rb; /* keep first */
-	bool used; /* fill possible hole */
-	bool cluster;
+	struct rb_node rb;
 	struct hlist_node node;
 	struct khl_entry e;
+	bool used;
+	bool cluster;
 };
 
 /* Vars */
@@ -139,7 +139,7 @@ static struct {
 	uint32_t ht_seed;
 	struct khl_cache_entry *next_free;
 	struct khl_cache_entry *last_search;
-	struct rbtree tree;
+	struct rb_root tree;
 	struct hlist_head ht[KHL_CACHE_HTSIZE];
 	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
 } cache;
@@ -235,6 +235,7 @@ init_next:
 		return false;
 	}
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
+
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;
@@ -1133,6 +1134,7 @@ check_next_free:
 			if(!e[1].used)
 				cache.next_free = &e[1];
 		}
+		RB_CLEAR_NODE(&e->rb);
 	}
 	return e;
 }
@@ -1193,95 +1195,80 @@ static void cache_ht_del(struct khl_cache_entry *e)
 	hlist_del(&e->node);
 }
 
-static inline int rbnode_cache_eq(struct khl_cache_entry *a, struct khl_cache_entry *b)
+static int khl_entry_cmp(struct khl_cache_entry *a, struct khl_cache_entry *b)
 {
-	return a->e.when == b->e.when && combo_addr_eq(&a->e.na, &b->e.na);
-}
-
-static inline int rbnode_cache_lt(struct khl_cache_entry *a, struct khl_cache_entry *b)
-{
-	int ret = a->e.when < b->e.when;
+	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	ret = a->e.when > b->e.when;
-	if(ret)
-		return !ret;
-	ret = a->e.na.s_fam < b->e.na.s_fam;
-	if(ret)
+	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
 		return ret;
-	ret = a->e.na.s_fam > b->e.na.s_fam;
-	if(ret)
-		return !ret;
-
-// TODO: when IPv6 is common, change it
 	if(likely(AF_INET == a->e.na.s_fam))
 	{
-		ret = a->e.na.in.sin_addr.s_addr < b->e.na.in.sin_addr.s_addr;
-		if(ret)
+		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;
-		ret = a->e.na.in.sin_addr.s_addr > b->e.na.in.sin_addr.s_addr;
-		if(ret)
-			return !ret;
-		return a->e.na.in.sin_port < b->e.na.in.sin_port;
+		return (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port;
 	}
 	else
 	{
-		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] < b->e.na.in6.sin6_addr.s6_addr32[0] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[1] < b->e.na.in6.sin6_addr.s6_addr32[1] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[2] < b->e.na.in6.sin6_addr.s6_addr32[2] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[3] < b->e.na.in6.sin6_addr.s6_addr32[3];
-		if(ret)
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
 			return ret;
-		ret =  a->e.na.in6.sin6_addr.s6_addr32[0] > b->e.na.in6.sin6_addr.s6_addr32[0] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[1] > b->e.na.in6.sin6_addr.s6_addr32[1] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[2] > b->e.na.in6.sin6_addr.s6_addr32[2] ||
-		       a->e.na.in6.sin6_addr.s6_addr32[3] > b->e.na.in6.sin6_addr.s6_addr32[3];
-		if(ret)
-			return !ret;
-		return a->e.na.in6.sin6_port < b->e.na.in6.sin6_port;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
+			return ret;
+		return (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port;
 	}
 }
 
-static inline void rbnode_cache_cp(struct khl_cache_entry *dest, struct khl_cache_entry *src)
+static noinline bool khl_rb_cache_insert(struct khl_cache_entry *e)
 {
-	/*
-	 * The whole trick here is:
-	 * source is the physical entry which gets removed from the rb-tree,
-	 * but still it may not be the logical entry which should get removed,
-	 * so maybe the data from source have to be copied to dest.
-	 * So we either have to remove src from the Hashtable, or
-	 * we have to remove src & dest, move the data from src to dest,
-	 * and finally reinsert dest into the hashtable.
-	 */
-	if(dest != src)
-	{
-/*		struct hlist_node *prev = (struct hlist_node *)src->node.pprev; */
+	struct rb_node **p = &cache.tree.rb_node;
+	struct rb_node *parent = NULL;
 
-		__hlist_del(&src->node);
-		INIT_HLIST_NODE(&src->node);
-		__hlist_del(&dest->node);
-		memcpy(&dest->used, &src->used,
-		       sizeof(struct khl_cache_entry) - offsetof(struct khl_cache_entry, used));
-		/* reinsert dest, src is now "removed" */
-/*		hlist_add_after(prev, &dest->node);*/
-// TODO: fix reinsertion
-		/*
-		 * we can not cheaply reinsert dest, somehow we are fucking
-		 * up the hashtable (or more precise: the linked list).
-		 * So pay CPU-cycles for our stupidness: cleanly reinsert
-		 * from the start
-		 */
-		cache_ht_add(dest, cache_ht_hash(&dest->e.na));
+	while(*p)
+	{
+		struct khl_cache_entry *n = rb_entry(*p, struct khl_cache_entry, rb);
+		int result = khl_entry_cmp(e, n);
+
+		parent = *p;
+		if(result < 0)
+			p = &((*p)->rb_left);
+		else if(result > 0)
+			p = &((*p)->rb_right);
+		else
+			return false;
 	}
-	else
-		cache_ht_del(src);
+	rb_link_node(&e->rb, parent, p);
+	rb_insert_color(&e->rb, &cache.tree);
+
+	return true;
 }
 
-RBTREE_MAKE_FUNCS(cache, struct khl_cache_entry, rb);
+static noinline bool khl_rb_cache_remove(struct khl_cache_entry *e)
+{
+	struct rb_node *n = &e->rb;
+
+	if(RB_EMPTY_NODE(n))
+		return false;
+
+	rb_erase(n, &cache.tree);
+	RB_CLEAR_NODE(n);
+	cache_ht_del(e);
+
+	return true;
+}
+
+static struct khl_cache_entry *khl_cache_last(void)
+{
+	struct rb_node *n = rb_last(&cache.tree);
+	return rb_entry(n, struct khl_cache_entry, rb);
+}
 
 void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 {
-	struct khl_cache_entry *e, *t;
+	struct khl_cache_entry *e;
 	uint32_t h;
 
 	/* check for bogus addresses */
@@ -1309,32 +1296,23 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 		/* entry newer? */
 		if(e->e.when >= when)
 			goto out_unlock;
-		t = rbtree_cache_remove(&cache.tree, e);
-		if(t)
-			e = t;
-		else {
+		if(!khl_rb_cache_remove(e)) {
 			logg_devel("remove failed\n");
 			goto life_tree_error; /* something went wrong... */
 		}
-		/*
-		 * The (physical) entry removed is maybe not the
-		 * one we asked for, it is just an entry. We have to
-		 * reinit it to reinsert it.
-		 */
 // TODO: cluster state changes??
 		e->cluster = cluster;
 	}
 	else
 	{
-		t = rbtree_cache_lowest(&cache.tree);
-		if(likely(t) &&
-		   t->e.when < when &&
+		e = khl_cache_last();
+		if(likely(e) &&
+		   e->e.when < when &&
 		   KHL_CACHE_SIZE <= cache.num)
 		{
 			logg_devel_old("found older entry\n");
-			if(!(t = rbtree_cache_remove(&cache.tree, t)))
+			if(!khl_rb_cache_remove(e))
 				goto out_unlock; /* the tree is amiss? */
-			e = t;
 		}
 		else
 			e = khl_cache_entry_alloc();
@@ -1342,11 +1320,11 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 			goto out_unlock;
 
 		e->cluster = cluster;
+		e->e.na = *addr;
 	}
-	e->e.na = *addr;
 	e->e.when = when;
 
-	if(!rbtree_cache_insert(&cache.tree, e)) {
+	if(!khl_rb_cache_insert(e)) {
 		logg_devel("insert failed\n");
 life_tree_error:
 		khl_cache_entry_free(e);
@@ -1376,6 +1354,8 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 		struct khl_cache_entry *w = NULL;
 		unsigned i = 0;
 
+// TODO: use lin search to randomize or return newest
+		/* now with rb_first, rb_next etc, we can search newest */
 		for(; i < KHL_CACHE_SIZE; i++)
 		{
 			if(likely(e->used && e->e.na.s_fam == s_fam && !e->cluster))
