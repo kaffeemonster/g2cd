@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * thread to accept connection and handshake G2
  *
- * Copyright (c) 2004-2008, Jan Seiffert
+ * Copyright (c) 2004-2009, Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -237,6 +237,7 @@ void *G2Accept(void *param)
 
 		/* Let's do it */
 		num_poll = my_epoll_wait(epoll_fd, eevents, EVENT_SPACE, 10000);
+		time(&local_time_now);
 		e_wptr = eevents;
 		switch(num_poll)
 		{
@@ -591,6 +592,7 @@ static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, i
 
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
+		w_entry->last_active = local_time_now;
 		if(!do_read(p_entry))
 			return w_entry;
 

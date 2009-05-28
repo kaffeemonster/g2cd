@@ -2,7 +2,7 @@
  * G2Connection.h
  * home of g2_connection_t and header-file for G2Connection.c
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -84,6 +84,7 @@ typedef struct g2_connection
 
 	/* Internal States */
 	union combo_addr sent_addr;
+	time_t           last_active;
 	long             time_diff;
 	/* flags */
 	struct

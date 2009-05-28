@@ -358,6 +358,7 @@ no_fill_before_write:
 		struct norm_buff *d_target = NULL;
 		bool retry, compact_cbuff = false, save_build_packet = false;
 
+		w_entry->last_active = local_time_now;
 		if(!do_read(p_entry))
 			return w_entry;
 		if(buffer_cempty(*w_entry->recv))
