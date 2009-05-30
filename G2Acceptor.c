@@ -287,7 +287,13 @@ void *G2Accept(void *param)
 									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 									{
 										logg_errno(LOGF_NOTICE, "sending connection to Handler");
+										/*
+										 * we have to do the recycle stuff here which was
+										 * not done because we said we want to keep it
+										 */
 										close(tmp_con->com_socket);
+										atomic_dec(&server.status.act_connection_sum);
+										g2_conreg_remove(tmp_con);
 										g2_con_clear(tmp_con);
 										g2_con_ret_free(tmp_con);
 									}

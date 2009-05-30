@@ -298,10 +298,10 @@ static void cache_ht_del(struct guid_cache_entry *e)
 	hlist_del(&e->node);
 }
 
-static int guid_entry_cmp(struct guid_cache_entry *a, struct guid_cache_entry *b)
+static long guid_entry_cmp(struct guid_cache_entry *a, struct guid_cache_entry *b)
 {
 	union guid_fast *ga, *gb;
-	int ret = (long)a->e.when - (long)b->e.when;
+	long ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
 	if((ret = (int)a->e.type - (int)b->e.type))
@@ -343,7 +343,7 @@ static noinline bool guid_rb_cache_insert(struct guid_cache_entry *e)
 	while(*p)
 	{
 		struct guid_cache_entry *n = rb_entry(*p, struct guid_cache_entry, rb);
-		int result = guid_entry_cmp(e, n);
+		long result = guid_entry_cmp(e, n);
 
 		parent = *p;
 		if(result < 0)
@@ -376,6 +376,8 @@ static noinline bool guid_rb_cache_remove(struct guid_cache_entry *e)
 static struct guid_cache_entry *guid_cache_last(void)
 {
 	struct rb_node *n = rb_last(&cache.tree);
+	if(!n)
+		return NULL;
 	return rb_entry(n, struct guid_cache_entry, rb);
 }
 

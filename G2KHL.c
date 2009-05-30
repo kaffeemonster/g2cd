@@ -1263,6 +1263,8 @@ static noinline bool khl_rb_cache_remove(struct khl_cache_entry *e)
 static struct khl_cache_entry *khl_cache_last(void)
 {
 	struct rb_node *n = rb_last(&cache.tree);
+	if(!n)
+		return NULL;
 	return rb_entry(n, struct khl_cache_entry, rb);
 }
 

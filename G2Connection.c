@@ -284,8 +284,10 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
 }
 
-void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
+void g2_con_free(g2_connection_t *to_free)
 {
+	struct list_head *e, *n;
+
 	if(!to_free)
 		return;
 
@@ -313,6 +315,12 @@ void GCC_ATTR_FASTCALL g2_con_free(g2_connection_t *to_free)
 
 	if(to_free->build_packet)
 		g2_packet_free(to_free->build_packet);
+
+	list_for_each_safe(e, n, &to_free->packets_to_send) {
+		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+		list_del(e);
+		g2_packet_free(entry);
+	}
 
 	free(to_free);
 }
@@ -369,7 +377,9 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 }
 
 
-	/* actionstring-functions */
+/*
+ * actionstring-functions
+ */
 static bool content_what(g2_connection_t *to_con, size_t distance)
 {
 	to_con->u.accept.flags.content_ok = true;

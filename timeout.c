@@ -42,9 +42,11 @@
 /* from deka to nano d    u    n */
 #define DSEC2NSEC (100*1000*1000)
 /* 100 * 0.1sec */
-#define DEFAULT_TIMEOUT	100
+#define DEFAULT_TIMEOUT	111
 
-/* vars */
+/*
+ * vars
+ */
 static struct
 {
 	pthread_cond_t  cond;
@@ -57,7 +59,9 @@ static struct
 	.mutex  = PTHREAD_MUTEX_INITIALIZER,
 };
 
-/* helper funcs */
+/*
+ * helper funcs
+ */
 static always_inline unsigned int to2sec(unsigned int timeout)
 {
 	return timeout / 10;
@@ -96,14 +100,14 @@ static always_inline bool timespec_after(struct timespec *a, struct timespec *b)
 	return false;
 }
 
-static always_inline int timespec_cmp(struct timespec *a, struct timespec *b)
+static always_inline long timespec_cmp(struct timespec *a, struct timespec *b)
 {
-	int ret = a->tv_sec - b->tv_sec;
+	long ret = a->tv_sec - b->tv_sec;
 	if(ret)
 		return ret;
 	if((ret = a->tv_nsec - b->tv_nsec))
 		return ret;
-	return (int)(a - b);
+	return (long)(a - b);
 }
 
 static always_inline void timespec_fill_local(struct timespec *t)
@@ -133,7 +137,7 @@ static always_inline void timespec_add(struct timespec *t, unsigned int timeout)
 	t->tv_nsec += to2nsec(timeout);
 }
 
-static struct timeout *timeout_nearest(void)
+static always_inline struct timeout *timeout_nearest(void)
 {
 	struct rb_node *n = rb_first(&wakeup.tree);
 	if(!n)
@@ -149,7 +153,7 @@ static bool timeout_rb_insert(struct timeout *t)
 	while(*p)
 	{
 		struct timeout *n = rb_entry(*p, struct timeout, rb);
-		int result = timespec_cmp(&t->t, &n->t);
+		long result = timespec_cmp(&t->t, &n->t);
 
 		parent = *p;
 		if(result < 0)
@@ -165,7 +169,9 @@ static bool timeout_rb_insert(struct timeout *t)
 	return true;
 }
 
-/* handling funcs */
+/*
+ * handling funcs
+ */
 bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 {
 	bool ret_val;
@@ -251,12 +257,25 @@ static void kick_timeouts(void)
 	struct timespec now;
 	struct timeout *t;
 
+	/*
+	 * we hold the tree lock
+	 * get the time now and the nearest timeout
+	 * and work on timeouts while they are
+	 * below now (timed out).
+	 */
 	for(timespec_fill(&now), t = timeout_nearest();
 	    t && !timespec_after(&t->t, &now);
 	    timespec_fill(&now), t = timeout_nearest())
 	{
+		/* lock the timeout */
 		pthread_mutex_lock(&t->lock);
-
+		logg_develd_old("now: %li.%li\tto: %li.%li\n",
+		                now.tv_sec, now.tv_nsec, t->t.tv_sec, t->t.tv_nsec);
+		/*
+		 * remove it from the tree while we locked:
+		 * - the tree
+		 * - the timeout
+		 */
 		if(!RB_EMPTY_NODE(&t->rb)) {
 			rb_erase(&t->rb, &wakeup.tree);
 			RB_CLEAR_NODE(&t->rb);
@@ -264,14 +283,19 @@ static void kick_timeouts(void)
 			pthread_mutex_unlock(&t->lock);
 			continue;
 		}
-
+		/* relaese the tree lock */
 		pthread_mutex_unlock(&wakeup.mutex);
 
+		/* work on the timeout */
 		if(t->fun)
 			t->fun(t->data);
 		else
 			logg_devel("empty timeout??\n");
 
+		/*
+		 * release the timeout, reaquire the tree lock
+		 * in exactly this order, or ABBA-deadlock
+		 */
 		pthread_mutex_unlock(&t->lock);
 		pthread_mutex_lock(&wakeup.mutex);
 	}
@@ -310,11 +334,8 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 		}
 
 		if(0 == ret_val || ETIMEDOUT == ret_val)
-		{
 			kick_timeouts();
-		}
-		else
-		{
+		else {
 			errno = ret_val;
 			logg_errnod(LOGF_ERR, "pthread_cond_timedwait failed with \"%i\" ", ret_val);
 			wakeup.abort = true;
