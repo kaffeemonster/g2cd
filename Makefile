@@ -119,6 +119,7 @@ CFLAGS += $(WARN_FLAGS)
 #
 # choose your cpu
 ARCH = athlon64-sse3
+#ARCH = core2
 #ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
@@ -132,7 +133,7 @@ ARCH_FLAGS += -march=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
-#ARCH_FLAGS += -momit-leaf-frame-pointer
+ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors
 # unfortunatly second class citizians
 #ARCH_FLAGS += -minline-all-stringops
@@ -147,7 +148,10 @@ ARCH_FLAGS += -march=$(ARCH)
 # generic archs (i686) do not help
 # always force mmx/sse - PPC: force altivec?
 #ARCH_FLAGS += -mmmx
-#ARCH_FLAGS += -msse
+#ARCH_FLAGS += -msse2
+#ARCH_FLAGS += -msse4
+#ARCH_FLAGS += -msse4.1
+#ARCH_FLAGS += -msse4.2
 CFLAGS += $(ARCH_FLAGS)
 
 #
@@ -217,7 +221,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -foptimize-sibling-calls
+#OPT_FLAGS = -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -795,7 +799,7 @@ G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h
 timeout.o: timeout.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
-G2Connection.h: G2Packet.h G2QHT.h lib/hzp.h lib/combo_addr.h lib/list.h version.h
+G2Connection.h: G2Packet.h G2QHT.h timeout.h lib/hzp.h lib/combo_addr.h lib/list.h lib/hlist.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
 G2ConRegistry.h: G2Connection.h lib/combo_addr.h
 G2QueryKey.h: lib/combo_addr.h

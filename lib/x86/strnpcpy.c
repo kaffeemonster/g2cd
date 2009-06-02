@@ -145,35 +145,47 @@ CPY_NEXT:
 	{
 		size_t cycles = i;
 		asm (
-				"pxor	%%xmm1, %%xmm1\n\t"
+				"mov	$0xFF01, %k3\n\t"
+				"movd	%k3, %%xmm1\n\t"
+				"xor	%3, %3\n\t"
 				"jmp	1f\n"
-				"3:\n\t"
 				".p2align 2\n\t"
-				"sub	%3, %0\n\t"
-				"add	%3, %1\n\t"
-				"movdqu	%%xmm0, (%2)\n\t"
-				"add	%3, %2\n\t"
-				"cmp	%3, %0\n\t"
+				"3:\n\t"
+				"sub	$16, %0\n\t"
+				"add	$16, %1\n\t"
+				"movdqu	%%xmm2, (%2)\n\t"
+				"add	$16, %2\n\t"
+				"cmp	$16, %0\n\t" /* check remaining length */
 				"jb	2f\n"
 				"1:\n\t"
-				"movdqu	(%1), %%xmm0\n\t"
-				"pcmpistri	$0b1000, %%xmm0, %%xmm1\n\t"
-				"jnz	3b\n"
+				"movdqu	(%1), %%xmm2\n\t"
+				/* Byte,Masked+,Range,Bytes */
+				/*             6543210 */
+				"pcmpistrm	$0b1100100, %%xmm2, %%xmm1\n\t"
+				"jnz	3b\n\t" /* if no zero byte */
+				"movdqa	%%xmm0, %%xmm1\n\t"
+				"pmovmskb	%%xmm0, %3\n\t"
+				"pslldq	$1, %%xmm1\n\t"
+				"por	%%xmm1, %%xmm0\n\t"
+				"maskmovdqu	%%xmm0, %%xmm2\n\t"
+				"not	%3\n\t"
+				"bsf	%3, %3\n\t"
+				"add	%3, %2\n"
 				"2:"
 			: /* %0 */ "=r" (i),
 			  /* %1 */ "=r" (src),
-			  /* %2 */ "=r" (dst),
-			  /* %3 */ "=c" (r)
+			  /* %2 */ "=D" (dst),
+			  /* %3 */ "=r" (r)
 			: /* %4 */ "0" (i),
 			  /* %5 */ "1" (src),
 			  /* %6 */ "2" (dst),
 			  /* %7 */ "3" (0)
 #ifdef __SSE__
-			: "xmm0", "xmm1"
+			: "xmm0", "xmm1", "xmm2"
 #endif
 		);
 		if(likely(r))
-			return cpy_rest0(dst, src, r);
+			return dst;
 		maxlen -= (cycles - i);
 	}
 	cpy_one_u64(dst, src, i, maxlen);
@@ -215,10 +227,10 @@ CPY_NEXT:
 		asm (
 			"pxor	%%xmm2, %%xmm2\n\t"
 			"jmp	1f\n"
+			".p2align 2\n\t"
 			"3:\n\t"
 			"sub	$16, %0\n\t"
 			"add	$16, %1\n\t"
-		/* there is movmsku since sse2, but creating the mask is a PITA */
 			"movdqu	%%xmm1, (%2)\n\t"
 			"add	$16, %2\n\t"
 			"cmp	$15, %0\n\t"
@@ -230,6 +242,7 @@ CPY_NEXT:
 			"pmovmskb	%%xmm0, %3\n\t"
 			"test	%3, %3\n\t"
 			"jz	3b\n"
+		/* there is maskmovdqu since sse2, but creating the mask is a PITA */
 			"2:"
 		: /* %0 */ "=r" (i),
 		  /* %1 */ "=r" (src),
@@ -288,6 +301,7 @@ CPY_NEXT:
 		asm (
 			"pxor	%%mm2, %%mm2\n\t"
 			"jmp	1f\n"
+			".p2align 2\n\t"
 			"3:\n\t"
 			"sub	$8, %0\n\t"
 			"add	$8, %1\n\t"

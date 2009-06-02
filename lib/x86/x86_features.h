@@ -38,14 +38,15 @@
 	FEATURE1( PSE      ,  3, "Page Size Extensions"              ), \
 	FEATURE1( TSC      ,  4, "Time Stamp Counter"                ), \
 	FEATURE1( MSR      ,  5, "RDMSR avail."                      ), \
-	FEATURE1( PAE      ,  6, "Physical Address Extensions"       ), \
+	FEATURE1( PAE      ,  6, "Phys. Address Extensions"          ), \
 	FEATURE1( MCE      ,  7, "Machine Check Execptions"          ), \
 	FEATURE1( CX8      ,  8, "CMPXCHG8 instruction"              ), \
 	FEATURE1( APIC     ,  9, "APIC on chip"                      ), \
+	FEATURE1( RES_1_10 , 10, "Reserverd"                         ), \
 	FEATURE1( SEP      , 11, "SYSENTER avail."                   ), \
-	FEATURE1( MTRR     , 12, "Memory Type Range Registers"       ), \
+	FEATURE1( MTRR     , 12, "Mem. Type Range Regs"              ), \
 	FEATURE1( PGE      , 13, "PTE Global Bit"                    ), \
-	FEATURE1( MCA      , 14, "Machine Check Architecture"        ), \
+	FEATURE1( MCA      , 14, "Machine Check Arch."               ), \
 	FEATURE1( CMOV     , 15, "CMOV avail."                       ), \
 	FEATURE1( PAT      , 16, "Page Attribute Table"              ), \
 	FEATURE1( PSE36    , 17, "Page Size Extention"               ), \
@@ -60,9 +61,11 @@
 	FEATURE1( SS       , 27, "Self Snoop Support"                ), \
 	FEATURE1( HTT      , 28, "SMT Multi-threading"               ), \
 	FEATURE1( TM       , 29, "Thermal Monitor"                   ), \
+	FEATURE1( IA64     , 30, "IA-64, Itanium in x86 mode"        ), \
 	FEATURE1( PBE      , 31, "Pending Break Enable"              ), \
 	FEATURE2( SSE3     ,  0, "SSE3 Extensions"                   ), \
-	FEATURE2( PCLMULQDQ,  1, "PCLMULQDQ avail."                  ), \
+	FEATURE2( PCLMULQDQ,  1, "PCLMULQDQ avail.(Intel:Res.Mar-09)"), \
+	FEATURE2( DTES64   ,  2, "64-Bit Debug Store"                ), \
 	FEATURE2( MONITOR  ,  3, "MONITOR avail."                    ), \
 	FEATURE2( DSCPL    ,  4, "CPL Qualified Debug Store"         ), \
 	FEATURE2( VMX      ,  5, "Virtual Machine Extensions"        ), \
@@ -71,24 +74,52 @@
 	FEATURE2( TM2      ,  8, "Thermal Monitor 2"                 ), \
 	FEATURE2( SSSE3    ,  9, "Supplemental SSE3 Extentions"      ), \
 	FEATURE2( CNXTID   , 10, "L1 Cache Context switch avail."    ), \
+	FEATURE2( RES_2_11 , 11, "Reserverd"                         ), \
 	FEATURE2( FMA      , 12, "Fused Multiply Add Extension"      ), \
 	FEATURE2( CX16     , 13, "CMPXCHG16 avail."                  ), \
 	FEATURE2( XTPR     , 14, "xTPR Update Control"               ), \
 	FEATURE2( PDCM     , 15, "Performance and Debug Capabillity" ), \
+	FEATURE2( RES_2_16 , 16, "Reserved"                          ), \
+	FEATURE2( RES_2_17 , 17, "Reserved"                          ), \
 	FEATURE2( DCA      , 18, "Direct Cache Access"               ), \
 	FEATURE2( SSE4_1   , 19, "SSE4.1 Extensions"                 ), \
 	FEATURE2( SSE4_2   , 20, "SSE4.2 Extensions"                 ), \
 	FEATURE2( X2APIC   , 21, "x2APIC avail."                     ), \
 	FEATURE2( MOVBE    , 22, "MOVBE avail."                      ), \
 	FEATURE2( POPCNT   , 23, "POPCNT avail."                     ), \
+	FEATURE2( RES_2_24 , 24, "Reserved"                          ), \
 	FEATURE2( AES      , 25, "AES Support"                       ), \
 	FEATURE2( XSAVE    , 26, "XSAVE avail."                      ), \
 	FEATURE2( OSXSAVE  , 27, "OS supports XSAVE"                 ), \
 	FEATURE2( AVX      , 28, "AVX Extensions"                    ), \
+	FEATURE2( RES_2_29 , 29, "Reserved"                          ), \
+	FEATURE2( RES_2_30 , 30, "Reserved"                          ), \
 	FEATURE2( RAZ      , 31, "WTF? found in AMD CPUID spec."     ), \
+	FEATURE3( MIR_FPU  ,  0, "FPU on Chip, mirrored"             ), \
+	FEATURE3( MIR_VME  ,  1, "Virtual Mode Extensions, mirrored" ), \
+	FEATURE3( MIR_DE   ,  2, "Debugging Extensions, mirrored"    ), \
+	FEATURE3( MIR_PSE  ,  3, "Page Size Extensions, mirrored"    ), \
+	FEATURE3( MIR_TSC  ,  4, "Time Stamp Counter, mirrored"      ), \
+	FEATURE3( MIR_MSR  ,  5, "RDMSR avail., mirrored"            ), \
+	FEATURE3( MIR_PAE  ,  6, "Phys. Address Extensions, mirrored"), \
+	FEATURE3( MIR_MCE  ,  7, "Machine Check Execptions, mirrored"), \
+	FEATURE3( MIR_CX8  ,  8, "CMPXCHG8 instruction, mirrored"    ), \
+	FEATURE3( MIR_APIC ,  9, "APIC on chip, mirrored"            ), \
+	FEATURE3( RES_3_10 , 10, "Reserverd"                         ), \
 	FEATURE3( SYSCALL  , 11, "SYSCALL avail."                    ), \
+	FEATURE3( MIR_MTRR , 12, "Mem. Type Range Regs, mirrored"    ), \
+	FEATURE3( MIR_PGE  , 13, "PTE Global Bit, mirrored"          ), \
+	FEATURE3( MIR_MCA  , 14, "Machine Check Arch., mirrored"     ), \
+	FEATURE3( MIR_CMOV , 15, "CMOV avail., mirrored"             ), \
+	FEATURE3( MIR_PAT  , 16, "Page Attribute Table, mirrored"    ), \
+	FEATURE3( MIR_PSE36, 17, "Page Size Extention, mirrored"     ), \
+	FEATURE3( RES_3_18 , 18, "Reserverd"                         ), \
+	FEATURE3( RES_3_19 , 19, "Reserverd"                         ), \
 	FEATURE3( NX       , 20, "Execute Disable"                   ), \
+	FEATURE3( RES_3_21 , 21, "Reserverd"                         ), \
 	FEATURE3( MMXEXT   , 22, "MMX Technology Extensions"         ), \
+	FEATURE3( MIR_MMX  , 23, "MMX Technology, mirrored"          ), \
+	FEATURE3( MIR_FXSR , 24, "FXSAVE avail., mirrored"           ), \
 	FEATURE3( FFXSR    , 25, "FXSAVE optimizations"              ), \
 	FEATURE3( PAGE1GB  , 26, "1 Giga byte pages supported"       ), \
 	FEATURE3( RDTSCP   , 27, "RDTSCP avail."                     ), \

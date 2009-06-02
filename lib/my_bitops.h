@@ -3,7 +3,7 @@
  * header-file for some global usefull bitbanging
  * functions
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -77,6 +77,7 @@ char *strchrnul(const char *s, int c) GCC_ATTR_PURE;
 #  define STRCHRNUL_DEFINED
 # endif
 
+# define strlitcmp(x, y)	(memcmp((x), (y), str_size(y)))
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))
 # define strplitcpy(x, y)	(mempcpy((x), (y), str_size(y)))
 

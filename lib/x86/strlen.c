@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, x86 implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -79,19 +79,27 @@ static size_t strlen_SSE42(const char *s)
 		"shr	%b2, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
+		"mov	$0xFF01, %k0\n\t"
+		"movd	%k0, %%xmm0\n\t"
 		".p2align 1\n"
 		"1:\n\t"
 		"add	$16, %1\n\t"
 		"prefetcht0	64(%1)\n\t"
-		"pcmpistri	$0b1000, (%1), %%xmm0\n\t"
+		/* LSB,Invert,Range,Bytes */
+		/*             6543210 */
+		"pcmpistri	$0b0010100, (%1), %%xmm0\n\t"
 		"jnz	1b\n\t"
 		"lea	(%1,%2),%0\n\t"
 		"sub	%3, %0\n"
 		"2:"
-		: /* %0 */ "=r" (len),
-		  /* %1 */ "=r" (p),
-		  /* %2 */ "=c" (t)
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#ifdef __i386__
 		: /* %3 */ "m" (s),
+#else
+		: /* %3 */ "r" (s),
+#endif
 		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
 		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
 #ifdef __SSE2__
@@ -127,8 +135,12 @@ static size_t strlen_SSE2(const char *s)
 		"sub	%2, %0\n\t"
 		"2:"
 		: /* %0 */ "=&r" (len),
-		  /* %1 */ "=r" (p)
+		  /* %1 */ "=&r" (p)
+#ifdef __i386__
 		: /* %2 */ "m" (s),
+#else
+		: /* %2 */ "r" (s),
+#endif
 		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
 		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
 #ifdef __SSE2__

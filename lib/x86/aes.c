@@ -150,29 +150,37 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 		  /* %9 */ "m" (*(const char *)in)
 	);
 #else
+# ifdef __i386__
+#  define REG_b "%%ebx"
+#  define REG_c "%%ecx"
+#  define REG_d "%%edx"
+#  define REG_S "%%esi"
+#  define REG_D "%%edi"
+# else
+#  define REG_b "%%rbx"
+#  define REG_c "%%rcx"
+#  define REG_d "%%rdx"
+#  define REG_S "%%rsi"
+#  define REG_D "%%rdi"
+# endif
 	const void *ptr = ctx->k;
-	/*
-	 * we simply assume 32 bit for this fallback, which will
-	 * break on 64 bit. Hopefully debugging 64 bit Centauers
-	 * are rare...
-	 */
 	asm(
-		"push	%%esi\n\t"
-		"push	%%edi\n\t"
-		"push	%%ecx\n\t"
-		"push	%%edx\n\t"
-		"push	%%ebx\n\t"
-		"mov	%3, %%esi\n\t"
-		"mov	%4, %%edi\n\t"
-		"mov	%1, %%edx\n\t"
-		"mov	%2, %%ebx\n\t"
-		"mov	$1, %%ecx\n\t"
+		"push	"REG_S"\n\t"
+		"push	"REG_D"\n\t"
+		"push	"REG_c"\n\t"
+		"push	"REG_d"\n\t"
+		"push	"REG_b"\n\t"
+		"mov	%3, "REG_S"\n\t"
+		"mov	%4, "REG_D"\n\t"
+		"mov	%1, "REG_d"\n\t"
+		"mov	%2, "REG_b"\n\t"
+		"mov	$1, "REG_c"\n\t"
 		"rep xcryptecb\n\t"
-		"pop	%%ebx\n\t"
-		"pop	%%edx\n\t"
-		"pop	%%ecx\n\t"
-		"pop	%%edi\n\t"
-		"pop	%%esi\n\t"
+		"pop	"REG_b"\n\t"
+		"pop	"REG_d"\n\t"
+		"pop	"REG_c"\n\t"
+		"pop	"REG_D"\n\t"
+		"pop	"REG_S"\n\t"
 		: /* %0 */ "=m" (*(char *)out)
 		: /* %1 */ "m" (*control_word),
 		  /* %2 */ "m" (ptr),

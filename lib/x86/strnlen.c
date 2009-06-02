@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, x86 implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -84,19 +84,24 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"bsf	%0, %0\n\t"
 		"jnz	5f\n\t"
 		"neg	%2\n\t"
+		"mov	$0xFF01, %k0\n\t"
+		"movd	%k0, %%xmm1\n\t"
 		"xor	%0, %0\n\t"
-		"add	$16, %0\n\t"
-		"add	%0, %2\n\t"
+		"add	$2, %0\n\t"
+		"xor	%3, %3\n\t"
+		"add	$16, %3\n\t"
+		"add	%3, %2\n\t"
 		".p2align 1\n"
 		"2:\n\t"
-		"sub	%0, %2\n\t"
-		"add	%0, %1\n\t"
+		"sub	%3, %2\n\t"
+		"add	%3, %1\n\t"
 		"prefetcht0	64(%1)\n\t"
-		"pcmpestri	$0b1000, (%1), %%xmm1\n\t"
+		/* LSB,Invert,Range,Bytes */
+		/*             6543210 */
+		"pcmpestri	$0b0010100, (%1), %%xmm1\n\t"
 		"ja	2b\n\t"
-		"cmovz	%2, %3\n\t"
-		"xchg	%3, %0\n\t"
-		"add	%1, %0\n\t"
+		"cmovnc	%2, %3\n\t"
+		"lea	(%3, %1), %0\n\t"
 		"sub	%5, %0\n"
 		"5:\n\t"
 		".subsection 2\n"
@@ -112,11 +117,16 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"jmp	5b\n"
 		".previous"
 	: /* %0 */ "=&a" (len),
-	  /* %1 */ "=r" (p),
+	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&d" (t),
-	  /* %3 */ "=c" (f)
+	  /* %3 */ "=&c" (f)
+#ifdef __i386__
 	: /* %4 */ "m" (maxlen),
 	  /* %5 */ "m" (s),
+#else
+	: /* %4 */ "r" (maxlen),
+	  /* %5 */ "r" (s),
+#endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "2" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
@@ -183,11 +193,16 @@ static size_t strnlen_SSE2(const char *s, size_t maxlen)
 		"jmp	5b\n\t"
 		".previous"
 	: /* %0 */ "=&a" (len),
-	  /* %1 */ "=r" (p),
+	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
-	  /* %3 */ "=c" (f)
+	  /* %3 */ "=&c" (f)
+#ifdef __i386__
 	: /* %4 */ "m" (maxlen),
 	  /* %5 */ "m" (s),
+#else
+	: /* %4 */ "r" (maxlen),
+	  /* %5 */ "r" (s),
+#endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "2" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))

@@ -148,7 +148,7 @@ static void *G2UDP_loop(void *param)
 	union combo_addr from, to;
 	int answer_fd = -1;
 
-	my_snprintf(d_hold.data, d_hold.limit, OUR_PROC " UDP %i", (int)param);
+	my_snprintf(d_hold.data, d_hold.limit, OUR_PROC " UDP %ti", (intptr_t)param);
 	g2_set_thread_name(d_hold.data);
 
 	while(worker.keep_going)
@@ -247,7 +247,7 @@ void *G2UDP(void *param)
 {
 	static pthread_t *helper;
 // TODO: get number of helper threads
-	unsigned int num_helper = 1, i;
+	size_t num_helper = 1, i;
 
 	poll_me[0].fd = *((int *)param);
 	logg(LOGF_INFO, "UDP:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", poll_me[0].fd, *(((int *)param)-1));
@@ -299,7 +299,7 @@ void *G2UDP(void *param)
 	for(i = 0; i < num_helper; i++)
 	{
 		if(pthread_create(&helper[i], &server.settings.t_def_attr, G2UDP_loop, (void *)(i + 1))) {
-			logg_errnod(LOGF_WARN, "starting UDP helper threads, will run with %u", i);
+			logg_errnod(LOGF_WARN, "starting UDP helper threads, will run with %zu", i);
 			num_helper = i;
 			break;
 		}

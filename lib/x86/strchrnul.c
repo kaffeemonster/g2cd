@@ -59,45 +59,119 @@
 static char *strchrnul_SSE42(const char *s, int c)
 {
 	char *ret;
-	size_t t;
+	size_t t, z;
 	const char *p;
+
 	/*
 	 * even if nehalem can handle unaligned load much better
 	 * (so they promised), we still align hard to get in
 	 * swing with the page boundery.
 	 */
 	asm (
-		"mov	%3, %2\n\t"
-		"prefetcht0	(%2)\n\t"
-		"movzbl	%4, %k0\n\t"
-		"movd	%k0, %%xmm1\n\t"
-		"and	$-16, %2\n\t"
+		"mov	%4, %3\n\t"
+		"prefetcht0	(%3)\n\t"
+		"pcmpeqb	%%xmm0, %%xmm0\n\t"
+		"pslldq	$1, %%xmm0\n\t"
+		"movd	%k5, %%xmm1\n\t"
+		"pshufb	%%xmm0, %%xmm1\n\t"
+		"and	$-16, %3\n\t"
 		"mov	$16, %k0\n\t"
 		"mov	%0, %1\n\t"
-		"pcmpestrm	$0b1000000, (%2), %%xmm1\n\t"
-		"mov	%2, %1\n\t"
-		"mov	%3, %2\n\t"
+		/* ByteM,Norm,Any,Bytes */
+		/*             6543210 */
+		"pcmpestrm	$0b1000000, (%3), %%xmm1\n\t"
+		"mov	%4, %2\n\t"
 		"and	$0x0f, %2\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
 		"shr	%b2, %0\n\t"
 		"shl	%b2, %0\n\t"
 		"bsf	%0, %2\n\t"
 		"jnz	2f\n\t"
+		"mov	%1, %0\n\t"
 		".p2align 1\n"
 		"1:\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpistri	$0b0100000, (%1), %%xmm1\n\t"
+		"add	%1, %3\n\t"
+		"prefetcht0	64(%3)\n\t"
+		/* LSB,Norm,Any,Bytes */
+		/*             6543210 */
+		"pcmpestri	$0b0000000, (%3), %%xmm1\n\t"
 		"ja	1b\n\t"
 		"2:"
-		"lea	(%1,%2),%0\n\t"
-		: /* %0 */ "=r" (ret),
-		  /* %1 */ "=d" (p),
-		  /* %2 */ "=c" (t)
-		: /* %3 */ "m" (s),
-		  /* %4 */ "m" (c)
+		"lea	(%3,%2),%0\n\t"
+		: /* %0 */ "=&a" (ret),
+		  /* %1 */ "=&d" (z),
+		  /* %2 */ "=&c" (t),
+		  /* %3 */ "=&r" (p)
+#ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "m" (c)
+#else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#endif
 #ifdef __SSE2__
 		: "xmm0", "xmm1"
+#endif
+	);
+	return ret;
+}
+
+static char *strchrnul_SSSE3(const char *s, int c)
+{
+	char *ret;
+	const char *p;
+	size_t t;
+
+	asm (
+		/*
+		 * hate doing this, but otherwise the compiler thinks
+		 * he absolutly needs to put everything in the wrong
+		 * reg, so he better shuffeles it all around, and for
+		 * this he needs another reg, ohh, lets spill one...
+		 */
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"movd	%k4, %%xmm2\n\t"
+		"mov	%1, %2\n\t"
+		"and	$-16, %1\n\t"
+		"and	$0x0f, %2\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"pshufb	%%xmm1, %%xmm2\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm2, %%xmm3\n\t"
+		"por	%%xmm3, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"add	$16, %1\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm2, %%xmm3\n\t"
+		"por	%%xmm3, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jz	1b\n\t"
+		"2:"
+		"add	%1, %0\n\t"
+		: /* %0 */ "=&r" (ret),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "m" (c)
+#else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#endif
+#ifdef __SSE2__
+		: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
 	);
 	return ret;
@@ -118,13 +192,15 @@ static char *strchrnul_SSE2(const char *s, int c)
 		 */
 		"mov	%3, %1\n\t"
 		"prefetcht0	(%1)\n\t"
-		"movb	%4, %b0\n\t"
-		"movb	%b0, %h0\n\t"
+		"movzbl	%b4, %k0\n\t"
+		"mov	%k0, %k2\n\t"
+		"shl	$8, %k2\n\t"
+		"or	%k2, %k0\n\t"
+		"movd	%k0, %%xmm2\n\t"
 		"mov	%1, %2\n\t"
 		"and	$-16, %1\n\t"
 		"and	$0x0f, %2\n\t"
 		"pxor	%%xmm1, %%xmm1\n\t"
-		"pinsrw	$0b00000000, %k0, %%xmm2\n\t"
 		"pshuflw	$0b00000000, %%xmm2, %%xmm2\n\t"
 		"pshufd	$0b00000000, %%xmm2, %%xmm2\n\t"
 		"movdqa	(%1), %%xmm0\n\t"
@@ -151,10 +227,15 @@ static char *strchrnul_SSE2(const char *s, int c)
 		"2:"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
-		  /* %1 */ "=r" (p),
-		  /* %2 */ "=c" (t)
-		: /* %3 */ "m" (s),
-		  /* %4 */ "m" (c)
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "m" (c)
+#else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#endif
 #ifdef __SSE2__
 		: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
@@ -318,6 +399,7 @@ static char *strchrnul_x86(const char *s, int c)
 static const struct test_cpu_feature t_feat[] =
 {
 	{.func = (void (*)(void))strchrnul_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strchrnul_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = NULL},
 	{.func = (void (*)(void))strchrnul_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strchrnul_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

@@ -385,7 +385,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 
 	while(likely(t_len) && likely(s_len))
 	{
-		unsigned t;
+		size_t t;
 		uint8_t c = *data;
 
 		if(unlikely(!(c & 0x80)))

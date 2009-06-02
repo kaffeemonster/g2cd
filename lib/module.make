@@ -195,6 +195,7 @@ LIBSRCS = \
 	$(MPL)/udpfromto.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
+	$(MPL)/strchr.c \
 	$(MPL)/strchrnul.c \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
@@ -215,6 +216,7 @@ BITOPOBJS = \
 	$(MPL)/popcountst.o \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
+	$(MPL)/strchr.o \
 	$(MPL)/strchrnul.o \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \

@@ -64,7 +64,7 @@ static const char ucd[16] GCC_ATTR_ALIGNED(16) =
 static int strncasecmp_a_SSE42(const char *s1, const char *s2, size_t n)
 {
 	size_t m1;
-	size_t i, j, cycles;
+	size_t t, i, j, cycles;
 	unsigned c1, c2;
 
 	prefetch(ucd);
@@ -83,33 +83,40 @@ LOOP_AGAIN:
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
 
-// TODO: untested
 	cycles = i;
 	asm (
-		"cmp	$16, %2\n\t"
+		"mov	$16, %3\n\t"
+		"cmp	%3, %2\n\t"
 		"jb	3f\n\t"
-		"mov	0x7A60, %k3\n\t"
-		"movd	%k3, %%xmm1\n\t"
-		"movdqa	%4, %%xmm2\n\t"
+		"mov	$0x7A61, %k4\n\t"
+		"movd	%k4, %%xmm1\n\t"
+		"movdqa	%5, %%xmm2\n\t"
+		"mov	$2, %k4\n\t"
 		"jmp	2f\n"
 		"1:\n\t"
-		"add	$16, %0\n\t"
-		"add	$16, %1\n"
-		"cmp	$16, %2\n\t"
+		"add	%3, %0\n\t"
+		"add	%3, %1\n"
+		"cmp	%3, %2\n\t"
 		"jbe	3f\n\t"
 		"2:\n\t"
-		"sub	$16, %2\n\t"
+		"sub	%3, %2\n\t"
 		/* s1 */
 		"movdqu	(%0), %%xmm7\n\t"
-		"pcmpistrm	$0b1100100, %%xmm1, %%xmm7\n\t"
+		/* ByteM,Masked+,Range,Bytes */
+		/*             6543210 */
+		"pcmpestrm	$0b1100100, %%xmm7, %%xmm1\n\t"
 		"pand	%%xmm2, %%xmm0\n\t"
 		"psubb	%%xmm0, %%xmm7\n\t"
 		/* s2 */
 		"movdqu	(%1), %%xmm6\n\t"
-		"pcmpistrm	$0b1100100, %%xmm1, %%xmm6\n\t"
+		/* ByteM,Masked+,Range,Bytes */
+		/*             6543210 */
+		"pcmpestrm	$0b1100100, %%xmm6, %%xmm1\n\t"
 		"pand	%%xmm2, %%xmm0\n\t"
 		"psubb	%%xmm0, %%xmm6\n\t"
 		/* s1 ^ s2 */
+		/* LSB,Masked-,EqualE,Bytes */
+		/*             6543210 */
 		"pcmpistri	$0b0111000, %%xmm7, %%xmm6\n\t"
 		"js	3f\n\t"
 		"jz	3f\n\t"
@@ -117,13 +124,13 @@ LOOP_AGAIN:
 		"3:\n\t"
 	: /* %0 */ "=r" (s1),
 	  /* %1 */ "=r" (s2),
-	  /* %2 */ "=r" (i),
-	  /* %3 */ "=c" (m1)
-	: /* %4 */ "m" (*ucd),
+	  /* %2 */ "=d" (i),
+	  /* %3 */ "=c" (m1),
+	  /* %4 */ "=a" (t)
+	: /* %5 */ "m" (*ucd),
 	  /*  */ "0" (s1),
 	  /*  */ "1" (s2),
-	  /*  */ "2" (i),
-	  /*  */ "3" (16)
+	  /*  */ "2" (i)
 	);
 	cycles = ((cycles - i) / 16) * 16;
 	if(likely(m1 < 16)) {

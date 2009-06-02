@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, x86 implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -83,7 +83,6 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 	size_t rr;
 	static const size_t t = 0;
 
-// TODO: untested
 	asm (
 		"prefetcht0	(%1)\n\t"
 		"test	%1, %1\n\t" /* src NULL? */
@@ -91,13 +90,14 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"test	%3, %3\n\t" /* len NULL? */
 		"jz	9f\n\t" /* outa here */
 		"add	$2, %0\n\t" /* create a 2 */
-		"movd %k2, %%xmm1\n\t"
+		"movd	%k2, %%xmm1\n\t"
 		"mov	%1, %2\n\t" /* duplicate src */
 		"and	$15, %2\n\t" /* create align difference */
 		"and	$-16, %1\n\t" /* align down src */
-		"movdqa	(%1), %%xmm2\n\t" /* load data */
 		"add	%2, %3\n\t" /* len += align diff */
-		"pcmpestrm	$0b1111100, %%xmm1, %%xmm2\n\t"
+		/* ByteM,Masked+,EqualO,Bytes */
+		/*             6543210 */
+		"pcmpestrm	$0b1101100, (%1), %%xmm1\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
 		"shr	%b2, %0\n\t" /* mask out lower stuff */
 		"shl	%b2, %0\n\t"
@@ -113,21 +113,21 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"cmp	$16, %3\n\t" /* len left? */
 		"jbe	9f\n\t" /* no -> done */
 		"shr	$17, %0\n\t" /* put eax.17 in carry */
-		"lea	2(%0), %0\n\t" /* create a two */
+		"lea	2(%0), %0\n\t" /* create a two without changing flags */
 		"jnc	3f\n\t" /* eax.17 == 0 ? -> start normal */
-		"add	$15, %2\n\t" /* create 15 */
 		".p2align 2\n"
 		"4:\n\t"
 		"cmpb	$0x0A, 16(%1)\n\t" /* is first byte in str a '\n'? */
 		"je	7f\n\t"
 		".p2align 1\n"
 		"3:\n\t"
-		"sub	%2, %3\n" /* len -= SOV16 */
-		"add	%2, %1\n\t" /* p += SOV16 */
-		"pcmpestri	$0b01100, (%1), %%xmm1\n\t"
+		"sub	$16, %3\n" /* len -= SOV16 */
+		"add	$16, %1\n\t" /* p += SOV16 */
+		/* LSB,Norm,EqualO,Bytes */
+		/*             6543210 */
+		"pcmpestri	$0b0001100, (%1), %%xmm1\n\t"
 		"ja	3b\n\t" /* no match(C) or end(Z)? -> continue */
 		"jz	2f\n\t" /* end? -> don't check match position */
-// TODO: does the instruction match a lonely '\r' in the len last byte ?
 		"cmp	$15, %2\n\t" /* index of last char? */
 		"je	4b\n" /* last char matched? - > continue */
 		"jmp	7f\n\t"
@@ -142,7 +142,7 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 #endif
 		"7:\n\t"
 		"movzx	%w2, %2\n\t" /* clear upper half, result is small */
-		"lea	(%1,%2), %0\n" /* add match index to p */
+		"lea	(%1, %2), %0\n" /* add match index to p */
 		"9:\n\t"
 		/*
 		 * done!
