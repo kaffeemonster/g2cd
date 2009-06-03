@@ -20,7 +20,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
+ *
+ * Floating Point conversion code is some one else clever foo,
+ * but i forgot who...
+ *
  * $Id:$
+ */
+
+/*
+ * FP-Code was retrieved as a C file without any attribution.
+ *
+ * All i remember is a paper about efficient floating point
+ * conversion. And after digging a reference impl. from one
+ * of the paper authors showed up, or something like that.
+ *
+ * Who ever it was:
+ * "For those about to rock: (fire!) We salute you"
+ *
+ * And i think it's not that efficient, but avoids the fpu
+ * quite succefully ;-)
  */
 
 #include <stdlib.h>
@@ -70,9 +88,9 @@
  *
  * Known limitations:
  * - Does not always return the correct needed length when truncating
- * - Can not print floating point
+ * - Can barely print floating point
  * - the maxlen is not always obeyed...
- * - Very fancy modifier/conversion options are ?broken?
+ * - Very fancy modifier/conversion options are /broken/
  * - And surely not std. conform
  */
 
@@ -392,9 +410,631 @@ MAKE_NFUNC( nz, size_t)
 MAKE_NFUNC( nt, ptrdiff_t)
 
 /*
- * FLOTING POINT - UNIMPLEMETNED
- * not over unimp, to pop the right arg size
+ * FLOTING POINT - ROUGHLY (UN)IMPLEMENTED
+ *
+ * no long double
+ * no hex
+ * does not obay any formating
+ * no fancy anything
+ * no exponential display
+ * no nothing
+ *
+ * but: brings a basic floating point number to the screen
+ * and mainly: to pop the right arg size
  */
+
+/* exponent stored + 1024, hidden bit to left of decimal point */
+#define BIAS 1023
+#define MAN_BITS2RIGHT 52
+#define HIDDEN_BIT 0x0010000000000000ULL
+
+#define BIGSIZE 24
+#define MIN_E -1074
+#define MAX_FIVE 325
+#define B_P1 (1ULL << MAN_BITS2RIGHT)
+
+typedef uint64_t big_digit;
+
+struct big_num
+{
+	big_digit d[BIGSIZE];
+	int l;
+};
+
+#ifdef HAVE_TIMODE
+typedef unsigned __uint128 __attribute__((mode(TI)));
+#endif
+
+#define five_tab five_tab_base_data
+extern const struct big_num five_tab[MAX_FIVE];
+
+#define ADD_BIG(x, y, z, k) \
+{ \
+	big_digit x_add, z_add; \
+	x_add = (x);\
+	if((k)) \
+		z_add = x_add + (y) + 1, (k) = (z_add <= x_add); \
+	else \
+		z_add = x_add + (y), (k) = (z_add < x_add); \
+	(z) = z_add; \
+}
+
+#define SUB_BIG(x, y, z, b) \
+{ \
+	big_digit x_sub, y_sub; \
+	x_sub = (x); y_sub = (y); \
+	if((b)) \
+		(z) = x_sub - y_sub - 1, b = (y_sub >= x_sub); \
+	else \
+		(z) = x_sub - y_sub, b = (y_sub > x_sub); \
+}
+
+#ifndef HAVE_TIMODE
+# define MUL_BIG(x, y, z, k) \
+{ \
+	big_digit x_mul, low, high; \
+	x_mul = (x); \
+	low = (x_mul & 0xffffffff) * (y) + (k); \
+	high = (x_mul >> 32) * (y) + (low >> 32); \
+	(k) = high >> 32; \
+	(z) = (low & 0xffffffff) | (high << 32); \
+}
+#else
+# define MUL_BIG(x, y, z, k) \
+{ \
+	__uint128 a_res = (__uint128)(x) * (y) + (k); \
+	(k) = a_res >> 64; \
+	(z) = a_res; \
+}
+#endif
+
+#ifndef HAVE_TIMODE
+# define SLL_BIG(x, y, z, k) \
+{ \
+	big_digit x_sll = (x); \
+	(z) = (x_sll << (y)) | (k); \
+	(k) = x_sll >> (64 - (y)); \
+}
+#else
+# define SLL_BIG(x, y, z, k) \
+{ \
+	__uint128 x_sll = ((__uint128)(x) << (y)) | (k); \
+	(k) = x_sll >> 64; \
+	(z) = x_sll; \
+}
+#endif
+
+static void mul10(struct big_num *x)
+{
+	int i, l;
+	big_digit *p, k;
+
+	l = x->l;
+	for(i = l, p = &x->d[0], k = 0; i >= 0; i--)
+		MUL_BIG(*p, 10, *p++, k);
+	if(k != 0)
+		*p = k, x->l = l+1;
+}
+
+static void big_short_mul(const struct big_num *x, big_digit y, struct big_num *z)
+{
+	int i, xl, zl;
+	const big_digit *xp;
+	big_digit *zp, k;
+	uint32_t high, low;
+
+	xl = x->l;
+	xp = &x->d[0];
+	zl = xl;
+	zp = &z->d[0];
+	high = y >> 32;
+	low = y & 0xffffffff;
+
+	for(i = xl, k = 0; i >= 0; i--, xp++, zp++)
+	{
+		big_digit xlow, xhigh, z0, t, c, z1;
+		xlow = *xp & 0xffffffff;
+		xhigh = *xp >> 32;
+		z0 = (xlow * low) + k; /* Cout is (z0 < k) */
+		t = xhigh * low;
+		z1 = (xlow * high) + t;
+		c = (z1 < t);
+		t = z0 >> 32;
+		z1 += t;
+		c += (z1 < t);
+		*zp = (z1 << 32) | (z0 & 0xffffffff);
+		k = (xhigh * high) + (c << 32) + (z1 >> 32) + (z0 < k);
+	}
+	if(k != 0)
+		*zp = k, zl++;
+	z->l = zl;
+}
+
+static inline void print_big(struct big_num *x)
+{
+	int i;
+
+	printf("#x");
+	i = x->l;
+
+	for(; i >= 0; i--)
+		printf("%016llx", x->d[i]);
+}
+
+static int estimate(int n)
+{
+	if(n < 0)
+		return (int)(n * 0.3010299956639812);
+	else
+		return 1 + (int)(n * 0.3010299956639811);
+}
+
+static void one_shift_left(int y, struct big_num *z)
+{
+	int n, m, i;
+
+	n = y / 64;
+	m = y % 64;
+
+	for(i = 0; i < n; i++)
+		z->d[i] = 0;
+	z->d[i] = 1ULL << m;
+	z->l = n;
+}
+
+static void short_shift_left(big_digit x, int y, struct big_num *z)
+{
+	int n, m, i, zl;
+	big_digit *zp;
+
+	n = y / 64;
+	m = y % 64;
+	zl = n;
+	zp = &(z->d[0]);
+
+	for(i = 0; i < n; i++)
+		z->d[i] = 0;
+
+	if(0 == m)
+		z->d[i] = x;
+	else
+	{
+		big_digit high = x >> (64 - m);
+		z->d[i] = x << m;
+		if(high != 0)
+			z->d[i + 1] = high, zl++;
+	}
+	z->l = zl;
+}
+
+static void big_shift_left(const struct big_num *x, int y, struct big_num *z)
+{
+	int n, m, i, xl, zl;
+	const big_digit *xp;
+	big_digit *zp, k;
+
+	n = y / 64;
+	m = y % 64;
+	xl = x->l;
+	xp = &(x->d[0]);
+	zl = xl + n;
+	zp = &(z->d[0]);
+
+	for(i = n; i > 0; i--)
+		*zp++ = 0;
+
+	if(0 == m)
+		for(i = xl; i >= 0; i--)
+			*zp++ = *xp++;
+	else
+	{
+		for(i = xl, k = 0; i >= 0; i--)
+			SLL_BIG(*xp++, m, *zp++, k);
+		if(k != 0)
+			*zp = k, zl++;
+	}
+	z->l = zl;
+}
+
+static int big_comp(struct big_num *x, struct big_num *y)
+{
+	int i;
+
+	if(x->l > y->l)
+		return 1;
+	if(x->l < y->l)
+		return -1;
+
+	for(i = x->l; i >= 0; i--)
+	{
+		big_digit a = x->d[i], b = y->d[i];
+
+		if(a > b)
+			return 1;
+		else if(a < b)
+			return -1;
+	}
+	return 0;
+}
+
+static int sub_big(struct big_num *x, struct big_num *y, struct big_num *z)
+{
+	int xl, yl, zl, b, i;
+	big_digit *xp, *yp, *zp;
+
+	xl = x->l;
+	yl = y->l;
+
+	if(yl > xl)
+		return 1;
+
+	xp = &x->d[0];
+	yp = &y->d[0];
+	zp = &z->d[0];
+
+	for(i = yl, b = 0; i >= 0; i--)
+		SUB_BIG(*xp++, *yp++, *zp++, b);
+
+	for(i = xl-yl; b && i > 0; i--)
+	{
+		big_digit x_sub;
+		x_sub = *xp++;
+		*zp++ = x_sub - 1;
+		b = (x_sub == 0);
+	}
+
+	for(; i > 0; i--)
+		*zp++ = *xp++;
+
+	if(b)
+		return 1;
+
+	zl = xl;
+	while(*--zp == 0)
+		zl--;
+	z->l = zl;
+	return 0;
+}
+
+static void add_big(struct big_num *x, struct big_num *y, struct big_num *z)
+{
+	int xl, yl, k, i;
+	big_digit *xp, *yp, *zp;
+
+	xl = x->l;
+	yl = y->l;
+	if(yl > xl)
+	{
+		int tl;
+		struct big_num *tn;
+		tl = xl; xl = yl; yl = tl;
+		tn = x; x = y; y = tn;
+	}
+
+	xp = &x->d[0];
+	yp = &y->d[0];
+	zp = &z->d[0];
+
+	for(i = yl, k = 0; i >= 0; i--)
+		ADD_BIG(*xp++, *yp++, *zp++, k);
+
+	for(i = xl-yl; k && i > 0; i--)
+	{
+		big_digit z_add;
+		z_add = *xp++ + 1;
+		k = (z_add == 0);
+		*zp++ = z_add;
+	}
+
+	for(; i > 0; i--)
+		*zp++ = *xp++;
+
+	if(k)
+		*zp = 1, z->l = xl+1;
+	else
+		z->l = xl;
+}
+
+static int add_cmp(struct big_num *R, struct big_num *S, struct big_num *MP, struct big_num *MM, bool use_mp)
+{
+	int rl, ml, sl, suml;
+	struct big_num sum;
+
+	rl = R->l;
+	ml = (use_mp ? MP->l : MM->l);
+	sl = S->l;
+
+	suml = rl >= ml ? rl : ml;
+	if((sl > suml+1) || ((sl == suml+1) && (S->d[sl] > 1)))
+		return -1;
+	if(sl < suml)
+		return 1;
+
+	add_big(R, (use_mp ? MP : MM), &sum);
+	return big_comp(&sum, S);
+}
+
+static int qr(struct big_num *R, struct big_num Sbox[9])
+{
+	if(big_comp(R, &Sbox[4]) < 0)
+	{
+		if(big_comp(R, &Sbox[1]) < 0)
+		{
+			if(big_comp(R, &Sbox[0]) < 0)
+				return 0;
+			else {
+				sub_big(R, &Sbox[0], R);
+				return 1;
+			}
+		}
+		else if(big_comp(R, &Sbox[2]) < 0) {
+			sub_big(R, &Sbox[1], R);
+			return 2;
+		} else if(big_comp(R, &Sbox[3]) < 0) {
+			sub_big(R, &Sbox[2], R);
+			return 3;
+		} else {
+			sub_big(R, &Sbox[3], R);
+			return 4;
+		}
+	}
+	else if(big_comp(R, &Sbox[6]) < 0)
+	{
+		if(big_comp(R, &Sbox[5]) < 0) {
+			sub_big(R, &Sbox[4], R);
+			return 5;
+		} else {
+			sub_big(R, &Sbox[5], R);
+			return 6;
+		}
+	}
+	else if(big_comp(R, &Sbox[8]) < 0)
+	{
+		if(big_comp(R, &Sbox[7]) < 0) {
+			sub_big(R, &Sbox[6], R);
+			return 7;
+		} else {
+			sub_big(R, &Sbox[7], R);
+			return 8;
+		}
+	}
+	else {
+		sub_big(R, &Sbox[8], R);
+		return 9;
+	}
+}
+
+union dblou64
+{
+	uint64_t u;
+	double d;
+};
+
+static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	struct big_num Sbox[9];
+	struct big_num R, MP, MM;
+	big_digit f;
+	double v;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	int sign, e, f_n, m_n, i, d, tc1, tc2;
+	int k, qr_shift, ruf, s_n, sl = 0, slr = 0, dig_i;
+	bool use_mp;
+
+	v = va_arg(spec->ap, double);
+
+	/* decompose float into sign, mantissa & exponent */
+	sign = !!(((union dblou64 *)&v)->u & 0x8000000000000000ULL);
+	e    =   (((union dblou64 *)&v)->u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
+	f    =    ((union dblou64 *)&v)->u & 0x000FFFFFFFFFFFFFULL;
+/*	printf("%i %i %llu\n", sign, e, f); */
+
+	if(e != 0) {
+		e  = e - BIAS - MAN_BITS2RIGHT;
+		f |= HIDDEN_BIT;
+	} else if(f != 0) /* denormalized */
+		e = 1 - BIAS - MAN_BITS2RIGHT;
+/*	printf("%i %i %llu\n", sign, e, f); */
+
+#define ADD_CHAR_TO_BUF(ch) \
+do \
+{ \
+	if(sav) { sav--; *buf = (ch); } \
+	buf++; \
+	spec->len++; \
+} while(0)
+
+	if(sign)
+		ADD_CHAR_TO_BUF('-');
+
+	if(0 == f) {
+		ADD_CHAR_TO_BUF('0');
+		return end_format(buf, fmt, spec);
+	}
+
+	ruf = !(f & 1); /* ruf = (even? f) */
+
+	/* Compute the scaling factor estimate, k */
+	if(e > MIN_E)
+		k = estimate(e + MAN_BITS2RIGHT);
+	else
+	{
+		int n;
+		big_digit y;
+
+		for(n = e + MAN_BITS2RIGHT, y = B_P1; f < y; n--)
+			y >>= 1;
+		k = estimate(n);
+	}
+
+	if(e >= 0)
+	{
+		if(f != B_P1)
+			use_mp = false, f_n = e + 1, s_n = 1, m_n = e;
+		else
+			use_mp = true, f_n = e + 2, s_n = 2, m_n = e;
+	}
+	else
+	{
+		if((e == MIN_E) || (f != B_P1))
+			use_mp = false, f_n = 1, s_n = 1 - e, m_n = 0;
+		else
+			use_mp = true, f_n = 2, s_n = 2 - e, m_n = 0;
+	}
+
+	/* Scale it! */
+	if(k == 0)
+	{
+		short_shift_left(f, f_n, &R);
+		one_shift_left(s_n, &Sbox[0]);
+		one_shift_left(m_n, &MM);
+		if(use_mp)
+			one_shift_left(m_n + 1, &MP);
+		qr_shift = 1;
+	}
+	else if(k > 0)
+	{
+		s_n += k;
+		if(m_n >= s_n)
+			f_n -= s_n, m_n -= s_n, s_n = 0;
+		else
+			f_n -= m_n, s_n -= m_n, m_n = 0;
+		short_shift_left(f, f_n, &R);
+		big_shift_left(&five_tab[k - 1], s_n, &Sbox[0]);
+		one_shift_left(m_n, &MM);
+		if(use_mp)
+			one_shift_left(m_n + 1, &MP);
+		qr_shift = 0;
+	}
+	else
+	{
+		const struct big_num *power = &five_tab[-k - 1];
+
+		s_n += k;
+		big_short_mul(power, f, &Sbox[0]);
+		big_shift_left(&Sbox[0], f_n, &R);
+		one_shift_left(s_n, &Sbox[0]);
+		big_shift_left(power, m_n, &MM);
+		if(use_mp)
+			big_shift_left(power, m_n + 1, &MP);
+		qr_shift = 1;
+	}
+
+	/* fixup */
+	if(add_cmp(&R, &Sbox[0], &MP, &MM, use_mp) <= -ruf)
+	{
+		k--;
+		mul10(&R);
+		mul10(&MM);
+		if(use_mp)
+			mul10(&MP);
+	}
+
+/*
+	printf("\nk = %d\n", k);
+	printf("R = "); print_big(&R);
+	printf("\nS = "); print_big(&Sbox[0]);
+	printf("\nM- = "); print_big(&MM);
+	if(use_mp)
+		printf("\nM+ = "), print_big(&MP);
+	putchar('\n');
+	fflush(0);
+	*/
+
+	if(qr_shift) {
+		sl = s_n / 64;
+		slr = s_n % 64;
+	}
+	else
+	{
+		big_shift_left(&Sbox[0], 1, &Sbox[1]);
+		add_big(&Sbox[1], &Sbox[0], &Sbox[2]);
+		big_shift_left(&Sbox[1], 1, &Sbox[3]);
+		add_big(&Sbox[3], &Sbox[0], &Sbox[4]);
+		add_big(&Sbox[3], &Sbox[1], &Sbox[5]);
+		add_big(&Sbox[3], &Sbox[2], &Sbox[6]);
+		big_shift_left(&Sbox[3], 1, &Sbox[7]);
+		add_big(&Sbox[7], &Sbox[0], &Sbox[8]);
+	}
+
+	dig_i = k + 1;
+	if(dig_i < 0) {
+		int dot_i = 1;
+		for(; dot_i >= dig_i; dot_i--)
+			ADD_CHAR_TO_BUF(dot_i ? '0' : '.');
+	} else if(!dig_i)
+		ADD_CHAR_TO_BUF('0');
+
+again:
+	if(!dig_i--)
+		ADD_CHAR_TO_BUF('.');
+	if (qr_shift)
+	{ /* Take advantage of the fact that Sbox[0] = (ash 1 s_n) */
+		if (R.l < sl)
+			d = 0;
+		else if (R.l == sl)
+		{
+			big_digit *p;
+
+			p = &R.d[sl];
+			d = *p >> slr;
+			*p &= (1ULL << slr) - 1;
+			for(i = sl; (i > 0) && (*p == 0); i--)
+				p--;
+			R.l = i;
+		}
+		else
+		{
+			big_digit *p;
+
+			p = &R.d[sl + 1];
+			d = *p << (64 - slr) | *(p - 1) >> slr;
+			p--;
+			*p &= (1ULL << slr) - 1;
+			for(i = sl; (i > 0) && (*p == 0); i--)
+				p--;
+			R.l = i;
+		}
+	}
+	else /* We need to do quotient-remainder */
+		d = qr(&R, Sbox);
+
+#define OUTDIG(d) { ADD_CHAR_TO_BUF((d) + '0'); goto out_of_fp; }
+	tc1 = big_comp(&R, &MM) < ruf;
+	tc2 = add_cmp(&R, &Sbox[0], &MP, &MM, use_mp) > -ruf;
+	if (!tc1)
+	{
+		if (!tc2)
+		{
+			mul10(&R);
+			mul10(&MM);
+			if (use_mp)
+				mul10(&MP);
+			ADD_CHAR_TO_BUF(d + '0');
+			goto again;
+		}
+		else
+			OUTDIG(d+1)
+	}
+	else
+	{
+		if(!tc2)
+			OUTDIG(d)
+		else
+		{
+			big_shift_left(&R, 1, &MM);
+			if(-1 == big_comp(&MM, &Sbox[0]))
+				OUTDIG(d)
+			else
+				OUTDIG(d+1)
+		}
+	}
+out_of_fp:
+	return end_format(buf, fmt, spec);
+}
+#undef ADD_CHAR_TO_BUF
+#undef OUTDIG
+
 static noinline const char *fp_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t fmt_len = fmt - spec->fmt_start;
@@ -403,17 +1043,11 @@ static noinline const char *fp_finish(char *buf, const char *fmt, struct format_
 	return nop_finish(buf, fmt, spec);
 }
 
-static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
-{
-	double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, double);
-	return fp_finish(buf, fmt, spec);
-}
 static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	long double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
-
 static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, double);

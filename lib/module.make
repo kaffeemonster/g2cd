@@ -239,6 +239,7 @@ LIBOBJS = \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
+	$(MPL)/five_tab.o \
 	$(MPL)/vsnprintf.o
 
 # target for this module
@@ -261,6 +262,15 @@ $(AES_TABS): $(MPL)/aes_tab_gen
 
 $(MPL)/aes_tab.o: $(AES_TABS) bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(AES_TABS)
+
+$(MPL)/five_tab_gen: $(MPL)/five_tab_gen.c ccdrv $(MPL)/module.make Makefile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/five_tab_gen.c -o $@
+
+$(MPL)/five_tab.bin: $(MPL)/five_tab_gen
+	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/five_tab_gen $@
+
+$(MPL)/five_tab.o: $(MPL)/five_tab.bin bin2o
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(MPL)/five_tab.bin
 
 # Dependencies
 $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
@@ -306,7 +316,7 @@ $(MPL)/x86/memneg.c: $(MPL)/x86/memneg_tmpl.c
 $(LIBOBJS): $(LIB_STD_DEPS)
 
 libclean:
-	$(RM) $(LIBCOMMON) $(LIBOBJS) $(MPL)/aes_tab_gen
+	$(RM) $(LIBCOMMON) $(LIBOBJS) $(MPL)/aes_tab_gen $(MPL)/five_tab_gen
 
 libdclean: libclean
 	$(RM) $(AES_TABS) $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.bin $(MPL)/*.rtl

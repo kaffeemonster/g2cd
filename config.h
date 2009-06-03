@@ -30,6 +30,8 @@
 #define HAVE_C99
 /* to we have compiler level TLS? */
 #define HAVE___THREAD
+/* does the comiler support 128bit vars on this arch */
+//#define HAVE_TIMODE
 
 /* do we have IPv6 and other net stuff */
 #define HAVE_SA_FAMILY_T

@@ -224,8 +224,8 @@ static char *char2hex(char *buf, char c)
 	static const char hexchars[] = "0123456789ABCDEF";
 	*buf++ = '0';
 	*buf++ = 'x';
-	*buf++ = hexchars[c & 0x00f];
 	*buf++ = hexchars[(c & 0x0f0) >> 4];
+	*buf++ = hexchars[c & 0x00f];
 	return buf;
 }
 
@@ -275,7 +275,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		memmove(buf->name, c_ptr+1, strlen(c_ptr+1)+1);
 	if(0 == strlen(buf->name))
 		sprintf(buf->name, "%X", e_sym++);
-	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align 8\n", buf->name);
+	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align 16\n", buf->name);
 
 	if((c_ptr = strrchr(buf->name, '.')))
 		*c_ptr = '\0';
