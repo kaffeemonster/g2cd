@@ -2471,6 +2471,34 @@ struct QKA_data
 	bool sending_na_valid;
 };
 
+static intptr_t QKA_SNA_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *carg)
+{
+	struct ptype_action_args *parg GCC_ATTRIB_UNUSED = carg;
+
+// TODO: no locking!!
+	/*
+	 * INSERT INTO code VALUES (wonder)
+	 *
+	 * Without locking, we can do nothing besides this little print.
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...), so we can read a
+	 * little, but besides that, no locking.
+	 */
+	logg_packet("/QKA/SNA -> wants forwarding to %p#I\n", &con->remote_host);
+// TODO: forward qka
+	/*
+	 * which means:
+	 * - deep clone/rebuild the packet (it's still in the recv buffer...)
+	 *         +- make it a literate send (TODO, no infrastructure)
+	 * - lock target connection packet list (TODO, no lock)
+	 * - add packet and unlock
+	 * - make the multiplexer wakeup (TODO: thread safety...)
+	 */
+
+	return 0;
+}
+
 static bool handle_QKA(struct ptype_action_args *parg)
 {
 	struct ptype_action_args cparg;
@@ -2525,19 +2553,10 @@ static bool handle_QKA(struct ptype_action_args *parg)
 			g2_qk_add(rdata.query_key, &rdata.queried_na);
 		}
 	}
-	else
-	{
-		g2_connection_t *remote_con;
+	else {
 		g2_qk_add(rdata.query_key, parg->src_addr);
-
-		if(!rdata.sending_na_valid)
-			return ret_val;
-
-		remote_con = g2_conreg_search_ip(&rdata.sending_na);
-		if(!remote_con)
-			return ret_val;
-
-// TODO: forward qka
+		if(rdata.sending_na_valid)
+			ret_val = !!g2_conreg_for_ip(&rdata.sending_na, QKA_SNA_callback, parg);
 	}
 
 	return ret_val;
@@ -2626,7 +2645,6 @@ static bool handle_HAW(struct ptype_action_args *parg)
 		}
 		if(child_p.packet_decode == DECODE_FINISHED)
 			ret_val |= g2_packet_decide_spec_int(&cparg, HAW_packet_dict);
-//		source->num_child++; // put within if
 	} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
 
 	if(!rdata.na_valid)
@@ -2634,6 +2652,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 
 	if(18 < buffer_remaining(source->data_trunk)) {
 		logg_packet(STDLF, "HAW", "no ttl, hops, guid?");
+// TODO: punishment?
 		return ret_val;
 	}
 
@@ -2653,6 +2672,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 	 * of the node sending a HAW.
 	 * Save it, for whatever purpose...
 	 */
+// TODO: Check if we now this HAW and drop it?
 	g2_guid_add(guid, &rdata.na, local_time_now, GT_HAW);
 
 	logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", *ttl, *hops, guid);
@@ -2917,14 +2937,42 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 	return false;
 }
 
-static bool magic_route(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM, uint8_t *guid GCC_ATTR_UNUSED_PARAM)
+static intptr_t magic_route_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *carg)
 {
-// TODO: route it
+	struct ptype_action_args *parg GCC_ATTRIB_UNUSED = carg;
+
+// TODO: no locking!!
 	/*
 	 * INSERT INTO code VALUES (wonder)
+	 *
+	 * Without locking, we can do nothing besides this little print.
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...), so we can read a
+	 * little, but besides that, no locking.
 	 */
-	logg_packet("/%s -> wants routing\n", g2_ptype_names[parg->source->type]);
-	return false;
+	logg_packet("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
+// TODO: route it
+	/*
+	 * which means:
+	 * - deep clone the packet (it's still in the recv buffer...)
+	 * - make it a literate send (TODO, no infrastructure)
+	 * - lock target connection packet list (TODO, no lock)
+	 * - add packet and unlock
+	 * - make the multiplexer wakeup (TODO: thread safety...)
+	 */
+
+	return 0;
+}
+
+static bool magic_route(struct ptype_action_args *parg, uint8_t *guid)
+{
+	union combo_addr na;
+
+	if(!g2_guid_lookup(guid, GT_LEAF, &na))
+		return false;
+
+	return !!g2_conreg_for_addr(&na, magic_route_callback, parg);
 }
 
 bool g2_packet_decide_spec(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)

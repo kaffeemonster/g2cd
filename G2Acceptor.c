@@ -480,7 +480,6 @@ static bool handle_accept_in(
 	int epoll_fd)
 {
 	struct epoll_event tmp_eevent = {0,{0}};
-	g2_connection_t *tmp_con;
 	socklen_t sin_size = sizeof(work_entry->remote_host); /* what to do with this info??? */
 	int tmp_fd;
 	int fd_flags;
@@ -507,8 +506,7 @@ static bool handle_accept_in(
 	}
 
 	/* ip already connected? */
-	tmp_con = g2_conreg_search_ip(&work_entry->remote_host);
-	if(unlikely(tmp_con)) {
+	if(unlikely(g2_conreg_have_ip(&work_entry->remote_host))) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == close(work_entry->com_socket) && EINTR == errno);

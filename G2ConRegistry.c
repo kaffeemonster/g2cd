@@ -2,7 +2,7 @@
  * G2ConRegistry.c
  * Central G2Connection registry
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -416,18 +416,19 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
-// TODO: we need a clever way to lock the retval
-g2_connection_t *g2_conreg_search_addr(union combo_addr *addr)
+intptr_t g2_conreg_for_addr(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
 {
 	struct g2_ht_chain *c;
 	struct hlist_node *n;
-	g2_connection_t *ret_val;
+	g2_connection_t *node;
+	intptr_t ret_val;
 
 	c = g2_conreg_find_chain(addr);
 	pthread_rwlock_rdlock(&c->lock);
-	hlist_for_each_entry(ret_val, n, &c->list, registry)
+	hlist_for_each_entry(node, n, &c->list, registry)
 	{
-		if(combo_addr_eq(&ret_val->remote_host, addr)) {
+		if(combo_addr_eq(&node->remote_host, addr)) {
+			ret_val = callback(node, carg);
 			pthread_rwlock_unlock(&c->lock);
 			return ret_val;
 		}
@@ -437,7 +438,29 @@ g2_connection_t *g2_conreg_search_addr(union combo_addr *addr)
 	return NULL;
 }
 
-g2_connection_t *g2_conreg_search_ip(union combo_addr *addr)
+intptr_t g2_conreg_for_ip(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	struct g2_ht_chain *c;
+	struct hlist_node *n;
+	g2_connection_t *node;
+	intptr_t ret_val;
+
+	c = g2_conreg_find_chain(addr);
+	pthread_rwlock_rdlock(&c->lock);
+	hlist_for_each_entry(node, n, &c->list, registry)
+	{
+		if(combo_addr_eq_ip(&node->remote_host, addr)) {
+			ret_val = callback(node, carg);
+			pthread_rwlock_unlock(&c->lock);
+			return ret_val;
+		}
+	}
+	pthread_rwlock_unlock(&c->lock);
+
+	return 0;
+}
+
+bool g2_conreg_have_ip(union combo_addr *addr)
 {
 	struct g2_ht_chain *c;
 	struct hlist_node *n;
@@ -449,13 +472,14 @@ g2_connection_t *g2_conreg_search_ip(union combo_addr *addr)
 	{
 		if(combo_addr_eq_ip(&ret_val->remote_host, addr)) {
 			pthread_rwlock_unlock(&c->lock);
-			return ret_val;
+			return true;
 		}
 	}
 	pthread_rwlock_unlock(&c->lock);
 
-	return NULL;
+	return false;
 }
+
 
 void g2_conreg_cleanup(void)
 {

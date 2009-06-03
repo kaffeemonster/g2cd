@@ -2,7 +2,7 @@
  * G2ConRegistry.h
  * header for the connection registry
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -39,8 +39,9 @@
 _G2CONREGISTRY_EXTRN(void g2_conreg_mark_dirty(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_add(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_remove(g2_connection_t *));
-_G2CONREGISTRY_EXTRN(g2_connection_t *g2_conreg_search_addr(union combo_addr *));
-_G2CONREGISTRY_EXTRN(g2_connection_t *g2_conreg_search_ip(union combo_addr *));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_addr(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_ip(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(bool g2_conreg_have_ip(union combo_addr *));
 _G2CONREGISTRY_EXTRN(void g2_conreg_cleanup(void));
 
 #endif
