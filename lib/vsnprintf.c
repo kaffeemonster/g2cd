@@ -178,6 +178,7 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 static noinline const char *decimal_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t len = spec->wptr - spec->conv_buf;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	if(spec->width && spec->width > len)
 	{
 		size_t i;
@@ -205,7 +206,7 @@ static noinline const char *decimal_finish(char *buf, const char *fmt, struct fo
 		len = spec->width;
 	}
 OUT_CPY:
-	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, spec->maxlen); \
+	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, sav);
 	spec->len += len;
 	return end_format(buf, fmt, spec);
 }
@@ -274,18 +275,19 @@ static inline char *hex_insert_alternate(char *buf, size_t count)
 static noinline const char *hex_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t len = spec->wptr - spec->conv_buf;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	len += !spec->u.flags.alternate ? 0 : 2;
 	if(spec->width && spec->width > len)
 	{
 		size_t i, ch_count = !spec->u.flags.alternate ? 0 :
-			spec->maxlen > 2 ? 2 : spec->maxlen;
+			sav > 2 ? 2 : sav;
 
 		i = spec->width - len;
 		i = i < spec->maxlen - ch_count ? i : spec->maxlen - ch_count;
 		if(spec->u.flags.zero && !spec->u.flags.left)
 		{
 			if(spec->u.flags.alternate)
-				buf = hex_insert_alternate(buf, spec->maxlen);
+				buf = hex_insert_alternate(buf, sav);
 			if(spec->precision)
 				goto OUT_CPY;
 			while(i--)
@@ -302,13 +304,13 @@ static noinline const char *hex_finish(char *buf, const char *fmt, struct format
 			while(i--)
 				*ins++ = ' ';
 			if(spec->u.flags.alternate)
-				buf = hex_insert_alternate(buf, spec->maxlen);
+				buf = hex_insert_alternate(buf, sav);
 		}
 		len = spec->width;
 	} else if(spec->u.flags.alternate)
-		buf = hex_insert_alternate(buf, spec->maxlen);
+		buf = hex_insert_alternate(buf, sav);
 OUT_CPY:
-	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, spec->maxlen);
+	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, sav);
 	spec->len += len;
 	return end_format(buf, fmt, spec);
 }
@@ -412,6 +414,16 @@ static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 	return fp_finish(buf, fmt, spec);
 }
 
+static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, double);
+	return fp_finish(buf, fmt, spec);
+}
+static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	long double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, long double);
+	return fp_finish(buf, fmt, spec);
+}
 
 /*
  * decider...
@@ -438,7 +450,8 @@ static const fmt_func num_format_table[][MOD_MAX_NUM] =
 	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa}, /* 3 */
 	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa}, /* 4 */
 	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa}, /* 5 */
-	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa}  /* 6 */
+	/*    FPHEX */ { vdtoxa, vdtoxa, vdtoxa,  vdtoxa,   vdtoxa,  vldtoxa,   vdtoxa,  vdtoxa,  vdtoxa,  vdtoxa}, /* 6 */
+	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa}  /* 7 */
 };
 
 static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
@@ -465,9 +478,13 @@ static const char *f_fp(char *buf, const char *fmt, struct format_spec *spec)
 {
 	return num_format_table[5][spec->mod](buf, fmt, spec);
 }
-static const char *fmtnop(char *buf, const char *fmt, struct format_spec *spec)
+static const char *f_fpx(char *buf, const char *fmt, struct format_spec *spec)
 {
 	return num_format_table[6][spec->mod](buf, fmt, spec);
+}
+static const char *fmtnop(char *buf, const char *fmt, struct format_spec *spec)
+{
+	return num_format_table[7][spec->mod](buf, fmt, spec);
 }
 /*
  * other conversion - uninmplemented
@@ -486,6 +503,7 @@ static const char *unimpl(char *buf, const char *fmt, struct format_spec *spec)
 static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 #if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
 # ifdef HAVE_GNU_STRERROR_R
 	/*
@@ -495,7 +513,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	 * wich needs a #define __GNU_SOURCE, but conflicts
 	 * with this...
 	 */
-	const char *s = strerror_r(errno, buf, spec->maxlen);
+	const char *s = strerror_r(errno, buf, sav);
 # else
 	/*
 	 * Ol Solaris seems to have a static msgtable, so
@@ -505,18 +523,18 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	const char *s = strerror(errno);
 # endif
 	if(s)
-		err_str_len = strnlen(s, spec->maxlen);
+		err_str_len = strnlen(s, sav);
 	else {
 		s = "Unknown system error";
-		err_str_len = strlen(s) < spec->maxlen ?
-		              strlen(s) : spec->maxlen;
+		err_str_len = strlen(s) < sav ?
+		              strlen(s) : sav;
 	}
 
 	if(s != buf)
 		memcpy(buf, s, err_str_len);
 #else
-	if(!strerror_r(errno, buf, spec->maxlen))
-		err_str_len += strnlen(buf, spec->maxlen);
+	if(!strerror_r(errno, buf, sav))
+		err_str_len += strnlen(buf, sav);
 	else
 	{
 		char *bs = buf;
@@ -638,6 +656,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
  */
 static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 {
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	size_t len;
 
 	if(unlikely('C' == *(fmt-1)))
@@ -646,7 +665,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 	if(likely(MOD_LONG != spec->mod))
 	{
 		int x = va_arg(spec->ap, int);
-		if(spec->maxlen - spec->len)
+		if(sav)
 			*buf = (char)x;
 		buf++;
 		len = 1;
@@ -656,7 +675,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 #ifndef WANT_WCHAR
 // TODO: popping an int may be wrong
 		int x GCC_ATTRIB_UNUSED = va_arg(spec->ap, int);
-		if(spec->maxlen - spec->len)
+		if(sav)
 			*buf = '?';
 		buf++;
 		len = 1;
@@ -669,7 +688,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 		memset(&ps, 0, sizeof(ps));
 		ret_val = wcrtomb(tbuf, wc, &ps);
 		if((size_t)-1 != ret_val) {
-			memcpy(buf, tbuf, spec->len + ret_val < spec->maxlen ? ret_val : spec->maxlen - spec->len);
+			memcpy(buf, tbuf, sav > ret_val ? ret_val : sav);
 			len = ret_val;
 		} else
 			len = 0;
@@ -688,6 +707,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 {
 	void *ptr = va_arg(spec->ap, void *);
 	char *ret_val;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	size_t len = 0;
 	char c;
 
@@ -707,7 +727,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 		len = 32;
 		if(spec->u.flags.alternate)
 			len += 15;
-		if(len <= spec->maxlen)
+		if(len <= sav)
 		{
 			unsigned i;
 			unsigned char *g = ptr;
@@ -728,18 +748,18 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 	{
 		union combo_addr *addr = ptr;
 		if(!addr) {
-			mempcpy(buf, "<null>", str_size("<null>") < spec->maxlen ? str_size("<null>") : spec->maxlen);
+			mempcpy(buf, "<null>", str_size("<null>") < sav ? str_size("<null>") : sav);
 			buf += str_size("<null>");
 			len  = str_size("<null>");
 			goto OUT_MORE;
 		}
 
-		if(spec->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= spec->maxlen)
+		if(spec->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= sav)
 			*buf++ = '[';
 
-		ret_val = combo_addr_print_c(addr, buf, spec->maxlen);
+		ret_val = combo_addr_print_c(addr, buf, sav);
 		if(!ret_val) {
-			if(spec->maxlen <= INET6_ADDRSTRLEN)
+			if(sav <= INET6_ADDRSTRLEN)
 				len += INET6_ADDRSTRLEN;
 			else
 				ret_val = buf;
@@ -748,11 +768,11 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 		buf = ret_val;
 		if(spec->u.flags.alternate)
 		{
-			if(AF_INET6 == addr->s_fam && len++ <= spec->maxlen)
+			if(AF_INET6 == addr->s_fam && len++ <= sav)
 				*buf++ = ']';
-			if(len++ <= spec->maxlen)
+			if(len++ <= sav)
 				*buf++ = ':';
-			ret_val = usntoa(buf, spec->maxlen - len, ntohs(combo_addr_port(addr)));
+			ret_val = usntoa(buf, sav - len, ntohs(combo_addr_port(addr)));
 			ret_val = ret_val ? ret_val : buf;
 			len += ret_val - buf;
 			buf = ret_val;
@@ -760,7 +780,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	else
 	{
-		if((sizeof(void *) * 2) + 2 > spec->maxlen)
+		if((sizeof(void *) * 2) + 2 > sav)
 			len = (sizeof(void *) * 2) + 2;
 		else
 			len = ptoa(buf, ptr) - buf;
@@ -904,7 +924,8 @@ static const char *lmod_l(char *buf, const char *fmt, struct format_spec *spec)
  */
 static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 {
-	if(likely(spec->maxlen - spec->len))
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	if(likely(sav))
 		*buf++ = '%';
 	spec->len++;
 	return end_format(buf, fmt, spec);
@@ -936,11 +957,11 @@ static const fmt_func format_table[256] =
 	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
 	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
-	/* 40 */ fmtnop,   f_fp, fmtnop,    f_c, fmtnop,   f_fp,   f_fp,   f_fp, fmtnop, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
+	/* 40 */ fmtnop,  f_fpx, fmtnop,    f_c, fmtnop,   f_fp,   f_fp,   f_fp, fmtnop, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
 	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
 	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */
-	/* 60 */ fmtnop,   f_fp, fmtnop,    f_c,    f_i,   f_fp,   f_fp,   f_fp, lmod_h,    f_i, lmod_j, fmtnop, lmod_l, f_serr,  p_len,    f_o,
+	/* 60 */ fmtnop,  f_fpx, fmtnop,    f_c,    f_i,   f_fp,   f_fp,   f_fp, lmod_h,    f_i, lmod_j, fmtnop, lmod_l, f_serr,  p_len,    f_o,
 	/*            `,      a,      b,      c,      d,      e,      f,      g,      h,      i,      j,      k,      l,      m,      n,      o, */
 	/* 70 */    f_p, lmod_q, fmtnop,    f_s, lmod_t,    f_u, fmtnop, fmtnop,    f_x, fmtnop, lmod_z, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            p,      q,      r,      s,      t,      u,      v,      w,      x,      y,      z,      {,      |,      },      ~,    DEL, */

@@ -257,7 +257,7 @@ $(MPL)/aes_tab_gen: $(MPL)/aes_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/aes_tab_gen.c -o $@
 
 $(AES_TABS): $(MPL)/aes_tab_gen
-	@./ccdrv -s$(VERBOSE) "TAB[aes]" $(MPL)/aes_tab_gen $@
+	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/aes_tab_gen $@
 
 $(MPL)/aes_tab.o: $(AES_TABS) bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(AES_TABS)
