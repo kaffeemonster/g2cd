@@ -93,6 +93,7 @@ static bool handle_LNI_V(struct ptype_action_args *);
 static bool handle_PI(struct ptype_action_args *);
 static bool handle_PI_UDP(struct ptype_action_args *);
 static bool handle_PI_RELAY(struct ptype_action_args *);
+static bool handle_PO(struct ptype_action_args *);
 static bool handle_Q2(struct ptype_action_args *);
 static bool handle_Q2_UDP(struct ptype_action_args *);
 static bool handle_Q2_QKY(struct ptype_action_args *);
@@ -131,7 +132,7 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_LNI   ] = handle_LNI,
 	[PT_HAW   ] = handle_HAW,
 	[PT_PI    ] = handle_PI,
-	[PT_PO    ] = unimpl_action_p,
+	[PT_PO    ] = handle_PO,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
 	[PT_Q2    ] = handle_Q2,
 	[PT_QA    ] = handle_QA,
@@ -150,6 +151,7 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_KHLA  ] = empty_action_p, /* we don't request khls by udp */
 	[PT_KHLR  ] = handle_KHLR,
 	[PT_PI    ] = handle_PI,
+	[PT_PO    ] = empty_action_p, /* yeah, so what */
 	[PT_JCT   ] = empty_action_p, /* no answer needed, it's ACKed */
 	[PT_Q2    ] = handle_Q2,
 	[PT_QA    ] = handle_QA,
@@ -964,11 +966,13 @@ static bool handle_KHL(struct ptype_action_args *parg)
 		if(!keep_decoding) {
 			logg_packet(STDLF, "KHL", "broken child");
 			parg->connec->flags.dismissed = true;
-			break;
+			return ret_val;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec_int(&cparg, KHL_packet_dict);
 	} while(keep_decoding && parg->source->packet_decode != DECODE_FINISHED);
+
+	parg->connec->flags.last_data_active = true;
 
 	/* time to send a packet again? */
 	if(local_time_now <
@@ -1254,7 +1258,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 		if(!keep_decoding) {
 			logg_packet(STDLF, "LNI", "broken child");
 			connec->flags.dismissed = true;
-			break;
+			return ret_val;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec_int(&cparg, LNI_packet_dict);
@@ -1281,6 +1285,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 		            connec->flags.upeer ? GT_NEIGHBOUR : GT_LEAF);
 		/* using remote_host because we registered it with this in the registry */
 
+	connec->flags.last_data_active = true;
 	/* time to send a packet again? */
 	if(unlikely(local_time_now < (connec->u.send_stamps.LNI + (LNI_TIMEOUT))))
 		return ret_val;
@@ -1495,7 +1500,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 	if(connec && !rdata.addr_valid) {
 		/* check if time to send a packet again? */
 		if(local_time_now < (connec->u.send_stamps.PI + (PI_TIMEOUT)))
-			return ret_val;
+			goto out_ok;
 	}
 
 	/* from a tcp connection and a udp addr? */
@@ -1536,9 +1541,11 @@ static bool handle_PI(struct ptype_action_args *parg)
 		list_add_tail(&po->list, parg->target);
 		if(connec)
 			connec->u.send_stamps.PI = local_time_now;
-		ret_val = true;
+		return true;
 	}
 
+out_ok:
+	connec->flags.last_data_active = true;
 	return ret_val;
 }
 
@@ -1561,6 +1568,12 @@ static bool handle_PI_RELAY(struct ptype_action_args *parg)
 
 	logg_packet(STDSF, "/PI/RELAY\n");
 	rdata->relay = true;
+	return false;
+}
+
+static bool handle_PO(struct ptype_action_args *parg)
+{
+	parg->connec->flags.last_data_active = true;
 	return false;
 }
 
@@ -1608,6 +1621,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 
 	if(parg->connec)
 	{
+		parg->connec->flags.last_data_active = true;
 // TODO: query limit one connection
 
 		if(!parg->connec->flags.upeer && rdata.udp_na_valid &&
@@ -1843,6 +1857,8 @@ static bool handle_QA(struct ptype_action_args *parg)
 	/* rewind buffer */
 	source->data_trunk.pos = old_pos;
 
+	if(parg->connec)
+		parg->connec->flags.last_data_active = true;
 // TODO: forward resulting packet to who it may concern
 
 	return ret_val;
@@ -2054,6 +2070,8 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	 * forward junk.
 	 */
 
+	if(parg->connec)
+		parg->connec->flags.last_data_active = true;
 //TODO: forward resulting packet to who it may concern
 
 	return ret_val;
@@ -2203,6 +2221,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 	else
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
+	connec->flags.last_data_active = true;
 	if(unlikely(ret_val) || !connec->flags.upeer || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT)))
 		return ret_val;
 
@@ -2306,7 +2325,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 				logg_packet(STDLF, "QKR", "broken child");
 				if(parg->connec)
 					parg->connec->flags.dismissed = true;
-				break;
+				return ret_val;
 			}
 			if(likely(child_p.packet_decode == DECODE_FINISHED))
 				ret_val |= g2_packet_decide_spec_int(&cparg, QKR_packet_dict);
@@ -2328,6 +2347,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 		if(!rdata.queried_na_valid)
 			return ret_val;
 
+		parg->connec->flags.last_data_active = true;
 		if(!rdata.refresh && g2_qk_lookup(&key, &rdata.queried_na))
 		{
 			g2_packet_t *qka, *qna, *qk, *cached;
@@ -2478,7 +2498,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 			logg_packet(STDLF, "QKA", "broken child");
 			if(parg->connec)
 				parg->connec->flags.dismissed = true;
-			break;
+			return ret_val;
 		}
 		if(likely(child_p.packet_decode == DECODE_FINISHED))
 			ret_val |= g2_packet_decide_spec_int(&cparg, QKA_packet_dict);
@@ -2500,8 +2520,10 @@ static bool handle_QKA(struct ptype_action_args *parg)
 
 // TODO: check for our own IP
 	if(parg->connec) {
-		if(rdata.queried_na_valid)
+		if(rdata.queried_na_valid) {
+			parg->connec->flags.last_data_active = true;
 			g2_qk_add(rdata.query_key, &rdata.queried_na);
+		}
 	}
 	else
 	{
@@ -2615,6 +2637,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 		return ret_val;
 	}
 
+	parg->connec->flags.last_data_active = true;
 	ttl  = (uint8_t *)buffer_start(source->data_trunk);
 	hops = (uint8_t *)(buffer_start(source->data_trunk) + 1);
 	guid = (uint8_t *)buffer_start(source->data_trunk) + 2;
@@ -2666,6 +2689,7 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 	 * /UPROC-packet, user-profile-request, if we want to and have an
 	 * answer, do it.
 	 */
+	parg->connec->flags.last_data_active = true;
 	logg_packet_old(STDSF, "/UPROC");
 	if(likely(server.settings.profile.want_2_send &&
 	   server.settings.profile.xml &&
@@ -2706,6 +2730,7 @@ static bool handle_UPROD(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 {
 	logg_packet_old(STDSF, "/UPROD");
 	if(parg->source->is_compound) {
+		parg->connec->flags.last_data_active = true;
 // TODO: write UPROD subdecoder ?
 		logg_packet(STDLF, "/UPROD", "/xxx -> subdecoder?");
 	}

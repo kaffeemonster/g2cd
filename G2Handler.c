@@ -61,10 +61,13 @@
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 
+#define HANDLER_ACTIVE_TIMEOUT (91 * 10)
+
 /* internal prototypes */
 static inline bool init_memory_h(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool handle_from_accept(int, int);
 static inline g2_connection_t *handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
+static void handler_active_timeout(void *);
 /* do not inline, we take a pointer of it, and when its called, performance doesn't matter */
 static void clean_up_h(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
@@ -284,6 +287,11 @@ static inline bool handle_from_accept(int from_acceptor, int epoll_fd)
 		goto clean_up;
 	}
 
+	recvd_con->last_active = local_time_now;
+	recvd_con->active_to.fun = handler_active_timeout;
+	recvd_con->active_to.data = recvd_con;
+	timeout_add(&recvd_con->active_to, HANDLER_ACTIVE_TIMEOUT);
+
 	return true;
 
 clean_up:
@@ -358,7 +366,7 @@ no_fill_before_write:
 		struct norm_buff *d_target = NULL;
 		bool retry, compact_cbuff = false, save_build_packet = false;
 
-		w_entry->last_active = local_time_now;
+		w_entry->flags.last_data_active = false;
 		if(!do_read(p_entry))
 			return w_entry;
 		if(buffer_cempty(*w_entry->recv))
@@ -514,6 +522,12 @@ retry_unpack:
 			if(compact_cbuff)
 				buffer_compact(*w_entry->recv);
 		}
+
+		if(w_entry->flags.last_data_active) {
+			w_entry->last_active = local_time_now;
+			timeout_advance(&w_entry->active_to, HANDLER_ACTIVE_TIMEOUT);
+		}
+
 		/* after last chance to get more data, save a partial decoded packet */
 		if(save_build_packet && build_packet == &tmp_packet)
 		{
@@ -525,6 +539,7 @@ retry_unpack:
 			}
 			w_entry->build_packet = t;
 		}
+
 // TODO: try to write if not already written on this connec?
 	}
 
@@ -533,6 +548,15 @@ nothing_to_read:
 	manage_buffer_after(&w_entry->send, lsend_buff);
 
 	return NULL;
+}
+
+static void handler_active_timeout(void *arg)
+{
+	g2_connection_t *con = arg;
+
+// TODO: send a ping
+	logg_develd("%p is inactive for %lus! last: %lu\n",
+	            con, time(NULL) - con->last_active, con->last_active);
 }
 
 static void clean_up_h(struct epoll_event *poll_me, struct norm_buff *lrecv_buff,

@@ -52,6 +52,7 @@
 #include "G2Connection.h"
 #include "G2ConHelper.h"
 #include "G2ConRegistry.h"
+#include "G2KHL.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
@@ -61,6 +62,10 @@
 
 #undef EVENT_SPACE
 #define EVENT_SPACE 8
+/* if there is no com for 10 seconds, something is wrong */
+#define ACCEPT_ACTIVE_TIMEOUT (10 * 10)
+/* if the header is not delivered in 50 seconds, go play somewhere else */
+#define ACCEPT_HEADER_COMPLETE_TIMEOUT (50 * 10)
 
 /* internal prototypes */
 static inline bool init_memory_a(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
@@ -69,6 +74,7 @@ static bool handle_accept_in(int, g2_connection_t *, int);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static noinline bool initiate_g2(g2_connection_t *);
+static void accept_timeout(void *);
 /*
  * do not inline, we take a pointer of it, and when its called,
  * performance doesn't matter
@@ -534,6 +540,15 @@ static bool handle_accept_in(
 		goto err_out_after_add;
 	}
 
+	work_entry->last_active = local_time_now;
+	work_entry->active_to.fun = accept_timeout;
+	work_entry->active_to.data = work_entry;
+	timeout_add(&work_entry->active_to, ACCEPT_ACTIVE_TIMEOUT);
+
+	work_entry->u.accept.header_complete_to.fun = accept_timeout;
+	work_entry->u.accept.header_complete_to.data = work_entry;
+	timeout_add(&work_entry->u.accept.header_complete_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
+
 	handle_accept_give_msg(work_entry, LOGF_DEVEL, "going to handshake");
 
 	return true;
@@ -599,6 +614,7 @@ static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, i
 	if(p_entry->events & (uint32_t)EPOLLIN)
 	{
 		w_entry->last_active = local_time_now;
+		timeout_advance(&w_entry->active_to, ACCEPT_ACTIVE_TIMEOUT);
 		if(!do_read(p_entry))
 			return w_entry;
 
@@ -623,6 +639,16 @@ static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, i
 		}
 	}
 	return NULL;
+}
+
+static void accept_timeout(void *arg)
+{
+	g2_connection_t *con = arg;
+
+// TODO: this connection has to go
+
+	logg_develd("%p is inactive for %lus! last: %lu\n",
+	            con, time(NULL) - con->last_active, con->last_active);
 }
 
 static void clean_up_a(struct epoll_event *poll_me, struct norm_buff *lrecv_buff,
@@ -799,7 +825,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				break;
 			}
 			/* let's see if we got the right string */
-			if(likely(!strncmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING, str_size(GNUTELLA_CONNECT_STRING))))
+			if(likely(!strlitcmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING)))
 				to_con->recv->pos += str_size(GNUTELLA_CONNECT_STRING);
 			else
 				return abort_g2_501(to_con);
@@ -864,6 +890,10 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				else
 					return abort_g2_400(to_con); /* go home */
 			}
+	/* the first header is comlete, give the poor soul new time */
+		case ADVANCE_TIMEOUTS:
+			timeout_advance(&to_con->u.accept.header_complete_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
+			to_con->connect_state++;
 	/* what's up with the accept-field? */
 		case CHECK_ACCEPT:
 			/* do we have one? */
@@ -953,6 +983,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 #define HED_2_PART_3				\
 	"\r\n" CONTENT_KEY ": " ACCEPT_G2 "\r\n"	\
 	ACCEPT_KEY ": " ACCEPT_G2 "\r\n"
+
+// TODO: maybe we want to refuse the connection
 
 			/* copy start of header */
 // TODO: finer granularity of stepping for smaller sendbuffer?
@@ -1071,7 +1103,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			           str_size(HUB_KEY) + str_size(HUB_NEEDED_KEY) + 4 * 9 + 2) <=
 			          buffer_remaining(*to_con->send)))
 			{
-				cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": ");;
+				cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": ");
 				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
 				                    G2_TRUE : G2_FALSE);
 				cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": ");
@@ -1084,12 +1116,54 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer_needed ?
 				                    G2_TRUE : G2_FALSE);
 				*cp_ret++ = '\r'; *cp_ret++ = '\n';
-				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			} else {
 				to_con->flags.dismissed = true;
 				return false;
 			}
+
+			if(likely((str_size(X_TRY_HUB_KEY) + 4 + 2 +
+			          (INET6_ADDRSTRLEN + 2 + 4 + 5 + str_size("2007-01-10T23:59Z")) * 2) <=
+			         buffer_remaining(*to_con->send)))
+			{
+				struct khl_entry khl_e[8];
+				size_t khl_num;
+				size_t rem = buffer_remaining(*to_con->send);
+
+				rem -= str_size(X_TRY_HUB_KEY) + 4 + 2;
+				rem /= (INET6_ADDRSTRLEN + 2 + 4 + 5 + str_size("2007-01-10T23:59Z"));
+				rem  = anum(khl_e) < rem ? anum(khl_e) : rem;
+
+				khl_num = g2_khl_fill_p(khl_e, rem, to_con->remote_host.s_fam);
+
+				if(khl_num)
+				{
+					cp_ret = strplitcpy(buffer_start(*to_con->send), X_TRY_HUB_KEY ": ");
+					while(khl_num--)
+					{
+						struct tm when_tm;
+
+						if(AF_INET6 == khl_e[khl_num].na.s_fam)
+							*cp_ret++ = '[';
+						cp_ret = combo_addr_print_c(&khl_e[khl_num].na, cp_ret, INET6_ADDRSTRLEN);
+						if(AF_INET6 == khl_e[khl_num].na.s_fam)
+							*cp_ret++ = ']';
+						*cp_ret++ = ':';
+						cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
+						*cp_ret++ = ' ';
+						gmtime_r(&khl_e[khl_num].when, &when_tm);
+						cp_ret += strftime(cp_ret, 20, "%Y-%m-%dT%H:%MZ", &when_tm);
+						*cp_ret++ = ',';
+						*cp_ret++ = ' ';
+					}
+					cp_ret -= 2;
+					*cp_ret++ = '\r'; *cp_ret++ = '\n';
+					to_con->send->pos += cp_ret - buffer_start(*to_con->send);
+				}
+			}
+			cp_ret = buffer_start(*to_con->send);
+			*cp_ret++ = '\r'; *cp_ret++ = '\n';
+			to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
 			logg_devel_old("\t------------------ Response\n");
 #if 0
@@ -1112,7 +1186,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 
 			/* did the other end like it */
-			if(unlikely(strncmp(buffer_start(*to_con->recv), GNUTELLA_STRING " 200", str_size(GNUTELLA_STRING " 200")))) {
+			if(unlikely(strlitcmp(buffer_start(*to_con->recv), GNUTELLA_STRING " 200"))) {
 				/* if not: no deal */
 				to_con->flags.dismissed = true;
 				return false;
@@ -1177,7 +1251,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			if(likely(header_end))
 			{
 			/*
-			 * retain data delivered directly behind the header if there is some
+			 * retain data delivered directly behind the header if there is some.
 			 * trust me, this is needed, so no skipping
 			 */
 				logg_devel_old("\t------------------ Initiator\n");
@@ -1200,6 +1274,12 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				else
 					return abort_g2_400(to_con); /* go home */
 			}
+	/* we have the second header, we are nearly finished, prevent from running out of time */
+		case CANCEL_TIMEOUTS:
+// TODO: cancel here or at end?
+			timeout_cancel(&to_con->active_to);
+			timeout_cancel(&to_con->u.accept.header_complete_to);
+			to_con->connect_state++;
 	/* Content-Key? */
 		case CHECK_CONTENT:
 			/* do we have one? */
@@ -1245,6 +1325,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->connect_state++;
 	/* make everything ready for business */
 		case FINISH_CONNECTION:
+			DESTROY_TIMEOUT(&to_con->u.accept.header_complete_to);
 			/* wipe out the shared space again */
 			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
 			to_con->connect_state = G2CONNECTED;

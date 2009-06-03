@@ -41,6 +41,7 @@ enum g2_connection_states
 {
 	UNCONNECTED,
 	HAS_CONNECT_STRING,
+	ADVANCE_TIMEOUTS,
 	CHECK_ACCEPT,
 	CHECK_ADDR,
 	CHECK_ENC_OUT,
@@ -50,6 +51,7 @@ enum g2_connection_states
 	HEADER_2,
 	ANSWER_200,
 	SEARCH_CAPS_2,
+	CANCEL_TIMEOUTS,
 	CHECK_CONTENT,
 	CHECK_ENC_IN,
 	FINISH_CONNECTION,
@@ -66,6 +68,7 @@ enum g2_connection_encodings
 # include "G2Packet.h"
 # include "G2QHT.h"
 # include "version.h"
+# include "timeout.h"
 # include "lib/sec_buffer.h"
 # include "lib/combo_addr.h"
 # include "lib/log_facility.h"
@@ -84,6 +87,7 @@ typedef struct g2_connection
 
 	/* Internal States */
 	union combo_addr sent_addr;
+	struct timeout   active_to;
 	time_t           last_active;
 	long             time_diff;
 	/* flags */
@@ -96,20 +100,22 @@ typedef struct g2_connection
 		bool          firewalled;
 		bool          query_key_cache;
 		bool          t1;
+		bool          last_data_active;
 	} flags;
 	union
 	{
 		struct
 		{
-			time_t        PI;
-			time_t        LNI;
-			time_t        KHL;
-			time_t        QHT;
-			time_t        UPROC;
+			time_t     PI;
+			time_t     LNI;
+			time_t     KHL;
+			time_t     QHT;
+			time_t     UPROC;
 		} send_stamps;
 		struct
 		{
-			size_t     header_bytes_recv;
+			struct timeout header_complete_to;
+			size_t         header_bytes_recv;
 			struct
 			{
 				bool    accept_ok;
@@ -160,7 +166,7 @@ typedef struct
 } action_string;
 
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
-# define KNOWN_HEADER_FIELDS_SUM  19
+# define KNOWN_HEADER_FIELDS_SUM  27
 
 /* Stringconstants */
 /* var */
@@ -195,10 +201,19 @@ typedef struct
 # define HUB_NEEDED_KEY    "X-Hub-Needed"
 # define X_TRY_UPEER_KEY   "X-Try-Ultrapeers"
 # define X_TRY_HUB_KEY     "X-Try-Hubs"
+/* G1 Stuff we want to silently ignore */
+# define X_VERSION         "X-Version"
+# define X_MAX_TTL_KEY     "X-Max-TTL"
+# define X_GUESS_KEY       "X-Guess"
 # define X_REQUERIES_KEY   "X-Requeries"
+# define X_LOC_PREF        "X-Locale-Pref"
+# define X_Q_ROUT_KEY      "X-Query-Routing"
+# define X_UQ_ROUT_KEY     "X-Ultrapeer-Query-Routing"
+# define X_DYN_Q_KEY       "X-Dynamic-Querying"
+# define X_EXT_PROBES_KEY  "X-Ext-Probes"
+# define X_DEGREE          "X-Degree"
 # define GGEP_KEY          "GGEP"
 # define PONG_C_KEY        "Pong-Caching"
-# define QUERY_ROUTE_KEY   "X-Query-Routing"
 # define UPTIME_KEY        "Uptime"
 # define VEND_MSG_KEY      "Vendor-Message"
 

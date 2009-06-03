@@ -2,7 +2,7 @@
  * G2Connection.c
  * helper-function for G2-Connections
  *
- * Copyright (c) 2004 - 2008 Jan Seiffert
+ * Copyright (c) 2004 - 2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <strings.h>
+#include <ctype.h>
 #include <zlib.h>
 /* other */
 #include "lib/other.h"
@@ -39,6 +40,7 @@
 #define _G2CONNECTION_C
 #include "G2Connection.h"
 #include "G2ConRegistry.h"
+#include "G2KHL.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
 #include "lib/atomic.h"
@@ -61,6 +63,7 @@ static bool uagent_what(g2_connection_t *, size_t);
 static bool ulpeer_what(g2_connection_t *, size_t);
 static bool content_what(g2_connection_t *, size_t);
 static bool listen_what(g2_connection_t *, size_t);
+static bool try_hub_what(g2_connection_t *, size_t);
 
 /* Vars */
 	/* con buffer */
@@ -86,42 +89,33 @@ static const action_string h_as05 = {&content_what,   str_size(CONTENT_KEY),    
 static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY), CONTENT_ENC_KEY};
 static const action_string h_as07 = {&ulpeer_what,    str_size(UPEER_KEY),       UPEER_KEY};
 static const action_string h_as08 = {&ulpeer_what,    str_size(HUB_KEY),         HUB_KEY};
-static const action_string h_as09 = {NULL,            str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
-static const action_string h_as10 = {&empty_action_c, str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
-static const action_string h_as11 = {NULL,            str_size(X_REQUERIES_KEY), X_REQUERIES_KEY};
-static const action_string h_as12 = {NULL,            str_size(X_TRY_UPEER_KEY), X_TRY_UPEER_KEY};
-static const action_string h_as13 = {&empty_action_c, str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
+static const action_string h_as09 = {&empty_action_c, str_size(X_TRY_UPEER_KEY), X_TRY_UPEER_KEY}; /* maybe parse */
+static const action_string h_as10 = {try_hub_what,    str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
+static const action_string h_as11 = {&empty_action_c, str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
+static const action_string h_as12 = {&empty_action_c, str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
+static const action_string h_as13 = {&empty_action_c, str_size(X_VERSION),        X_VERSION};
 static const action_string h_as14 = {&empty_action_c, str_size(GGEP_KEY),        GGEP_KEY};
 static const action_string h_as15 = {&empty_action_c, str_size(PONG_C_KEY),      PONG_C_KEY};
-static const action_string h_as16 = {&empty_action_c, str_size(QUERY_ROUTE_KEY), QUERY_ROUTE_KEY};
-static const action_string h_as17 = {&empty_action_c, str_size(UPTIME_KEY),      UPTIME_KEY};
-static const action_string h_as18 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
+static const action_string h_as16 = {&empty_action_c, str_size(UPTIME_KEY),      UPTIME_KEY};
+static const action_string h_as17 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
+static const action_string h_as18 = {&empty_action_c, str_size(X_LOC_PREF),      X_LOC_PREF};
+static const action_string h_as19 = {&empty_action_c, str_size(X_MAX_TTL_KEY),   X_MAX_TTL_KEY};
+static const action_string h_as20 = {&empty_action_c, str_size(X_GUESS_KEY),     X_GUESS_KEY};
+static const action_string h_as21 = {&empty_action_c, str_size(X_REQUERIES_KEY), X_REQUERIES_KEY};
+static const action_string h_as22 = {&empty_action_c, str_size(X_Q_ROUT_KEY),    X_Q_ROUT_KEY};
+static const action_string h_as23 = {&empty_action_c, str_size(X_UQ_ROUT_KEY),   X_UQ_ROUT_KEY};
+static const action_string h_as24 = {&empty_action_c, str_size(X_DYN_Q_KEY),     X_DYN_Q_KEY};
+static const action_string h_as25 = {&empty_action_c, str_size(X_EXT_PROBES_KEY),X_EXT_PROBES_KEY};
+static const action_string h_as26 = {&empty_action_c, str_size(X_DEGREE),        X_DEGREE};
 
-const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") = 
+const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
-	&h_as00,
-	&h_as01,
-	&h_as02,
-	&h_as03,
-	&h_as04,
-	&h_as05,
-	&h_as06,
-	&h_as07,
-	&h_as08,
-	&h_as09,
-	&h_as10,
-	&h_as11,
-	&h_as12,
-	&h_as13,
-	&h_as14,
-	&h_as15,
-	&h_as16,
-	&h_as17,
-	&h_as18,
+	&h_as00, &h_as01, &h_as02, &h_as03, &h_as04, &h_as05, &h_as06, &h_as07, &h_as08,
+	&h_as09, &h_as10, &h_as11, &h_as12, &h_as13, &h_as14, &h_as15, &h_as16, &h_as17,
+	&h_as18, &h_as19, &h_as20, &h_as21, &h_as22, &h_as23, &h_as24, &h_as25, &h_as26,
 };
 
-
-/* 
+/*
  * Funcs
  */
 	/* constructor */
@@ -193,9 +187,19 @@ static void my_zfree(void *opaque, void *to_free)
 
 void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
-	/* if theres zlib stuff, free it */
+	/* cleanup stuff we don't wan't to memset */
 	if(!new)
 	{
+		timeout_cancel(&work_entry->active_to);
+		DESTROY_TIMEOUT(&work_entry->active_to);
+
+		if(G2CONNECTED != work_entry->connect_state) {
+			timeout_cancel(&work_entry->u.accept.header_complete_to);
+			DESTROY_TIMEOUT(&work_entry->u.accept.header_complete_to);
+		} else {
+			/* Handler timeouts */
+		}
+
 		if(Z_OK != inflateEnd(&work_entry->z_decoder)) {
 			if(work_entry->z_decoder.msg)
 				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder.msg);
@@ -282,6 +286,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->sent_qht = NULL;
 	work_entry->build_packet = NULL;
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
+	INIT_TIMEOUT(&work_entry->active_to);
+	INIT_TIMEOUT(&work_entry->u.accept.header_complete_to);
 }
 
 void g2_con_free(g2_connection_t *to_free)
@@ -291,6 +297,17 @@ void g2_con_free(g2_connection_t *to_free)
 	if(!to_free)
 		return;
 
+	/* timeouts */
+	timeout_cancel(&to_free->active_to);
+
+	if(G2CONNECTED != to_free->connect_state) {
+		timeout_cancel(&to_free->u.accept.header_complete_to);
+		DESTROY_TIMEOUT(&to_free->u.accept.header_complete_to);
+	} else {
+		/* Handler timeouts */
+	}
+
+	/* zlib */
 	if(unlikely(Z_OK != inflateEnd(&to_free->z_decoder))) {
 		if(to_free->z_decoder.msg)
 			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_decoder.msg);
@@ -300,7 +317,8 @@ void g2_con_free(g2_connection_t *to_free)
 		if(to_free->z_encoder.msg)
 			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder.msg);
 	}
-	
+
+	/* buffer */
 	if(to_free->recv)
 		recv_buff_free(to_free->recv);
 	if(to_free->send)
@@ -310,9 +328,11 @@ void g2_con_free(g2_connection_t *to_free)
 	if(to_free->send_u)
 		recv_buff_free(to_free->send_u);
 
+	/* qht */
 	g2_qht_put(to_free->qht);
 	g2_qht_put(to_free->sent_qht);
 
+	/* packets */
 	if(to_free->build_packet)
 		g2_packet_free(to_free->build_packet);
 
@@ -442,7 +462,7 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 
 		if(!strncasecmp_a(buffer_start(*to_con->recv), KNOWN_ENCODINGS[i]->txt, KNOWN_ENCODINGS[i]->length))
 		{
-		//found!!
+		/* found!! */
 			to_con->encoding_out = i;
 			to_con->u.accept.flags.enc_out_ok = true;
 			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
@@ -550,11 +570,78 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 	return true;
 }
 
-static bool listen_what(g2_connection_t * to_con, size_t distance)
+static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
-	/* stringdisplacements are int... */
+	/* string displacements are int... */
 	logg_develd(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(*to_con->recv));
 	return false;
+}
+
+static bool try_hub_what(g2_connection_t *to_con, size_t distance)
+{
+	union combo_addr where;
+	struct tm when_tm;
+	time_t when;
+	char *w_ptr = buffer_start(*to_con->recv);
+	char *x;
+	char c;
+
+	/* we only accept foreign hub info after the second header */
+	if(!to_con->u.accept.flags.second_header)
+		return true;
+
+	/* brutally NUL terminate, there is a \r\n behind us */
+	w_ptr[distance] = '\0';
+
+	/* init stuff */
+	gmtime_r(&local_time_now, &when_tm);
+	memset(&where, 0, sizeof(where));
+
+	for(c = 0xff; c; w_ptr = x)
+	{
+		char *t_str, *z;
+		uint16_t port;
+
+		x = strchrnul(w_ptr, ',');
+		/* remove leading white-spaces in field-data */
+		for(c = *x, *x++ = '\0'; c && (c = *x) && isspace(*x);)
+			*x++ = '\0';
+
+		t_str = strchrnul(w_ptr, ' ');
+		if(!*t_str)
+			continue;
+		*t_str++ = '\0';
+
+		/* port */
+		z = strrchr(w_ptr, ':');
+		if(!z)
+			continue;
+		*z++ = '\0';
+		port = atoi(z);
+		if(!port)
+			continue;
+		combo_addr_set_port(&where, port);
+
+		/* IPv6? */
+		if(*w_ptr == '[')
+			w_ptr++;
+		if(!combo_addr_read(w_ptr, &where))
+			continue;
+
+		/* time stamp */
+		z = strptime(t_str, "%Y-%m-%dT%H:%M", &when_tm);
+		if(!z) {
+			logg_develd("couldn't read time stamp \"%s\"\n", z);
+			continue;
+		}
+		if('\0' != *z || 'Z' != *z)
+			logg_develd("funny stuff behind time stamp \"%s\"\n", z);
+		when = mktime(&when_tm);
+
+		g2_khl_add(&where, when, false);
+	}
+
+	return true;
 }
 
 static bool empty_action_c(g2_connection_t *to_con GCC_ATTR_UNUSED_PARAM, size_t distance GCC_ATTR_UNUSED_PARAM)

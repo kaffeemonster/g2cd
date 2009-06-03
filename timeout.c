@@ -41,6 +41,8 @@
 
 /* from deka to nano d    u    n */
 #define DSEC2NSEC (100*1000*1000)
+/* how many nsec in a sec    m      u      n */
+#define ONESEC_AS_NSEC (1 * 1000 * 1000 * 1000)
 /* 100 * 0.1sec */
 #define DEFAULT_TIMEOUT	111
 
@@ -135,6 +137,11 @@ static always_inline void timespec_add(struct timespec *t, unsigned int timeout)
 {
 	t->tv_sec  += to2sec(timeout);
 	t->tv_nsec += to2nsec(timeout);
+	/* normalize */
+	if(t->tv_nsec >= ONESEC_AS_NSEC) {
+		t->tv_sec  += 1;
+		t->tv_nsec -= ONESEC_AS_NSEC;
+	}
 }
 
 static always_inline struct timeout *timeout_nearest(void)
