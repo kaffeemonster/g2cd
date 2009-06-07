@@ -2,7 +2,7 @@
  * G2PacketSerializer.c
  * Serializer for G2-packets
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -29,10 +29,16 @@
 /* System includes */
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef HAVE_MALLOC_H
+# include <malloc.h>
+#elif defined(HAVE_MALLOC_NP_H)
+# include <malloc_np.h>
+#endif
 /* other */
 #include "lib/other.h"
 /* Own includes */
 #define _G2PACKETSERIALIZER_C
+#define G2PACKET_POWER_MONGER
 #include "G2PacketSerializer.h"
 #include "G2Packet.h"
 #include "lib/sec_buffer.h"
@@ -146,7 +152,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 		target->more_bytes_needed = true;
 		return 0;
 	}
-			
+
 	target->length = 0;
 	for(i = 0; i < target->length_length; i++)
 	{
@@ -164,7 +170,11 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 		return -1;
 	}
 
-/* seems to be allowed to send a packet with compound flag and no data.. */
+/*
+ * seems to be allowed to send a packet with compound flag and
+ * no data to prevent a zero control byte
+ * Fix it up, so we do not choke on it later on.
+ */
 	if(unlikely(!target->length))
 		target->is_compound = false;
 	
@@ -189,8 +199,11 @@ static inline int read_length(struct norm_buff *source, g2_packet_t *target, siz
 
 static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 {
-	char type_str[16]; /* 8 + 2 */
-	type_str[0] = '\0';
+	union
+	{
+		char type_str[16]; /* 8 + 2 */
+		uint64_t type_ll[2];
+	} u;
 
 	/* fetch the up to eigth type-bytes */
 	if(unlikely(target->type_length > buffer_remaining(*source))) {
@@ -198,37 +211,47 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 		return 0;
 	}
 
+	/*
+	 * Since a type can be 8 byte long, it is also a uint64_t. And
+	 * because we need !two! zeros behind the type, we set the !two!
+	 * u64 to 0, this should be 2 or 4 moves.
+	 * One day we might change the packet typer to a "magic 64Bit
+	 * interpreter", which means you treat the u64 with 0 padding at
+	 * the end as one big number, to lookup (hashtable, what ever,
+	 * don't know, it't the super duper thing shareaza is doing).
+	 * instead of our byte-by-byte table interpreter.
+	 */
+	u.type_ll[0] = 0;
+	u.type_ll[1] = 0;
+
 	if(likely(target->type_length))
 	{
-		char *w_ptr = type_str;
+		char *t_ptr = u.type_str, *s_ptr = buffer_start(*source);
+		char *h_ptr = &target->pd.in.type[0], c;
 		size_t i;
-		for(i = target->type_length; likely(i); i--, w_ptr++, source->pos++)
+
+		for(i = target->type_length, source->pos += i; likely(i); i--)
 		{
-			*w_ptr = *buffer_start(*source);
+			c = *s_ptr++;
 	/*
 	 * A *VERY* simple test if the packet-type is legal,
 	 * hopefully we can detect de-sync-ing of the stream with this
 	 */
-			if(unlikely(*w_ptr < 0x20 || *w_ptr & 0x80)) {
+			if(unlikely(c < 0x20 || c & 0x80)) {
 				logg_devel("packet with bogus/ugly type-name\n");
 				return -1;
 			}
+			/* save unmodified header for forwarding */
+			*h_ptr++ = c;
+			*t_ptr++ = c;
 		}
-
-		/*
-		 * insert 2 zeros so we can match one behind a zero ;)
-		 * We should have enough space, type can only be
-		 * 8 char long, we have 16
-		 */
-		*w_ptr++ = '\0';
-		*w_ptr = '\0';
 	} else {
 		/* Normaly can not happen, Illegal Packet... */
 		logg_devel("packet with 0 type-length\n");
 		return -1;
 	}
 
-	g2_packet_find_type(target, type_str);
+	g2_packet_find_type(target, u.type_str);
 
 	target->packet_decode++;
 	return 1;
@@ -540,6 +563,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				return false;
 		case DECIDE_DECODE:
 // TODO: since we know the type now, we may want to play games with skipping
+		/* we have to obay a /TO before we can skip anything! */
 			func_ret_val = 0;
 			stat_packet(target, func_ret_val);
 
@@ -554,7 +578,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			}
 			break;
 		case START_EXTRACT_PACKET_FROM_STREAM:
-		/* look what have to be done to extract the data */
+		/* look what has to be done to extract the data */
 			/* do we have a trunk? */
 			if(!target->data_trunk_is_freeable  ||
 			   0 == target->data_trunk.capacity ||
@@ -568,7 +592,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 	 * will stay were it is.
 	 *
 	 * We are assuming, that a packet with PACKET_EXTRACTION_COMPLETE
-	 * is imideatly handeld in one go. See g2Handler.c
+	 * is imideatly handeld in one go. See G2Handler.c
 	 *
 	 */
 				/* all data delivered? */
@@ -601,34 +625,63 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			{
 				/* no, realloc */
 				char *tmp_ptr = NULL;
-				if(target->data_trunk_is_freeable)
-					tmp_ptr = realloc(target->data_trunk.data, target->length);
-				else if(target->length > sizeof(target->data))
-					tmp_ptr = malloc(target->length);
+				if(target->data_trunk_is_freeable ||
+				   target->length > sizeof(target->pd.in.buf))
+				{
+					struct packet_data_store *pds;
 
-				if(tmp_ptr) {
+					if(target->data_trunk.data)
+					{
+						struct packet_data_store *tmp_pds =
+							container_of(target->data_trunk.data, struct packet_data_store, data);
+// TODO: check refcnt for fun and profit
+						/* a packet used for input should not have a shared data storage */
+#ifdef HAVE_MALLOC_USABLE_SIZE
+						size_t block_size = malloc_usable_size(tmp_pds);
+						/*
+						 * reallocating may save us a big cycle through the allocator
+						 * because of usable slack behind allocation, but if this fails
+						 * nothing is gained and copying like the std.func is mandated
+						 * to do makes it much worse in our case, because we want to
+						 * overwrite the buffer with new data.
+						 * We can try to avoid it, but it is system dependent...
+						 */
+						if(block_size < target->length)
+						{
+							free(tmp_pds);
+							target->data_trunk_is_freeable = false;
+							memset(&target->data_trunk, 0, sizeof(target->data_trunk));
+							pds = malloc(sizeof(*pds) + target->length);
+						}
+						else
+#endif
+							pds = realloc(tmp_pds, sizeof(*pds) + target->length);
+					}
+					else
+						pds = malloc(sizeof(*pds) + target->length);
+
+					if(!pds) {
+						logg_errno(LOGF_DEBUG, "reallocating packet space");
+						return false;
+					}
+					atomic_set(&pds->refcnt, 1);
+
+					tmp_ptr = pds->data;
 					target->data_trunk_is_freeable = true;
 					target->data_trunk.capacity = target->length;
 				}
 				else
 				{
-					if(target->length > sizeof(target->data)) {
-						logg_errno(LOGF_DEBUG, "reallocating packet space");
-						return false;
-					}
 					target->data_trunk_is_freeable = false;
-					tmp_ptr = target->data;
-					target->data_trunk.capacity = sizeof(target->data);
+					tmp_ptr = target->pd.in.buf;
+					target->data_trunk.capacity = sizeof(target->pd.in.buf);
 				}
 
 				target->data_trunk.data = tmp_ptr;
-				buffer_clear(target->data_trunk);
 				logg_develd("%p -> packet space %p reallocated: %lu bytes\n", (void *) target, (void *) target->data_trunk.data, (unsigned long) target->length);
 			}
-			else {
-				target->data_trunk.pos = 0;
-				target->data_trunk.limit = target->length;
-			}
+			target->data_trunk.pos = 0;
+			target->data_trunk.limit = target->length;
 			target->packet_decode++;
 		case EXTRACT_PACKET_FROM_STREAM:
 		/* grep payload */
@@ -647,7 +700,6 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_target);
 				target->data_trunk.pos += buff_remain_target;
 				source->pos += buff_remain_target;
-//				target->data_pos = 0;
 				target->packet_decode++;
 			}
 		case PACKET_EXTRACTION_COMPLETE:
@@ -915,7 +967,10 @@ static uint8_t create_control_byte(g2_packet_t *p)
 					source->more_bytes_needed = true; \
 					break; \
 				} \
-				*buffer_start(*target) = g2_ptype_names[source->type][((x)-1)]; \
+				if(likely(PT_UNKNOWN != source->type)) \
+					*buffer_start(*target) = g2_ptype_names[source->type][((x)-1)]; \
+				else \
+					*buffer_start(*target) = source->pd.in.type[((x)-1)]; \
 				target->pos++; \
 			} \
 			source->packet_encode++; \
@@ -1116,20 +1171,23 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	size_t size = 0, child_size = 0, i, j;
 	uint8_t control = 0;
 
-	/* calculate the inner packet length */
-	if(likely(!list_empty(&p->children))) {
-		struct list_head *e;
-		list_for_each(e, &p->children) {
-			g2_packet_t *child = list_entry(e, g2_packet_t, list);
-			ssize_t ret = g2_packet_serialize_prep_internal(child, write_header);
-			if(-1 == ret)
-				return ret;
-			child_size += (size_t)ret;
-		}
-		p->is_compound = true;
-		size += child_size;
-	} else
-		p->is_compound = false;
+	if(!p->is_literal)
+	{
+		/* calculate the inner packet length */
+		if(likely(!list_empty(&p->children))) {
+			struct list_head *e;
+			list_for_each(e, &p->children) {
+				g2_packet_t *child = list_entry(e, g2_packet_t, list);
+				ssize_t ret = g2_packet_serialize_prep_internal(child, write_header);
+				if(-1 == ret)
+					return ret;
+				child_size += (size_t)ret;
+			}
+			p->is_compound = true;
+			size += child_size;
+		} else
+			p->is_compound = false;
+	}
 
 	if(likely(p->data_trunk.data && buffer_remaining(p->data_trunk))) {
 		size += size ? 1 : 0; /* child terminator */
@@ -1148,8 +1206,8 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	else {
 		size_t difference;
 		/* normaly we should NEVER reach this! */
-		logg_develd("Packet with very big size! Trying scary fixup for \"%s\": %lu\n",
-			g2_ptype_names[p->type], (unsigned long)size);
+		logg_develd("Packet with very big size! Trying scary fixup for \"%s\": %zu\n",
+			g2_ptype_names[p->type], size);
 		difference = size - child_size;
 		if(0 == difference || difference >= buffer_remaining(p->data_trunk))
 			return -1;
@@ -1159,7 +1217,8 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 	}
 
 	p->length = size;
-	p->type_length = g2_ptype_names_length[p->type];
+	if(likely(PT_UNKNOWN != p->type))
+		p->type_length = g2_ptype_names_length[p->type];
 	/*
 	 * don't touch endiannes, inner packet data mandates
 	 * endiannes. We can adapt how we write the length
@@ -1172,19 +1231,20 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 		return size + p->length_length + p->type_length + 1;
 	}
 
+// TODO: this is broken ATM, and uneeded
 	control = create_control_byte(p);
 
 	/* check if headerspace is free */
-	if(p->data_trunk.data == p->data)
+	if(p->data_trunk.data == p->pd.out)
 	{
 		size_t size_needed = p->length_length + p->type_length + 1;
-		/* OhOh, we have a Problem, data to send stored in header space */
-		if((sizeof(p->data) - size_needed) < buffer_remaining(p->data_trunk)) {
+		/* OhOh, we have a Problem, data to send may stored in header space */
+		if((sizeof(p->pd.out) - size_needed) < buffer_remaining(p->data_trunk)) {
 			char *tmp_ptr;
 			/* totaly fucked up, header and data to big */
-			logg_develd("Packet with stuffed data! Expensive Fixup for \"%s\": %lu\n",
-				g2_ptype_names[p->type], (unsigned long)buffer_remaining(p->data_trunk));
-			if(!(tmp_ptr = malloc(sizeof(p->data))))
+			logg_develd("Packet with stuffed data! Expensive Fixup for \"%s\": %zu\n",
+				g2_ptype_names[p->type], buffer_remaining(p->data_trunk));
+			if(!(tmp_ptr = malloc(sizeof(p->pd.out))))
 				return -1;
 			memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
 			p->data_trunk.data = tmp_ptr;
@@ -1194,31 +1254,31 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 		{
 			size_t dlength = buffer_remaining(p->data_trunk);
 			/* move data up */
-			memmove(p->data + size_needed, buffer_start(p->data_trunk), dlength);
+			memmove(p->pd.out + size_needed, buffer_start(p->data_trunk), dlength);
 			p->data_trunk.pos  = 0;
-			p->data_trunk.data = p->data + size_needed;
+			p->data_trunk.data = p->pd.out + size_needed;
 			p->data_trunk.limit = dlength;
-			p->data_trunk.capacity = sizeof(p->data) - size_needed;
+			p->data_trunk.capacity = sizeof(p->pd.out) - size_needed;
 			p->data_trunk_is_freeable = false;
 		}
 		/* else we are lucky bastards */
 	}
 
 	i = 0;
-	p->data[i++] = control;
+	p->pd.out[i++] = control;
 	/* write the inner packet length */
 	if(1 == p->length_length)
-		p->data[i++] = (char)size;
+		p->pd.out[i++] = (char)size;
 	else if(!p->big_endian) {
 		uint32_t nsize = size;
 		for(j = 0; j < p->length_length; j++, nsize >>=8)
-			p->data[i++] = (char)(nsize & 0xFF);
+			p->pd.out[i++] = (char)(nsize & 0xFF);
 	} else {
 		for(j = p->length_length; j--;)
-			p->data[i++] = (char)(size >> (j*8)) & 0xFF;
+			p->pd.out[i++] = (char)(size >> (j*8)) & 0xFF;
 	}
 	for(j = 0; j < p->type_length; i++, j++)
-		p->data[i] = g2_ptype_names[p->type][j];
+		p->pd.out[i] = g2_ptype_names[p->type][j];
 
 	/*
 	 * return REAL packet length !!
@@ -1234,9 +1294,11 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
  *
  * our job is to go over the packet (and it childs) and:
  * - gather the lengths
- * - set the fields length_length, type_length, endian, compound
+ * - set the fields length_length, compound
  *
  * We do NOT write out every header(see down)
+ *
+ * Warning: Your packet may be is_literal, then we do nothing!
  *
  * return value: REAL packet length !! with header
  *               -1 on error
@@ -1253,8 +1315,10 @@ ssize_t g2_packet_serialize_prep_min(g2_packet_t *p)
  *
  * our job is to go over the packet (and it childs) and:
  * - gather the lengths
- * - set the fields length_length, type_length, endian, compound
+ * - set the fields length_length, compound
  * - write out every header
+ *
+ * Warning: Your packet may be is_literal, then we do nothing!
  *
  * return value: REAL packet length !! with header
  *               -1 on error

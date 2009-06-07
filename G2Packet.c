@@ -40,6 +40,7 @@
 /* own includes */
 #define _G2PACKET_C
 #define _NEED_G2_P_TYPE
+#define G2PACKET_POWER_MONGER
 #include "G2Packet.h"
 #include "G2PacketSerializer.h"
 #include "G2QHT.h"
@@ -69,7 +70,8 @@
 /*
  * Internal Prototypes
  */
-static inline bool g2_packet_steal_data_space(g2_packet_t *, size_t);
+static bool g2_packet_steal_data_space(g2_packet_t *, size_t);
+static bool g2_packet_steal_data_space_lit(g2_packet_t *, size_t);
 static bool g2_packet_decide_spec_int(struct ptype_action_args *, g2_ptype_action_func const *);
 /* packet handler */
 static bool empty_action_p(struct ptype_action_args *);
@@ -473,7 +475,7 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
 	combo_addr_set_port(target, tmp_port);
 
-	logg_packet("%s:\t%p#I\n", name, target);
+	logg_packet_old("%s:\t%p#I\n", name, target);
 	return true;
 }
 
@@ -641,6 +643,28 @@ static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 	target->big_endian = HOST_IS_BIGENDIAN;
 }
 
+static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
+{
+	size_t len;
+
+	len = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+
+	if(!g2_packet_steal_data_space(target, len))
+		return false;
+
+	/* We Assume network byte order for the IP */
+	if(AF_INET == source->s_fam) {
+		put_unaligned(source->in.sin_addr.s_addr,
+		              (uint32_t *)buffer_start(target->data_trunk));
+	} else {
+		memcpy(buffer_start(target->data_trunk),
+		       &source->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+	}
+
+	target->big_endian = HOST_IS_BIGENDIAN;
+	return true;
+}
+
 static bool g2_packet_has_TO(g2_packet_t *src, uint8_t **guid)
 {
 	char *data;
@@ -728,6 +752,18 @@ static void g2_packet_send_qka(union combo_addr *req_addr, union combo_addr *sen
 	INIT_LIST_HEAD(&answer);
 	list_add_tail(&qka.list, &answer);
 	g2_udp_send(req_addr, &answer);
+}
+
+static void g2_packet_add2target(g2_packet_t *to_add, struct list_head *target, shortlock_t *target_lock)
+{
+	if(target_lock)
+	{
+		shortlock_t_lock(target_lock);
+		list_add_tail(&to_add->list, target);
+		shortlock_t_unlock(target_lock);
+	}
+	else
+		list_add_tail(&to_add->list, target);
 }
 
 /*
@@ -904,6 +940,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 
 // TODO: fill in our neighbouring hubs
 
+	/* only UDP, no need to lock */
 	list_add_tail(&khla->list, parg->target);
 	return true;
 out_fail:
@@ -1016,7 +1053,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 
 // TODO: fill in our neighbouring hubs
 
-	list_add_tail(&khl->list, parg->target);
+	g2_packet_add2target(khl, parg->target, parg->target_lock);
 	parg->connec->u.send_stamps.KHL = local_time_now;
 	return true;
 out_fail:
@@ -1341,7 +1378,8 @@ static bool handle_LNI(struct ptype_action_args *parg)
 			g2_packet_free(hs);
 	}
 	lni->big_endian = HOST_IS_BIGENDIAN;
-	list_add_tail(&lni->list, parg->target);
+
+	g2_packet_add2target(lni, parg->target, parg->target_lock);
 	parg->connec->u.send_stamps.LNI = local_time_now;
 
 	return true;
@@ -1538,7 +1576,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 		}
 		po->type = PT_PO;
 
-		list_add_tail(&po->list, parg->target);
+		g2_packet_add2target(po, parg->target, parg->target_lock);
 		if(connec)
 			connec->u.send_stamps.PI = local_time_now;
 		return true;
@@ -2066,8 +2104,8 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	 *
 	 * When it is "good", we can use the guid, na, etc...
 	 *
-	 * And all this checking would be beneficial not to
-	 * forward junk.
+	 * At least all this checking would be beneficial not
+	 * to forward junk.
 	 */
 
 	if(parg->connec)
@@ -2196,8 +2234,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 {
 	g2_connection_t *connec = parg->connec;
 	g2_packet_t *source = parg->source;
-	struct list_head *target = parg->target;
-	struct qht_fragment *frags;
+	struct qht_fragment *frags, *nfrag;
 	struct qhtable *master_qht;
 	g2_packet_t *qht = NULL;
 	char tmp;
@@ -2248,7 +2285,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 		put_unaligned(ent, (uint32_t*)(buffer_start(qht->data_trunk)+1));
 		*(buffer_start(qht->data_trunk)+5) = 1; /* infinity */
 		qht->big_endian = HOST_IS_BIGENDIAN;
-		list_add_tail(&qht->list, target);
+		g2_packet_add2target(qht, parg->target, parg->target_lock);
 		qht = NULL;
 	}
 
@@ -2258,16 +2295,37 @@ static bool handle_QHT(struct ptype_action_args *parg)
 
 	do
 	{
+		struct packet_data_store *pds;
+
+		/*
+		 * Dirty Dirty Dirty
+		 * We got frags from the qht stuff. They left us some space
+		 * at the start for a qht fragment header.
+		 * But to free the fragments, by being data_trunk->data, we
+		 * have to set up stuff right.
+		 * First it was enough to set the raw fragment as ->data
+		 * and advance ->pos over the struct fragment.
+		 * Now, since the data store is refcounted, we have to move
+		 * the start about a sizeof(pds).
+		 * So this is ugly pointer foo and aliasing.
+		 *
+		 * May the compiler be with us...
+		 */
+		nfrag = frags->next;
 		qht = g2_packet_calloc();
 		if(!qht)
 			goto out_fail_frags;
 		qht->type = PT_QHT;
+		frags->next = NULL;
 
-		qht->data_trunk.data = (char *)frags;
-		qht->data_trunk.capacity = sizeof(*frags) + frags->length;
+		pds = (struct packet_data_store *)frags;
+		qht->data_trunk.capacity = sizeof(*frags) + frags->length - sizeof(*pds);
 		qht->data_trunk.limit = qht->data_trunk.capacity;
-		qht->data_trunk.pos = offsetof(struct qht_fragment, data);
+		qht->data_trunk.pos =
+			offsetof(struct qht_fragment, data) - offsetof(struct packet_data_store, data);
 		qht->data_trunk_is_freeable = true;
+		qht->data_trunk.data = pds->data;
+		atomic_set(&pds->refcnt, 1);
 
 		*buffer_start(qht->data_trunk) = 1; /* command */
 		*(buffer_start(qht->data_trunk)+1) = frags->nr; /* fragment no */
@@ -2275,8 +2333,8 @@ static bool handle_QHT(struct ptype_action_args *parg)
 		*(buffer_start(qht->data_trunk)+3) = frags->compressed; /* compresion */
 		*(buffer_start(qht->data_trunk)+4) = 1; /* bits */
 
-		list_add_tail(&qht->list, target);
-		frags = frags->next;
+		g2_packet_add2target(qht, parg->target, parg->target_lock);
+		frags = nfrag;
 	} while(frags);
 
 	g2_qht_put(connec->sent_qht);
@@ -2382,7 +2440,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 
 			qka->type = PT_QKA;
 			qka->big_endian = HOST_IS_BIGENDIAN;
-			list_add_tail(&qka->list, parg->target);
+			g2_packet_add2target(qka, parg->target, parg->target_lock);
 
 			return true;
 out_fail:
@@ -2473,29 +2531,62 @@ struct QKA_data
 
 static intptr_t QKA_SNA_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *carg)
 {
-	struct ptype_action_args *parg GCC_ATTRIB_UNUSED = carg;
+	struct ptype_action_args *parg = carg;
+	struct QKA_data *rdata = parg->opaque;;
+	g2_packet_t *qka, *qk, *sna, *qna;
 
-// TODO: no locking!!
 	/*
-	 * INSERT INTO code VALUES (wonder)
-	 *
-	 * Without locking, we can do nothing besides this little print.
 	 * The connection is locked against removal inside this callback
 	 * (but because of this we do not want to lock to long, we have
-	 * a whole hash slot locked in the conreg...), so we can read a
-	 * little, but besides that, no locking.
-	 */
-	logg_packet("/QKA/SNA -> wants forwarding to %p#I\n", &con->remote_host);
-// TODO: forward qka
-	/*
-	 * which means:
-	 * - deep clone/rebuild the packet (it's still in the recv buffer...)
-	 *         +- make it a literate send (TODO, no infrastructure)
-	 * - lock target connection packet list (TODO, no lock)
-	 * - add packet and unlock
-	 * - make the multiplexer wakeup (TODO: thread safety...)
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
 	 */
 
+	/*
+	 * we simply rebuild the packet, this way we can avoid
+	 * to add a child packet to a raw packet. We may loose
+	 * unknown/untypical childs by this.
+	 */
+	qka = g2_packet_alloc();
+	qk  = g2_packet_alloc();
+	sna = g2_packet_alloc();
+	qna = g2_packet_alloc();
+
+	if(!(qka && qk && sna && qna))
+		goto out_fail;
+
+	qna->type = PT_QNA;
+	if(!write_na_to_packet(qna, parg->src_addr))
+		goto out_fail;
+
+	sna->type = PT_CACHED;
+	/* buffers are now large enough, should not fail */
+	if(!write_sna_to_packet(sna, &rdata->sending_na))
+		goto out_fail;
+
+	qk->type = PT_QK;
+	qk->big_endian = HOST_IS_BIGENDIAN;
+	/* should not fail */
+	if(!g2_packet_steal_data_space(qk, sizeof(uint32_t)))
+		goto out_fail;
+	put_unaligned(rdata->query_key, (uint32_t *)buffer_start(qk->data_trunk));
+
+	list_add_tail(&sna->list, &qka->children);
+	list_add_tail(&qna->list, &qka->children);
+	list_add_tail(&qk->list, &qka->children);
+
+	qka->type = PT_QKA;
+	qka->big_endian = HOST_IS_BIGENDIAN;
+	g2_packet_add2target(qka, &con->packets_to_send, &con->pts_lock);
+// TODO: make the multiplexer wakeup (TODO: thread safety...)
+
+	return 0;
+
+out_fail:
+	g2_packet_free(qka);
+	g2_packet_free(qk);
+	g2_packet_free(sna);
+	g2_packet_free(qna);
 	return 0;
 }
 
@@ -2553,10 +2644,13 @@ static bool handle_QKA(struct ptype_action_args *parg)
 			g2_qk_add(rdata.query_key, &rdata.queried_na);
 		}
 	}
-	else {
+	else
+	{
 		g2_qk_add(rdata.query_key, parg->src_addr);
-		if(rdata.sending_na_valid)
+		if(rdata.sending_na_valid) {
+			parg->opaque = &rdata;
 			ret_val = !!g2_conreg_for_ip(&rdata.sending_na, QKA_SNA_callback, parg);
+		}
 	}
 
 	return ret_val;
@@ -2617,17 +2711,64 @@ struct HAW_data
 	bool na_valid;
 };
 
+static intptr_t HAW_callback(g2_connection_t *con, void *carg)
+{
+	struct ptype_action_args *parg = carg;
+	g2_packet_t *t, *source = parg->source;
+
+	/*
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
+	 */
+	t = g2_packet_clone(source);
+	if(!t)
+		return 0;
+
+	/* if we can, steal the data form the source packet */
+	if(unlikely(source->data_trunk_is_freeable)) {
+		source->data_trunk.data = NULL;
+		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
+		source->data_trunk_is_freeable = false;
+	} else {
+		/* data in packet buffer? Adjust */
+		if(unlikely(source->data_trunk.data >= source->pd.out &&
+		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				return 0;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_packet_add2target(t, &con->packets_to_send, &con->pts_lock);
+// TODO: make the multiplexer wakeup (TODO: thread safety...)
+
+	return 0;
+}
+
 static bool handle_HAW(struct ptype_action_args *parg)
 {
 	struct HAW_data rdata;
 	struct ptype_action_args cparg;
 	g2_packet_t *source = parg->source;
+	size_t old_pos;
 	uint8_t *ttl, *hops, *guid;
 	bool ret_val = false, keep_decoding;
 
 	if(!source->is_compound)
 		return ret_val;
 
+	old_pos = source->data_trunk.pos;
 	rdata.na_valid = false;
 	cparg = *parg;
 	cparg.opaque = &rdata;
@@ -2672,7 +2813,10 @@ static bool handle_HAW(struct ptype_action_args *parg)
 	 * of the node sending a HAW.
 	 * Save it, for whatever purpose...
 	 */
-// TODO: Check if we now this HAW and drop it?
+	/* do we know this HAW already? */
+	if(g2_guid_lookup(guid, GT_HAW, NULL))
+		return ret_val; /* do not forward */
+
 	g2_guid_add(guid, &rdata.na, local_time_now, GT_HAW);
 
 	logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", *ttl, *hops, guid);
@@ -2681,11 +2825,9 @@ static bool handle_HAW(struct ptype_action_args *parg)
 		*ttl  -= 1;
 		*hops += 1;
 
-// TODO: grep a random neighbouring hub, forward
-	/*
-	 * receiver is not the owner of the guid, foward packet
-	 * literatly (we already altered the ttl/hops), needs code
-	 */
+		/* rewind buffer */
+		source->data_trunk.pos = old_pos;
+		ret_val |= !!g2_conreg_random_hub(&parg->connec->remote_host, HAW_callback, parg);
 	}
 
 	return ret_val;
@@ -2738,7 +2880,7 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 		xml->data_trunk.capacity = server.settings.profile.xml_length;
 		buffer_clear(xml->data_trunk);
 
-		list_add_tail(&uprod->list, parg->target);
+		g2_packet_add2target(uprod, parg->target, parg->target_lock);
 		parg->connec->u.send_stamps.UPROC = local_time_now;
 		return true;
 	}
@@ -2781,6 +2923,10 @@ static bool handle_G2CDC(struct ptype_action_args *parg)
 	if(dlerror())
 		return false;
 
+	if(parg->source->is_compound ||
+	   buffer_remaining(parg->source->data_trunk))
+		return false;
+
 	if(local_time_now < (last_send + G2CDC_TIMEOUT))
 		return false;
 	last_send = local_time_now;
@@ -2794,7 +2940,7 @@ static bool handle_G2CDC(struct ptype_action_args *parg)
 	t->data_trunk.data = (void*)(intptr_t)s_data->data;
 	t->data_trunk.capacity = s_data->len;
 	buffer_clear(t->data_trunk);
-	list_add_tail(&t->list, parg->target);
+	g2_packet_add2target(t, parg->target, parg->target_lock);
 	return true;
 #else
 	parg = parg;
@@ -2869,10 +3015,16 @@ void g2_packet_free(g2_packet_t *to_free)
 		g2_packet_free(entry);
 	}
 
-	if(to_free->data_trunk_is_freeable)
-		free(to_free->data_trunk.data);
+	if(unlikely(to_free->data_trunk_is_freeable && to_free->data_trunk.data))
+	{
+		struct packet_data_store *pds =
+			container_of(to_free->data_trunk.data,
+			             struct packet_data_store, data);
+		if(atomic_dec_test(&pds->refcnt))
+			free(pds);
+	}
 
-	if(to_free->is_freeable)
+	if(likely(to_free->is_freeable))
 		free(to_free);
 }
 
@@ -2894,21 +3046,61 @@ void g2_packet_clean(g2_packet_t *to_clean)
 	to_clean->is_freeable = tmp_free;
 }
 
-static inline bool g2_packet_steal_data_space(g2_packet_t *p, size_t bytes)
+static bool g2_packet_steal_data_space(g2_packet_t *p, size_t bytes)
 {
-	if(sizeof(p->data) < bytes)
+	struct packet_data_store *pds;
+
+	if(sizeof(p->pd.out) < bytes)
 		goto must_malloc;
 
-	p->data_trunk.data  = p->data;
-	p->data_trunk.limit = p->data_trunk.capacity = sizeof(p->data);
-	p->data_trunk.pos   = sizeof(p->data) - bytes;
+	p->data_trunk.data  = p->pd.out;
+	p->data_trunk.limit = p->data_trunk.capacity = sizeof(p->pd.out);
+	p->data_trunk.pos   = sizeof(p->pd.out) - bytes;
 	p->data_trunk_is_freeable = false;
 
 	return true;
+
 must_malloc:
-	p->data_trunk.data = malloc(bytes);
-	if(!p->data_trunk.data)
+	pds = malloc(sizeof(*pds) + bytes);
+	if(!pds)
 		return false;
+	atomic_set(&pds->refcnt, 1);
+	p->data_trunk.data = pds->data;
+	p->data_trunk.capacity = bytes;
+	buffer_clear(p->data_trunk);
+	p->data_trunk_is_freeable = true;
+	return true;
+}
+
+static bool g2_packet_steal_data_space_lit(g2_packet_t *p, size_t bytes)
+{
+	struct packet_data_store *pds;
+	size_t have_bytes;
+	char *buf_start;
+
+	if(likely(PT_UNKNOWN != p->type)) {
+		have_bytes = sizeof(p->pd.out);
+		buf_start  = p->pd.out;
+	} else {
+		have_bytes = sizeof(p->pd.out) - p->type_length;
+		buf_start  = &p->pd.out[p->type_length];
+	}
+	if(have_bytes < bytes)
+		goto must_malloc;
+
+	p->data_trunk.data  = buf_start;
+	p->data_trunk.limit = p->data_trunk.capacity = have_bytes;
+	p->data_trunk.pos   = have_bytes - bytes;
+	p->data_trunk_is_freeable = false;
+
+	return true;
+
+must_malloc:
+	pds = malloc(sizeof(*pds) + bytes);
+	if(!pds)
+		return false;
+	atomic_set(&pds->refcnt, 1);
+	p->data_trunk.data = pds->data;
 	p->data_trunk.capacity = bytes;
 	buffer_clear(p->data_trunk);
 	p->data_trunk_is_freeable = true;
@@ -2937,30 +3129,49 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 	return false;
 }
 
-static intptr_t magic_route_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *carg)
+static intptr_t magic_route_callback(g2_connection_t *con, void *carg)
 {
-	struct ptype_action_args *parg GCC_ATTRIB_UNUSED = carg;
+	struct ptype_action_args *parg = carg;
+	g2_packet_t *t, *source = parg->source;
 
-// TODO: no locking!!
 	/*
-	 * INSERT INTO code VALUES (wonder)
-	 *
-	 * Without locking, we can do nothing besides this little print.
 	 * The connection is locked against removal inside this callback
 	 * (but because of this we do not want to lock to long, we have
-	 * a whole hash slot locked in the conreg...), so we can read a
-	 * little, but besides that, no locking.
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
 	 */
 	logg_packet("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
-// TODO: route it
-	/*
-	 * which means:
-	 * - deep clone the packet (it's still in the recv buffer...)
-	 * - make it a literate send (TODO, no infrastructure)
-	 * - lock target connection packet list (TODO, no lock)
-	 * - add packet and unlock
-	 * - make the multiplexer wakeup (TODO: thread safety...)
-	 */
+
+	t = g2_packet_clone(source);
+	if(!t)
+		return 0;
+
+	/* if we can, steal the data form the source packet */
+	if(unlikely(source->data_trunk_is_freeable)) {
+		source->data_trunk.data = NULL;
+		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
+		source->data_trunk_is_freeable = false;
+	} else {
+		/* data in packet buffer? Adjust */
+		if(unlikely(source->data_trunk.data >= source->pd.out &&
+		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				return 0;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_packet_add2target(t, &con->packets_to_send, &con->pts_lock);
+// TODO: make the multiplexer wakeup (TODO: thread safety...)
 
 	return 0;
 }

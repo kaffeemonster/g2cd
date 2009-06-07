@@ -320,7 +320,6 @@ static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, i
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
 		struct norm_buff *d_target = NULL;
-		struct list_head *e, *n;
 		if(ENC_DEFLATE == w_entry->encoding_out)
 			d_target = w_entry->send_u;
 		else
@@ -329,23 +328,45 @@ static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, i
 		if(buffer_remaining(*d_target) < 10)
 			goto no_fill_before_write;
 
-		list_for_each_safe(e, n, &w_entry->packets_to_send)
+		shortlock_t_lock(&w_entry->pts_lock);
+		if(!list_empty(&w_entry->packets_to_send))
 		{
-			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-			if(!g2_packet_serialize_to_buff(entry, d_target))
+			struct list_head head;
+			struct list_head *e, *n;
+
+			INIT_LIST_HEAD(&head);
+more_packet_encode:
+			list_splice_init(&w_entry->packets_to_send, &head);
+			shortlock_t_unlock(&w_entry->pts_lock);
+
+			list_for_each_safe(e, n, &head)
 			{
-				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
-				          "failed to encode packet-stream", &w_entry->remote_host,
-				          w_entry->com_socket);
-				w_entry->flags.dismissed = true;
-				return w_entry;
+				g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+				if(!g2_packet_serialize_to_buff(entry, d_target))
+				{
+					logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+					          "failed to encode packet-stream", &w_entry->remote_host,
+					          w_entry->com_socket);
+					w_entry->flags.dismissed = true;
+					break;
+				}
+				if(ENCODE_FINISHED != entry->packet_encode)
+					break;
+				logg_develd_old("removing one: %s\n", g2_ptype_names[entry->type]);
+				list_del(e);
+				g2_packet_free(entry);
 			}
-			if(ENCODE_FINISHED != entry->packet_encode)
-				break;
-			logg_develd_old("removing one: %s\n", g2_ptype_names[entry->type]);
-			list_del(e);
-			g2_packet_free(entry);
+			shortlock_t_lock(&w_entry->pts_lock);
+			if(!list_empty(&head))
+				list_splice(&head, &w_entry->packets_to_send);
+			else if(!list_empty(&w_entry->packets_to_send))
+				goto more_packet_encode;
+			shortlock_t_unlock(&w_entry->pts_lock);
+			if(w_entry->flags.dismissed)
+				return w_entry;
 		}
+		else
+			shortlock_t_unlock(&w_entry->pts_lock);
 // TODO: handle compression
 
 no_fill_before_write:
@@ -458,25 +479,30 @@ retry_unpack:
 					else
 						d_target = w_entry->send;
 
-					parg.connec   = w_entry;
-					parg.src_addr = NULL;
-					parg.dst_addr = NULL;
-					parg.source   = build_packet;
-					parg.target   = &w_entry->packets_to_send;
-					parg.opaque   = NULL;
+					parg.connec      = w_entry;
+					parg.src_addr    = NULL;
+					parg.dst_addr    = NULL;
+					parg.source      = build_packet;
+					parg.target_lock = &w_entry->pts_lock;
+					parg.target      = &w_entry->packets_to_send;
+					parg.opaque      = NULL;
 					if(g2_packet_decide_spec(&parg, g2_packet_dict))
 					{
+						shortlock_t_lock(&w_entry->pts_lock);
 						if(!(w_entry->poll_interrests & (uint32_t)EPOLLOUT))
 						{
 							struct epoll_event tmp_eevent = {0,{0}};
 							w_entry->poll_interrests |= (uint32_t)EPOLLOUT;
 							tmp_eevent.events = w_entry->poll_interrests;
+							shortlock_t_unlock(&w_entry->pts_lock);
 							tmp_eevent.data.ptr = w_entry;
 							if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &tmp_eevent)) {
 								logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 								return w_entry;
 							}
 						}
+						else
+							shortlock_t_unlock(&w_entry->pts_lock);
 					}
 
 					save_build_packet = false;

@@ -2,7 +2,7 @@
  * G2Packet.h
  * home of g2_packet_t and header-file for G2Packet.c
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -150,8 +150,8 @@ typedef struct g2_packet
 {
 	/* official packet info */
 	uint32_t      length;	/* 0 */
-	uint8_t       length_length;	/* 4 */
-	uint8_t       type_length;	/* 5 */
+	uint8_t       type_length;	/* 4 */
+	uint8_t       length_length;	/* 5 */
 	enum g2_ptype type;	/* 6 */
 	bool          big_endian;	/* 7 */
 	bool          is_compound;	/* 8 */
@@ -163,16 +163,26 @@ typedef struct g2_packet
 	bool          more_bytes_needed;	/* 12 */
 	bool          is_freeable;	/* 13 */
 	bool          data_trunk_is_freeable;	/* 14 */
-	/* 1+3+8 maximum header length +5 pad/reserve */
-	char          data[17];	/* 15 */
+	bool          is_literal;	/* 15 */
+	union	/* 16 */
+	{
+		struct _pd_mixed_buf_internal
+		{
+			/* 8 maximum type len */
+			char    type[8];
+			/* 1+3+type = maximum header len + pad/reserve + 32 space for out */
+			char    buf[1 + 3 + 4 + 32];
+		} in;
+		char       out[sizeof(struct _pd_mixed_buf_internal)];
+	} pd;
 
 	/* everything up to data trunk gets wiped */
-	struct pointer_buff data_trunk;	/* 32 */
+	struct pointer_buff data_trunk;	/* 64 */
 
 	/* packet-data */
-	struct list_head list;	/* 48/64 */
-	struct list_head children; /* 56/76 */
-	/* 64/96 */
+	struct list_head list;	/* 80/96 */
+	struct list_head children;	/* 88/112 */
+	/* 96/128 */
 } g2_packet_t;
 
 # ifndef _G2PACKET_C
@@ -186,13 +196,13 @@ typedef struct g2_packet
 /*
  * Use dirty tricks to init a g2_packet fast.
  * We set everything to 0 from is_compound
- * to data[1] which should be 8 byte or one or
+ * to data[0] which should be 8 byte or one or
  * two moves.
  * Warning! Adapt when layout changes.
  */
 # define g2_packet_init_on_stack(x) \
 	do { \
-		memset(&(x)->is_compound, 0, offsetof(g2_packet_t, data[1]) - offsetof(g2_packet_t, is_compound)); \
+		memset(&(x)->is_compound, 0, offsetof(g2_packet_t, pd.out[0]) - offsetof(g2_packet_t, is_compound)); \
 		INIT_PBUF(&(x)->data_trunk); \
 		INIT_LIST_HEAD(&(x)->list); \
 		INIT_LIST_HEAD(&(x)->children); \
@@ -218,12 +228,13 @@ _G2PACK_EXTRNVAR(const uint8_t g2_ptype_names_length[PT_MAXIMUM])
 
 struct ptype_action_args
 {
-	g2_connection_t *connec;
-	g2_packet_t *source;
+	g2_connection_t  *connec;
+	g2_packet_t      *source;
 	union combo_addr *src_addr;
 	union combo_addr *dst_addr;
+	shortlock_t      *target_lock;
 	struct list_head *target;
-	void *opaque;
+	void             *opaque;
 };
 
 typedef bool (*g2_ptype_action_func) (struct ptype_action_args *) ;
@@ -232,6 +243,15 @@ _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM])
 _G2PACK_EXTRN(bool g2_packet_decide_spec(struct ptype_action_args *, g2_ptype_action_func const *));
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */
+
+#ifdef G2PACKET_POWER_MONGER
+# include "lib/atomic.h"
+struct packet_data_store
+{
+	atomic_t refcnt;
+	char     data[DYN_ARRAY_LEN];
+};
+#endif /* G2PACKET_POWER_MONGER */
 
 #endif /*! defined _G2PACKET_H || defined _NEED_G2_P_TYPE */
 /* EOF */

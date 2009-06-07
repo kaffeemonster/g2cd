@@ -39,6 +39,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifdef HAVE_MALLOC_H
+# include <malloc.h>
+#elif defined(HAVE_MALLOC_NP_H)
+# include <malloc_np.h>
+#endif
 #include <zlib.h>
 /* other */
 #include "lib/other.h"
@@ -399,7 +404,9 @@ void g2_qht_put(struct qhtable *to_free)
 		logg_develd("qht refcnt below zero! %p %i\n", (void*)to_free, atomic_read(&to_free->refcnt));
 }
 
-/* funcs */
+/*
+ * funcs
+ */
 static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_size)
 {
 	uint8_t *ndata = qht_get_scratch1(1 << 20); /* try to not realloc scratch */
@@ -873,7 +880,24 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 			uint8_t *ttable_data;
 			if(atomic_read(&tmp_table->refcnt) > 1)
 				logg_develd("WARNING: reset on qht with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
-			ttable_data = realloc(tmp_table->data, w_size);
+			{
+#ifdef HAVE_MALLOC_USABLE_SIZE
+				size_t block_size = malloc_usable_size(tmp_table->data);
+				/*
+				 * reallocating may save us a big cycle through the allocator
+				 * because of usable slack behind allocation, but if this fails
+				 * nothing is gained and copying like the std.func is mandated
+				 * to do makes it much worse in our case, because we want to
+				 * reset.
+				 * We can try to avoid it, but it is system dependent...
+				 */
+				if(block_size < w_size) {
+					if((ttable_data = malloc(w_size)))
+						free(tmp_table->data);
+				} else
+#endif
+				ttable_data = realloc(tmp_table->data, w_size);
+			}
 			if(ttable_data) {
 				tmp_table->data = ttable_data;
 				tmp_table->data_length = w_size;

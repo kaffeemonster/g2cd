@@ -432,7 +432,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 
 	/*
 	 * get the packet-sequence-number,
-	 * fortunately byte-sex doesn't matter the
+	 * fortunately byte-sex doesn't matter, the
 	 * numbers must only be different or same
 	 */
 	get_unaligned(tmp_packet.sequence, ((uint16_t *)buffer_start(*d_hold)));
@@ -514,7 +514,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		return;
 	}
 
-// TODO: Handle multipoart UDP packets
+// TODO: Handle multipart UDP packets
 	if(tmp_packet.count > 1) {
 		logg_devel("multipart UDP packet, needs reassamble\n");
 		goto out;
@@ -529,6 +529,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		logg_devel("compressed packet recevied\n");
 		goto out;
 	}
+
 	/*
 	 * Look at the packet received
 	 */
@@ -545,12 +546,13 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	}
 
 	INIT_LIST_HEAD(&answer);
-	parg.connec   = NULL;
-	parg.source   = &g_packet;
-	parg.src_addr = from;
-	parg.dst_addr = to;
-	parg.target   = &answer;
-	parg.opaque   = NULL;
+	parg.connec      = NULL;
+	parg.source      = &g_packet;
+	parg.src_addr    = from;
+	parg.dst_addr    = to;
+	parg.target_lock = NULL;
+	parg.target      = &answer;
+	parg.opaque      = NULL;
 	if(g2_packet_decide_spec(&parg, g2_packet_dict_udp))
 	{
 		struct list_head *e, *n;

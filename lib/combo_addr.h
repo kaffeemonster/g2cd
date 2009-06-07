@@ -230,7 +230,9 @@ static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 
 # define SLASH04 htonl(0xF0000000)
 # define SLASH08 htonl(0xFF000000)
+# define SLASH15 htonl(0xFFFE0000)
 # define SLASH16 htonl(0xFFFF0000)
+# define SLASH24 htonl(0xFFFFFF00)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
 static inline bool combo_addr_is_public(const union combo_addr *addr)
@@ -261,19 +263,28 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 	else
 		a = addr->in.sin_addr.s_addr;
 
+	/* according to RFC3330 */
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return false;
-	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8 */
+	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8   "this" net, "this" host */
 		return false;
-	if(IP_CMP(a, 0xA0000000, SLASH08)) /* 010.000.000.000/8 */
+	if(IP_CMP(a, 0xA0000000, SLASH08)) /* 010.000.000.000/8   private */
 		return false;
-	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8 */
+	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
+	   subject to allocation to RIRs? */
+	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
 		return false;
 	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
 		return false;
-	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16 */
+	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private */
 		return false;
-	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16 */
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net, like example.com */
+		return false;
+	if(IP_CMP(a, 0xC0586300, SLASH16)) /* 192.088.099.000/24  6to4 relays anycast */
+		return false; /* only sinks, not source */
+	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
+		return false;
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
 		return false;
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return false;
@@ -282,7 +293,9 @@ out:
 }
 # undef SLASH04
 # undef SLASH08
+# undef SLASH15
 # undef SLASH16
+# undef SLASH25
 # undef SLASH32
 # undef IP_CMP
 

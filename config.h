@@ -58,6 +58,13 @@
 /* do we have alloca.h */
 #define HAVE_ALLOCA_H
 
+/* do we have malloc.h */
+#define HAVE_MALLOC_H
+/* or malloc_np.h (FreeBSD) */
+//#define HAVE_MALLOC_NP_H
+/* do we have malloc_usable_size() (GlibC >= ?? && FreeBSD >= 7.0) */
+#define HAVE_MALLOC_USABLE_SIZE
+
 /* are we on a GNU/nonGNU-sys */
 #define HAVE_STRNLEN
 #define HAVE_STRCHRNUL

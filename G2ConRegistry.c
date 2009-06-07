@@ -416,6 +416,11 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
+intptr_t g2_conreg_random_hub(union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	return 0;
+}
+
 intptr_t g2_conreg_for_addr(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
 {
 	struct g2_ht_chain *c;
@@ -435,7 +440,7 @@ intptr_t g2_conreg_for_addr(union combo_addr *addr, intptr_t (*callback)(g2_conn
 	}
 	pthread_rwlock_unlock(&c->lock);
 
-	return NULL;
+	return 0;
 }
 
 intptr_t g2_conreg_for_ip(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)

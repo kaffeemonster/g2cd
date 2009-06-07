@@ -161,7 +161,9 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 	default:
 		if(!more && iovec_len(vec, cnt) <= (size_t)result)
 		{
+			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			shortlock_t_unlock(&w_entry->pts_lock);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
@@ -186,7 +188,9 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 		}
 		else if(!more)
 		{
+			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			shortlock_t_unlock(&w_entry->pts_lock);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
@@ -209,7 +213,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 bool do_write(struct epoll_event *p_entry, int epoll_fd)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
-	bool ret_val = true;
+	bool ret_val = true, more_write;
 	ssize_t result = 0;
 #ifdef DEBUG_DEVEL
 	if(!w_entry->send) {
@@ -232,9 +236,19 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		w_entry->send->pos += result;
 		w_entry->flags.has_written = true;
 		//p_entry->events |= POLLIN;
-		if(!buffer_remaining(*w_entry->send) && list_empty(&w_entry->packets_to_send))
-		{
+		if(buffer_remaining(*w_entry->send))
+			break;
+
+		shortlock_t_lock(&w_entry->pts_lock);
+		if(list_empty(&w_entry->packets_to_send)) {
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			more_write = true;
+		} else
+			more_write = false;
+		shortlock_t_unlock(&w_entry->pts_lock);
+
+		if(more_write)
+		{
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
@@ -259,7 +273,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		}
 		else
 		{
+			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
+			shortlock_t_unlock(&w_entry->pts_lock);
 			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;

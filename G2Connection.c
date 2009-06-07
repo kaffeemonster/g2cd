@@ -275,6 +275,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	}
 	else {
 		INIT_HLIST_NODE(&work_entry->registry);
+		shortlock_t_init(&work_entry->pts_lock);
 		work_entry->qht = NULL;
 	}
 
@@ -341,6 +342,8 @@ void g2_con_free(g2_connection_t *to_free)
 		list_del(e);
 		g2_packet_free(entry);
 	}
+
+	shortlock_t_destroy(&to_free->pts_lock);
 
 	free(to_free);
 }

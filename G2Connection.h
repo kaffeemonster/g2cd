@@ -155,6 +155,7 @@ typedef struct g2_connection
 	
 	/* Packets */
 	g2_packet_t      *build_packet;
+	shortlock_t      pts_lock;
 	struct list_head packets_to_send;
 } g2_connection_t;
 

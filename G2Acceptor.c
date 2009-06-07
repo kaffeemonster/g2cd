@@ -1101,18 +1101,21 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			           str_size(HUB_KEY) + str_size(HUB_NEEDED_KEY) + 4 * 9 + 2) <=
 			          buffer_remaining(*to_con->send)))
 			{
-				cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": ");
-				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
-				                    G2_TRUE : G2_FALSE);
-				cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": ");
-				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer_needed ?
-				                    G2_TRUE : G2_FALSE);
-				cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": ");
-				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer ?
-				                    G2_TRUE : G2_FALSE);
-				cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": ");
-				cp_ret = strpcpy(cp_ret, server.status.our_server_upeer_needed ?
-				                    G2_TRUE : G2_FALSE);
+				cp_ret = buffer_start(*to_con->send);
+				if(server.status.our_server_upeer) {
+					cp_ret = strplitcpy(cp_ret, UPEER_KEY ": " G2_TRUE);
+					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": " G2_TRUE);
+				} else {
+					cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": " G2_FALSE);
+					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": " G2_FALSE);
+				}
+				if(server.status.our_server_upeer_needed) {
+					cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": " G2_TRUE);
+					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": " G2_TRUE);
+				} else {
+					cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": " G2_FALSE);
+					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": " G2_FALSE);
+				}
 				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			} else {
