@@ -236,6 +236,21 @@ init_next:
 	}
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 
+	/*
+	 * Librarys...
+	 * My Berkley DB (the provider of my dbm) needs also some
+	 * kind of random (a seed?).
+	 * But since it does not know if the app using it already
+	 * initialised the random number generator, it does so itself.
+	 * Unfortunatly for us, we already did this, with some fine
+	 * entropy from /dev/urandom and aes and whatnot.
+	 * DB in contrast uses some inferior time() and uname stuff.
+	 * And makes our init void.
+	 * So reinit it...
+	 */
+	random_bytes_get(&name_len, sizeof(name_len));
+	srand((unsigned int)name_len);
+
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;

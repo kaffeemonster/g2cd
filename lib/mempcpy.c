@@ -35,6 +35,7 @@
  * We simply always provide one.
  */
 
+#define IN_STRWHATEVER
 #include "../config.h"
 #include "other.h"
 

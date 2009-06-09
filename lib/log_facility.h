@@ -84,9 +84,9 @@ _LOGF_EXTRN(int logg_more_ent(const enum loglevel, const char *, const char *, c
 
 # ifdef __GNUC__
 #  define logg(l,f, ...) \
-	((l <= get_act_loglevel()) ? logg_ent(l, f, ## __VA_ARGS__) : 0)
+	((l <= get_act_loglevel()) ? logg_ent(l, f, ## __VA_ARGS__) : (void)0)
 #  define logg_more(le, fi, fu, li, e, fmt, ...) \
-	((unlikely(le <= get_act_loglevel())) ? logg_more_ent(le, fi, fu, li, e, fmt, ## __VA_ARGS__) : 0)
+	((unlikely(le <= get_act_loglevel())) ? logg_more_ent(le, fi, fu, li, e, fmt, ## __VA_ARGS__) : (void)0)
 # else
 #  define logg	logg_ent
 #  define logg_more	logg_more_ent

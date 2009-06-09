@@ -204,7 +204,7 @@ void GCC_ATTR_FASTCALL hzp_deferfree(struct hzp_free *item, void *data, void (*f
 	item->free_func = func2free;
 	atomic_push(&hzp_freelist.head, &item->st);
 	atomic_inc(&nr_free);
-	logg_develd("would free: %p\n", data);
+	logg_develd_old("would free: %p\n", data);
 }
 
 /*
@@ -315,7 +315,7 @@ int hzp_scan(int threshold)
  */
 static void hzp_free(void *dt_hzp)
 {
-	if(dt_hzp)
+	if(likely(dt_hzp))
 	{
 		struct hzp *tmp = (struct hzp *) dt_hzp;
 		tmp->flags.used = false;

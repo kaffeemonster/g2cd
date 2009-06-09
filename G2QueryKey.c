@@ -105,7 +105,7 @@
  * Thats why we choose a simple hash table hash, not a secure hash.
  * Because 32 Bit are not such a large key space even distribution
  * is more welcome. And we want validation to be cheap. (Secure
- * hashes are expensive and yeild more bits we could ever use/only
+ * hashes are expensive and yield more bits we could ever use/only
  * use the wrong way (is truncation ok?))
  *
  * This has its downside: The hash may be "simply" reversed to get
@@ -113,9 +113,9 @@
  * Time for the next solution: An attacker would need several
  * samples of (known) input <-> hash to get to the salt (due to
  * collision problem, we map more info on a smaller space). This
- * needs to be "foreign input" (man-in-the-middle, zombie), because
- * a request for its own "credentials" would lead to the same query
- * key for this time slot.
+ * needs to be "foreign input" (man-in-the-middle, controled zombie),
+ * because a request for its own "credentials" would lead to the same
+ * query key for this time slot.
  * If we use different salts within one time slot choosen by
  * hash(addr, time_slot_master_salt), the attacker would need more
  * input to guess one salt, because he can not identfy for which
@@ -136,7 +136,7 @@
 #define TIME_SLOT_COUNT 8
 #define TIME_SLOT_COUNT_MASK (~(TIME_SLOT_COUNT - 1UL))
 /* 8 slots at 1hour per slot == 8 hours key dekay */
-#define TIME_SLOT_SECS 60 * 60
+#define TIME_SLOT_SECS (60 * 60)
 #define TIME_SLOT_ELEM 64
 
  /* Types */
@@ -176,7 +176,7 @@ void g2_qk_init(void)
 
 void g2_qk_tick(void)
 {
-	unsigned n_salt;
+	unsigned n_salt, t;
 	long t_diff;
 
 	t_diff = local_time_now - g2_qk_s.last_update;
@@ -194,6 +194,12 @@ void g2_qk_tick(void)
 	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));
+	/*
+	 * reseed the libc random number generator every tick,
+	 * for the greater good of the whole server
+	 */
+	random_bytes_get(&t, sizeof(t));
+	srand(t);
 	check_salt_vals(n_salt);
 
 	g2_qk_s.act_salt = n_salt;

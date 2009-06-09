@@ -223,8 +223,8 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 #endif
 	:
 #ifdef __i386__
-	  /* %0 */ "=r" (dst),
-	  /* %1 */ "=r" (src),
+	  /* %0 */ "=a" (dst),
+	  /* %1 */ "=d" (src),
 #else
 	  /* %0 */ "=D" (dst),
 	  /* %1 */ "=S" (src),
