@@ -2,7 +2,7 @@
  * G2Handler.h
  * header-file for G2Handler.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,6 +33,7 @@
 # endif /* _G2HANDLER_C */
 
 _G2HAN_EXTRN(void *G2Handler(void *));
+_G2HAN_EXTRN(void g2_handler_con_mark_write(g2_packet_t *, g2_connection_t *));
 
 #endif /* G2HANDLER_H */
 /* EOF */

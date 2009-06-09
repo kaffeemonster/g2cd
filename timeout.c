@@ -240,8 +240,17 @@ bool timeout_cancel(struct timeout *who_to_cancel)
 {
 	bool ret_val = false;
 
+retry:
 	pthread_mutex_lock(&wakeup.mutex);
 	pthread_mutex_lock(&who_to_cancel->lock);
+	if(who_to_cancel->rearm_in_progress)
+	{
+		pthread_mutex_unlock(&who_to_cancel->lock);
+		pthread_mutex_unlock(&wakeup.mutex);
+		cpu_relax();
+		goto retry;
+	}
+
 	if(!RB_EMPTY_NODE(&who_to_cancel->rb)) {
 		rb_erase(&who_to_cancel->rb, &wakeup.tree);
 		RB_CLEAR_NODE(&who_to_cancel->rb);
@@ -274,6 +283,7 @@ static void kick_timeouts(void)
 	    t && !timespec_after(&t->t, &now);
 	    timespec_fill(&now), t = timeout_nearest())
 	{
+		int ret = 0;
 		/* lock the timeout */
 		pthread_mutex_lock(&t->lock);
 		logg_develd_old("now: %li.%li\tto: %li.%li\n",
@@ -290,14 +300,35 @@ static void kick_timeouts(void)
 			pthread_mutex_unlock(&t->lock);
 			continue;
 		}
-		/* relaese the tree lock */
+		/* release the tree lock */
 		pthread_mutex_unlock(&wakeup.mutex);
 
+		local_time_now = now.tv_sec;
 		/* work on the timeout */
 		if(t->fun)
-			t->fun(t->data);
+			ret = t->fun(t->data);
 		else
 			logg_devel("empty timeout??\n");
+
+		if(ret)
+		{
+			/*
+			 * the timer wants to get rearmed. Doh!
+			 * Now the shit hits the fan...
+			 *
+			 * We have to leave our ABBA lock problem,
+			 * first and foremost, or we can not readd
+			 * the timeout.
+			 * But when we do this, someone canceling
+			 * the timeout may be happilly continue to
+			 * prop. free the timeout, and we make a
+			 * use after free even if only to find out.
+			 *
+			 * So make the cancelee spinn on the locks
+			 * so we get a chance to sneak in.
+			 */
+			t->rearm_in_progress = true;
+		}
 
 		/*
 		 * release the timeout, reaquire the tree lock
@@ -305,6 +336,18 @@ static void kick_timeouts(void)
 		 */
 		pthread_mutex_unlock(&t->lock);
 		pthread_mutex_lock(&wakeup.mutex);
+		if(ret)
+		{
+			/*
+			 * and now we can add it, maybe that someone
+			 * removes it imitiadly again.
+			 */
+			timespec_fill_local(&t->t);
+			timespec_add(&t->t, ret);
+			timeout_rb_insert(t);
+			barrier();
+			t->rearm_in_progress = false;
+		}
 	}
 }
 
@@ -325,8 +368,7 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 		t = timeout_nearest();
 		if(t)
 			wakeup.time = t->t;
-		else
-		{
+		else {
 			timespec_fill(&wakeup.time);
 			timespec_add(&wakeup.time, DEFAULT_TIMEOUT);
 		}

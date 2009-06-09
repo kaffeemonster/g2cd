@@ -50,6 +50,7 @@
 #include "G2MainServer.h"
 #include "G2ConRegistry.h"
 #include "G2QueryKey.h"
+#include "G2Handler.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 
@@ -2750,8 +2751,7 @@ static intptr_t HAW_callback(g2_connection_t *con, void *carg)
 		}
 	}
 	t->is_literal = true;
-	g2_packet_add2target(t, &con->packets_to_send, &con->pts_lock);
-// TODO: make the multiplexer wakeup (TODO: thread safety...)
+	g2_handler_con_mark_write(t, con);
 
 	return 0;
 }
@@ -3170,8 +3170,7 @@ static intptr_t magic_route_callback(g2_connection_t *con, void *carg)
 		}
 	}
 	t->is_literal = true;
-	g2_packet_add2target(t, &con->packets_to_send, &con->pts_lock);
-// TODO: make the multiplexer wakeup (TODO: thread safety...)
+	g2_handler_con_mark_write(t, con);
 
 	return 0;
 }

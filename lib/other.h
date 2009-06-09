@@ -266,9 +266,23 @@ typedef void (*sighandler_t)(int);
 # define barrier()	asm volatile ("")
 # define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
 #else
-# define barrier()	do { } while (0)
+# define barrier()	do {} while (0)
 # define mem_barrier(x)	do {} while (0)
 #endif
+
+# ifdef I_LIKE_ASM
+#  if defined(__i386__) || defined(__x86_64__)
+#   define cpu_relax() asm volatile("pause")
+#  elif defined(__powerpc64__)
+#   define cpu_relax() asm volatile("or 1,1,1\n\tor 2,2,2")
+#  elif defined(__IA64__)
+#   define cpu_relax() asm volatile ("hint @pause" ::: "memory")
+#  else
+#   define cpu_relax() barrier();
+#  endif
+# else
+#  define cpu_relax() barrier();
+# endif
 
 /* unaligned access */
 #if defined(__GNUC__) || _SUNC_PREREQ(0x5100)

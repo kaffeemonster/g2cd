@@ -36,7 +36,8 @@ struct timeout
 	struct timespec t;
 	pthread_mutex_t lock;
 	void *data;
-	void (*fun)(void *);
+	int (*fun)(void *);
+	int rearm_in_progress;
 };
 
 # ifndef _TIMEOUT_C
@@ -49,6 +50,7 @@ static inline void INIT_TIMEOUT(struct timeout *t)
 {
 	RB_CLEAR_NODE(&t->rb);
 	pthread_mutex_init(&t->lock, NULL);
+	t->rearm_in_progress = 0;
 }
 
 static inline void DESTROY_TIMEOUT(struct timeout *t)
