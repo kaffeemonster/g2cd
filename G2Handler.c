@@ -294,6 +294,9 @@ static inline bool handle_from_accept(int from_acceptor, int epoll_fd)
 	}
 
 	recvd_con->last_active = local_time_now;
+	/* promote here, now we are really connected */
+	if(recvd_con->flags.upeer)
+		g2_conreg_promote_hub(recvd_con);
 	recvd_con->active_to.fun = handler_active_timeout;
 	recvd_con->active_to.data = recvd_con;
 	timeout_add(&recvd_con->active_to, HANDLER_ACTIVE_TIMEOUT);

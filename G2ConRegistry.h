@@ -39,11 +39,14 @@
 _G2CONREGISTRY_EXTRN(void g2_conreg_mark_dirty(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_add(g2_connection_t *));
 _G2CONREGISTRY_EXTRN(bool g2_conreg_remove(g2_connection_t *));
-_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_all_hub(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
-_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_random_hub(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
-_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_addr(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
-_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_ip(union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
-_G2CONREGISTRY_EXTRN(bool g2_conreg_have_ip(union combo_addr *));
+_G2CONREGISTRY_EXTRN(void g2_conreg_promote_hub(g2_connection_t *));
+_G2CONREGISTRY_EXTRN(void g2_conreg_demote_hub(g2_connection_t *));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_all_hub(const union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_random_hub(const union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(bool g2_conreg_is_neighbour_hub(const union combo_addr *addr));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_addr(const union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(intptr_t g2_conreg_for_ip(const union combo_addr *, intptr_t (*)(g2_connection_t *, void *), void *));
+_G2CONREGISTRY_EXTRN(bool g2_conreg_have_ip(const union combo_addr *));
 _G2CONREGISTRY_EXTRN(void g2_conreg_cleanup(void));
 
 #endif

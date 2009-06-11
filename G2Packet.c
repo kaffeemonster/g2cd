@@ -1399,7 +1399,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	{
 		/* demote connection from hub mode */
 		connec->flags.upeer = false;
-// TODO: remove from hub connections
+		g2_conreg_demote_hub(connec);
 		/* connection is no hub anymore, add to QHTs */
 		g2_conreg_mark_dirty(connec);
 		if(connec->sent_qht) {
@@ -1515,8 +1515,8 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 	}
 
 	if(!connec->flags.upeer) {
-// TODO: now this connection is a hub connection, add it there
 		connec->flags.upeer = true;
+		g2_conreg_promote_hub(connec);
 		/* connection is now a hub, remove from QHTs */
 		g2_conreg_mark_dirty(connec);
 	}
@@ -3035,8 +3035,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 	guid = (uint8_t *)buffer_start(source->data_trunk) + 2;
 // TODO: check ttl/hops for validity
 
-// TODO: check if neigbour
-	g2_khl_add(&rdata.na, local_time_now, false);
+	g2_khl_add(&rdata.na, local_time_now, g2_conreg_is_neighbour_hub(&rdata.na));
 
 	/*
 	 * sh** f***ing guids...

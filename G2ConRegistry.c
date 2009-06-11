@@ -243,6 +243,8 @@ struct g2_ht_bucket
 /* Vars */
 static struct g2_ht_bucket *raw_bucket_storage, ht_root;
 static struct g2_ht_chain *raw_chain_storage;
+static struct list_head neighbour_hubs;
+static pthread_rwlock_t neighbour_hubs_lock;
 static uint32_t ht_seed;
 
 /* Protos */
@@ -287,6 +289,9 @@ static void g2_conreg_init(void)
 {
 	size_t count_b = 0, count_c = 0, i = 0;
 	struct g2_ht_chain *tc;
+
+	INIT_LIST_HEAD(&neighbour_hubs);
+	pthread_rwlock_init(&neighbour_hubs_lock, NULL);
 
 	for(; i < (LEVEL_COUNT-1); i++)
 		count_b += 1 << (LEVEL_SHIFT * (i + 1));
@@ -347,7 +352,7 @@ static void g2_conreg_deinit(void)
 	free(raw_chain_storage);
 }
 
-static struct g2_ht_chain *g2_conreg_find_chain(union combo_addr *addr)
+static struct g2_ht_chain *g2_conreg_find_chain(const union combo_addr *addr)
 {
 	struct g2_ht_bucket *b = &ht_root;
 	uint32_t h = combo_addr_hash_ip(addr, ht_seed);
@@ -358,7 +363,7 @@ static struct g2_ht_chain *g2_conreg_find_chain(union combo_addr *addr)
 	return b->d.c[h & LEVEL_MASK];
 }
 
-static struct g2_ht_chain *g2_conreg_find_chain_and_mark_dirty(union combo_addr *addr)
+static struct g2_ht_chain *g2_conreg_find_chain_and_mark_dirty(const union combo_addr *addr)
 {
 	struct g2_ht_bucket *b = &ht_root;
 	uint32_t h = combo_addr_hash_ip(addr, ht_seed);
@@ -405,6 +410,14 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	if(unlikely(hlist_unhashed(&connec->registry)))
 		return false;
 
+	if(unlikely(!list_empty(&connec->hub_list)))
+	{
+		pthread_rwlock_wrlock(&neighbour_hubs_lock);
+		if(likely(!list_empty(&connec->hub_list)))
+			list_del(&connec->hub_list);
+		pthread_rwlock_unlock(&neighbour_hubs_lock);
+		INIT_LIST_HEAD(&connec->hub_list);
+	}
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
 	pthread_rwlock_wrlock(&c->lock);
 	c->dirty = true;
@@ -416,29 +429,93 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
-intptr_t g2_conreg_all_hub(union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+void g2_conreg_promote_hub(g2_connection_t *connec)
 {
-	return 0;
+	if(unlikely(!list_empty(&connec->hub_list)))
+		return;
+
+	pthread_rwlock_wrlock(&neighbour_hubs_lock);
+	list_add_tail(&connec->hub_list, &neighbour_hubs);
+	pthread_rwlock_unlock(&neighbour_hubs_lock);
 }
 
-intptr_t g2_conreg_random_hub(union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+void g2_conreg_demote_hub(g2_connection_t *connec)
 {
-	return 0;
+	if(unlikely(list_empty(&connec->hub_list)))
+		return;
+
+	pthread_rwlock_wrlock(&neighbour_hubs_lock);
+	if(likely(!list_empty(&connec->hub_list)))
+		list_del_init(&connec->hub_list);
+	pthread_rwlock_unlock(&neighbour_hubs_lock);
 }
 
-intptr_t g2_conreg_for_addr(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+bool g2_conreg_is_neighbour_hub(const union combo_addr *addr)
 {
 	struct g2_ht_chain *c;
 	struct hlist_node *n;
 	g2_connection_t *node;
-	intptr_t ret_val;
 
 	c = g2_conreg_find_chain(addr);
 	pthread_rwlock_rdlock(&c->lock);
 	hlist_for_each_entry(node, n, &c->list, registry)
 	{
 		if(combo_addr_eq(&node->remote_host, addr)) {
-			ret_val = callback(node, carg);
+			bool ret_val = node->flags.upeer;
+			pthread_rwlock_unlock(&c->lock);
+			return ret_val;
+		}
+	}
+	pthread_rwlock_unlock(&c->lock);
+
+	return false;
+}
+
+intptr_t g2_conreg_all_hub(const union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	g2_connection_t *con;
+	intptr_t ret_val = 0;
+
+	pthread_rwlock_rdlock(&neighbour_hubs_lock);
+	list_for_each_entry(con, &neighbour_hubs, hub_list) {
+		if(!combo_addr_eq(&con->remote_host, filter))
+			ret_val |= callback(con, carg);
+	}
+	pthread_rwlock_unlock(&neighbour_hubs_lock);
+	return ret_val;
+}
+
+intptr_t g2_conreg_random_hub(const union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	g2_connection_t *con;
+
+// TODO: make it random...
+
+	pthread_rwlock_rdlock(&neighbour_hubs_lock);
+	list_for_each_entry(con, &neighbour_hubs, hub_list)
+	{
+		if(!combo_addr_eq(&con->remote_host, filter)) {
+			intptr_t ret_val = callback(con, carg);
+			pthread_rwlock_unlock(&neighbour_hubs_lock);
+			return ret_val;
+		}
+	}
+	pthread_rwlock_unlock(&neighbour_hubs_lock);
+	return 0;
+}
+
+intptr_t g2_conreg_for_addr(const union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	struct g2_ht_chain *c;
+	struct hlist_node *n;
+	g2_connection_t *node;
+
+	c = g2_conreg_find_chain(addr);
+	pthread_rwlock_rdlock(&c->lock);
+	hlist_for_each_entry(node, n, &c->list, registry)
+	{
+		if(combo_addr_eq(&node->remote_host, addr)) {
+			intptr_t ret_val = callback(node, carg);
 			pthread_rwlock_unlock(&c->lock);
 			return ret_val;
 		}
@@ -448,19 +525,18 @@ intptr_t g2_conreg_for_addr(union combo_addr *addr, intptr_t (*callback)(g2_conn
 	return 0;
 }
 
-intptr_t g2_conreg_for_ip(union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+intptr_t g2_conreg_for_ip(const union combo_addr *addr, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
 {
 	struct g2_ht_chain *c;
 	struct hlist_node *n;
 	g2_connection_t *node;
-	intptr_t ret_val;
 
 	c = g2_conreg_find_chain(addr);
 	pthread_rwlock_rdlock(&c->lock);
 	hlist_for_each_entry(node, n, &c->list, registry)
 	{
 		if(combo_addr_eq_ip(&node->remote_host, addr)) {
-			ret_val = callback(node, carg);
+			intptr_t ret_val = callback(node, carg);
 			pthread_rwlock_unlock(&c->lock);
 			return ret_val;
 		}
@@ -470,7 +546,7 @@ intptr_t g2_conreg_for_ip(union combo_addr *addr, intptr_t (*callback)(g2_connec
 	return 0;
 }
 
-bool g2_conreg_have_ip(union combo_addr *addr)
+bool g2_conreg_have_ip(const union combo_addr *addr)
 {
 	struct g2_ht_chain *c;
 	struct hlist_node *n;

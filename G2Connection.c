@@ -287,6 +287,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->sent_qht = NULL;
 	work_entry->build_packet = NULL;
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
+	INIT_LIST_HEAD(&work_entry->hub_list);
 	INIT_TIMEOUT(&work_entry->active_to);
 	INIT_TIMEOUT(&work_entry->u.accept.header_complete_to);
 }

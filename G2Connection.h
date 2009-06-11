@@ -80,6 +80,7 @@ typedef struct g2_connection
 {
 	struct hzp_free  hzp;
 	struct hlist_node registry;
+	struct list_head hub_list;
 	/* System Com-Things */
 	union combo_addr remote_host;
 	uint32_t         poll_interrests;
