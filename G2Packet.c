@@ -53,6 +53,7 @@
 #include "G2Handler.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
+#include "lib/my_bitops.h"
 
 /* minutes to seconds */
 #define PI_TIMEOUT    (   30)
@@ -100,6 +101,9 @@ static bool handle_PO(struct ptype_action_args *);
 static bool handle_Q2(struct ptype_action_args *);
 static bool handle_Q2_UDP(struct ptype_action_args *);
 static bool handle_Q2_QKY(struct ptype_action_args *);
+static bool handle_Q2_URN(struct ptype_action_args *);
+static bool handle_Q2_DN(struct ptype_action_args *);
+static bool handle_Q2_MD(struct ptype_action_args *);
 static bool handle_QA(struct ptype_action_args *);
 static bool handle_QA_TS(struct ptype_action_args *);
 static bool handle_QA_D(struct ptype_action_args *);
@@ -230,11 +234,11 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_TO ] = empty_action_p,
 	[PT_UDP] = handle_Q2_UDP,
 	[PT_QKY] = handle_Q2_QKY,
-	[PT_URN] = unimpl_action_p,
-	[PT_DN ] = unimpl_action_p,
-	[PT_MD ] = unimpl_action_p,
-	[PT_SZR] = unimpl_action_p,
-	[PT_I  ] = unimpl_action_p,
+	[PT_URN] = handle_Q2_URN,
+	[PT_DN ] = handle_Q2_DN,
+	[PT_MD ] = handle_Q2_MD,
+	[PT_SZR] = empty_action_p,
+	[PT_I  ] = empty_action_p,
 };
 
 /* QH2-childs */
@@ -765,6 +769,95 @@ static void g2_packet_add2target(g2_packet_t *to_add, struct list_head *target, 
 	}
 	else
 		list_add_tail(&to_add->list, target);
+}
+
+static intptr_t forward_lit_callback_ignore(g2_connection_t *con, void *carg)
+{
+	struct ptype_action_args *parg = carg;
+	g2_packet_t *t, *source = parg->source;
+
+	logg_packet("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
+	/*
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
+	 */
+	t = g2_packet_clone(source);
+	if(!t)
+		return 0;
+
+	/* if we can, steal the data form the source packet */
+	if(unlikely(source->data_trunk_is_freeable)) {
+		source->data_trunk.data = NULL;
+		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
+		source->data_trunk_is_freeable = false;
+	} else {
+		/* data in packet buffer? Adjust */
+		if(unlikely(source->data_trunk.data >= source->pd.out &&
+		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				return 0;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_handler_con_mark_write(t, con);
+
+	return 0;
+}
+
+static intptr_t forward_lit_callback_found(g2_connection_t *con, void *carg)
+{
+	struct ptype_action_args *parg = carg;
+	g2_packet_t *t, *source = parg->source;
+
+	/*
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
+	 */
+	t = g2_packet_clone(source);
+	if(!t)
+		return 1;
+
+	/* if we can, steal the data form the source packet */
+	if(unlikely(source->data_trunk_is_freeable)) {
+		source->data_trunk.data = NULL;
+		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
+		source->data_trunk_is_freeable = false;
+	} else {
+		/* data in packet buffer? Adjust */
+		if(unlikely(source->data_trunk.data >= source->pd.out &&
+		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				return 1;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_handler_con_mark_write(t, con);
+
+	return 1;
 }
 
 /*
@@ -1491,6 +1584,55 @@ struct PI_data
 	bool relay;
 };
 
+static intptr_t PI_callback(g2_connection_t *con, void *carg)
+{
+	struct ptype_action_args *parg = carg;
+	struct PI_data *rdata = parg->opaque;;
+	g2_packet_t *pi, *udp, *relay;
+
+	/*
+	 * The connection is locked against removal inside this callback
+	 * (but because of this we do not want to lock to long, we have
+	 * a whole hash slot locked in the conreg...).
+	 * But there may be further locking needed.
+	 */
+
+	/*
+	 * we simply rebuild the packet, this way we can avoid
+	 * to add a child packet to a raw packet. We may loose
+	 * unknown/untypical childs by this.
+	 */
+	pi    = g2_packet_alloc();
+	udp   = g2_packet_alloc();
+	relay = g2_packet_alloc();
+
+	if(!(pi && udp && relay))
+		goto out_fail;
+
+	udp->type = PT_UDP;
+	/* buffers are now large enough, should not fail */
+	if(!write_na_to_packet(udp, &rdata->addr))
+		goto out_fail;
+
+	relay->type = PT_RELAY;
+	relay->big_endian = HOST_IS_BIGENDIAN;
+
+	list_add_tail(&udp->list, &pi->children);
+	list_add_tail(&relay->list, &pi->children);
+
+	pi->type = PT_PI;
+	pi->big_endian = HOST_IS_BIGENDIAN;
+
+	g2_handler_con_mark_write(pi, con);
+	return 0;
+
+out_fail:
+	g2_packet_free(pi);
+	g2_packet_free(udp);
+	g2_packet_free(relay);
+	return 0;
+}
+
 static bool handle_PI(struct ptype_action_args *parg)
 {
 	struct PI_data rdata;
@@ -1563,10 +1705,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 			g2_udp_send(&rdata.addr, &answer);
 		}
 		else
-		{
-// TODO: relay it to NH
-			logg_packet(STDLF, "\t/PI", "relay not implemented!");
-		}
+			ret_val |= !!g2_conreg_all_hub(&connec->remote_host, PI_callback, parg);
 	}
 	else
 	{
@@ -1580,11 +1719,12 @@ static bool handle_PI(struct ptype_action_args *parg)
 		g2_packet_add2target(po, parg->target, parg->target_lock);
 		if(connec)
 			connec->u.send_stamps.PI = local_time_now;
-		return true;
+		ret_val = true;
 	}
 
 out_ok:
-	connec->flags.last_data_active = true;
+	if(connec)
+		connec->flags.last_data_active = true;
 	return ret_val;
 }
 
@@ -1620,6 +1760,11 @@ struct Q2_data
 {
 	union combo_addr udp_na;
 	uint32_t qk;
+	char *metadata;
+	size_t metadata_len;
+	char *dn;
+	size_t dn_len;
+	bool had_urn;
 	bool udp_na_valid;
 	bool qk_valid;
 };
@@ -1633,7 +1778,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 	if(!parg->source->is_compound)
 		return ret_val;
 
-	memset(&rdata.udp_na_valid, 0, offsetof(struct Q2_data, udp_na_valid) - offsetof(struct Q2_data, qk_valid) + 1);
+	memset(&rdata.metadata, 0, offsetof(struct Q2_data, metadata) - offsetof(struct Q2_data, qk_valid) + 1);
 	cparg = *parg;
 	cparg.opaque = &rdata;
 	do
@@ -1830,6 +1975,112 @@ static bool handle_Q2_QKY(struct ptype_action_args *parg)
 	return false;
 }
 
+static bool handle_Q2_URN(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+	char *urn = buffer_start(source->data_trunk);
+	size_t remaining = buffer_remaining(source->data_trunk);
+	size_t len;
+
+	/*
+	 * even if we had an urn we do not understand, no
+	 * dn && md processing
+	 */
+	rdata->had_urn = true;
+	len = strnlen(urn, remaining);
+	if(unlikely(len < 2 || len + 1 >= remaining))
+		return false;
+
+	source->data_trunk.pos += len + 1;
+	remaining = buffer_remaining(source->data_trunk);
+	if(unlikely(20 != remaining && /* sha1 && btih */
+	            44 != remaining && /* bp */
+	            24 != remaining && /* ttr */
+	            16 != remaining))   /* md5 && ed2k */
+		return false;
+
+	if(likely(len <= 4))
+	{
+		uint32_t type = 0;
+#define MAKE_TYPE(a, b, c, d) \
+	ntohl((((uint32_t)(a)) << 24) | \
+	      (((uint32_t)(b)) << 16) | \
+	      (((uint32_t)(c)) <<  8) | \
+	      (((uint32_t)(d)) <<  0))
+
+		get_unaligned(type, (uint32_t *)urn);
+		if(HOST_IS_BIGENDIAN)
+			type &= (uint32_t)0xFFFFFFFF << ((4 - len) * 8);
+		else
+			type &= (uint32_t)0xFFFFFFFF >> ((4 - len) * 8);
+
+		if(MAKE_TYPE('s', 'h', 'a', '1') == type && 20 == remaining)
+		{
+// TODO: handle urns
+			barrier();
+		}
+		else if(MAKE_TYPE('b', 'p',  0,   0 ) == type && 44 == remaining)
+		{
+handle_bitprint:
+			barrier();
+		}
+		else if(MAKE_TYPE('t', 't', 'r',  0 ) == type && 24 == remaining)
+		{
+handle_tiger_tree:
+			barrier();
+		}
+		else if(MAKE_TYPE('e', 'd', '2', 'k') == type && 16 == remaining)
+		{
+			barrier();
+		}
+		else if(MAKE_TYPE('b', 't', 'i', 'h') == type && 20 == remaining)
+		{
+			barrier();
+		}
+		else if(MAKE_TYPE('m', 'd', '5',  0 ) == type && 16 == remaining)
+		{
+			barrier();
+		}
+#undef MAKE_TYPE
+	}
+	else
+	{
+		if(44 == remaining && !strlitcmp(urn, "bitprint"))
+			goto handle_bitprint;
+		else if(24 == remaining && !strlitcmp(urn, "tree:tiger/"))
+			goto handle_tiger_tree;
+	}
+
+	return false;
+}
+
+static bool handle_Q2_DN(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+
+	if(unlikely(!skip_unexpected_child(source, "/Q2/DN")))
+		return false;
+
+	rdata->dn_len = buffer_remaining(source->data_trunk);
+	rdata->dn     = buffer_start(source->data_trunk);
+	return false;
+}
+
+static bool handle_Q2_MD(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+
+	if(unlikely(!skip_unexpected_child(source, "/Q2/MD")))
+		return false;
+
+	rdata->metadata_len = buffer_remaining(source->data_trunk);
+	rdata->metadata     = buffer_start(source->data_trunk);
+	return false;
+}
+
 struct QA_data
 {
 	long td;
@@ -1840,6 +2091,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 {
 	struct QA_data rdata;
 	struct ptype_action_args cparg;
+	union combo_addr dest;
 	g2_packet_t *source = parg->source;
 	uint8_t *guid;
 	size_t old_pos;
@@ -1861,7 +2113,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 	}
 
 	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
-	if(!g2_guid_lookup(guid, GT_QUERY, NULL))
+	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return ret_val;
 
 	old_pos = source->data_trunk.pos;
@@ -1898,9 +2150,9 @@ static bool handle_QA(struct ptype_action_args *parg)
 
 	if(parg->connec)
 		parg->connec->flags.last_data_active = true;
-// TODO: forward resulting packet to who it may concern
 
-	return ret_val;
+	/* either target is connected or nothing */
+	return (!!g2_conreg_for_addr(&dest, forward_lit_callback_ignore, parg)) | ret_val;
 }
 
 static bool handle_QA_TS(struct ptype_action_args *parg)
@@ -2025,10 +2277,12 @@ struct QH2_data
 	bool na_valid;
 };
 
+
 static bool handle_QH2(struct ptype_action_args *parg)
 {
 	struct QH2_data rdata;
 	struct ptype_action_args cparg;
+	union combo_addr dest;
 	g2_packet_t *source = parg->source;
 	uint8_t *hop_count, *guid;
 	size_t old_pos;
@@ -2050,7 +2304,7 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	}
 
 	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
-	if(!g2_guid_lookup(guid, GT_QUERY, NULL))
+	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return ret_val;
 
 	old_pos = source->data_trunk.pos;
@@ -2083,20 +2337,31 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	if(17 != buffer_remaining(source->data_trunk) || !rdata.guid)
 		return ret_val;
 
+	if(!parg->connec)
+	{
+		/* for UDP they better send their address along */
+		if(!rdata.na_valid)
+			return ret_val;
+
+		/* and it has to be valid */
+		if(!combo_addr_is_public(&rdata.na) || !combo_addr_eq(&rdata.na, parg->src_addr))
+			return ret_val;
+	}
+
 	hop_count = (uint8_t *)buffer_start(source->data_trunk);
 	if(*hop_count >= 254)
 		return ret_val;
-
-	/* rewind buffer */
-	source->data_trunk.pos = old_pos;
 
 	/* increment hop count */
 	*hop_count += 1;
 
 	/*
 	 * We normaly would have to tear apart a fucking lot
-	 * of this package, to understand it, to decide if
-	 * it's "good" or "bad".
+	 * of this package to understand it.
+	 * But we do not search, we do not need those infos.
+	 *
+	 * Only thing thats left is to decide if the packet
+	 * is "good" or "bad".
 	 *
 	 * This includes parsing and frobnicating XML (ahhhh),
 	 * looking over all Hits/HitGroups (alloc galore), only
@@ -2111,7 +2376,19 @@ static bool handle_QH2(struct ptype_action_args *parg)
 
 	if(parg->connec)
 		parg->connec->flags.last_data_active = true;
-//TODO: forward resulting packet to who it may concern
+
+	/* rewind buffer */
+	source->data_trunk.pos = old_pos;
+
+	if(!g2_conreg_for_addr(&dest, forward_lit_callback_found, parg))
+	{
+		struct list_head answer;
+		/* seems to be a udp address */
+		source->is_literal = true;
+		INIT_LIST_HEAD(&answer);
+		list_add_tail(&source->list, &answer);
+		g2_udp_send(&dest, &answer);
+	}
 
 	return ret_val;
 }
@@ -2530,7 +2807,7 @@ struct QKA_data
 	bool sending_na_valid;
 };
 
-static intptr_t QKA_SNA_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *carg)
+static intptr_t QKA_SNA_callback(g2_connection_t *con, void *carg)
 {
 	struct ptype_action_args *parg = carg;
 	struct QKA_data *rdata = parg->opaque;;
@@ -2578,9 +2855,8 @@ static intptr_t QKA_SNA_callback(g2_connection_t *con GCC_ATTRIB_UNUSED, void *c
 
 	qka->type = PT_QKA;
 	qka->big_endian = HOST_IS_BIGENDIAN;
-	g2_packet_add2target(qka, &con->packets_to_send, &con->pts_lock);
-// TODO: make the multiplexer wakeup (TODO: thread safety...)
 
+	g2_handler_con_mark_write(qka, con);
 	return 0;
 
 out_fail:
@@ -2712,50 +2988,6 @@ struct HAW_data
 	bool na_valid;
 };
 
-static intptr_t HAW_callback(g2_connection_t *con, void *carg)
-{
-	struct ptype_action_args *parg = carg;
-	g2_packet_t *t, *source = parg->source;
-
-	/*
-	 * The connection is locked against removal inside this callback
-	 * (but because of this we do not want to lock to long, we have
-	 * a whole hash slot locked in the conreg...).
-	 * But there may be further locking needed.
-	 */
-	t = g2_packet_clone(source);
-	if(!t)
-		return 0;
-
-	/* if we can, steal the data form the source packet */
-	if(unlikely(source->data_trunk_is_freeable)) {
-		source->data_trunk.data = NULL;
-		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
-		source->data_trunk_is_freeable = false;
-	} else {
-		/* data in packet buffer? Adjust */
-		if(unlikely(source->data_trunk.data >= source->pd.out &&
-		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
-			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
-			t->data_trunk.data = &t->pd.out[diff];
-		}
-		else
-		{
-			/* data still lingers in the recv buff, we have to copy it */
-			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
-				g2_packet_free(t);
-				return 0;
-			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
-		}
-	}
-	t->is_literal = true;
-	g2_handler_con_mark_write(t, con);
-
-	return 0;
-}
-
 static bool handle_HAW(struct ptype_action_args *parg)
 {
 	struct HAW_data rdata;
@@ -2827,7 +3059,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 
 		/* rewind buffer */
 		source->data_trunk.pos = old_pos;
-		ret_val |= !!g2_conreg_random_hub(&parg->connec->remote_host, HAW_callback, parg);
+		ret_val |= !!g2_conreg_random_hub(&parg->connec->remote_host, forward_lit_callback_ignore, parg);
 	}
 
 	return ret_val;
@@ -3120,59 +3352,14 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 	{
 		prefetch(*work_type[packs->type]);
 		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]) &&
-			PT_CH != packs->type)
+			PT_CH != packs->type) {
 			logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+		}
 		return work_type[packs->type](parg);
 	}
 
 	logg_packet("*/%s\tC: %s -> No action\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 	return false;
-}
-
-static intptr_t magic_route_callback(g2_connection_t *con, void *carg)
-{
-	struct ptype_action_args *parg = carg;
-	g2_packet_t *t, *source = parg->source;
-
-	/*
-	 * The connection is locked against removal inside this callback
-	 * (but because of this we do not want to lock to long, we have
-	 * a whole hash slot locked in the conreg...).
-	 * But there may be further locking needed.
-	 */
-	logg_packet("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
-
-	t = g2_packet_clone(source);
-	if(!t)
-		return 0;
-
-	/* if we can, steal the data form the source packet */
-	if(unlikely(source->data_trunk_is_freeable)) {
-		source->data_trunk.data = NULL;
-		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
-		source->data_trunk_is_freeable = false;
-	} else {
-		/* data in packet buffer? Adjust */
-		if(unlikely(source->data_trunk.data >= source->pd.out &&
-		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
-			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
-			t->data_trunk.data = &t->pd.out[diff];
-		}
-		else
-		{
-			/* data still lingers in the recv buff, we have to copy it */
-			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
-				g2_packet_free(t);
-				return 0;
-			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
-		}
-	}
-	t->is_literal = true;
-	g2_handler_con_mark_write(t, con);
-
-	return 0;
 }
 
 static bool magic_route(struct ptype_action_args *parg, uint8_t *guid)
@@ -3182,7 +3369,7 @@ static bool magic_route(struct ptype_action_args *parg, uint8_t *guid)
 	if(!g2_guid_lookup(guid, GT_LEAF, &na))
 		return false;
 
-	return !!g2_conreg_for_addr(&na, magic_route_callback, parg);
+	return !!g2_conreg_for_addr(&na, forward_lit_callback_ignore, parg);
 }
 
 bool g2_packet_decide_spec(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)

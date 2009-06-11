@@ -416,6 +416,11 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
+intptr_t g2_conreg_all_hub(union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	return 0;
+}
+
 intptr_t g2_conreg_random_hub(union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
 {
 	return 0;

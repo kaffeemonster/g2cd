@@ -480,7 +480,9 @@ static inline void handle_config(void)
 	size_t i;
 
 	/* whats fixed */
-	server.status.our_server_upeer_needed = true;
+// TODO: switch according to hub need
+	/* set to true on startup, switch when enough hubs */
+	server.status.our_server_upeer_needed = false;
 	atomic_set(&server.status.act_connection_sum, 0);
 
 // TODO: read from config files
@@ -679,9 +681,11 @@ static inline void setup_resources(void)
 		 * And by the way looks nicer (have your little proc take 27MB looks
 		 * scary, even if its 3 * 8 MB Thread stack, mostly unused (not backed
 		 * by real memory) only 12kb used)
+		 * For 64 Bit we take more memory, because all stuff is bigger.
 		 */
-		if(i > (64 * 1024))
-			pthread_attr_setstacksize(&server.settings.t_def_attr, 64 * 1024);
+// TODO: also raise to low values
+		if(i > (64 * 1024) || sizeof(size_t) > 4)
+			pthread_attr_setstacksize(&server.settings.t_def_attr, 64 * 1024 * (sizeof(size_t)/4));
 	}
 
 	/* IPC */
