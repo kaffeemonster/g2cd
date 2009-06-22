@@ -495,11 +495,8 @@ static bool handle_accept_in(int accept_so, g2_connection_t *work_entry, int epo
 	}
 	work_entry->com_socket = tmp_fd;
 
-	/* increase our total server connection sum */
-	atomic_inc(&server.status.act_connection_sum);
-// TODO: Little race, we may kill the wrong one...
-	/* check if our total server connection limit is reached */
-	if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
+	/* increase and check if our total server connection limit is reached */
+	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == close(work_entry->com_socket) && EINTR == errno);
@@ -1031,7 +1028,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				if(unlikely(getsockname(to_con->com_socket, casa(&local_addr), &sin_size))) {
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
 					local_addr = AF_INET == to_con->remote_host.s_fam ?
-						server.settings.bind.ip4 : server.settings.bind.ip6;
+					             server.settings.bind.ip4 : server.settings.bind.ip6;
 				}
 				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
 				                            buffer_remaining(*to_con->send));

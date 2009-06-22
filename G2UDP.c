@@ -50,6 +50,7 @@
 #include "G2UDP.h"
 #include "G2MainServer.h"
 #include "G2PacketSerializer.h"
+#include "lib/atomic.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
@@ -361,7 +362,7 @@ static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t pa
 
 static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold)
 {
-	static uint16_t internal_sequence;
+	static atomic_t internal_sequence;
 	ssize_t result;
 	unsigned int num_udp_packets, i;
 	uint16_t sequence_number;
@@ -373,8 +374,7 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		return;
 	}
 	num_udp_packets = (result+(UDP_MTU-UDP_RELIABLE_LENGTH-1))/(UDP_MTU-UDP_RELIABLE_LENGTH);
-// TODO: fancy sequence and locking
-	sequence_number = internal_sequence++;
+	sequence_number = ((unsigned)atomic_inc_return(&internal_sequence)) & 0x0000FFFF;
 	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets);
 
 	for(i = 0; i < num_udp_packets; i++)
