@@ -72,7 +72,7 @@
 /*
  * bitfield_encode - run length encode a bit field
  * res: buffer for result data
- * t_len: size fo the result buffer
+ * t_len: size of the result buffer
  * data: buffer with input data
  * s_len: length of input data
  *
@@ -85,12 +85,27 @@
 /*
  * bitfield_decode - run length decode a bit field
  * res: buffer for result data
- * t_len: size fo the result buffer
+ * t_len: size of the result buffer
  * data: buffer with input data
  * s_len: length of input data
  *
  * return value: length of the result or -length of the result
  *               if not all data could be consumed.
+ *
+ * Please refer to the general notes about these functions.
+ */
+
+/*
+ * bitfield_lookup - test an array of bit indexes against an encoded bitfield
+ * vals: array of bit indexes
+ * v_len: number of elements in vals
+ * data: encoded bitfield
+ * s_len: length of encoded bitfield
+ *
+ * return value: 0 if no index matched, -1 if one index matched
+ *
+ * This function works best if the indexes are sorted ascending
+ * (or it has to "unpack" the bitfield v_len times worst case)
  *
  * Please refer to the general notes about these functions.
  */
@@ -221,9 +236,9 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 #if defined(I_LIKE_ASM) && (defined(__i386__) || defined(__x86_64__))
 				size_t v;
 				asm ("bsr	%1, %0" : "=r" (v) : "rm" (f_row));
-				cnt = (v / 8) + 1;
+				cnt = (v / BITS_PER_CHAR) + 1;
 #else
-				cnt = (((sizeof(f_row) * 8) - __builtin_clzl(f_row)) / 8) + 1;
+				cnt = (((sizeof(f_row) * BITS_PER_CHAR) - __builtin_clzl(f_row)) / BITS_PER_CHAR) + 1;
 #endif
 				*r_wptr++ = cnt | 0xF0;
 				t_len--;
@@ -246,11 +261,11 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 						break;
 					case 3:
 						if(HOST_IS_BIGENDIAN) {
-							*r_wptr++ = (f_row >> (2 * 8)) & 0xFF;
+							*r_wptr++ = (f_row >> (2 * BITS_PER_CHAR)) & 0xFF;
 							*(uint16_t *)r_wptr = f_row & 0xFFFF;
 						} else {
 							*r_wptr++ = f_row & 0xFF;
-							*(uint16_t *)r_wptr = (f_row >> 8) & 0xFFFF;
+							*(uint16_t *)r_wptr = (f_row >> BITS_PER_CHAR) & 0xFFFF;
 						}
 						r_wptr += sizeof(uint16_t);
 						t_len -= sizeof(uint16_t) + sizeof(uint8_t);
@@ -270,11 +285,11 @@ write_out_manual:
 					if(HOST_IS_BIGENDIAN) { /* write big endian data */
 						unsigned i = cnt - 1;
 						for(; t_len && cnt; t_len--, cnt--, i--)
-							*r_wptr++ = (f_row >> (i * 8)) & 0xFF;
+							*r_wptr++ = (f_row >> (i * BITS_PER_CHAR)) & 0xFF;
 					} else { /* write little endian data */
 						for(; t_len && cnt; t_len--, cnt--) {
 							*r_wptr++ = f_row & 0xFF;
-							f_row >>= 8;
+							f_row >>= BITS_PER_CHAR;
 						}
 					}
 				}
@@ -430,10 +445,10 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			continue;
 		}
 
-		t = c & ~0xF0;
+		cnt = c & ~0xF0;
 		s_len--;
 		data++;
-		if(t > s_len)
+		if(cnt > s_len)
 			break;
 		if(UNALIGNED_OK )
 		{
@@ -450,11 +465,11 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 				break;
 			case 3:
 				if(HOST_IS_BIGENDIAN) {
-					cnt  = ((size_t)(*data++)) << (2 * 8);
+					cnt  = ((size_t)(*data++)) << (2 * BITS_PER_CHAR);
 					cnt |= *(const uint16_t *)data;
 				} else {
 					cnt  = *data++;
-					cnt |= ((size_t)(*(const uint16_t *)data)) << 8;
+					cnt |= ((size_t)(*(const uint16_t *)data)) << BITS_PER_CHAR;
 				}
 				data  += sizeof(uint16_t);
 				s_len -= sizeof(uint16_t) + sizeof(uint8_t);
@@ -471,15 +486,16 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		else
 		{
 read_in_manual:
+			t = cnt;
 			if(HOST_IS_BIGENDIAN) {
 				for(cnt = 0; likely(s_len) && likely(t); data++, s_len--, t--) {
-					cnt <<= 8;
+					cnt <<= BITS_PER_CHAR;
 					cnt |= *data;
 				}
 			} else {
 				unsigned i = 0;
 				for(cnt = 0; likely(s_len) && likely(t); data++, s_len--, t--, i++)
-					cnt |= ((size_t)*data) << (i * 8);
+					cnt |= ((size_t)*data) << (i * BITS_PER_CHAR);
 			}
 		}
 write_out_ff:
@@ -507,4 +523,139 @@ write_out_ff:
 	if(s_len)
 		c_len = -c_len;
 	return c_len;
+}
+
+int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len)
+{
+	const uint8_t *dwptr = data;
+	size_t i, rem_len;
+	uint32_t bpos;
+
+	for(i = 0, bpos = 0, rem_len = s_len; i < v_len; i++)
+	{
+		/*
+		 * when the act. bit index is below the bit pos, we have to
+		 * restart. Sort your numbers, kids.
+		 */
+		if(vals[i] < bpos) {
+			dwptr = data;
+			bpos = 0;
+			rem_len = s_len;
+		}
+
+		while(rem_len)
+		{
+			size_t cnt, t;
+			uint32_t dist = vals[i] - bpos;
+			uint8_t c = *dwptr;
+
+			/* a simple ff run? */
+			if(unlikely(!(c & 0x80)))
+			{
+				cnt = c * BITS_PER_CHAR;
+				if(dist < cnt) /* match within run? */
+					break; /* cannot match, next val */
+				dwptr++;
+				rem_len--;
+				bpos += cnt;
+				continue;
+			}
+
+			/* plain data run? */
+			if(unlikely(!(c & 0x40)))
+			{
+				cnt = c & ~0x80;
+				if(dist < (cnt * BITS_PER_CHAR)) { /* match within run? */
+					if(!(dwptr[1 + (dist / 8)] & (1 << (dist % 8))))
+						return -1; /* match */
+					break; /* no match, next val */
+				}
+				cnt      = cnt < rem_len ? cnt : rem_len - 1;
+				bpos    += cnt * BITS_PER_CHAR;
+				dwptr   += cnt + 1;
+				rem_len -= cnt + 1;
+				continue;
+			}
+
+			/* two bit */
+			if(unlikely(!(c & 0x20)))
+			{
+				if(dist < 8) { /* dist in this byte? */
+					if(index_twos[c & ~0xC0] & (1 << dist))
+						return -1; /* match */
+					break; /* no match, next val */
+				}
+				dwptr++;
+				rem_len--;
+				bpos += 8;
+				continue;
+			}
+
+			/* one bit */
+			if(unlikely(!(c & 0x10)))
+			{
+				if(dist < 8) { /* dist in this byte? */
+					if((c & ~0xE0) == dist)
+						return -1; /* match */
+					break; /* no match, next val */
+				}
+				dwptr++;
+				rem_len--;
+				bpos += 8;
+				continue;
+			}
+
+			/* long ff run */
+			t = c & ~0xF0;
+			if(t >= rem_len)
+				break; /* somethings fishy here... */
+			if(UNALIGNED_OK )
+			{
+				switch(t)
+				{
+				case 1:
+					cnt = dwptr[1];
+					break;
+				case 2:
+					cnt    = *(const uint16_t *)(dwptr + 1);
+					break;
+				case 3:
+					if(HOST_IS_BIGENDIAN) {
+						cnt  = ((size_t)(dwptr[1])) << (2 * BITS_PER_CHAR);
+						cnt |= *(const uint16_t *)(data + 2);
+					} else {
+						cnt  = dwptr[1];
+						cnt |= ((size_t)(*(const uint16_t *)(dwptr + 2))) << BITS_PER_CHAR;
+					}
+					break;
+				case 4:
+					cnt    = *(const uint32_t *)(dwptr + 1);
+					break;
+				default:
+					goto read_in_manual;
+				}
+			}
+			else
+			{
+				unsigned j;
+read_in_manual:
+				if(HOST_IS_BIGENDIAN) {
+					for(cnt = 0, j = 0; likely(j < t); j++) {
+						cnt <<= BITS_PER_CHAR;
+						cnt |= dwptr[1 + j];
+					}
+				} else {
+					for(cnt = 0, j = 0; likely(j < t); j++)
+						cnt |= ((size_t)data[1 + j]) << (j * BITS_PER_CHAR);
+				}
+			}
+
+			if(dist < (cnt * BITS_PER_CHAR)) /* match within run? */
+				break; /* cannot match, next val */
+			dwptr   += 1 + t;
+			rem_len -= 1 + t;
+			bpos    += cnt * BITS_PER_CHAR;
+		}
+	}
+	return 0;
 }

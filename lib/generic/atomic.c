@@ -1,29 +1,29 @@
 /*
  * atomic.c
  * generic implementation of atomic ops
- * 
+ *
  * Thanks to the Linux kernel
- * 
- * Copyright (c) 2006, Jan Seiffert
- * 
+ *
+ * Copyright (c) 2006-2009 Jan Seiffert
+ *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
  * $Id:$
- * 
+ *
  */
 
 #include <stdlib.h>
@@ -58,6 +58,15 @@ void gen_atomic_inc(atomic_t *x)
 	shortlock_t_lock(ATOMIC_HASH(x));
 	x->d++;
 	shortlock_t_unlock(ATOMIC_HASH(x));
+}
+
+int gen_atomic_inc_return(atomic_t *x)
+{
+	int ret;
+	shortlock_t_lock(ATOMIC_HASH(x));
+	ret = x->d++;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+	return ret;
 }
 
 void gen_atomic_dec(atomic_t *x)

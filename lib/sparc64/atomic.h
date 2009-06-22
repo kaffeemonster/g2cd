@@ -3,27 +3,27 @@
  * atomic primitves for sparc64
  *
  * Thanks Linux Kernel
- * 
- * Copyright (c) 2006, Jan Seiffert
- * 
+ *
+ * Copyright (c) 2006-2009 Jan Seiffert
+ *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
  * $Id:$
- * 
+ *
  */
 
 #ifndef LIB_IMPL_ATOMIC_H
@@ -227,6 +227,7 @@ static always_inline int atomic_sub_return(int val, atomic_t *ptr)
 }
 
 # define atomic_inc(x) ((void) atomic_add_return(1, (x)))
+# define atomic_inc_return(x) (atomic_add_return(1, (x)))
 # define atomic_dec(x) ((void) atomic_sub_return(1, (x)))
 # define atomic_dec_test(x) (atommic_sub_return(1, (x)) == 0)
 

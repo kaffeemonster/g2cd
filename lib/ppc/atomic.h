@@ -50,7 +50,7 @@
 # endif
 
 # ifdef __PPC405__
-#  define PPC405_ERR77(op)	"dcbt\t"str_it(op)"\n\t"
+#  define PPC405_ERR77(op)	"dcbt	"str_it(op)"\n\t"
 # else
 #  define  PPC405_ERR77(op)
 # endif
@@ -192,10 +192,10 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%y2\n\t"
+		"lwarx	%0,%y2\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%3,%y2\n\t"
-		"bne-\t1b"
+		"stwcx.	%3,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -214,10 +214,10 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
+		"ldarx	%0,%y2\n\t"
 		PPC405_ERR77(%y2)
-		"stdcx.\t%3,%y2\n\t"
-		"bne-\t1b"
+		"stdcx.	%3,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -250,10 +250,10 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%y2\n\t"
+		"lwarx	%0,%y2\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%3,%y2\n\t"
-		"bne-\t1b"
+		"stwcx.	%3,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -272,10 +272,10 @@ static always_inline int atomic_x_64(int val, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
+		"ldarx	%0,%y2\n\t"
 		PPC405_ERR77(%y2)
-		"stdcx.\t%3,%y2\n\t"
-		"bne-\t1b"
+		"stdcx.	%3,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -307,12 +307,12 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 
 	__asm__ __volatile__ (
 		"1:\n\t"
-		"lwarx\t%0,%y2 \n\t"
-		"cmpw\t0,%0,%3 \n\t"
-		"bne\t2f\n\t"
+		"lwarx	%0,%y2 \n\t"
+		"cmpw	0,%0,%3 \n\t"
+		"bne	2f\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%4,%y2 \n\t"
-		"bne-\t1b"
+		"stwcx.	%4,%y2 \n\t"
+		"bne-	1b"
 		SYNC
 		"\n2:"
 		: /* %0 */ "=&r" (prev),
@@ -333,12 +333,12 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 
 	__asm__ __volatile__ (
 		"1:\n\t"
-		"ldarx\t%0,%y2 \n\t"
-		"cmpd\t0,%0,%3 \n\t"
-		"bne\t2f\n\t"
+		"ldarx	%0,%y2 \n\t"
+		"cmpd	0,%0,%3 \n\t"
+		"bne	2f\n\t"
 		PPC405_ERR77(%y2)
-		"stdcx.\t%4,%y2 \n\t"
-		"bne-\t1b"
+		"stdcx.	%4,%y2 \n\t"
+		"bne-	1b"
 		SYNC
 		"\n2:"
 		: /* %0 */ "=&r" (prev),
@@ -370,11 +370,11 @@ static always_inline void atomic_inc_32(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%y2\n\t"
-		"addic\t%0,%0,1\n\t"
+		"lwarx	%0,%y2\n\t"
+		"addic	%0,%0,1\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%0,%y2 \n\t"
-		"bne-\t1b"
+		"stwcx.	%0,%y2 \n\t"
+		"bne-	1b"
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -388,11 +388,11 @@ static always_inline void atomic_inc_64(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
-		"addic\t%0,%0,1\n\t"
+		"ldarx	%0,%y2\n\t"
+		"addic	%0,%0,1\n\t"
 		PPC405_ERR77(%y2)
-		"stdcx.\t%0,%y2 \n\t"
-		"bne-\t1b"
+		"stdcx.	%0,%y2 \n\t"
+		"bne-	1b"
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -419,11 +419,11 @@ static always_inline void atomic_dec_32(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"lwarx\t%0,%y2\n\t"
-		"addic\t%0,%0,-1\n\t"
+		"lwarx	%0,%y2\n\t"
+		"addic	%0,%0,-1\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%0,%y2\n\t"
-		"bne-\t1b"
+		"stwcx.	%0,%y2\n\t"
+		"bne-	1b"
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -437,11 +437,11 @@ static always_inline void atomic_dec_64(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
-		"addic\t%0,%0,-1\n\t"
+		"ldarx	%0,%y2\n\t"
+		"addic	%0,%0,-1\n\t"
 		PPC405_ERR77(%y2)
-		"stdcx.\t%0,%y2\n\t"
-		"bne-\t1b"
+		"stdcx.	%0,%y2\n\t"
+		"bne-	1b"
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -468,11 +468,11 @@ static always_inline int atomic_dec_return_32(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
-		"addic\t%0,%0,-1\n\t"
+		"lwarx	%0,%y2\n\t"
+		"addic	%0,%0,-1\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%0,%y2\n\t"
-		"bne-\t1b"
+		"stwcx.	%0,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -488,11 +488,11 @@ static always_inline int atomic_dec_return_64(atomic_t *ptr)
 	int tmp;
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldarx\t%0,%y2\n\t"
-		"addic\t%0,%0,-1\n\t"
+		"ldarx	%0,%y2\n\t"
+		"addic	%0,%0,-1\n\t"
 		PPC405_ERR77(%y2)
-		"stwcx.\t%0,%y2\n\t"
-		"bne-\t1b"
+		"stdcx.	%0,%y2\n\t"
+		"bne-	1b"
 		SYNC
 		: /* %0 */ "=&r" (tmp),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -516,5 +516,59 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 }
 
 #define atomic_dec_test(x) (atomic_dec_return((x)) == 0)
+
+static always_inline int atomic_inc_return_32(atomic_t *ptr)
+{
+	int tmp, ret;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"lwarx	%1,%y3\n\t"
+		"addic	%0,%1,1\n\t"
+		PPC405_ERR77(%y2)
+		"stwcx.	%0,%y3\n\t"
+		"bne-	1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		  /* %1 */ "=&r" (ret),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %2 */ "=m" (atomic_read(ptr))
+		: /* %3 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %4 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+	return ret;
+}
+
+static always_inline int atomic_inc_return_64(atomic_t *ptr)
+{
+	int tmp, ret;
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldarx	%1,%y3\n\t"
+		"addic	%0,%1,1\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.	%0,%y3\n\t"
+		"bne-	1b"
+		SYNC
+		: /* %0 */ "=&r" (tmp),
+		  /* %1 */ "=&r" (ret),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %2 */ "=m" (atomic_read(ptr))
+		: /* %3 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %4 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+	return ret;
+}
+
+static always_inline int atomic_inc_return(atomic_t *ptr)
+{
+	switch(sizeof(atomic_read(ptr)))
+	{
+	case 4:
+		return atomic_inc_return_32(ptr);
+	case 8:
+		return atomic_inc_return_64(ptr);
+	}
+	return _illigal_int_size(0, ptr);
+}
 
 #endif /* LIB_IMPL_ATOMIC_H */

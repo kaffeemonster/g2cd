@@ -33,6 +33,10 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <errno.h>
+#include <unistd.h>
+#ifdef _POSIX_PRIORITY_SCHEDULING
+# include <sched.h>
+#endif
 /* Own Includes */
 #define _TIMEOUT_C
 #include "lib/other.h"
@@ -248,6 +252,9 @@ retry:
 		pthread_mutex_unlock(&who_to_cancel->lock);
 		pthread_mutex_unlock(&wakeup.mutex);
 		cpu_relax();
+#ifdef _POSIX_PRIORITY_SCHEDULING
+		sched_yield();
+#endif
 		goto retry;
 	}
 

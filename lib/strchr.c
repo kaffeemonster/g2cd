@@ -90,3 +90,7 @@ char *strchr(const char *s, int c)
 	char *ret_val = strchrnul(s, c);
 	return likely('\0' != *ret_val) ? ret_val : NULL;
 }
+
+/*@unused@*/
+static char const rcsid_sc[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

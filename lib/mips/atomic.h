@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2007, Jan Seiffert
+ * Copyright (c) 2007-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -76,16 +76,16 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 	void *ret_val, *dummy;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %3\n"
-		".set\tmips0\n\t"
-		"move\t%2, %z4\n"
-		".set\tmips3\n\t"
-		"sc\t%2, %1\n\t"
-		"beqz\t%2, 1b\n"
+		"ll	%0, %3\n"
+		".set mips0\n\t"
+		"move	%2, %z4\n"
+		".set mips3\n\t"
+		"sc	%2, %1\n\t"
+		"beqz	%2, 1b\n"
 		MEM_ORDER
-		".set\tmips0\n"
+		".set mips0\n"
 		: /* %0 */ "=&r" (ret_val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr)),
@@ -101,14 +101,14 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 	void *ret_val, *dummy;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"lld\t%0, %3\n"
-		"move\t%2, %z4\n"
-		"scd\t%2, %1\n\t"
-		"beqz\t%2, 1b\n"
+		"lld	%0, %3\n"
+		"move	%2, %z4\n"
+		"scd	%2, %1\n\t"
+		"beqz	%2, 1b\n"
 		MEM_ORDER
-		".set\tmips0\n"
+		".set mips0\n"
 		: /* %0 */ "=&r" (ret_val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr)),
@@ -138,16 +138,16 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	int ret_val, dummy;
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %3\n"
-		".set\tmips0\n\t"
-		"move\t%2, %z4\n"
-		".set\tmips3\n\t"
-		"sc\t%2, %1\n\t"
-		"beqz\t%2, 1b\n"
+		"ll	%0, %3\n"
+		".set mips0\n\t"
+		"move	%2, %z4\n"
+		".set mips3\n\t"
+		"sc	%2, %1\n\t"
+		"beqz	%2, 1b\n"
 		MEM_ORDER
-		".set\tmips0\n"
+		".set mips0\n"
 		: /* %0 */ "=&r" (ret_val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr)),
@@ -162,14 +162,14 @@ static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int ret_val, dummy;
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"lld\t%0, %3\n"
-		"move\t%2, %z4\n"
-		"scd\t%2, %1\n\t"
-		"beqz\t%2, 1b\n"
+		"lld	%0, %3\n"
+		"move	%2, %z4\n"
+		"scd	%2, %1\n\t"
+		"beqz	%2, 1b\n"
 		MEM_ORDER
-		".set\tmips0\n"
+		".set mips0\n"
 		: /* %0 */ "=&r" (ret_val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr)),
@@ -200,20 +200,20 @@ static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 	int prev;
 
 	__asm__ __volatile__(
-		".set\tpush\n"
-		".set\tnoat\n"
-		".set\tmips3\n"
+		".set push\n"
+		".set noat\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %3\n\t"
-		"bne\t%0, %z2, 2f\n"
-		".set\tmips0\n\t"
-		"move\t$1, %z4\n"
-		".set\tmips3\n\t"
-		"sc\t$1, %1\n\t"
-		"beqz\t$1, 1b\n"
+		"ll	%0, %3\n\t"
+		"bne	%0, %z2, 2f\n"
+		".set mips0\n\t"
+		"move	$1, %z4\n"
+		".set mips3\n\t"
+		"sc	$1, %1\n\t"
+		"beqz	$1, 1b\n"
 		MEM_ORDER
 		"2:\n"
-		".set\tpop\n"
+		".set pop\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -229,18 +229,18 @@ static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 	int prev;
 
 	__asm__ __volatile__(
-		".set\tpush\n"
-		".set\tnoat\n"
-		".set\tmips3\n"
+		".set push\n"
+		".set noat\n"
+		".set mips3\n"
 		"1:\n\t"
-		"lld\t%0, %3\n\t"
-		"bne\t%0, %z2, 2f\n\t"
-		"move\t$1, %z4\n\t"
-		"scd\t$1, %1\n\t"
-		"beqz\t$1, 1b\n"
+		"lld	%0, %3\n\t"
+		"bne	%0, %z2, 2f\n\t"
+		"move	$1, %z4\n\t"
+		"scd	$1, %1\n\t"
+		"beqz	$1, 1b\n"
 		MEM_ORDER
 		"2:\n"
-		".set\tpop\n"
+		".set pop\n"
 		: /* %0 */  "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -269,20 +269,20 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 {
 	void *prev;
 	__asm__ __volatile__(
-		".set\tpush\n"
-		".set\tnoat\n"
-		".set\tmips3\n"
+		".set push\n"
+		".set noat\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %3\n\t"
-		"bne\t%0, %z2, 2f\n"
-		".set\tmips0\n\t"
-		"move\t$1, %z4\n"
-		".set\tmips3\n\t"
-		"sc\t$1, %1\n\t"
-		"beqz\t$1, 1b\n"
+		"ll	%0, %3\n\t"
+		"bne	%0, %z2, 2f\n"
+		".set mips0\n\t"
+		"move	$1, %z4\n"
+		".set mips3\n\t"
+		"sc	$1, %1\n\t"
+		"beqz	$1, 1b\n"
 		MEM_ORDER
 		"2:\n"
-		".set\tpop\n"
+		".set pop\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -297,18 +297,18 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 {
 	void *prev;
 	__asm__ __volatile__(
-		".set\tpush\n"
-		".set\tnoat\n"
-		".set\tmips3\n"
+		".set push\n"
+		".set noat\n"
+		".set mips3\n"
 		"1:\n\t"
-		"lld\t%0, %3\n\t"
-		"bne\t%0, %z2, 2f\n\t"
-		"move\t$1, %z4\n\t"
-		"scd\t$1, %1\n\t"
-		"beqz\t$1, 1b\n"
+		"lld	%0, %3\n\t"
+		"bne	%0, %z2, 2f\n\t"
+		"move	$1, %z4\n\t"
+		"scd	$1, %1\n\t"
+		"beqz	$1, 1b\n"
 		MEM_ORDER
 		"2:\n"
-		".set\tpop\n"
+		".set pop\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -338,12 +338,12 @@ static always_inline void atomic_inc(atomic_t *ptr)
 	int tmp;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %2\n\t"
-		"addiu\t%0, 1\n\t"
-		"sc\t%0, %1\n\t"
-		"beqz\t%0, 1b\n"
+		"ll	%0, %2\n\t"
+		"addiu	%0, 1\n\t"
+		"sc	%0, %1\n\t"
+		"beqz	%0, 1b\n"
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -355,12 +355,12 @@ static always_inline void atomic_dec(atomic_t *ptr)
 	int tmp;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %2\n\t"
-		"addiu\t%0,-1\n\t"
-		"sc\t%0, %1\n\t"
-		"beqz\t%0, 1b\n"
+		"ll	%0, %2\n\t"
+		"addiu	%0, -1\n\t"
+		"sc	%0, %1\n\t"
+		"beqz	%0, 1b\n"
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -372,12 +372,12 @@ static always_inline void atomic_add(int i, atomic_t *ptr)
 	int tmp;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %2\n\t"
-		"addu\t%0, %z3\n\t"
-		"sc\t%0, %1\n\t"
-		"beqz\t%0, 1b\n"
+		"ll	%0, %2\n\t"
+		"addu	%0, %z3\n\t"
+		"sc	%0, %1\n\t"
+		"beqz	%0, 1b\n"
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -390,12 +390,12 @@ static always_inline void atomic_sub(int i, atomic_t *ptr)
 	int tmp;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %2\n\t"
-		"subu\t%0, %z3\n\t"
-		"sc\t%0, %1\n\t"
-		"beqz\t%0, 1b\n"
+		"ll	%0, %2\n\t"
+		"subu	%0, %z3\n\t"
+		"sc	%0, %1\n\t"
+		"beqz	%0, 1b\n"
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -408,22 +408,43 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 	int tmp, dummy;
 
 	__asm__ __volatile__(
-		".set\tmips3\n"
+		".set mips3\n"
 		"1:\n\t"
-		"ll\t%0, %3\n\t"
-		"addiu\t%0,-1\n\t"
-		"move\t%2, %0\n\t"
-		"sc\t%2, %1\n\t"
-		"beqz\t%2, 1b\n"
+		"ll	%0, %3\n\t"
+		"addiu	%0, -1\n\t"
+		"move	%2, %0\n\t"
+		"sc	%2, %1\n\t"
+		"beqz	%2, 1b\n"
 		MEM_ORDER
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr)),
 		  /* %2 */ "=&r" (dummy)
-		: /* %3 */ "m" (atomic_read(ptr)));	
+		: /* %3 */ "m" (atomic_read(ptr)));
 	return tmp;
 }
 
 # define atomic_dec_test(x) (atommic_dec_return((x)) == 0)
+
+static always_inline int atomic_inc_return(atomic_t *ptr)
+{
+	int tmp, dummy;
+
+	__asm__ __volatile__(
+		".set mips3\n"
+		"1:\n\t"
+		"ll	%0, %3\n\t"
+		"move	%2, %0\n\t"
+		"addiu	%2, 1\n\t"
+		"sc	%2, %1\n\t"
+		"beqz	%2, 1b\n"
+		MEM_ORDER
+		".set mips0\n"
+		: /* %0 */ "=&r" (tmp),
+		  /* %1 */ "=m" (atomic_read(ptr)),
+		  /* %2 */ "=&r" (dummy)
+		: /* %3 */ "m" (atomic_read(ptr)));
+	return tmp;
+}
 
 #endif /* LIB_IMPL_ATOMIC_H */

@@ -39,8 +39,10 @@ LIB_MY_BITOPS_EXTRN(uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigne
 # endif
 LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
+LIB_MY_BITOPS_EXTRN(size_t introsort_u32(uint32_t a[], size_t n));
 LIB_MY_BITOPS_EXTRN(ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len));
 LIB_MY_BITOPS_EXTRN(ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len));
+LIB_MY_BITOPS_EXTRN(int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len));
 
 LIB_MY_BITOPS_EXTRN(char *cpy_rest(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(char *cpy_rest_o(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);

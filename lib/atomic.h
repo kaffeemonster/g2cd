@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -65,20 +65,20 @@ typedef union xxxxxx4
 	volatile void *d;
 	 /* some archs build atomic ops by the mean of an "atomic"
 	  * load and store (notably ppc and alpha). When a load
-	  * is executet, the CPU magicaly starts bookkeeping of
-	  * acceses to the src mem-area, and the store ends this
-	  * watch, failing if an change happend inbetween.
-	  * This mem-area mostly has a size greater then the
+	  * is executed, the CPU magicaly starts bookkeeping of
+	  * accesses to the src mem-area, and the store ends this
+	  * watch, failing if a change happend in between.
+	  * This mem-area mostly has a size greater than the
 	  * atomic-type size.
 	  * For "normal" apps this would be fine. Think of a
 	  * linked list, there is always the listmagic (*next etc.)
 	  * you want to handle atomical (minus the fact you
 	  * shouldn't stick *prev and *next directly together...)
 	  * and some data which gives padding.
-	  * But we have a Problem, in an array of pointers several
-	  * are in such an area. An access to an neighboring element
+	  * But we have a problem, in an array of pointers several
+	  * are in such an area. An access to an neighbouring element
 	  * would trash the cpu-watch.
-	  * So extra for array use, this type is defined, which padds
+	  * So extra for array use, this type is defined, which pads
 	  * array-elements far enough from each other.
 	  * (be warned, this makes the array larger! Keep the number
 	  * of entrys small)
@@ -119,19 +119,21 @@ typedef union xxxxxx4
 #  else
 #   if _GNUC_PREREQ(4, 1)
 #    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval))
-#    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
-#    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
-#    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)
+#    define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
+#    define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
+#    define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
+#    define atomic_dec_test(ptr) (!__sync_sub_and_fetch(&(ptr)->d, 1))
 #   endif
 #   include "generic/atomic.h"
 #  endif
 # else
-#   if _GNUC_PREREQ(4, 1)
-#    define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval)))
-#    define atomic_inc(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
-#    define atomic_dec(ptr) __sync_fetch_and_sub(&(ptr)->d, 1)
-#    define atomic_dec_test(ptr) !__sync_sub_and_fetch(&(ptr)->d, 1)
-#   endif
+#  if _GNUC_PREREQ(4, 1)
+#   define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval)))
+#   define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
+#   define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
+#   define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
+#   define atomic_dec_test(ptr) (!__sync_sub_and_fetch(&(ptr)->d, 1))
+#  endif
 #  include "generic/atomic.h"
 # endif
 

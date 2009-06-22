@@ -3,38 +3,38 @@
  * atomic primitves for ia64
  *
  * Thanks Linux Kernel
- * 
- * Copyright (c) 2006, Jan Seiffert
- * 
+ *
+ * Copyright (c) 2006-2009 Jan Seiffert
+ *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
  * $Id:$
- * 
+ *
  */
 
 #ifndef LIB_IMPL_ATOMIC_H
 # define LIB_IMPL_ATOMIC_H
 
 # define atomic_read(x)	((x)->d)
-# define atomic_set(x, y) (((x)->d) = (y))
+# define atomic_set(x, y)	(((x)->d) = (y))
 # define atomic_pread(x)	((x)->d)
-# define atomic_pset(x, y) ((x)->d = (y))
+# define atomic_pset(x, y)	((x)->d = (y))
 # define atomic_sread(x)	((x)->next)
-# define atomic_sset(x, y) ((x)->next = (y))
+# define atomic_sset(x, y)	((x)->next = (y))
 
 # ifdef __INTEL_COMPILER
 #  define atomic_px_32(val, ptr) _InterlockedExchange(&atomic_pread(ptr), val)
@@ -44,7 +44,7 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	void *ret;
 	__asm__ __volatile__(
-		"xchg4\t\t%0=[%2], %3"
+		"xchg4		%0=[%2], %3"
 		: /* %0 */ "=r" (ret),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -57,7 +57,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	void *ret;
 	__asm__ __volatile__(
-		"xchg8\t\t%0=[%2], %3"
+		"xchg8		%0=[%2], %3"
 		: /* %0 */ "=r" (ret),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -88,7 +88,7 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
 	int ret;
 	__asm__ __volatile__(
-		"xchg4\t\t%0=[%2], %3"
+		"xchg4		%0=[%2], %3"
 		: /* %0 */ "=r" (ret),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */  "=m" (atomic_read(ptr))
@@ -101,7 +101,7 @@ static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int ret;
 	__asm__ __volatile__(
-		"xchg8\t\t%0=[%2], %3"
+		"xchg8		%0=[%2], %3"
 		: /* %0 */ "=r" (ret),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -138,12 +138,12 @@ static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
-		/* 
+		/*
 		 * we could let gcc load the application register, but we must avoid
 		 * that the mov and the cmpxchg end up in the same instruction group
 		 */
-		"mov\t\tar.ccv=%4;;\n"
-		"cmpxchg4.acq\t%0=[%2], %3, ar.ccv"
+		"mov		ar.ccv=%4;;\n"
+		"cmpxchg4.acq	%0=[%2], %3, ar.ccv"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -158,12 +158,12 @@ static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
-		/* 
+		/*
 		 * we could let gcc load the application register, but we must avoid
 		 * that the mov and the cmpxchg end up in the same instruction group
 		 */
-		"mov\t\tar.ccv=%4;;\n"
-		"cmpxchg8.acq\t%0=[%2], %3, ar.ccv"
+		"mov		ar.ccv=%4;;\n"
+		"cmpxchg8.acq	%0=[%2], %3, ar.ccv"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -195,12 +195,12 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 {
 	void *res;
 	__asm__ __volatile__(
-		/* 
+		/*
 		 * we could let gcc load the application register, but we must avoid
 		 * that the mov and the cmpxchg end up in the same instruction group
 		 */
-		"mov\t\tar.ccv=%4;;\n"
-		"cmpxchg4.acq\t%0=[%2], %3, ar.ccv"
+		"mov		ar.ccv=%4;;\n"
+		"cmpxchg4.acq	%0=[%2], %3, ar.ccv"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -215,12 +215,12 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 {
 	void *res;
 	__asm__ __volatile__(
-		/* 
+		/*
 		 * we could let gcc load the application register, but we must avoid
 		 * that the mov and the cmpxchg end up in the same instruction group
 		 */
-		"mov\t\tar.ccv=%4;;\n"
-		"cmpxchg8.acq\t%0=[%2], %3, ar.ccv"
+		"mov		ar.ccv=%4;;\n"
+		"cmpxchg8.acq	%0=[%2], %3, ar.ccv"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -270,7 +270,7 @@ static always_inline int atomic_fetch_and_add_32(int val, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
-		"fetchadd4.acq\t%0=[%2], %3"
+		"fetchadd4.acq	%0=[%2], %3"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -283,7 +283,7 @@ static always_inline int atomic_fetch_and_add_64(int val, atomic_t *ptr)
 {
 	int res;
 	__asm__ __volatile__(
-		"fetchadd8.acq\t%0=[%2], %3"
+		"fetchadd8.acq	%0=[%2], %3"
 		: /* %0 */ "=r" (res),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
@@ -326,6 +326,7 @@ static always_inline int atomic_fetch_and_add(int val, atomic_t *ptr)
 
 
 # define atomic_inc(x) ((void) atomic_add_return(1, (x)))
+# define atomic_inc_return(x) (atomic_add_return(1, (x)))
 # define atomic_dec(x) ((void) atomic_sub_return(1, (x)))
 # define atomic_dec_test(x) (atomic_sub_return(1, (x)) == 0)
 

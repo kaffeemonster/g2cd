@@ -2,7 +2,7 @@
  * hzp.c
  * Header for the hzp interface.
  *
- * Copyright (c) 2006 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,6 +36,7 @@ enum hzps
 {
 	HZP_EPOLL,
 	HZP_QHT,
+	HZP_QHTDAT,
 	/* keep this the last entry!! */
 	HZP_MAX
 };
@@ -50,7 +51,12 @@ struct hzp_free
 LIB_HZP_EXTRN(bool hzp_alloc(void));
 LIB_HZP_EXTRN(void hzp_ref(enum hzps, void *));
 LIB_HZP_EXTRN(void hzp_unref(enum hzps));
+# ifdef DEBUG_HZP_LANDMINE
+# define hzp_deferfree(x, y, z) _hzp_deferfree(x, y, z, __func__, __LINE__)
+LIB_HZP_EXTRN(void _hzp_deferfree(struct hzp_free *, void *, void (*)(void *), const char *, unsigned));
+# else
 LIB_HZP_EXTRN(void hzp_deferfree(struct hzp_free *, void *, void (*)(void *)) GCC_ATTR_FASTCALL);
+# endif
 LIB_HZP_EXTRN(int hzp_scan(int));
 	
 #endif

@@ -3,27 +3,27 @@
  * atomic primitves generic implementation
  *
  * Thanks Linux Kernel
- * 
- * Copyright (c) 2006, Jan Seiffert
- * 
+ *
+ * Copyright (c) 2006-2009 Jan Seiffert
+ *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
  * $Id:$
- * 
+ *
  */
 
 #ifndef LIB_IMPL_ATOMIC_H
@@ -57,6 +57,9 @@
 # ifndef atomic_inc
 #  define atomic_inc(x)	gen_atomic_inc((x))
 # endif
+# ifndef atomic_inc_return
+#  define atomic_inc_return(x)	gen_atomic_inc_return((x))
+# endif
 # ifndef atomic_dec
 #  define atomic_dec(x)	gen_atomic_dec((x))
 # endif
@@ -74,6 +77,7 @@
 # endif
 
 extern void gen_atomic_inc(atomic_t *);
+extern int  gen_atomic_inc_return(atomic_t *);
 extern void gen_atomic_dec(atomic_t *);
 extern int  gen_atomic_dec_test(atomic_t *);
 extern int  gen_atomic_x(int, atomic_t *);

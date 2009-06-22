@@ -2,7 +2,7 @@
  * hzp.c
  * hzp internal voodoo
  *
- * Copyright (c) 2006 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -198,13 +198,21 @@ void hzp_unref(enum hzps key)
  *         free_func - the free callback, either libc free or 
  *                     your own allocator for this object.
  */
+#ifdef DEBUG_HZP_LANDMINE
+void _hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *), const char *func, unsigned line)
+#else
 void GCC_ATTR_FASTCALL hzp_deferfree(struct hzp_free *item, void *data, void (*func2free)(void *))
+#endif
 {
 	item->data = data;
 	item->free_func = func2free;
 	atomic_push(&hzp_freelist.head, &item->st);
 	atomic_inc(&nr_free);
+#ifdef DEBUG_HZP_LANDMINE
+	logg_develd("would free: %p, from %s@%u\n", data, func, line);
+#else
 	logg_develd_old("would free: %p\n", data);
+#endif
 }
 
 /*

@@ -74,7 +74,7 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 	return val;
 }
 
-# ifdef __GNUC__
+# if defined(__GNUC__) && !defined(__clang__)
 #  define ASIZE "%z0"
 # else
 /* using a incl/decl/whateverl for int may be wrong */
@@ -151,5 +151,20 @@ static always_inline int atomic_dec_test(atomic_t *ptr)
 		: "cc");
 	return c != 0;
 }
+
+static always_inline int atomic_inc_return(atomic_t *ptr)
+{
+	int c;
+	__asm__ __volatile__(
+		LOCK "xadd %1, %0\n\t"
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		: /* %0 */ "=m" (atomic_read(ptr)),
+		  /* %1 */ "=r" (c)
+		: /* %2 */ "m" (atomic_read(ptr)),
+		  /* %3 */ "1" (1)
+		: "cc");
+	return c;
+}
+
 # undef ASIZE
 #endif /* LIB_IMPL_ATOMIC_H */

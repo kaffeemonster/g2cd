@@ -180,6 +180,7 @@ LIBSRCS = \
 	$(MPL)/hzp.c \
 	$(MPL)/inet_ntop.c \
 	$(MPL)/inet_pton.c \
+	$(MPL)/introsort.c \
 	$(MPL)/log_facility.c \
 	$(MPL)/memxorcpy.c \
 	$(MPL)/memand.c \
@@ -207,6 +208,7 @@ BITOPOBJS = \
 	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
 	$(MPL)/flsst.o \
+	$(MPL)/introsort.o \
 	$(MPL)/memxorcpy.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
@@ -320,3 +322,6 @@ libclean:
 
 libdclean: libclean
 	$(RM) $(AES_TABS) $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.bin $(MPL)/*.rtl
+
+libdepend: $(LIBSRCS)
+	@$(PORT_PR) "\tDEP[$(MPL)/$@]\n"; $(CC) -MM -MG $(CFLAGS) $(CPPFLAGS) $(LIBSRCS) > $(MPL)/$@;

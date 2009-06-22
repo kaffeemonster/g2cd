@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2007, Jan Seiffert
+ * Copyright (c) 2007-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -79,14 +79,14 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldq_l\t%0,%3\n"
-		"bis\t$31,%4,%2\n"
-		"stq_c\t%2,%1\n\t"
-		"beq\t%2,2f\n"
+		"ldq_l	%0,%3\n\t"
+		"bis	$31,%4,%2\n\t"
+		"stq_c	%2,%1\n\t"
+		"beq	%2,2f\n"
 		MEM_ORDER
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -100,16 +100,17 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 static always_inline int atomic_x(int val, atomic_t *ptr)
 {
 	unsigned long long dummy;
+
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%3\n"
-		"bis\t$31,%4,%2\n"
-		"stl_c\t%2, %1\n\t"
-		"beq\t%2,2f\n"
+		"ldl_l	%0,%3\n\t"
+		"bis	$31,%4,%2\n\t"
+		"stl_c	%2, %1\n\t"
+		"beq	%2,2f\n"
 		MEM_ORDER
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -126,17 +127,17 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%4\n\t"
-		"cmpeq %0,%3,%1\n\t"
-		"beq\t%1,2f\n\t"
-		"mov\t%5,%1\n\t"
-		"stl_c\t%1,%2\n\t"
-		"beq\t%1,3f\n"
+		"ldl_l	%0,%4\n\t"
+		"cmpeq	%0,%3,%1\n\t"
+		"beq	%1,2f\n\t"
+		"mov	%5,%1\n\t"
+		"stl_c	%1,%2\n\t"
+		"beq	%1,3f\n"
 		MEM_ORDER
 		"2:\n"
 		".subsection 2\n"
 		"3:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -152,19 +153,20 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 {
 	void *prev;
 	unsigned long long cmp;
+
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldq_l\t%0,%4\n\t"
-		"cmpeq\t%0,%3,%1\n\t"
-		"bne\t%1,2f\n"
-		"mov\t%5,%1\n\t"
-		"stq_c\t%1,%2\n\t"
-		"beq\t%1,3f\n"
+		"ldq_l	%0,%4\n\t"
+		"cmpeq	%0,%3,%1\n\t"
+		"bne	%1,2f\n\t"
+		"mov	%5,%1\n\t"
+		"stq_c	%1,%2\n\t"
+		"beq	%1,3f\n"
 		MEM_ORDER
 		"2:\n"
 		".subsection 2\n"
 		"3:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
@@ -182,18 +184,41 @@ static always_inline void atomic_inc(atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%2\n\t"
-		"addl\t%0,1,%0\n\t"
-		"stl_c\t%0,%1\n\t"
-		"beq\t%0,2f\n"
+		"ldl_l	%0,%2\n\t"
+		"addl	%0,1,%0\n\t"
+		"stl_c	%0,%1\n\t"
+		"beq	%0,2f\n"
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
 		: /* %2 */ "m" (atomic_read(ptr)));
 }
+
+static always_inline int atomic_inc_return(atomic_t *ptr)
+{
+	long long tmp, ret_val;
+
+	__asm__ __volatile__(
+		"1:\n\t"
+		"ldl_l	%2,%3\n\t"
+		"addl	%2,1,%0\n\t"
+		"stl_c	%0,%1\n\t"
+		"beq\t%0,2f\n"
+		MEM_ORDER
+		".subsection 2\n"
+		"2:\n\t"
+		"br	1b\n"
+		".previous\n"
+		: /* %0 */ "=&r" (tmp),
+		  /* %1 */ "=m" (atomic_read(ptr)),
+		  /* %2 */ "=&r" (ret_val)
+		: /* %3 */ "m" (atomic_read(ptr)));
+	return (int) ret_val;
+}
+
 
 static always_inline void atomic_dec(atomic_t *ptr)
 {
@@ -201,13 +226,13 @@ static always_inline void atomic_dec(atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%2\n\t"
-		"subl\t%0,1,%0\n\t"
-		"stl_c\t%0,%1\n\t"
-		"beq\t%0,2f\n"
+		"ldl_l	%0,%2\n\t"
+		"subl	%0,1,%0\n\t"
+		"stl_c	%0,%1\n\t"
+		"beq	%0,2f\n"
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -220,13 +245,13 @@ static always_inline void atomic_add(int i, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%2\n\t"
-		"addl\t%0,%3,%0\n\t"
-		"stl_c\t%0,%1\n\t"
-		"beq\t%0,2f\n"
+		"ldl_l	%0,%2\n\t"
+		"addl	%0,%3,%0\n\t"
+		"stl_c	%0,%1\n\t"
+		"beq	%0,2f\n"
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -240,13 +265,13 @@ static always_inline void atomic_sub(int i, atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%2\n\t"
-		"subl\t%0,%3,%0\n\t"
-		"stl_c\t%0,%1\n\t"
-		"beq\t%0,2f\n"
+		"ldl_l	%0,%2\n\t"
+		"subl	%0,%3,%0\n\t"
+		"stl_c	%0,%1\n\t"
+		"beq	%0,2f\n"
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
@@ -260,20 +285,20 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 
 	__asm__ __volatile__(
 		"1:\n\t"
-		"ldl_l\t%0,%3\n\t"
-		"subl\t%0,1,%2\n\t"
-		"subl\t%0,1,%0\n\t"
-		"stl_c\t%0,%1\n\t"
+		"ldl_l	%0,%3\n\t"
+		"subl	%0,1,%2\n\t"
+		"subl	%0,1,%0\n\t"
+		"stl_c	%0,%1\n\t"
 		"beq\t%0,2f\n"
 		MEM_ORDER
 		".subsection 2\n"
 		"2:\n\t"
-		"br\t1b\n"
+		"br	1b\n"
 		".previous\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr)),
 		  /* %2 */ "=&r" (ret_val)
-		: /* %3 */ "m" (atomic_read(ptr)));	
+		: /* %3 */ "m" (atomic_read(ptr)));
 	return (int) ret_val;
 }
 
