@@ -39,6 +39,7 @@
 #include "lib/hthash.h"
 #include "lib/combo_addr.h"
 #include "lib/my_bitops.h"
+#include "lib/hzp.h"
 
 /* WARNING, long prosa ahead...
  * Reading this will not make you a better whatever, surely waste
@@ -214,7 +215,7 @@
  *
  */
 
-#define LEVEL_COUNT 3
+#define LEVEL_COUNT CONREG_LEVEL_COUNT
 #define LEVEL_SHIFT 3
 #define LEVEL_SIZE (1 << LEVEL_SHIFT)
 #define LEVEL_MASK (LEVEL_SIZE - 1)
@@ -307,7 +308,7 @@ static void g2_conreg_init(void)
 	ht_seed = (uint32_t) time(NULL);
 
 	/* our ht_root carries the global master QHT */
-	if(g2_qht_reset(&ht_root.qht, 1<<20, false))
+	if(g2_qht_reset(&ht_root.qht, 1 << QHT_DEFAULT_BITS, false))
 		diedie("couldn't create global QHT");
 	/* the only qht where lazy init harms (at least ATM) */
 	memset(ht_root.qht->data, ~0, ht_root.qht->data_length);
@@ -478,7 +479,7 @@ intptr_t g2_conreg_all_hub(const union combo_addr *filter, intptr_t (*callback)(
 
 	pthread_rwlock_rdlock(&neighbour_hubs_lock);
 	list_for_each_entry(con, &neighbour_hubs, hub_list) {
-		if(!combo_addr_eq(&con->remote_host, filter))
+		if(!(filter && combo_addr_eq(&con->remote_host, filter)))
 			ret_val |= callback(con, carg);
 	}
 	pthread_rwlock_unlock(&neighbour_hubs_lock);
@@ -494,7 +495,7 @@ intptr_t g2_conreg_random_hub(const union combo_addr *filter, intptr_t (*callbac
 	pthread_rwlock_rdlock(&neighbour_hubs_lock);
 	list_for_each_entry(con, &neighbour_hubs, hub_list)
 	{
-		if(!combo_addr_eq(&con->remote_host, filter)) {
+		if(!(filter && combo_addr_eq(&con->remote_host, filter))) {
 			intptr_t ret_val = callback(con, carg);
 			pthread_rwlock_unlock(&neighbour_hubs_lock);
 			return ret_val;
@@ -575,6 +576,85 @@ void g2_conreg_cleanup(void)
 /*
  * functions for the global qht
  */
+static noinline void do_global_search_chain(struct qht_search_walk *qsw, struct g2_ht_chain *c)
+{
+	struct hlist_node *n;
+	g2_connection_t *connec;
+
+	if(pthread_rwlock_rdlock(&c->lock))
+		return;
+	/*
+	 * now no connection can vanish under us,
+	 * we can "safely" read the qht, if we check
+	 * for NULL (assume empty qht)
+	 * We race with concurrent qht updates, but thats OK.
+	 */
+	hlist_for_each_entry(connec, n, &c->list, registry)
+	{
+		/* no qht? Busy... */
+		if(!connec->qht)
+			continue;
+		/* nothing to find in empty qhts */
+		if(connec->qht->flags.reset_needed)
+			continue;
+		/* do not search hubs again */
+		if(connec->flags.upeer)
+			continue;
+
+		g2_qht_global_search_chain(qsw, connec);
+	}
+
+	pthread_rwlock_unlock(&c->lock);
+}
+
+static void do_global_search(struct qht_search_walk *qsw, struct g2_ht_bucket *b, unsigned level)
+{
+	unsigned i;
+
+	for(i = 0; i < LEVEL_SIZE; i++)
+	{
+		struct qhtable *t;
+		struct qht_search_walk lqsw;
+
+		if(level < (LEVEL_COUNT-1))
+		{
+			if(!b->d.b[i]->qht)
+				continue;
+			do {
+				mem_barrier(b->d.b[i]->qht);
+				hzp_ref(HZP_QHT, t = b->d.b[i]->qht);
+			} while(t != b->d.b[i]->qht);
+		}
+		else
+		{
+			if(!b->d.c[i]->qht)
+				continue;
+			do {
+				mem_barrier(b->d.c[i]->qht);
+				hzp_ref(HZP_QHT, t = b->d.c[i]->qht);
+			} while(t != b->d.c[i]->qht);
+		}
+
+		if(!t)
+			continue;
+
+		lqsw = *qsw;
+		/* search_bucket unrefs qht */
+		if(!g2_qht_global_search_bucket(&lqsw, t))
+			continue;
+
+		if(level < (LEVEL_COUNT-1))
+				do_global_search(&lqsw, b->d.b[i], level + 1);
+		else
+				do_global_search_chain(&lqsw, b->d.c[i]);
+	}
+}
+
+void g2_qht_global_search(struct qht_search_walk *qsw)
+{
+	do_global_search(qsw, &ht_root, 0);
+}
+
 static noinline void do_global_update_chain(struct qhtable *new_master, struct g2_ht_chain *c)
 {
 	struct qhtable *new_sub = NULL, *old_sub = NULL;
@@ -602,7 +682,7 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 		struct hlist_node *n;
 		g2_connection_t *connec;
 
-		if(g2_qht_reset(&new_sub, 1<<20, false)) {
+		if(g2_qht_reset(&new_sub, 1 << QHT_DEFAULT_BITS, false)) {
 			logg_devel("preparing a new chain qht failed?");
 			goto out_unlock;
 		}
@@ -642,14 +722,14 @@ out_unlock:
 static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_bucket *b, unsigned level)
 {
 	struct qhtable *new_sub = NULL;
-	unsigned i = 0;
 
 	if(b->dirty)
 	{
 		struct qhtable *old_sub;
+		unsigned i;
 
 // TODO: error handling
-		g2_qht_reset(&new_sub, 1<<20, false);
+		g2_qht_reset(&new_sub, 1 << QHT_DEFAULT_BITS, false);
 
 		/*
 		 * resetting the dirty state is racy,
@@ -658,7 +738,7 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 		 * more, thats not bad, as long as we don't miss an update.
 		 */
 		b->dirty = false;
-		for(; i < LEVEL_SIZE; i++) {
+		for(i = 0; i < LEVEL_SIZE; i++) {
 			if(level < (LEVEL_COUNT-1))
 					do_global_update(new_sub, b->d.b[i], level + 1);
 			else
@@ -711,13 +791,25 @@ struct qhtable *g2_qht_global_get(void)
 	struct qhtable *ret_val;
 
 retry:
+	mem_barrier(&ht_root.qht);
 	ret_val = ht_root.qht;
-	atomic_inc(&ret_val->refcnt);
-	if(unlikely(1 == atomic_read(&ret_val->refcnt))) {
+	if(unlikely(0 == atomic_inc_return(&ret_val->refcnt))) {
 		/* yikes, we zombied a qht which died some µs ago...  */
 		atomic_set(&ret_val->refcnt, 0);
 		goto retry;
 	}
+
+	return ret_val;
+}
+
+struct qhtable *g2_qht_global_get_hzp(void)
+{
+	struct qhtable *ret_val;
+
+	do {
+		mem_barrier(&ht_root.qht);
+		hzp_ref(HZP_QHT, ret_val = ht_root.qht);
+	} while(ret_val != ht_root.qht);
 
 	return ret_val;
 }

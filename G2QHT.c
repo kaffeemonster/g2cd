@@ -49,7 +49,10 @@
 #include "lib/other.h"
 /* Own includes */
 #define _G2QHT_C
+#define _NEED_G2_P_TYPE
 #include "G2QHT.h"
+#include "G2Packet.h"
+#include "G2ConRegistry.h"
 // #include "G2MainServer.h"
 #include "lib/log_facility.h"
 #include "lib/sec_buffer.h"
@@ -86,6 +89,19 @@ struct scratch
 {
 	size_t length;
 	unsigned char data[DYN_ARRAY_LEN];
+};
+
+struct search_hash_buffer
+{
+	size_t num;
+	size_t size;
+	uint32_t hashes[DYN_ARRAY_LEN];
+};
+
+struct qht_data
+{
+	struct hzp_free hzp;
+	uint8_t data[DYN_ARRAY_LEN];
 };
 
 /* Vars */
@@ -377,6 +393,22 @@ void g2_qht_clean(struct qhtable *to_clean)
 	_g2_qht_clean(to_clean, true);
 }
 
+static struct qht_data *g2_qht_data_alloc(size_t size)
+{
+	return malloc(sizeof(struct qht_data) + size);
+}
+
+static void g2_qht_data_free(uint8_t *tof)
+{
+	struct qht_data *d;
+
+	if(!tof)
+		return;
+
+	d = container_of(tof, struct qht_data, data);
+	hzp_deferfree(&d->hzp, d, free);
+}
+
 static void g2_qht_free_hzp(void *qtable)
 {
 	struct qhtable *to_free;
@@ -389,7 +421,7 @@ static void g2_qht_free_hzp(void *qtable)
 		return;
 	}
 	g2_qht_frag_free(to_free->fragments);
-	free(to_free->data);
+	g2_qht_data_free(to_free->data);
 	free(to_free);
 }
 
@@ -407,72 +439,531 @@ void g2_qht_put(struct qhtable *to_free)
 /*
  * funcs
  */
+bool g2_qht_search_prepare(void)
+{
+	struct search_hash_buffer *shb =
+		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
+
+	/*
+	 * We reuse the scratch pads as a lookaside buffer for
+	 * the search hashes.
+	 * So no QHT patches or something like that in this thread
+	 * while we process a Query.
+	 */
+
+	if(!shb)
+		return false;
+
+	shb->num  = 0;
+	shb->size = ((QHT_DEFAULT_BYTES / (CONREG_LEVEL_COUNT + 1)) - sizeof(*shb)) / sizeof(uint32_t);
+	return true;
+}
+
+static uint32_t g2_qht_hnumber(uint32_t h, unsigned bits)
+{
+	uint64_t prod = (uint64_t)h * 0x4F1BBCDCULL;
+	uint64_t hash = prod << 32;
+	hash >>= 32 + (32 - bits);
+	return (uint32_t)hash;
+}
+
+static uint32_t g2_qht_search_number_word(const char *s, size_t start, size_t len)
+{
+	uint32_t h;
+	int b;
+
+	for(h = 0, b = 0, s += start; len; len--, s++)
+	{
+		int v = *(const unsigned char *)s;
+		/*
+		 * and again f4n l10n/i18n beats us...
+		 * hashes are calced with a tolower. This totaly breaks on
+		 * UTF-8 (which is our lingua franka), and add. modern system
+		 * think it is a good idea to take our locale into account
+		 * (which is maybe some classic iso8551). So hardcode a ASCII
+		 * tolower.
+		 * Will do the right thing most of the time because it does
+		 * not break at the wrong moment (or we need to emulate a
+		 * Win CP850/CP1250 tolower *autschn*).
+		 */
+		v   = v < 'A' || v > 'Z' ? v : v + 'a' - 'A';
+		v <<= b * BITS_PER_CHAR;
+		b   = (b + 1) & 3;
+		h  ^= v;
+	}
+	/*
+	 * Hashes are calced as above in "full length".
+	 * They are then cut to hash table length.
+	 * We can store the hashes in "full length" and cut them immidiatly
+	 * before use, to accomodate for different QHT bit sizes (for every QHT
+	 * with the QHT bits property). And this is the way it is intended to
+	 * be done.
+	 * But this does not work.
+	 * We sort the full length hashes (to sort only one time), but after the
+	 * cut (due to overflow trunc.) they maybe unsorted again. And we would
+	 * have to mix bitfield rle lookups with QHT hash cuts.
+	 * All in all we do not support different QHT sizes anyway. We can not
+	 * build master tables out of different QHT sizes.
+	 * So we can stop burning cycles on every use.
+	 * Shareaza is no better here, it also cuts the hashes on generation.
+	 */
+	return g2_qht_hnumber(h, QHT_DEFAULT_BITS);
+}
+
+void g2_qht_search_add_word(const char *s, size_t start, size_t len)
+{
+	struct search_hash_buffer *shb =
+		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
+
+	if(!shb || shb->num >= shb->size)
+		return;
+	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
+}
+
+// TODO: some smartass defined those urn strings as wchar???
+/*
+ * but it is totaly obfuscated if you are not a C++ pro and win accolyte
+ * (e.g. me) if they end up as simple 8-bit strings. I not, we are fucked
+ * up. Our hashes will be wrong (missing zeros, and hint: Win uses ucs16).
+ */
+static char *to_base16(const unsigned char *h, char *wptr, unsigned num)
+{
+	const char base16c[] = "0123456789abcdef";
+	unsigned i;
+	for(i = 0; i < num; i++) {
+		*wptr++ = base16c[h[i] / 16];
+		*wptr++ = base16c[h[i] % 16];
+	}
+	return wptr;
+}
+
+#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
+static char *to_base32(const unsigned char *h, char *wptr, unsigned num)
+{
+	const char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
+	unsigned b32chars = B32_LEN(num), i = 0, ch = 0;
+	int shift = 11;
+
+	do
+	{
+		*wptr++ = base32c[((h[i] * 256 + h[i + 1]) >> shift) & 0x1F];
+		shift  -= 5;
+		if(shift <= 0) {
+			shift += BITS_PER_CHAR;
+			i++;
+		}
+	} while(++ch < b32chars - 1);
+	*wptr++ = base32c[(h[num - 1] << (b32chars * 5 % BITS_PER_CHAR)) & 0x1F];
+	return wptr;
+}
+
+#define URN_SHA1 "urn:sha1:"
+void g2_qht_search_add_sha1(const unsigned char *h)
+{
+	char ih[sizeof(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
+	char *wptr = strplitcpy(ih, URN_SHA1);
+	wptr = to_base32(h, wptr, 20);
+	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+#define URN_TTR "urn:tree:tiger/:"
+void g2_qht_search_add_ttr(const unsigned char *h)
+{
+	char ih[sizeof(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
+	char *wptr = strplitcpy(ih, URN_TTR);
+	wptr = to_base32(h, wptr, 24);
+	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+#define URN_ED2K "urn:ed2khash:"
+void g2_qht_search_add_ed2k(const unsigned char *h)
+{
+	char ih[sizeof(URN_ED2K) + 16 * 2]; /* hex encoding */
+	char *wptr = strplitcpy(ih, URN_ED2K);
+	wptr = to_base16(h, wptr, 16);
+	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+#define URN_BTH "urn:btih:"
+void g2_qht_search_add_bth(const unsigned char *h)
+{
+	char ih[sizeof(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
+	char *wptr = strplitcpy(ih, URN_BTH);
+	wptr = to_base32(h, wptr, 20);
+	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+#define URN_MD5 "urn:md5:"
+void g2_qht_search_add_md5(const unsigned char *h)
+{
+	char ih[sizeof(URN_MD5) + 16 * 2]; /* hex encoding */
+	char *wptr = strplitcpy(ih, URN_MD5);
+	wptr = to_base16(h, wptr, 16);
+	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t dn_len, void *data, bool had_urn, bool hubs)
+{
+	struct search_hash_buffer *shb =
+		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
+
+	if(!shb)
+		return false;
+
+	if(!had_urn && ((metadata && metadata_len) || (dn && dn_len)))
+	{
+		/*
+		 * metadata (XML) and dn (Desciptive Search lang) have to be groked
+		 * and keywords have to be extracted to build hashes to match against
+		 * the QHT.
+		 * Keyword extraction basically means: after a XML/DN-foo strip off do
+		 * word spliting.
+		 *
+		 * If we would party like it's 1981 we would strtok and be done with it.
+		 *
+		 * Unfortunatly it is "28 Years Later", zombies have taken over control
+		 * and type in searches in their own language.
+		 * And word splitting is a PITA on languages from Asia. Other languages
+		 * also have their bumps (e.g. arabic: articels ligature into the word).
+		 * Did i mention BIDI, in which direction should we take hashes?
+		 *
+		 * Since we get our stuff as UTF-8, we can express everything that is
+		 * in UNICODE, which should be anything on this Planet (mostly...).
+		 * But thats just the transmission. It does not help us at groking
+		 * the content.
+		 *
+		 * Shareaza does the most simple aprouch:
+		 * If it is some Asian language, do char by char hashes, else split
+		 * like 1981.
+		 * But this is all ... basic, what about to try to do better when
+		 * faced with hiragana/katakana or esp. hangul instead of
+		 * hanzi/kanji/hanji? Or Arabic anyone?
+		 * And for this we have to detect Asian language. Shareaza uses
+		 * something from the winapi, which seems to be there (as in: if
+		 * your win is new enough), always? (in every win locale?)
+		 *
+		 * Where we hit the next big problem.
+		 * There is nothing adequate for this in the Std.-libs. All this
+		 * wchar_t foo is still locale dependent. You can put every
+		 * character in there, but you can only do an isspace&friends for the
+		 * stuff in your locale. To top it off, they didn't feel like poluting
+		 * the isfoo() space any more, so no iskanji(). Instead they switched
+		 * to a genertic iswctype() which needs a lookup key you have to aquire.
+		 * But which keys you can generate besides the classic xdigit, alnum
+		 * etc. is not defined. *sigh*
+		 * And not every key works in every locale. So to get the "jkanji"
+		 * key (which may exist, or maybe not) you have to be an a japanese
+		 * locale. We are still talking about wchar_t here...
+		 * Great tennis!
+		 * Switching trough 4 locales (with locking, multithreading is a GNU
+		 * extension) for every character, which may not be installed (do you
+		 * have the korean locale on your machine?)...
+		 *
+		 * l10n, fuck yeah!
+		 *
+		 * UNICODE does define a generic word split algo. (TR-28)
+		 * But it is just a glimpse at the problem (only basic splitting).
+		 * And for this we need to categorize the characters we get in a UNICODE
+		 * sense.
+		 * Where the fun stops.
+		 *
+		 * So other libs?
+		 * ICU is the solution, if your problem is to few dependencies (C bindings,
+		 * but C++ core, besides: 14 Meg source?? WTF?).
+		 * glib is also a heavy dep, and only has some basic unicode stuff.
+		 * gnulib has a unicode word splitter since Feb.2009, but GPL 3, thanks FSF!
+		 *
+		 * And the basic Problem with chinese and friends remains. If you do not
+		 * take a dict at hand, you split garbage and try to compensate by processing
+		 * power. E.g. computational indexing in chinese, if not using a dict, uses
+		 * n-grams meaning to use every combination in a n-wide sliding window.
+		 * With n = 2 (because the avarge chinese word has 1.54 chars...) this
+		 * is quite successful.
+		 *
+		 * At the end of the day this does not help us. We have to create hashes
+		 * like Shareaza or it will not blend^Wmatch the hash.
+		 * And for this we have to create a bunch of code ourself.
+		 *
+		 * So ATM left out.
+		 */
+		char *str_buf = (char *)qht_get_scratch2((metadata_len > dn_len ? metadata_len : dn_len) + 10);
+		if(metadata && metadata_len)
+		{
+			memcpy(str_buf, metadata, metadata_len);
+			str_buf[metadata_len] = '\0';
+// TODO: grok metadata
+		}
+		if(dn && dn_len)
+		{
+			memcpy(str_buf, dn, dn_len);
+			str_buf[dn_len] = '\0';
+// TODO: grok dn
+			shb->hashes[shb->num++] = g2_qht_search_number_word(str_buf, 0, dn_len);
+		}
+	}
+
+	shb->num = introsort_u32(shb->hashes, shb->num);
+	if(!shb->num)
+		return false;
+
+	return g2_packet_search_finalize(shb->hashes, shb->num, data, hubs);
+}
+
+struct hub_match_carg
+{
+	uint32_t *hashes;
+	size_t num;
+	void *data;
+};
+
+static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
+{
+	struct hub_match_carg *rdata = carg;
+	struct qhtable *table;
+	struct qht_data *qd;
+
+	do {
+		mem_barrier(con->qht);
+		hzp_ref(HZP_QHT, table = con->qht);
+	} while(table != con->qht);
+
+	if(!table)
+		return 0;
+
+	if(table->flags.reset_needed)
+		goto out;
+
+	do {
+		mem_barrier(container_of(table->data, struct qht_data, data));
+		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));
+	} while(qd != container_of(table->data, struct qht_data, data));
+
+	if(!table->data)
+		goto out_unref;
+
+	if(COMP_RLE == table->compressed) {
+		if(bitfield_lookup(rdata->hashes, rdata->num, table->data, table->data_length))
+			goto out_match;
+	}
+	else
+	{
+		size_t i;
+		for(i = 0; i < rdata->num; i++) {
+			uint32_t n = rdata->hashes[i];
+			if(n > table->entries)
+				break;
+			if(!(table->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR))))
+				goto out_match;
+		}
+	}
+
+out_unref:
+	hzp_unref(HZP_QHTDAT);
+out:
+	hzp_unref(HZP_QHT);
+	return g2_packet_hub_qht_done(con, rdata->data);
+out_match:
+	hzp_unref(HZP_QHTDAT);
+	hzp_unref(HZP_QHT);
+	return g2_packet_hub_qht_match(con, rdata->data);
+}
+
+void g2_qht_match_hubs(uint32_t hashes[], size_t num, void *data)
+{
+	struct hub_match_carg rdata = { hashes, num, data };
+	g2_conreg_all_hub(NULL, hub_match_callback, &rdata);
+}
+
+void g2_qht_global_search_chain(struct qht_search_walk *qsw, void *arg)
+{
+	g2_connection_t *con = arg;
+	struct qhtable *table;
+	struct qht_data *qd;
+	size_t entries;
+
+	do {
+		mem_barrier(con->qht);
+		hzp_ref(HZP_QHT, table = con->qht);
+	} while(table != con->qht);
+
+	if(!table)
+		return;
+
+	if(table->flags.reset_needed)
+		goto out;
+
+	entries = table->entries;
+	do {
+		mem_barrier(container_of(table->data, struct qht_data, data));
+		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));
+	} while(qd != container_of(table->data, struct qht_data, data));
+
+	if(!table->data)
+		goto out_unref;
+
+	if(COMP_RLE == table->compressed) {
+		if(bitfield_lookup(qsw->hashes, qsw->num, table->data, table->data_length))
+			goto out_match;
+	}
+	else
+	{
+		size_t i, num = qsw->num;
+		uint32_t *hashes = qsw->hashes;
+		for(i = 0; i < num; i++) {
+			uint32_t n = hashes[i];
+			if(n > entries)
+				break;
+			if(!(qd->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR))))
+				goto out_match;
+		}
+	}
+
+out_unref:
+	hzp_unref(HZP_QHTDAT);
+out:
+	hzp_unref(HZP_QHT);
+	return;
+
+out_match:
+	hzp_unref(HZP_QHTDAT);
+	hzp_unref(HZP_QHT);
+	g2_packet_leaf_qht_match(con, qsw->data);
+}
+
+bool g2_qht_global_search_bucket(struct qht_search_walk *qsw, struct qhtable *t)
+{
+	struct qht_data *qd;
+	uint32_t *hashes;
+	size_t i, j, entries, num;
+	bool ret_val = false;
+
+	entries = t->entries;
+	do {
+		mem_barrier(container_of(t->data, struct qht_data, data));
+		hzp_ref(HZP_QHTDAT, qd = container_of(t->data, struct qht_data, data));
+	} while(qd != container_of(t->data, struct qht_data, data));
+
+	if(!t->data || COMP_RLE == t->compressed)
+		goto out_unref;
+
+	num = qsw->num;
+	hashes = qsw->hashes;
+	/*
+	 * condense hashes to matches
+	 * Dirty trick:
+	 * While setup we made sure there is enough room for
+	 * matched hashes at the end CONREG_LEVELS deep.
+	 */
+	for(i = 0, j = num; i < num; i++)
+	{
+		uint32_t n = hashes[i];
+		if(n > entries)
+			break;
+		if(!(qd->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR))))
+			hashes[j++] = n;
+	}
+	/* did something match */
+	if(j - num)
+	{
+		qsw->hashes = &hashes[num];
+		qsw->num = j - num;
+		ret_val = true;
+	}
+
+out_unref:
+	hzp_unref(HZP_QHTDAT);
+	hzp_unref(HZP_QHT);
+	return ret_val;
+}
+
+void g2_qht_match_leafs(uint32_t hashes[], size_t num, void *data)
+{
+	struct qht_data *qd;
+	struct qhtable *master_qht;
+	size_t i, j, entries;
+
+	master_qht = g2_qht_global_get_hzp();
+	if(!master_qht)
+		return;
+
+	/* should not happen */
+	if(master_qht->flags.reset_needed)
+		goto out;
+
+	entries = master_qht->entries;
+	do {
+		mem_barrier(container_of(master_qht->data, struct qht_data, data));
+		hzp_ref(HZP_QHTDAT, qd = container_of(master_qht->data, struct qht_data, data));
+	} while(qd != container_of(master_qht->data, struct qht_data, data));
+
+	if(!master_qht->data || COMP_RLE == master_qht->compressed)
+		goto out_unref;
+
+	/* condense hashes to matches */
+	for(i = 0, j = 0; i < num; i++)
+	{
+		uint32_t n = hashes[i];
+		if(n > entries)
+			break;
+		if(!(qd->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR))))
+			hashes[j++] = n;
+	}
+	num = j;
+	/* let the master qht go */
+	hzp_unref(HZP_QHTDAT);
+	hzp_unref(HZP_QHT);
+
+	if(num) {
+		struct qht_search_walk qsw = {.hashes = hashes, .num = num, .data = data};
+		g2_qht_global_search(&qsw);
+	}
+	return;
+
+out_unref:
+	hzp_unref(HZP_QHTDAT);
+out:
+	hzp_unref(HZP_QHT);
+}
+
 static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_size)
 {
-	uint8_t *ndata = qht_get_scratch1(1 << 20); /* try to not realloc scratch */
+	uint8_t *ndata = qht_get_scratch1(QHT_DEFAULT_BYTES); /* try to not realloc scratch */
 	ssize_t res;
-	uint8_t *t_data;
+	struct qht_data *t_data;
 	void *t_x = NULL;
+	enum g2_qht_comp tcomp;
 
 	res = bitfield_encode(ndata, QHT_RLE_MAXSIZE, data, qht_size);
 	if(res < 0)
 	{
 		logg_develd("QHT %p could not be compressed!\n", table);
-		t_data = malloc(qht_size);
-		if(!t_data) {
-			logg_develd("could not allocate memory for not compressable QHT: %zu\n", qht_size);
-			return false;
-		}
-		memcpy(t_data, data, qht_size);
-		if(table->data)
-		{
-			t_x = atomic_px(t_x, (atomicptr_t *)&table->data);
-			if(table->data_length >= sizeof(struct hzp_free))
-				hzp_deferfree(t_x, t_x, free);
-			else
-				free(t_x);
-		}
-		table->compressed = COMP_NONE;
-		table->data_length = qht_size;
-		t_x = atomic_px(t_data, (atomicptr_t *)&table->data);
-		if(t_x)
-		{
-			if(table->data_length >= sizeof(struct hzp_free))
-				hzp_deferfree(t_x, t_x, free);
-			else
-				free(t_x);
-		}
+		tcomp = COMP_NONE;
+		res = qht_size;
+		ndata = data;
 	}
 	else
 	{
 		logg_develd("QHT %p compressed - 1:%u.%u\n", table,
 		            (unsigned)(qht_size / res),
 		            (unsigned)(((qht_size % res) * 1000) / res));
-		t_data = malloc(res);
-		if(!t_data) {
-			logg_develd("could not allocate memory for compressable QHT: %zu\n", res);
-			return false;
-		}
-		memcpy(t_data, ndata, res);
-		if(table->data)
-		{
-			t_x = atomic_px(t_x, (atomicptr_t *)&table->data);
-			if(table->data_length >= sizeof(struct hzp_free))
-				hzp_deferfree(t_x, t_x, free);
-			else
-				free(t_x);
-// TODO: use after free is possible here
-		}
-		table->compressed = COMP_RLE;
-		table->data_length = res;
-		t_x = atomic_px(t_data, (atomicptr_t *)&table->data);
-		if(t_x) {
-			if(table->data_length >= sizeof(struct hzp_free))
-				hzp_deferfree(t_x, t_x, free);
-			else
-				free(t_x);
-		}
+		tcomp = COMP_RLE;
 	}
+
+	t_data = g2_qht_data_alloc(res);
+	if(!t_data) {
+		logg_develd("could not allocate memory for %s compressable QHT: %zu\n",
+		            COMP_NONE == tcomp ? "not" : "", res);
+		return false;
+	}
+	memcpy(t_data->data, ndata, res);
+	if(table->data) {
+		t_x = atomic_px(t_x, (atomicptr_t *)&table->data);
+		g2_qht_data_free(t_x);
+	}
+	table->compressed = tcomp;
+	table->data_length = res;
+	t_x = atomic_px(t_data->data, (atomicptr_t *)&table->data);
+	g2_qht_data_free(t_x);
 	return true;
 }
 
@@ -527,10 +1018,10 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 			}
 
 			/* fix allocations... done, TLS rocks ;) */
-			zpad->z.next_out = tmp_ptr;
+			zpad->z.next_out  = tmp_ptr;
 			zpad->z.avail_out = qht_size;
-			zpad->z.next_in = frag->data;
-			zpad->z.avail_in = frag->length;
+			zpad->z.next_in   = frag->data;
+			zpad->z.avail_in  = frag->length;
 			frag = frag->next;
 
 			if(Z_OK != inflateInit(&zpad->z)) {
@@ -545,7 +1036,7 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 				{
 					if(!frag)
 						break;
-					zpad->z.next_in = frag->data;
+					zpad->z.next_in  = frag->data;
 					zpad->z.avail_in = frag->length;
 					frag = frag->next;
 				} else if(Z_STREAM_END != res) {
@@ -861,6 +1352,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 	 */
 	tmp_table = *ttable;
 	*ttable = NULL;
+	barrier();
 	if(!tmp_table)
 	{
 		tmp_table = malloc(sizeof(*tmp_table));
@@ -877,30 +1369,18 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 	{
 		if(tmp_table->data_length < w_size)
 		{
-			uint8_t *ttable_data;
+			struct qht_data *ttable_data;
+
 			if(atomic_read(&tmp_table->refcnt) > 1)
 				logg_develd("WARNING: reset on qht with refcnt > 1!! %p %i\n", (void*)tmp_table, atomic_read(&tmp_table->refcnt));
-			{
-#ifdef HAVE_MALLOC_USABLE_SIZE
-				size_t block_size = malloc_usable_size(tmp_table->data);
-				/*
-				 * reallocating may save us a big cycle through the allocator
-				 * because of usable slack behind allocation, but if this fails
-				 * nothing is gained and copying like the std.func is mandated
-				 * to do makes it much worse in our case, because we want to
-				 * reset.
-				 * We can try to avoid it, but it is system dependent...
-				 */
-				if(block_size < w_size) {
-					if((ttable_data = malloc(w_size)))
-						free(tmp_table->data);
-				} else
-#endif
-				ttable_data = realloc(tmp_table->data, w_size);
-			}
+
+			ttable_data = g2_qht_data_alloc(w_size);
 			if(ttable_data) {
-				tmp_table->data = ttable_data;
+				uint8_t *ptr = tmp_table->data;
+				barrier();
+				tmp_table->data = ttable_data->data;
 				tmp_table->data_length = w_size;
+				g2_qht_data_free(ptr);
 			} else {
 				logg_errno(LOGF_DEBUG, "reallocating qh-table data");
 				qht_ent = tmp_table->entries;
@@ -908,9 +1388,11 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 			}
 		}
 	} else if(tmp_table->data) {
-		hzp_deferfree((struct hzp_free *)tmp_table->data, tmp_table->data, free);
+		void *ptr  = tmp_table->data;
+		barrier();
 		tmp_table->data = NULL;
 		tmp_table->data_length = 0;
+		g2_qht_data_free(ptr);
 	}
 
 	_g2_qht_clean(tmp_table, true);

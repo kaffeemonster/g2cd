@@ -670,6 +670,44 @@ static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 	return true;
 }
 
+static bool fill_d_packet(g2_packet_t *d, union combo_addr *taddr, uint16_t leafs)
+{
+	size_t len, old_pos_in;
+	uint16_t port;
+
+	len  = AF_INET == taddr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len += sizeof(port) + sizeof(uint16_t);
+
+	if(!g2_packet_steal_data_space(d, len))
+		return false;
+
+	d->type = PT_D;
+	d->big_endian = HOST_IS_BIGENDIAN;
+
+	old_pos_in = d->data_trunk.pos;
+	/* We Assume network byte order for the IP */
+	if(AF_INET == taddr->s_fam) {
+		put_unaligned(taddr->in.sin_addr.s_addr,
+		              (uint32_t *)buffer_start(d->data_trunk));
+		d->data_trunk.pos += sizeof(uint32_t);
+	} else {
+		memcpy(buffer_start(d->data_trunk),
+		       &taddr->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+		d->data_trunk.pos += INET6_ADDRLEN;
+	}
+
+	/* and use host byte order for the port and leaf count */
+	port = combo_addr_port(taddr);
+	port = ntohs(port);
+	put_unaligned(port, (uint16_t *)(buffer_start(d->data_trunk)));
+	d->data_trunk.pos += sizeof(port);
+
+	put_unaligned(leafs, (uint16_t *)(buffer_start(d->data_trunk)));
+	d->data_trunk.pos = old_pos_in;
+
+	return true;
+}
+
 static bool g2_packet_has_TO(g2_packet_t *src, uint8_t **guid)
 {
 	char *data;
@@ -1107,7 +1145,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 
 	/* time to send a packet again? */
 	if(local_time_now <
-	   (parg->connec->u.send_stamps.KHL + (KHL_TIMEOUT * parg->connec->flags.upeer ? 1 : 3)))
+	   (parg->connec->u.handler.send_stamps.KHL + (KHL_TIMEOUT * parg->connec->flags.upeer ? 1 : 3)))
 		return ret_val;
 
 	/* build package */
@@ -1148,7 +1186,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 // TODO: fill in our neighbouring hubs
 
 	g2_packet_add2target(khl, parg->target, parg->target_lock);
-	parg->connec->u.send_stamps.KHL = local_time_now;
+	parg->connec->u.handler.send_stamps.KHL = local_time_now;
 	return true;
 out_fail:
 	g2_packet_free(ts);
@@ -1418,7 +1456,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 
 	connec->flags.last_data_active = true;
 	/* time to send a packet again? */
-	if(unlikely(local_time_now < (connec->u.send_stamps.LNI + (LNI_TIMEOUT))))
+	if(unlikely(local_time_now < (connec->u.handler.send_stamps.LNI + (LNI_TIMEOUT))))
 		return ret_val;
 
 	/* build package */
@@ -1474,7 +1512,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	lni->big_endian = HOST_IS_BIGENDIAN;
 
 	g2_packet_add2target(lni, parg->target, parg->target_lock);
-	parg->connec->u.send_stamps.LNI = local_time_now;
+	parg->connec->u.handler.send_stamps.LNI = local_time_now;
 
 	return true;
 out_fail:
@@ -1510,6 +1548,7 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 		if(4 <= rem)
 			get_unaligned_endian(max_leaf, (uint16_t *) (buffer_start(source->data_trunk)+2), source->big_endian);
 
+		connec->u.handler.leaf_count = akt_leaf;
 		logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
 				connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
 	}
@@ -1602,9 +1641,9 @@ static intptr_t PI_callback(g2_connection_t *con, void *carg)
 	 * to add a child packet to a raw packet. We may loose
 	 * unknown/untypical childs by this.
 	 */
-	pi    = g2_packet_alloc();
-	udp   = g2_packet_alloc();
-	relay = g2_packet_alloc();
+	pi    = g2_packet_calloc();
+	udp   = g2_packet_calloc();
+	relay = g2_packet_calloc();
 
 	if(!(pi && udp && relay))
 		goto out_fail;
@@ -1680,7 +1719,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 	/* tcp connection and not a relay request? */
 	if(connec && !rdata.addr_valid) {
 		/* check if time to send a packet again? */
-		if(local_time_now < (connec->u.send_stamps.PI + (PI_TIMEOUT)))
+		if(local_time_now < (connec->u.handler.send_stamps.PI + (PI_TIMEOUT)))
 			goto out_ok;
 	}
 
@@ -1718,7 +1757,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 
 		g2_packet_add2target(po, parg->target, parg->target_lock);
 		if(connec)
-			connec->u.send_stamps.PI = local_time_now;
+			connec->u.handler.send_stamps.PI = local_time_now;
 		ret_val = true;
 	}
 
@@ -1764,21 +1803,258 @@ struct Q2_data
 	size_t metadata_len;
 	char *dn;
 	size_t dn_len;
+	uint8_t *s_guid;
+	g2_packet_t *qa;
 	bool had_urn;
 	bool udp_na_valid;
 	bool qk_valid;
 };
 
+intptr_t g2_packet_leaf_qht_match(g2_connection_t *con, void *data)
+{
+	struct ptype_action_args *parg = data;
+	g2_packet_t *t, *source = parg->source;
+
+	t = g2_packet_clone(source);
+	if(!t)
+		return 0;
+
+	/* if we have a datatrunk, inc refcnt */
+	if(source->data_trunk_is_freeable) {
+		struct packet_data_store *pds =
+			container_of(source->data_trunk.data,
+			             struct packet_data_store, data);
+		atomic_inc(&pds->refcnt);
+	} else {
+		/* data in packet buffer? Adjust */
+		if(source->data_trunk.data >= source->pd.out &&
+		   source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)]) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/*
+			 * data still lingers in the recv buff, we have to copy it
+			 * this should not happen, higher levels should have fixed things
+			 */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				return 0;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_handler_con_mark_write(t, con);
+	return 0;
+}
+
+intptr_t g2_packet_hub_qht_match(g2_connection_t *con, void *data)
+{
+	struct ptype_action_args *parg = data;
+	g2_packet_t *t, *source = parg->source;
+
+	t = g2_packet_clone(source);
+	if(!t)
+		goto out;
+
+	/* if we have a datatrunk, inc refcnt */
+	if(source->data_trunk_is_freeable) {
+		struct packet_data_store *pds =
+			container_of(source->data_trunk.data,
+			             struct packet_data_store, data);
+		atomic_inc(&pds->refcnt);
+	} else {
+		/* data in packet buffer? Adjust */
+		if(source->data_trunk.data >= source->pd.out &&
+		   source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)]) {
+			ptrdiff_t diff = source->data_trunk.data - source->pd.out;
+			t->data_trunk.data = &t->pd.out[diff];
+		}
+		else
+		{
+			/*
+			 * data still lingers in the recv buff, we have to copy it
+			 * this should not happen, higher levels should have fixed things
+			 */
+			if(!g2_packet_steal_data_space_lit(t, buffer_remaining(source->data_trunk))) {
+				g2_packet_free(t);
+				goto out;
+			}
+			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			       buffer_remaining(source->data_trunk));
+		}
+	}
+	t->is_literal = true;
+	g2_handler_con_mark_write(t, con);
+out:
+	return g2_packet_hub_qht_done(con, data);
+}
+
+intptr_t g2_packet_hub_qht_done(g2_connection_t *con, void *data)
+{
+	struct ptype_action_args *parg = data;
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *d = g2_packet_calloc();
+
+	if(!d)
+		return 0;
+
+	if(fill_d_packet(d, &con->sent_addr, con->u.handler.leaf_count))
+		list_add_tail(&d->list, &rdata->qa->children);
+	else
+		g2_packet_free(d);
+
+	return 0;
+}
+
+bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool hubs)
+{
+	struct ptype_action_args *parg = data;
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *qa, *d, *ts, *source = parg->source;
+	union combo_addr *our_addr = NULL, backup_addr;
+
+	qa = g2_packet_calloc();
+	d  = g2_packet_calloc();
+	ts = g2_packet_calloc();
+
+	if(!(qa && d && ts))
+		return false;
+
+	if(parg->connec)
+	{
+		socklen_t sin_size = sizeof(backup_addr);
+		/*
+		 * get our ip the remote host connected to from
+		 * our socket handle
+		 */
+		if(unlikely(getsockname(parg->connec->com_socket, casa(&backup_addr), &sin_size))) {
+			logg_errno(LOGF_DEBUG, "getting local addr of socket");
+			our_addr = AF_INET == parg->connec->remote_host.s_fam ?
+			           &server.settings.bind.ip4 : &server.settings.bind.ip6;
+		}
+		else
+			our_addr = &backup_addr;
+	}
+	else
+		our_addr = parg->dst_addr;
+	if(!our_addr)
+		return false;
+
+	if(source->data_trunk_is_freeable) {
+	/*
+	 * We already have a datatrunk, thats fine, but we have to
+	 * remove it later from the source
+	 */
+	} else {
+		if(source->data_trunk.data >= source->pd.out &&
+		   source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)]) {
+			/* the data is in the packet buffer, thats also fine */
+		}
+		else
+		{
+			struct pointer_buff pb = source->data_trunk;
+			/* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space_lit(source, buffer_remaining(pb)))
+				goto out_fail_free_all;
+			memcpy(buffer_start(source->data_trunk), buffer_start(pb),
+			       buffer_remaining(pb));
+		}
+	}
+
+	if(!fill_d_packet(d, our_addr, atomic_read(&server.status.act_connection_sum)))
+		goto out_fail_free_all;
+
+	ts->type   = PT_TS;
+	/* should not fail, we should have enough space */
+	if(likely(g2_packet_steal_data_space(ts, sizeof(time_t))))
+	{
+		time_t now = local_time_now;
+		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
+		ts->big_endian = HOST_IS_BIGENDIAN;
+	}
+	else
+		goto out_fail_free_all;
+
+	if(!g2_packet_steal_data_space(qa, 16))
+		goto out_fail_free_all;
+
+	list_add_tail(&ts->list, &qa->children);
+	list_add_tail(&d->list, &qa->children);
+	qa->type = PT_QA;
+	qa->big_endian = HOST_IS_BIGENDIAN;
+	memcpy(buffer_start(qa->data_trunk), rdata->s_guid, 16);
+
+	/*
+	 * Do the search!
+	 */
+	rdata->qa = qa;
+	if(hubs)
+		g2_qht_match_hubs(hashes, num, data);
+	g2_qht_match_leafs(hashes, num, data);
+
+// TODO: add some search hubs
+
+	/* if our source had a buffer, remove it now */
+	if(source->data_trunk_is_freeable) {
+		struct packet_data_store *pds =
+			container_of(source->data_trunk.data,
+			             struct packet_data_store, data);
+		source->data_trunk.data = NULL;
+		source->data_trunk.pos = source->data_trunk.limit = source->data_trunk.capacity = 0;
+		source->data_trunk_is_freeable = false;
+		if(atomic_dec_test(&pds->refcnt))
+			free(pds);
+	}
+
+	if(parg->connec)
+	{
+		if(rdata->udp_na_valid)
+			goto do_it_by_udp;
+		else
+			g2_packet_add2target(qa, parg->target, parg->target_lock);
+	}
+	else
+	{
+		if(!combo_addr_eq(&rdata->udp_na, parg->src_addr))
+		{
+			struct list_head answer;
+do_it_by_udp:
+			INIT_LIST_HEAD(&answer);
+			list_add_tail(&qa->list, &answer);
+			g2_udp_send(&rdata->udp_na, &answer);
+			g2_packet_free(qa);
+			return false;
+		}
+		else
+			g2_packet_add2target(qa, parg->target, parg->target_lock);
+	}
+	return true;
+
+out_fail_free_all:
+	g2_packet_free(d);
+	g2_packet_free(ts);
+	g2_packet_free(qa);
+	return false;
+}
+
 static bool handle_Q2(struct ptype_action_args *parg)
 {
 	struct Q2_data rdata;
 	struct ptype_action_args cparg;
+	size_t old_pos = parg->source->data_trunk.pos;
 	bool ret_val = false, keep_decoding;
 
 	if(!parg->source->is_compound)
 		return ret_val;
 
-	memset(&rdata.metadata, 0, offsetof(struct Q2_data, metadata) - offsetof(struct Q2_data, qk_valid) + 1);
+	if(!g2_qht_search_prepare())
+		return ret_val;
+
+	memset(&rdata.metadata, 0, sizeof(struct Q2_data) - offsetof(struct Q2_data, metadata));
 	cparg = *parg;
 	cparg.opaque = &rdata;
 	do
@@ -1803,6 +2079,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 		return ret_val;
 	}
 
+	rdata.s_guid = (uint8_t *)buffer_start(parg->source->data_trunk);
 	if(parg->connec)
 	{
 		parg->connec->flags.last_data_active = true;
@@ -1812,19 +2089,18 @@ static bool handle_Q2(struct ptype_action_args *parg)
 		   !combo_addr_eq_ip(&parg->connec->remote_host, &rdata.udp_na))
 			return ret_val;
 
-		if(g2_guid_add((uint8_t *)buffer_start(parg->source->data_trunk),
+		if(g2_guid_add(rdata.s_guid,
 		               rdata.udp_na_valid ? &rdata.udp_na : &parg->connec->remote_host,
 		               local_time_now, GT_QUERY))
 			return ret_val;
 
-		if(parg->connec->flags.upeer)
-		{
-// TODO: forward query to any match in the QHT, leafs only
-		}
-		else
-		{
-// TODO: forward query to any match in the QHT, leaf & hub
-		}
+		/* rewind buffer for forwarding */
+		parg->source->data_trunk.pos = old_pos;
+		parg->opaque = &rdata;
+		ret_val =
+			g2_qht_search_drive(rdata.metadata, rdata.metadata_len, rdata.dn,
+			                    rdata.dn_len, parg, rdata.had_urn,
+			                    !parg->connec->flags.upeer); /* leafs only or hubs & leafs */
 	}
 	else
 	{
@@ -1836,25 +2112,19 @@ static bool handle_Q2(struct ptype_action_args *parg)
 			return ret_val;
 		}
 
-		if(g2_guid_add((uint8_t *)buffer_start(parg->source->data_trunk),
-		               &rdata.udp_na, local_time_now, GT_QUERY))
+		if(g2_guid_add(rdata.s_guid, &rdata.udp_na, local_time_now, GT_QUERY))
 		{
 			/* already in the cache */
 			g2_packet_t qa, d;
 			struct list_head answer;
 			union combo_addr *our_addr;
-			size_t len, old_pos;
-			uint16_t port, leafs;
 
 			our_addr = parg->dst_addr;
 			if(!our_addr)
 				return ret_val;
 
-			len  = AF_INET == our_addr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
-			len += sizeof(port) + sizeof(uint16_t);
-
 			g2_packet_init_on_stack(&d);
-			if(!g2_packet_steal_data_space(&d, len))
+			if(!fill_d_packet(&d, our_addr, 0))
 				return ret_val;
 
 			g2_packet_init_on_stack(&qa);
@@ -1862,31 +2132,6 @@ static bool handle_Q2(struct ptype_action_args *parg)
 				g2_packet_free(&d);
 				return ret_val;
 			}
-
-			d.type = PT_D;
-			d.big_endian = HOST_IS_BIGENDIAN;
-
-			old_pos = d.data_trunk.pos;
-			/* We Assume network byte order for the IP */
-			if(AF_INET == our_addr->s_fam) {
-				put_unaligned(our_addr->in.sin_addr.s_addr,
-				              (uint32_t *)buffer_start(d.data_trunk));
-				d.data_trunk.pos += sizeof(uint32_t);
-			} else {
-				memcpy(buffer_start(d.data_trunk),
-				       &our_addr->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
-				d.data_trunk.pos += INET6_ADDRLEN;
-			}
-
-			/* and use host byte order for the port and leaf count */
-			port = combo_addr_port(our_addr);
-			port = ntohs(port);
-			put_unaligned(port, (uint16_t *)(buffer_start(d.data_trunk)));
-			d.data_trunk.pos += sizeof(port);
-
-			leafs = 0;
-			put_unaligned(leafs, (uint16_t *)(buffer_start(d.data_trunk)));
-			d.data_trunk.pos = old_pos;
 
 			list_add_tail(&d.list, &qa.children);
 			qa.type = PT_QA;
@@ -1899,7 +2144,13 @@ static bool handle_Q2(struct ptype_action_args *parg)
 			g2_udp_send(&rdata.udp_na, &answer);
 			return ret_val;
 		}
-// TODO: forward query to any match in the QHT, leaf & hub
+
+		/* rewind buffer for forwarding */
+		parg->source->data_trunk.pos = old_pos;
+		parg->opaque = &rdata;
+		ret_val =
+			g2_qht_search_drive(rdata.metadata, rdata.metadata_len, rdata.dn,
+			                    rdata.dn_len, parg, rdata.had_urn, true); /* hubs & leafs */
 	}
 
 	return ret_val;
@@ -1980,6 +2231,7 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	struct Q2_data *rdata = parg->opaque;
 	g2_packet_t *source = parg->source;
 	char *urn = buffer_start(source->data_trunk);
+	unsigned char *hash;
 	size_t remaining = buffer_remaining(source->data_trunk);
 	size_t len;
 
@@ -1997,9 +2249,10 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	if(unlikely(20 != remaining && /* sha1 && btih */
 	            44 != remaining && /* bp */
 	            24 != remaining && /* ttr */
-	            16 != remaining))   /* md5 && ed2k */
+	            16 != remaining))  /* md5 && ed2k */
 		return false;
 
+	hash = (unsigned char *)buffer_start(source->data_trunk);
 	if(likely(len <= 4))
 	{
 		uint32_t type = 0;
@@ -2016,32 +2269,22 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 			type &= (uint32_t)0xFFFFFFFF >> ((4 - len) * 8);
 
 		if(MAKE_TYPE('s', 'h', 'a', '1') == type && 20 == remaining)
-		{
-// TODO: handle urns
-			barrier();
-		}
+			g2_qht_search_add_sha1(hash);
 		else if(MAKE_TYPE('b', 'p',  0,   0 ) == type && 44 == remaining)
 		{
 handle_bitprint:
-			barrier();
+			g2_qht_search_add_sha1(hash);
+			hash += 20;
+			g2_qht_search_add_ttr(hash);
 		}
 		else if(MAKE_TYPE('t', 't', 'r',  0 ) == type && 24 == remaining)
-		{
-handle_tiger_tree:
-			barrier();
-		}
+			g2_qht_search_add_ttr(hash);
 		else if(MAKE_TYPE('e', 'd', '2', 'k') == type && 16 == remaining)
-		{
-			barrier();
-		}
+			g2_qht_search_add_ed2k(hash);
 		else if(MAKE_TYPE('b', 't', 'i', 'h') == type && 20 == remaining)
-		{
-			barrier();
-		}
+			g2_qht_search_add_bth(hash);
 		else if(MAKE_TYPE('m', 'd', '5',  0 ) == type && 16 == remaining)
-		{
-			barrier();
-		}
+			g2_qht_search_add_md5(hash);
 #undef MAKE_TYPE
 	}
 	else
@@ -2049,7 +2292,7 @@ handle_tiger_tree:
 		if(44 == remaining && !strlitcmp(urn, "bitprint"))
 			goto handle_bitprint;
 		else if(24 == remaining && !strlitcmp(urn, "tree:tiger/"))
-			goto handle_tiger_tree;
+			g2_qht_search_add_ttr(hash);
 	}
 
 	return false;
@@ -2065,6 +2308,7 @@ static bool handle_Q2_DN(struct ptype_action_args *parg)
 
 	rdata->dn_len = buffer_remaining(source->data_trunk);
 	rdata->dn     = buffer_start(source->data_trunk);
+	logg_develd("/Q2/DN - %zu \"%.*s\"\n", rdata->dn_len, rdata->dn_len, rdata->dn);
 	return false;
 }
 
@@ -2537,7 +2781,8 @@ static bool handle_QHT(struct ptype_action_args *parg)
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
 	connec->flags.last_data_active = true;
-	if(unlikely(ret_val) || !connec->flags.upeer || local_time_now < (connec->u.send_stamps.QHT + (QHT_TIMEOUT)))
+	return ret_val;
+	if(unlikely(ret_val) || !connec->flags.upeer || local_time_now < (connec->u.handler.send_stamps.QHT + (QHT_TIMEOUT)))
 		return ret_val;
 
 	master_qht = g2_qht_global_get();
@@ -2617,7 +2862,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 
 	g2_qht_put(connec->sent_qht);
 	connec->sent_qht = master_qht;
-	connec->u.send_stamps.QHT = local_time_now;
+	connec->u.handler.send_stamps.QHT = local_time_now;
 	return true;
 
 out_fail_frags:
@@ -2645,7 +2890,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 	struct list_head answer;
 	bool ret_val = false, keep_decoding;
 
-	memset(&rdata.refresh, 0, offsetof(struct QKR_data, sending_na_valid) - offsetof(struct QKR_data, refresh) + 1);
+	memset(&rdata.refresh, 0, sizeof(struct QKR_data) - offsetof(struct QKR_data, refresh));
 	if(parg->source->is_compound)
 	{
 		struct ptype_action_args cparg = *parg;
@@ -2825,10 +3070,10 @@ static intptr_t QKA_SNA_callback(g2_connection_t *con, void *carg)
 	 * to add a child packet to a raw packet. We may loose
 	 * unknown/untypical childs by this.
 	 */
-	qka = g2_packet_alloc();
-	qk  = g2_packet_alloc();
-	sna = g2_packet_alloc();
-	qna = g2_packet_alloc();
+	qka = g2_packet_calloc();
+	qk  = g2_packet_calloc();
+	sna = g2_packet_calloc();
+	qna = g2_packet_calloc();
 
 	if(!(qka && qk && sna && qna))
 		goto out_fail;
@@ -2880,7 +3125,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 	if(parg->connec && !parg->connec->flags.upeer)
 		return ret_val;
 
-	memset(&rdata.cached, 0, offsetof(struct QKA_data, sending_na_valid) - offsetof(struct QKA_data, cached) + 1);
+	memset(&rdata.cached, 0, sizeof(struct QKA_data) - offsetof(struct QKA_data, cached));
 	cparg = *parg;
 	cparg.opaque = &rdata;
 	do
@@ -3093,7 +3338,7 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 		g2_packet_t *xml;
 
 		/* time to send a packet again? */
-		if(local_time_now < (parg->connec->u.send_stamps.UPROC + (UPROC_TIMEOUT)))
+		if(local_time_now < (parg->connec->u.handler.send_stamps.UPROC + (UPROC_TIMEOUT)))
 			return false;
 
 		uprod = g2_packet_calloc();
@@ -3112,7 +3357,7 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 		buffer_clear(xml->data_trunk);
 
 		g2_packet_add2target(uprod, parg->target, parg->target_lock);
-		parg->connec->u.send_stamps.UPROC = local_time_now;
+		parg->connec->u.handler.send_stamps.UPROC = local_time_now;
 		return true;
 	}
 

@@ -207,6 +207,7 @@ typedef struct g2_packet
 		INIT_LIST_HEAD(&(x)->list); \
 		INIT_LIST_HEAD(&(x)->children); \
 	} while(0)
+
 _G2PACK_EXTRN(g2_packet_t *g2_packet_init(g2_packet_t *));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void));
@@ -237,10 +238,15 @@ struct ptype_action_args
 	void             *opaque;
 };
 
-typedef bool (*g2_ptype_action_func) (struct ptype_action_args *) ;
+typedef bool (*g2_ptype_action_func) (struct ptype_action_args *);
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM])
 _G2PACK_EXTRNVAR(const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM])
 _G2PACK_EXTRN(bool g2_packet_decide_spec(struct ptype_action_args *, g2_ptype_action_func const *));
+_G2PACK_EXTRN(bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool hubs));
+_G2PACK_EXTRN(intptr_t g2_packet_hub_qht_match(g2_connection_t *con, void *data));
+_G2PACK_EXTRN(intptr_t g2_packet_hub_qht_done(g2_connection_t *con, void *data));
+_G2PACK_EXTRN(intptr_t g2_packet_leaf_qht_match(g2_connection_t *con, void *data));
+
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */
 

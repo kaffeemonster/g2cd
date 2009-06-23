@@ -217,6 +217,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -fvisibility=hidden
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
+#OPT_FLAGS += -fwhole-program
 #	sun studio is ...
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
@@ -236,7 +237,6 @@ CFLAGS += $(OPT_FLAGS)
 #
 # Libs
 #
-LDLIBS_BASE = -lcommon
 # Libraries from the System (which will never be modules)
 #	Solaris...
 LDLIBS_BASE += -ldl #-lm
@@ -255,7 +255,7 @@ LDLIBS_BASE += -ldb
 #	on old solaris it's in the dbm lib, part of system
 #LDLIBS_BASE += ldbm
 #	All libs if we don't use modules
-LDLIBS = $(LDLIBS_BASE) -lz
+LDLIBS = -lz -lcommon $(LDLIBS_BASE)
 
 #
 #	Linking-Flags
@@ -320,9 +320,10 @@ CFLAGS += -pthread
 #	sun studio
 #CFLAGS += -mt
 #	not used (until now)
-#CFLAGS += -DFASTDBL2INT 
+#CFLAGS += -DFASTDBL2INT
 CFLAGS += -DDEBUG_DEVEL
 #CFLAGS += -DDEBUG_DEVEL_OLD
+#CFLAGS += -DDEBUG_HZP_LANDMINE
 CFLAGS += -DHAVE_CONFIG_H
 #CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
@@ -376,7 +377,7 @@ DATEFLAGS = -u +%Y%m%d-%H%M
 #	Name of Program
 MAIN = g2cd
 #	Version-ding-dong
-VERSION = 0.0.00.09
+VERSION = 0.0.00.10
 DISTNAME = $(MAIN)-$(VERSION)
 LONGNAME = Go2CHub $(VERSION) programming Experiment
 
@@ -590,7 +591,7 @@ $(MAIN): $(OBJS) $(LIBCOMMON) .mapfile
 once: final
 final: .final
 .final: version.h $(LIBSRCS) $(MSRCS) $(HEADS) .mapfile
-	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS) && touch $@
+	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
 withzlib: .withzlib
 .withzlib: $(OBJS) $(ZLIB) $(LIBCOMMON) .mapfile
@@ -633,6 +634,9 @@ edistclean: distclean
 
 #	generate dependencies on whish
 #depend: $(DEPENDS)
+#	temporary clutch, to control deps by hand
+depend: libdepend $(SRCS)
+	@$(PORT_PR) "\tDEP[$@]\n"; $(CC) -MM -MG $(CFLAGS) $(CPPFLAGS) $(SRCS) > $@;
 
 #	package-building for ...
 #	compression in extra step since the solaris 5.7 'tar'
@@ -786,13 +790,13 @@ data.o: sbox.bin bin2o
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
-G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h
+G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
-G2QHT.o: G2QHT.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
+G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
 G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h

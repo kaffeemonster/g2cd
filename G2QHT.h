@@ -54,6 +54,8 @@ struct qht_fragment
 # define MAX_BYTES_QHT (512 * 1024)
 # define QHT_PATCH_HEADER_BYTES 5
 # define QHT_RESET_HEADER_BYTES 6
+# define QHT_DEFAULT_BITS 20
+# define QHT_DEFAULT_BYTES ((1 << QHT_DEFAULT_BITS)/8)
 struct qhtable
 {
 	struct hzp_free hzp;
@@ -73,6 +75,13 @@ struct qhtable
 	uint8_t  *data;
 };
 
+struct qht_search_walk
+{
+	uint32_t *hashes;
+	size_t num;
+	void *data;
+};
+
 # ifndef _G2QHT_C
 #  define _G2QHT_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 #  define _G2QHT_EXTRNVAR(x) extern x
@@ -83,6 +92,18 @@ struct qhtable
 
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
+_G2QHT_EXTRN(bool g2_qht_search_prepare(void));
+_G2QHT_EXTRN(void g2_qht_search_add_word(const char *s, size_t start, size_t len));
+_G2QHT_EXTRN(void g2_qht_search_add_sha1(const unsigned char *h));
+_G2QHT_EXTRN(void g2_qht_search_add_ttr(const unsigned char *h));
+_G2QHT_EXTRN(void g2_qht_search_add_ed2k(const unsigned char *h));
+_G2QHT_EXTRN(void g2_qht_search_add_bth(const unsigned char *h));
+_G2QHT_EXTRN(void g2_qht_search_add_md5(const unsigned char *h));
+_G2QHT_EXTRN(bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t dn_len, void *data, bool had_urn, bool hubs));
+_G2QHT_EXTRN(void g2_qht_match_hubs(uint32_t hashes[], size_t num, void *data));
+_G2QHT_EXTRN(void g2_qht_match_leafs(uint32_t hashes[], size_t num, void *data));
+_G2QHT_EXTRN(bool g2_qht_global_search_bucket(struct qht_search_walk *, struct qhtable *));
+_G2QHT_EXTRN(void g2_qht_global_search_chain(struct qht_search_walk *, void *)); /* last parm is a g2_connec, but to not pull the header */
 _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable *, struct qht_fragment *));
 _G2QHT_EXTRN(void g2_qht_aggregate(struct qhtable *, struct qhtable *));
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *, uint8_t *data));
@@ -93,6 +114,8 @@ _G2QHT_EXTRN(void g2_qht_frag_free(struct qht_fragment *));
 /* funcs for the global qht are in the G2ConRegistry */
 _G2QHT_EXTRN(size_t g2_qht_global_get_ent(void));
 _G2QHT_EXTRN(struct qhtable *g2_qht_global_get(void));
+_G2QHT_EXTRN(struct qhtable *g2_qht_global_get_hzp(void));
+_G2QHT_EXTRN(void g2_qht_global_search(struct qht_search_walk *));
 _G2QHT_EXTRN(void g2_qht_global_update(void));
 
 #endif /* G2QHT_H */

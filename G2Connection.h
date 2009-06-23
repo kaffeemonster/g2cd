@@ -107,12 +107,16 @@ typedef struct g2_connection
 	{
 		struct
 		{
-			time_t     PI;
-			time_t     LNI;
-			time_t     KHL;
-			time_t     QHT;
-			time_t     UPROC;
-		} send_stamps;
+			struct
+			{
+				time_t     PI;
+				time_t     LNI;
+				time_t     KHL;
+				time_t     QHT;
+				time_t     UPROC;
+			} send_stamps;
+			unsigned leaf_count;
+		} handler;
 		struct
 		{
 			struct timeout header_complete_to;

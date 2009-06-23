@@ -2,7 +2,7 @@
  * my_epoll_devpoll.c
  * wrapper to get epoll on solaris with /dev/poll
  *
- * Copyright (c) 2005,2006 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,7 +34,7 @@
  * or online: http://docs.sun.com/app/docs/doc/817-5430/ \
  * 6mksu57ic?q=%2fdev%2fpoll&a=view
  */
-#include <sys/devpoll.h> 
+#include <sys/devpoll.h>
 #include <fcntl.h>
 #include <alloca.h>
 #include "hzp.h"
@@ -65,8 +65,8 @@ static int realloc_fddata(int new_max)
 	struct dev_poll_data *old_data = deatomic(fds);
 	int old_max = old_data->max_fd; /* we are under writer lock */
 	struct dev_poll_data *tmp_data = malloc(sizeof(*tmp_data) + (sizeof(epoll_data_t) * (new_max + 1)));
-	if(!tmp_data)
-	{
+
+	if(!tmp_data) {
 		logg_errno(LOGF_ERR, "allocating fd_data memory");
 		errno = ENOMEM;
 		return -1;
@@ -121,11 +121,11 @@ static void my_epoll_init(void)
 	/* generate a lock for shared free_cons */
 	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
 		diedie("creating my_epoll writes mutex");
-	
+
 	fds = malloc(sizeof(*fds) + (sizeof(epoll_data_t) * ((size_t)EPOLL_QUEUES * 20 + 1)));
 	if(!fds)
 		diedie("allocating my_epoll memory");
-	
+
 	for(tmp_fd = 0; tmp_fd <= EPOLL_QUEUES * 20; tmp_fd++)
 		fds->data[tmp_fd].u64 = EPDATA_POISON;
 	fds->max_fd = EPOLL_QUEUES * 20;
@@ -282,9 +282,10 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		struct dev_poll_data *loc_data;
 	default:
 		/* accuire a reference on the data array */
-		do
+		do {
+			mem_barrier(fds);
 			hzp_ref(HZP_EPOLL, (loc_data = deatomic(fds)));
-		while(loc_data != fds);
+		} while(loc_data != fds);
 
 		for(; num_poll; num_poll--, wptr++, poll_buf++)
 		{
