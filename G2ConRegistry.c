@@ -220,6 +220,7 @@
 #define LEVEL_SIZE (1 << LEVEL_SHIFT)
 #define LEVEL_MASK (LEVEL_SIZE - 1)
 #define TOTAL_SIZE (1 << (LEVEL_SHIFT * LEVEL_COUNT))
+#define UPDATE_INTERVAL (60)
 
  /* Types */
 struct g2_ht_chain
@@ -769,14 +770,20 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 void g2_qht_global_update(void)
 {
 	static pthread_mutex_t update_lock = PTHREAD_MUTEX_INITIALIZER;
+	static time_t last_update;
+	long tdiff;
 
 	/* only one updater at a time */
 	if(unlikely(pthread_mutex_lock(&update_lock)))
 		return;
 
-	do_global_update(NULL, &ht_root, 0);
+	tdiff = local_time_now - last_update;
+	tdiff = tdiff >= 0 ? tdiff : -tdiff;
+	if(tdiff >= UPDATE_INTERVAL)
+		do_global_update(NULL, &ht_root, 0);
 // TODO: When the QHT gets updated, push change activly to other hubs
 
+	last_update = local_time_now;
 	if(unlikely(pthread_mutex_unlock(&update_lock)))
 		diedie("Huuarg, ConReg update lock stuck, bye!");
 }

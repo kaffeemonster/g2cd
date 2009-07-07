@@ -1,6 +1,6 @@
 /*
  * cpy_rest.c
- * copy a byte trailer
+ * copy a byte trailer, x86 impl
  *
  * Copyright (c) 2008 Jan Seiffert
  *

@@ -291,6 +291,8 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		{
 			/* totaly bogus fd, close it */
 			if(poll_buf->fd > loc_data->max_fd) {
+// TODO: close it or not, racy...
+				/* fd may be not in set, but reassigned to someone else */
 				close(poll_buf->fd);
 				logg_pos(LOGF_INFO, "hit FD out of lockup arry?")
 				continue;
@@ -323,12 +325,14 @@ int my_epoll_create(int size)
 {
 	int dpfd;
 
-	if(1 > size)
+	if(1 > size) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	if(!hzp_alloc())
 		return -1;
-	
+
 	if(0 > (dpfd = open("/dev/poll", O_RDWR)))
 		return -1;
 

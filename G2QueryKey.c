@@ -160,6 +160,7 @@ static void check_salt_vals(unsigned j)
 	/* make sure no unpleasant values are in the array */
 	for(i = 0; i < anum(g2_qk_s.salts[0]); i++)
 	{
+// TODO: check every byte
 		while(0 == g2_qk_s.salts[j][i][0] || 1 == g2_qk_s.salts[j][i][0])
 			g2_qk_s.salts[j][i][0] = rand();
 		while(0 == g2_qk_s.salts[j][i][1] || 1 == g2_qk_s.salts[j][i][1])

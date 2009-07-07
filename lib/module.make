@@ -99,6 +99,7 @@ POPCOUNTSTSRC = \
 	$(MPL)/alpha/popcountst.c
 CPY_RESTSRC = \
 	$(MPL)/generic/cpy_rest.c \
+	$(MPL)/ppc/cpy_rest.c \
 	$(MPL)/x86/cpy_rest.c
 MEMXORCPYSRC = \
 	$(MPL)/generic/memxorcpy.c \

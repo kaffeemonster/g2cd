@@ -95,6 +95,7 @@
 	ENUM_CMD( DIS    , 1 ), /* KHL extention */ \
 	ENUM_CMD( UKHLID , 1 ), /* KHLA/KHLR? */ \
 	ENUM_CMD( YOURIP , 1 ), /* KHLA */ \
+	ENUM_CMD( CV     , 1 ), /* version */ \
 	ENUM_CMD( V      , 1 ), /* commom child packets */ \
 	ENUM_CMD( FW     , 1 ), /* LNI? */ \
 	ENUM_CMD( BUP    , 1 ), /* QH2 */ \
@@ -133,6 +134,12 @@
 	ENUM_CMD( RNAME  , 4 ), /* CRAWLR */ \
 	ENUM_CMD( RGPS   , 4 ), /* CRAWLR */ \
 	ENUM_CMD( REXT   , 4 ), /* CRAWLR */ \
+	ENUM_CMD( NL     , 0 ), /* CRAWLA */ \
+	ENUM_CMD( SELF   , 0 ), /* CRAWLA */ \
+	ENUM_CMD( HUB    , 0 ), /* CRAWLA */ \
+	ENUM_CMD( LEAF   , 0 ), /* CRAWLA */ \
+	ENUM_CMD( GPS    , 0 ), /* CRAWLA */ \
+	ENUM_CMD( NAME   , 0 ), /* CRAWLA, same as NICK, idiots */ \
 	ENUM_CMD( RELAY  , 1 ), /* PI PO */ \
 	ENUM_CMD( TO     , 1 ), \
 	ENUM_CMD( XML    , 1 ), /* UPROD */ \

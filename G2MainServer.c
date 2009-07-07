@@ -241,7 +241,7 @@ int main(int argc, char **args)
 	{
 		int num_poll = poll(sock_poll,
 				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
-				long_poll ? 60300 : 1100);
+				long_poll ? 11300 : 1100);
 		local_time_now = time(NULL);
 		switch(num_poll)
 		{

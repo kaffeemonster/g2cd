@@ -39,11 +39,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#ifdef HAVE_MALLOC_H
-# include <malloc.h>
-#elif defined(HAVE_MALLOC_NP_H)
-# include <malloc_np.h>
-#endif
 #include <zlib.h>
 /* other */
 #include "lib/other.h"
@@ -480,8 +475,8 @@ static uint32_t g2_qht_search_number_word(const char *s, size_t start, size_t le
 		 * hashes are calced with a tolower. This totaly breaks on
 		 * UTF-8 (which is our lingua franka), and add. modern system
 		 * think it is a good idea to take our locale into account
-		 * (which is maybe some classic iso8551). So hardcode a ASCII
-		 * tolower.
+		 * (which is maybe some classic iso-8859-1). So hardcode a
+		 * ASCII tolower.
 		 * Will do the right thing most of the time because it does
 		 * not break at the wrong moment (or we need to emulate a
 		 * Win CP850/CP1250 tolower *autschn*).
@@ -663,8 +658,8 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 *
 		 * UNICODE does define a generic word split algo. (TR-28)
 		 * But it is just a glimpse at the problem (only basic splitting).
-		 * And for this we need to categorize the characters we get in a UNICODE
-		 * sense.
+		 * And for this we need to categorize the characters we get in a
+		 * UNICODE sense.
 		 * Where the fun stops.
 		 *
 		 * So other libs?
@@ -680,21 +675,38 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * With n = 2 (because the avarge chinese word has 1.54 chars...) this
 		 * is quite successful.
 		 *
+		 * And there is another problem:
+		 * Normalization.
+		 * You can express one character sometimes as a direct code point, and
+		 * also as a composed contruct. For example an angstrom (an 'a' with a
+		 * circle at the top) can be expressed as 'ANGSTROM SIGN (U+212B)' or
+		 * as a 'LATIN CAPITAL LETTER A WITH RING ABOVE' (U+00C5) (old latin1
+		 * coding), wich can be decomposed as 'LATIN CAPITAL LETTER A' (U+0041)
+		 * and a 'COMBINING RING ABOVE' (U+030A).
+		 * So three different binary representations, for the same letter, which
+		 * will yield different hashes. In european languages we have a set of
+		 * accents above, wrinckles below, dots somewhere to make this "important",
+		 * but for example hangul, thanks to their system, can also be written
+		 * either completely decomposed (Jamo) or as composed 'fixed' graphemes.
+		 * This will mostly hurt with MacOS, because the APIs there normalize
+		 * everthing to decomposed form.
+		 *
 		 * At the end of the day this does not help us. We have to create hashes
 		 * like Shareaza or it will not blend^Wmatch the hash.
 		 * And for this we have to create a bunch of code ourself.
 		 *
 		 * So ATM left out.
 		 */
-		char *str_buf = (char *)qht_get_scratch2((metadata_len > dn_len ? metadata_len : dn_len) + 10);
 		if(metadata && metadata_len)
 		{
+			char *str_buf = (char *)qht_get_scratch2(metadata_len + 10);
 			memcpy(str_buf, metadata, metadata_len);
 			str_buf[metadata_len] = '\0';
 // TODO: grok metadata
 		}
 		if(dn && dn_len)
 		{
+			char *str_buf = (char *)qht_get_scratch2(dn_len + 10);
 			memcpy(str_buf, dn, dn_len);
 			str_buf[dn_len] = '\0';
 // TODO: grok dn

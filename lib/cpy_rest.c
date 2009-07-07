@@ -60,6 +60,8 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/cpy_rest.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/cpy_rest.c"
 # else
 #  include "generic/cpy_rest.c"
 # endif

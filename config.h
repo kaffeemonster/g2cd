@@ -28,7 +28,14 @@
 
 /* can we have dyn arrays? */
 #define HAVE_C99
-/* to we have compiler level TLS? */
+/*
+ * Is __thread keyword for thread local storage available?
+ * __thread should be cheaper since direct CPU-instructions
+ * get generated (for example addressing over the %gs segment
+ * selector on x86: movl %gs:-4, %eax) instead of a call
+ * over the GOT, a runtimecheck for a proper key, a runtime
+ * address calculation, and finaly load and return.
+ */
 #define HAVE___THREAD
 /* does the comiler support 128bit vars on this arch */
 //#define HAVE_TIMODE
@@ -131,20 +138,6 @@
  * another aproach (add, shifts, xor, etc.) can be faster.
  */
 #define HAVE_HW_MULT
-
-/*
- * Is __thread keyword for thread local storage available?
- * This option is unused ATM, since __thread has its share
- * of problems (no descructors, portability).
- * It only gets interresting if pthread_{get|set}_specific
- * start to show up high in profiles.
- * __thread should be cheaper since direct CPU-instructions
- * get generated (for example addressing over the %gs segment
- * selector on x86: movl %gs:-4, %eax) instead of a call
- * over the GOT, a runtimecheck for a proper key, a runtime
- * address calculation, and finaly load and return.
- */
-//#define HAVE___THREAD
 
 /*
  * how many bytes must be avail to switch away

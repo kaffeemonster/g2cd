@@ -289,7 +289,7 @@ LDFLAGS += -pthread
 #LDFLAGS += -Wl,-B,direct
 # gnarf, on Linux only external Patch, and other syntax...
 #LDFLAGS += -Wl,-Bdirect
-# get some more symbols in the executable, so backktraces
+# get some more symbols in the executable, so backtraces
 # look better
 LDFLAGS += -rdynamic
 
@@ -325,6 +325,7 @@ CFLAGS += -DDEBUG_DEVEL
 #CFLAGS += -DDEBUG_DEVEL_OLD
 #CFLAGS += -DDEBUG_HZP_LANDMINE
 CFLAGS += -DHAVE_CONFIG_H
+CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
 #CFLAGS += -DHELGRIND_ME

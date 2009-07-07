@@ -690,7 +690,7 @@ static int sub_big(struct big_num *x, struct big_num *y, struct big_num *z)
 		return 1;
 
 	zl = xl;
-	while(*--zp == 0)
+	while(zl && *--zp == 0)
 		zl--;
 	z->l = zl;
 	return 0;
@@ -767,41 +767,37 @@ static int qr(struct big_num *R, struct big_num Sbox[9])
 				return 1;
 			}
 		}
-		else if(big_comp(R, &Sbox[2]) < 0) {
+		if(big_comp(R, &Sbox[2]) < 0) {
 			sub_big(R, &Sbox[1], R);
 			return 2;
-		} else if(big_comp(R, &Sbox[3]) < 0) {
+		}
+		if(big_comp(R, &Sbox[3]) < 0) {
 			sub_big(R, &Sbox[2], R);
 			return 3;
-		} else {
-			sub_big(R, &Sbox[3], R);
-			return 4;
 		}
+		sub_big(R, &Sbox[3], R);
+		return 4;
 	}
-	else if(big_comp(R, &Sbox[6]) < 0)
+	if(big_comp(R, &Sbox[6]) < 0)
 	{
 		if(big_comp(R, &Sbox[5]) < 0) {
 			sub_big(R, &Sbox[4], R);
 			return 5;
-		} else {
-			sub_big(R, &Sbox[5], R);
-			return 6;
 		}
+		sub_big(R, &Sbox[5], R);
+		return 6;
 	}
-	else if(big_comp(R, &Sbox[8]) < 0)
+	if(big_comp(R, &Sbox[8]) < 0)
 	{
 		if(big_comp(R, &Sbox[7]) < 0) {
 			sub_big(R, &Sbox[6], R);
 			return 7;
-		} else {
-			sub_big(R, &Sbox[7], R);
-			return 8;
 		}
+		sub_big(R, &Sbox[7], R);
+		return 8;
 	}
-	else {
-		sub_big(R, &Sbox[8], R);
-		return 9;
-	}
+	sub_big(R, &Sbox[8], R);
+	return 9;
 }
 
 union dblou64
@@ -921,25 +917,26 @@ do \
 	}
 
 	/* fixup */
-	if(add_cmp(&R, &Sbox[0], &MP, &MM, use_mp) <= -ruf)
+	tc1 = add_cmp(&R, &Sbox[0], &MP, &MM, use_mp);
+	if(tc1 <= -ruf)
 	{
-		k--;
+		if(tc1 < -ruf)
+			k--;
 		mul10(&R);
 		mul10(&MM);
 		if(use_mp)
 			mul10(&MP);
-	}
+	} else if(tc1 == ruf)
+		k++;
 
-/*
-	printf("\nk = %d\n", k);
+/*	printf("k = %d\n", k);
 	printf("R = "); print_big(&R);
 	printf("\nS = "); print_big(&Sbox[0]);
 	printf("\nM- = "); print_big(&MM);
 	if(use_mp)
 		printf("\nM+ = "), print_big(&MP);
 	putchar('\n');
-	fflush(0);
-	*/
+	fflush(0); */
 
 	if(qr_shift) {
 		sl = s_n / 64;
@@ -966,13 +963,13 @@ do \
 		ADD_CHAR_TO_BUF('0');
 
 again:
-	if(!dig_i--)
+	if(!--dig_i)
 		ADD_CHAR_TO_BUF('.');
-	if (qr_shift)
+	if(qr_shift)
 	{ /* Take advantage of the fact that Sbox[0] = (ash 1 s_n) */
-		if (R.l < sl)
+		if(R.l < sl)
 			d = 0;
-		else if (R.l == sl)
+		else if(R.l == sl)
 		{
 			big_digit *p;
 
@@ -1000,15 +997,20 @@ again:
 		d = qr(&R, Sbox);
 
 #define OUTDIG(d) { ADD_CHAR_TO_BUF((d) + '0'); goto out_of_fp; }
-	tc1 = big_comp(&R, &MM) < ruf;
+//	printf("\ndig_i: %i\td: %i\nR = ", dig_i, d); print_big(&R);
+//	printf("\nM- = "); print_big(&MM);
+	tc1 = big_comp(&R, &MM);
+//	printf("\ncmp: %i\truf: %i\n", tc1, ruf);
+	tc1 = tc1 < ruf;
 	tc2 = add_cmp(&R, &Sbox[0], &MP, &MM, use_mp) > -ruf;
-	if (!tc1)
+//	printf("tc1: %i\ttc2: %i\n", tc1, tc2);
+	if(!tc1)
 	{
-		if (!tc2)
+		if(!tc2)
 		{
 			mul10(&R);
 			mul10(&MM);
-			if (use_mp)
+			if(use_mp)
 				mul10(&MP);
 			ADD_CHAR_TO_BUF(d + '0');
 			goto again;
@@ -1030,6 +1032,9 @@ again:
 		}
 	}
 out_of_fp:
+	while(dig_i-- > 1)
+		ADD_CHAR_TO_BUF('0');
+//	putchar('\n');
 	return end_format(buf, fmt, spec);
 }
 #undef ADD_CHAR_TO_BUF
