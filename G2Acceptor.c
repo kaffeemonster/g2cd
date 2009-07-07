@@ -58,6 +58,7 @@
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
 #include "lib/atomic.h"
+#include "lib/hzp.h"
 #include "lib/itoa.h"
 
 #undef EVENT_SPACE
@@ -109,6 +110,9 @@ void *G2Accept(void *param)
 	ac_data.epoll_fd = -1;
 	sock2main = *((int *)param);
 	logg(LOGF_DEBUG, "Accept:\t\tOur SockFD -> %d\t\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
+
+	/* make our hzp ready */
+	hzp_alloc();
 
 	/* Setting up the accepting Sockets */
 	{
@@ -396,6 +400,8 @@ killit:
 	clean_up_a(eevents, lrecv_buff, lsend_buff, ac_data.epoll_fd, sock2main);
 	close(accept_so4);
 	close(accept_so6);
+	/* clean up our hzp */
+	hzp_free();
 	pthread_exit(NULL);
 	return NULL; /* to avoid warning about reaching end of non-void funktion */
 }

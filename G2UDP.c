@@ -55,6 +55,7 @@
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
 #include "lib/udpfromto.h"
+#include "lib/hzp.h"
 
 #define UDP_MTU        500
 #define UDP_RELIABLE_LENGTH 8
@@ -149,6 +150,9 @@ static void *G2UDP_loop(void *param)
 	union combo_addr from, to;
 	int answer_fd = -1;
 
+	/* make our hzp ready */
+	hzp_alloc();
+
 	my_snprintf(d_hold.data, d_hold.limit, OUR_PROC " UDP %ti", (intptr_t)param);
 	g2_set_thread_name(d_hold.data);
 
@@ -237,6 +241,9 @@ static void *G2UDP_loop(void *param)
 		handle_udp_packet(&d_hold, &from, &to, answer_fd);
 		buffer_clear(d_hold);
 	}
+
+	/* clean up our hzp */
+	hzp_free();
 
 	if(param)
 		pthread_exit(NULL);

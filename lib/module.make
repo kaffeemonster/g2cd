@@ -226,11 +226,15 @@ BITOPOBJS = \
 	$(MPL)/strnpcpy.o \
 	$(MPL)/my_bitops.o
 
+LIBBINOBJS = \
+	$(MPL)/aes_tab.o \
+	$(MPL)/five_tab.o
+
 # base objectfiles
 LIBOBJS = \
 	$(BITOPOBJS) \
+	$(LIBBINOBJS) \
 	$(MPL)/aes.o \
-	$(MPL)/aes_tab.o \
 	$(MPL)/atomic.o \
 	$(MPL)/ansi_prng.o \
 	$(MPL)/backtrace.o \
@@ -242,7 +246,6 @@ LIBOBJS = \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
-	$(MPL)/five_tab.o \
 	$(MPL)/vsnprintf.o
 
 # target for this module

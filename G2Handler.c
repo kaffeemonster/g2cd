@@ -60,6 +60,7 @@
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
 #include "lib/my_epoll.h"
+#include "lib/hzp.h"
 
 #define HANDLER_ACTIVE_TIMEOUT (91 * 10)
 
@@ -97,9 +98,12 @@ void *G2Handler(void *param)
 	sock2main = *((int *)param);
 	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
 
+	/* make our hzp ready */
+	hzp_alloc();
+
 	/* getting memory for our FD's and everything else */
 	if(!init_memory_h(&eevents, &lrecv_buff, &lsend_buff, &h_data.epoll_fd))
-	{ 
+	{
 		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
 			diedie("initiating stop"); // hate doing this, but now it's to late
 		logg_pos(LOGF_ERR, "should go down\n");
@@ -239,6 +243,8 @@ void *G2Handler(void *param)
 	}
 
 	clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
+	/* clean up our hzp */
+	hzp_free();
 	pthread_exit(NULL);
 	return NULL; /* to avoid warning about reaching end of non-void funktion */
 }

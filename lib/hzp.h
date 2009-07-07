@@ -30,7 +30,13 @@
 # include "other.h"
 # include "atomic.h"
 
-# define LIB_HZP_EXTRN(x) x GCC_ATTR_VIS("hidden")
+# ifndef LIB_HZP_C
+#  define LIB_HZP_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
+#  define LIB_HZP_EXTRNVAR(x) extern x GCC_ATTR_VIS("hidden")
+# else
+#  define LIB_HZP_EXTRN(x) x GCC_ATTR_VIS("hidden")
+#  define LIB_HZP_EXTRNVAR(x) x GCC_ATTR_VIS("hidden")
+# endif
 
 enum hzps
 {
@@ -48,9 +54,34 @@ struct hzp_free
 	void (*free_func)(void *);
 };
 
-LIB_HZP_EXTRN(bool hzp_alloc(void));
+struct hzp
+{
+	volatile void *ptr[HZP_MAX];
+	struct hzp_flags
+	{
+		int used;
+	} flags;
+	atomicst_t lst;
+};
+
+# ifdef HAVE___THREAD
+LIB_HZP_EXTRNVAR(__thread struct hzp local_hzp);
+static inline void hzp_ref(enum hzps key, void *new_ref)
+{
+	if(key < HZP_MAX)
+		local_hzp.ptr[key] = new_ref;
+}
+static inline void hzp_unref(enum hzps key)
+{
+	hzp_ref(key, NULL);
+}
+# else
 LIB_HZP_EXTRN(void hzp_ref(enum hzps, void *));
 LIB_HZP_EXTRN(void hzp_unref(enum hzps));
+# endif
+
+LIB_HZP_EXTRN(bool hzp_alloc(void));
+LIB_HZP_EXTRN(void hzp_free(void));
 # ifdef DEBUG_HZP_LANDMINE
 # define hzp_deferfree(x, y, z) _hzp_deferfree(x, y, z, __func__, __LINE__)
 LIB_HZP_EXTRN(void _hzp_deferfree(struct hzp_free *, void *, void (*)(void *), const char *, unsigned));

@@ -236,6 +236,9 @@ int main(int argc, char **args)
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
 	}
 
+	/* make our hzp ready */
+	hzp_alloc();
+
 	/* main server wait loop */
 	while(server_running)
 	{
@@ -321,7 +324,8 @@ int main(int argc, char **args)
 			}
 		}
 
-		if(all_down) break;
+		if(all_down)
+			break;
 		else if(9 == i) {
 			logg_pos(LOGF_ERR, "not all gone down! Aborting!\n");
 			fsync(STDOUT_FILENO);

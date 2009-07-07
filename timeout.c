@@ -42,6 +42,7 @@
 #include "lib/other.h"
 #include "timeout.h"
 #include "lib/log_facility.h"
+#include "lib/hzp.h"
 
 /* from deka to nano d    u    n */
 #define DSEC2NSEC (100*1000*1000)
@@ -362,6 +363,9 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 {
 	logg(LOGF_DEBUG, "timeout_timer:\trunning\n");
 
+	/* make our hzp ready */
+	hzp_alloc();
+
 	server.status.all_abord[THREAD_TIMER] = true;
 
 	g2_set_thread_name(OUR_PROC " timeout");
@@ -400,7 +404,9 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 	pthread_mutex_unlock(&wakeup.mutex);
 
 	logg_pos(LOGF_NOTICE, "should go down\n");
-	server.status.all_abord[THREAD_TIMER] = false;	
+	server.status.all_abord[THREAD_TIMER] = false;
+	/* clean up our hzp */
+	hzp_free();
 	pthread_exit(NULL);
 	return(NULL);
 }

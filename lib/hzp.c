@@ -26,26 +26,16 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
-
-#include "log_facility.h"
-#include "atomic.h"
-#include "hzp.h"
-#include "other.h"
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #endif
 
-struct hzp
-{
-	volatile void *ptr[HZP_MAX];
-	struct hzp_flags
-	{
-		bool used;
-	} flags;
-	atomicst_t lst;
-};
+#define LIB_HZP_C
+#include "log_facility.h"
+#include "atomic.h"
+#include "hzp.h"
+#include "other.h"
 
-static pthread_key_t key2hzp;
 static union lists
 {
 	atomicst_t head;
@@ -53,11 +43,57 @@ static union lists
 } hzp_threads, hzp_freelist;
 static atomic_t nr_free;
 
+#ifdef HAVE___THREAD
+/*
+ * hzp_alloc - lay TLS hzp struct in the TSD
+ *
+ * returns: true - everythings fine
+ *          false - ooops
+ */
+bool hzp_alloc(void)
+{
+	local_hzp.flags.used = true;
+	atomic_push(&hzp_threads.head, &local_hzp.lst);
+
+	return true;
+}
+
+/*
+ * hzp_free_int - remove TLS from list
+ */
+void hzp_free(void)
+{
+	static pthread_mutex_t free_lock = PTHREAD_MUTEX_INITIALIZER;
+	atomicst_t *whead;
+
+	local_hzp.flags.used = false;
+	if(unlikely(pthread_mutex_lock(&free_lock)))
+		return;
+
+	/* travers list of threads */
+	whead = deatomic(&hzp_threads.head);
+	while(atomic_sread(whead))
+	{
+		struct hzp *entry = container_of(deatomic(atomic_sread(whead)), struct hzp, lst);
+		if(entry->flags.used) {
+			/* shut up, we want to travers the list... */
+			whead = deatomic(atomic_sread(whead));
+		} else {
+			atomic_pop(whead);
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&free_lock);
+}
+#else
+static pthread_key_t key2hzp;
+
 /* Protos */
 	/* You better not kill this proto, or it wount work ;) */
 static void hzp_init(void) GCC_ATTR_CONSTRUCT;
 static void hzp_deinit(void) GCC_ATTR_DESTRUCT;
-static void hzp_free(void *dt_hzp);
+static void hzp_free_int(void *dt_hzp);
 static struct hzp *hzp_alloc_intern(void);
 
 /*
@@ -69,7 +105,7 @@ static struct hzp *hzp_alloc_intern(void);
  */
 static void hzp_init(void) 
 {
-	if(pthread_key_create(&key2hzp, hzp_free))
+	if(pthread_key_create(&key2hzp, hzp_free_int))
 		diedie("couldn't create TLS key for hzp");
 }
 
@@ -83,22 +119,6 @@ static void hzp_deinit(void)
 {
 	pthread_key_delete(key2hzp);
 // TODO: free thread data
-}
-
-/*
- * hzp_alloc - allocate mem and lay it in the TSD
- * If thread wants to play with us, he needs a little storage
- * where we can put a list within.
- *
- * returns: true - everythings fine
- *          false - ooops
- */
-bool hzp_alloc(void)
-{
-	if(pthread_getspecific(key2hzp))
-		return true;
-
-	return hzp_alloc_intern() ? true : false;
 }
 
 static noinline struct hzp *hzp_alloc_intern(void)
@@ -122,6 +142,49 @@ static noinline struct hzp *hzp_alloc_intern(void)
 
 	return new_hzp;
 }
+
+/*
+ * hzp_alloc - allocate mem and lay it in the TSD
+ * If thread wants to play with us, he needs a little storage
+ * where we can put a list within.
+ *
+ * returns: true - everythings fine
+ *          false - ooops
+ */
+bool hzp_alloc(void)
+{
+	if(pthread_getspecific(key2hzp))
+		return true;
+
+	return hzp_alloc_intern() ? true : false;
+}
+
+/*
+ * hzp_free_int - dummy func
+ */
+void hzp_free(void)
+{
+}
+
+/*
+ * hzp_free_int - thread exit call back from pthread_key interface
+ *
+ * When a thread exits, this func gets called with its data
+ * at the TSD entry this was registered for.
+ * There should be a struct hzp, mark it unused, so a collector
+ * can pick it up.
+ *
+ * params : dt_hzp - the mem associated with the just exiting thread
+ */
+static void hzp_free_int(void *dt_hzp)
+{
+	if(likely(dt_hzp))
+	{
+		struct hzp *tmp = (struct hzp *) dt_hzp;
+		tmp->flags.used = false;
+	}
+}
+
 
 /*
  * hzp_ref - register a reference under a key for a subsystem
@@ -174,6 +237,7 @@ void hzp_unref(enum hzps key)
 {
 	hzp_ref(key, NULL);
 }
+#endif
 
 /*
  * hzp_deferfree - called for hzp freeing
@@ -280,9 +344,13 @@ int hzp_scan(int threshold)
 		else
 		{
 			atomicst_t *x = atomic_pop(whead);
+#ifndef HAVE___THREAD
 			logg_develd("unused hzp entry: %p\t%p\t%p, trying to free....\n",
 				(void *)x, (void *)whead, (void *)entry);
 			free(x);
+#else
+			x = x;
+#endif
 		}
 	}
 
@@ -309,25 +377,6 @@ int hzp_scan(int threshold)
 		}
 	}
 	return freed;
-}
-
-/*
- * hzp_free - thread exit call back from pthread_key interface
- *
- * When a thread exits, this func gets called with its data
- * at the TSD entry this was registered for.
- * There should be a struct hzp, mark it unused, so a collector
- * can pick it up.
- *
- * params : dt_hzp - the mem associated with the just exiting thread
- */
-static void hzp_free(void *dt_hzp)
-{
-	if(likely(dt_hzp))
-	{
-		struct hzp *tmp = (struct hzp *) dt_hzp;
-		tmp->flags.used = false;
-	}
 }
 
 static char const rcsid_hzp[] GCC_ATTR_USED_VAR = "$Id: $";

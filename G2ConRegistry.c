@@ -779,11 +779,12 @@ void g2_qht_global_update(void)
 
 	tdiff = local_time_now - last_update;
 	tdiff = tdiff >= 0 ? tdiff : -tdiff;
-	if(tdiff >= UPDATE_INTERVAL)
+	if(tdiff >= UPDATE_INTERVAL) {
 		do_global_update(NULL, &ht_root, 0);
+		last_update = local_time_now;
 // TODO: When the QHT gets updated, push change activly to other hubs
+	}
 
-	last_update = local_time_now;
 	if(unlikely(pthread_mutex_unlock(&update_lock)))
 		diedie("Huuarg, ConReg update lock stuck, bye!");
 }

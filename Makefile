@@ -217,7 +217,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -fvisibility=hidden
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
-#OPT_FLAGS += -fwhole-program
+#OPT_FLAGS += -fwhole-program -combine
 #	sun studio is ...
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
@@ -254,8 +254,9 @@ LDLIBS_BASE += -ldl #-lm
 LDLIBS_BASE += -ldb
 #	on old solaris it's in the dbm lib, part of system
 #LDLIBS_BASE += ldbm
+LDLIBS_Z = -lz $(LDLIBS_BASE)
 #	All libs if we don't use modules
-LDLIBS = -lz -lcommon $(LDLIBS_BASE)
+LDLIBS = -lcommon $(LDLIBS_Z)
 
 #
 #	Linking-Flags
@@ -591,8 +592,8 @@ $(MAIN): $(OBJS) $(LIBCOMMON) .mapfile
 
 once: final
 final: .final
-.final: version.h $(LIBSRCS) $(MSRCS) $(HEADS) .mapfile
-	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+.final: version.h $(LIBSRCS) $(LIBBINOBJS) $(MSRCS) $(HEADS) .mapfile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_Z) && touch $@
 
 withzlib: .withzlib
 .withzlib: $(OBJS) $(ZLIB) $(LIBCOMMON) .mapfile
@@ -600,13 +601,13 @@ withzlib: .withzlib
 	
 oncewithzlib686: finalwithzlib686
 finalwithzlib686: .finalwithzlib686
-.finalwithzlib686: version.h $(LIBSRCS) $(ZSRCS) $(ZSRCS_686) $(MSRCS) $(HEADS) .mapfile
-	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) -DASMV -DNO_UNDERLINE $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(ZSRCS_686) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+.finalwithzlib686: version.h $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(ZSRCS_686) $(MSRCS) $(HEADS) .mapfile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) -DASMV -DNO_UNDERLINE $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(ZSRCS_686) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
 oncewithzlib: finalwithzlib
 finalwithzlib: .finalwithzlib
-.finalwithzlib: version.h $(LIBSRCS) $(ZSRCS) $(MSRCS) $(HEADS) .mapfile
-	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+.finalwithzlib: version.h $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(MSRCS) $(HEADS) .mapfile
+	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
 #	someday we need this, dependend on all or $(MAIN)
 install:
@@ -789,12 +790,12 @@ data.o: sbox.bin bin2o
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
-G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h
-G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h lib/hzp.h
+G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
+G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
-G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h
+G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
@@ -811,7 +812,7 @@ G2QueryKey.h: lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
 G2QHT.h: lib/hzp.h lib/atomic.h
-timeout.h: lib/list.h
+timeout.h: lib/list.h lib/hzp.h
 
 #
 #	add std.-dep. to .o's, is this gmake only?
