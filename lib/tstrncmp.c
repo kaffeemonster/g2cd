@@ -1,8 +1,8 @@
 /*
- * strncasecmp_a.c
- * strncasecmp ascii only
+ * tstrncmp.c
+ * tstrncmp
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,7 +24,7 @@
  */
 
 /*
- * strncasecmp_a - strncasecmp ascii only
+ * tstrncmp - strncmp for tchars
  * s1: one string you want to compare
  * s2: other string you want to compare
  * n: the maximum length
@@ -35,39 +35,17 @@
  *
  * NOTE: we asume that the caller garantees that maxlen bytes
  *       are accessible at s
- *
- * Since we only want to compare ascii strings most of the time, don't
- * bother with any fancy locale lookups for the ingnore-case-part, just
- * use some good old math, so we can speed up this operation with vector
- * instructions.
- * This is dirty and shurely violates everything, but as the functions
- * says, "I'm for ascii data".
- *
- * We don't use any fancy tricks like (a[i] ^ b[i]) & ~0x20, because
- * this would be a sledgehammer tolower(). We only want to get rid
- * of locale foo and vectorize it, not making the use of this funktion
- * a PITA (caller must garantee input is ONLY printable characters,
- * otherwise it matches bullsh^weverything and the kitchen sink).
  */
 
-#define IN_STRWHATEVER
 #include "../config.h"
 #include "other.h"
 
 #include "my_bitops.h"
 #include "my_bitopsm.h"
-
-/* int strncasecmp_a(const char *s1, const char *s2, size_t n); */
+#include "tchar.h"
 
 #ifdef I_LIKE_ASM
-# if defined(__i386__) || defined(__x86_64__)
-	/* works for both */
-#  include "x86/strncasecmp_a.c"
-# elif defined(__powerpc__) || defined(__powerpc64__)
-#  include "ppc/strncasecmp_a.c"
-# else
-#  include "generic/strncasecmp_a.c"
-# endif
+# include "generic/tstrncmp.c"
 #else
-# include "generic/strncasecmp_a.c"
+# include "generic/tstrncmp.c"
 #endif

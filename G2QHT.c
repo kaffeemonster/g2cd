@@ -55,6 +55,7 @@
 #include "lib/my_bitopsm.h"
 #include "lib/hzp.h"
 #include "lib/atomic.h"
+#include "lib/tchar.h"
 
 /* RLE maximum size */
 // TODO: take less?
@@ -322,7 +323,7 @@ static inline unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t
 	 * nice interference with malloc. It alignes this to 4 ;(
 	 * (and i don't understand why... only because it is a huge
 	 * alloc? and if i want to put doubles in it?)
-	 * And since every malloc could align it to another boundery
+	 * And since every malloc could align it to another boundary
 	 * we fix it up once and by hand...
 	 */
 	length += 16;
@@ -462,26 +463,24 @@ static uint32_t g2_qht_hnumber(uint32_t h, unsigned bits)
 	return (uint32_t)hash;
 }
 
-static uint32_t g2_qht_search_number_word(const char *s, size_t start, size_t len)
+static uint32_t g2_qht_search_number_word(const tchar_t *s, size_t start, size_t len)
 {
 	uint32_t h;
 	int b;
 
 	for(h = 0, b = 0, s += start; len; len--, s++)
 	{
-		int v = *(const unsigned char *)s;
+		int v = *s;
 		/*
-		 * and again f4n l10n/i18n beats us...
-		 * hashes are calced with a tolower. This totaly breaks on
-		 * UTF-8 (which is our lingua franka), and add. modern system
-		 * think it is a good idea to take our locale into account
-		 * (which is maybe some classic iso-8859-1). So hardcode a
-		 * ASCII tolower.
-		 * Will do the right thing most of the time because it does
-		 * not break at the wrong moment (or we need to emulate a
-		 * Win CP850/CP1250 tolower *autschn*).
+		 * This is fuckin broken...
+		 * Pass around and create winblow UTF-16, like shareaza,
+		 * to throw it against an ASCII tolower (here coded explicit
+		 * to prevent funny things), like shareaza, and cut away
+		 * everthing outside ASCII, like shareaza.
+		 * ????
+		 * What are they doing?
 		 */
-		v   = v < 'A' || v > 'Z' ? v : v + 'a' - 'A';
+		v   = (v < 'A' || v > 'Z' ? v : v + 'a' - 'A') & 0xFF;
 		v <<= b * BITS_PER_CHAR;
 		b   = (b + 1) & 3;
 		h  ^= v;
@@ -505,7 +504,7 @@ static uint32_t g2_qht_search_number_word(const char *s, size_t start, size_t le
 	return g2_qht_hnumber(h, QHT_DEFAULT_BITS);
 }
 
-void g2_qht_search_add_word(const char *s, size_t start, size_t len)
+void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 {
 	struct search_hash_buffer *shb =
 		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
@@ -515,15 +514,9 @@ void g2_qht_search_add_word(const char *s, size_t start, size_t len)
 	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
 }
 
-// TODO: some smartass defined those urn strings as wchar???
-/*
- * but it is totaly obfuscated if you are not a C++ pro and win accolyte
- * (e.g. me) if they end up as simple 8-bit strings. I not, we are fucked
- * up. Our hashes will be wrong (missing zeros, and hint: Win uses ucs16).
- */
-static char *to_base16(const unsigned char *h, char *wptr, unsigned num)
+static tchar_t *to_base16(const unsigned char *h, tchar_t *wptr, unsigned num)
 {
-	const char base16c[] = "0123456789abcdef";
+	static const char base16c[] = "0123456789abcdef";
 	unsigned i;
 	for(i = 0; i < num; i++) {
 		*wptr++ = base16c[h[i] / 16];
@@ -533,9 +526,9 @@ static char *to_base16(const unsigned char *h, char *wptr, unsigned num)
 }
 
 #define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
-static char *to_base32(const unsigned char *h, char *wptr, unsigned num)
+static tchar_t *to_base32(const unsigned char *h, tchar_t *wptr, unsigned num)
 {
-	const char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
+	static const char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
 	unsigned b32chars = B32_LEN(num), i = 0, ch = 0;
 	int shift = 11;
 
@@ -555,8 +548,8 @@ static char *to_base32(const unsigned char *h, char *wptr, unsigned num)
 #define URN_SHA1 "urn:sha1:"
 void g2_qht_search_add_sha1(const unsigned char *h)
 {
-	char ih[sizeof(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
-	char *wptr = strplitcpy(ih, URN_SHA1);
+	tchar_t ih[sizeof(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
+	tchar_t *wptr = strplitctcpy(ih, URN_SHA1);
 	wptr = to_base32(h, wptr, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -564,8 +557,8 @@ void g2_qht_search_add_sha1(const unsigned char *h)
 #define URN_TTR "urn:tree:tiger/:"
 void g2_qht_search_add_ttr(const unsigned char *h)
 {
-	char ih[sizeof(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
-	char *wptr = strplitcpy(ih, URN_TTR);
+	tchar_t ih[sizeof(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
+	tchar_t *wptr = strplitcpy(ih, URN_TTR);
 	wptr = to_base32(h, wptr, 24);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -573,8 +566,8 @@ void g2_qht_search_add_ttr(const unsigned char *h)
 #define URN_ED2K "urn:ed2khash:"
 void g2_qht_search_add_ed2k(const unsigned char *h)
 {
-	char ih[sizeof(URN_ED2K) + 16 * 2]; /* hex encoding */
-	char *wptr = strplitcpy(ih, URN_ED2K);
+	tchar_t ih[sizeof(URN_ED2K) + 16 * 2]; /* hex encoding */
+	tchar_t *wptr = strplitcpy(ih, URN_ED2K);
 	wptr = to_base16(h, wptr, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -582,8 +575,8 @@ void g2_qht_search_add_ed2k(const unsigned char *h)
 #define URN_BTH "urn:btih:"
 void g2_qht_search_add_bth(const unsigned char *h)
 {
-	char ih[sizeof(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
-	char *wptr = strplitcpy(ih, URN_BTH);
+	tchar_t ih[sizeof(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
+	tchar_t *wptr = strplitcpy(ih, URN_BTH);
 	wptr = to_base32(h, wptr, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -591,10 +584,328 @@ void g2_qht_search_add_bth(const unsigned char *h)
 #define URN_MD5 "urn:md5:"
 void g2_qht_search_add_md5(const unsigned char *h)
 {
-	char ih[sizeof(URN_MD5) + 16 * 2]; /* hex encoding */
-	char *wptr = strplitcpy(ih, URN_MD5);
+	tchar_t ih[sizeof(URN_MD5) + 16 * 2]; /* hex encoding */
+	tchar_t *wptr = strplitcpy(ih, URN_MD5);
 	wptr = to_base16(h, wptr, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
+}
+
+static tchar_t *make_keywords(const tchar_t *s)
+{
+	enum script_type
+	{
+		SC_NONE     = 0,
+		SC_NUMERIC  = 1,
+		SC_REGULAR  = 2,
+		SC_KANJI    = 4,
+		SC_HIRAGANA = 8,
+		SC_KATAKANA = 16,
+	} boundary[2] = {SC_NONE, SC_NONE};
+	tchar_t *phrase = (tchar_t *)qht_get_scratch2(QHT_DEFAULT_BYTES);
+	tchar_t *t_wptr = phrase + 3, *end_phrase = phrase + (QHT_DEFAULT_BYTES / sizeof(tchar_t)) - 4;
+	const tchar_t *wptr = s;
+	unsigned pos = 0, prev_word = 0;
+	tchar_t p_ch;
+	bool negativ = false;
+
+	if(!phrase)
+		return NULL;
+
+	/*
+	 * since we look back in our generated string
+	 * and do not use some cosy warm oop right/left/mid
+	 * funcs which safe our ass if the string is to short
+	 * to get back 3 chars, we have to fake it...
+	 */
+	phrase[0] = ' ';
+	phrase[1] = ' ';
+	phrase[2] = ' ';
+
+	for(; *wptr; pos++, wptr++)
+	{
+		bool character;
+		unsigned distance;
+
+		boundary[0] = boundary[1];
+		boundary[1] = SC_NONE;
+
+		boundary[1] |= tiskanji(*wptr) ? SC_KANJI : SC_NONE;
+		boundary[1] |= tiskatakana(*wptr) ? SC_KATAKANA : SC_NONE;
+		boundary[1] |= tishiragana(*wptr) ? SC_HIRAGANA : SC_NONE;
+		boundary[1] |= tischaracter(*wptr) ? SC_REGULAR : SC_NONE;
+/*		boundary[1] |= tisdigit(*wptr) ? SC_NUMERIC : SC_NONE; */
+
+		if((boundary[1] & (SC_HIRAGANA | SC_KATAKANA)) == (SC_HIRAGANA | SC_KATAKANA) &&
+		   (boundary[0] & (SC_HIRAGANA | SC_KATAKANA)))
+			boundary[1] = boundary[0];
+
+		character = (boundary[1] & SC_REGULAR) && ('-' == *wptr || '=' == *wptr);
+		if('-' == *wptr)
+			negativ = true;
+		else if('=' == *wptr)
+			negativ = false;
+		distance = !character ? 1 : 0;
+
+		if(!(!character || (boundary[0] != boundary[1] && pos)))
+			continue;
+
+		if(pos > prev_word)
+		{
+			p_ch = *(t_wptr - 2);
+			if(boundary[0] &&
+			   (' ' == p_ch || '-' == p_ch || '"' == p_ch) &&
+			   !tisdigit(*(t_wptr - (pos < 3 ? 1 : 3))))
+			{
+				/*
+				 * Why this if is empty, plug from the shareaza code
+				 *
+				 * Join two phrases if the previous was a sigle characters word.
+				 * idea of joining single characters breaks GDF compatibility completely,
+				 * but because Shareaza 2.2 and above are not really following GDF about
+				 * word length limit for ASIAN chars, merging is necessary to be done.
+				 */
+			}
+			else if(' ' != *(t_wptr - 1) && character)
+			{
+				if(('-' != *(t_wptr - 1) || '"' != *(t_wptr - 1) || '"' == *wptr) &&
+				   (!negativ || !(boundary[0] & (SC_HIRAGANA | SC_KATAKANA | SC_KANJI)))) {
+					if(t_wptr + 1 < end_phrase)
+						*t_wptr++ = ' ';
+					else
+						goto out;
+				}
+			}
+
+			if('-' == s[pos - 1] && pos > 1)
+			{
+				if(' ' == *wptr && ' ' == s[pos - 2])
+				{
+					prev_word += distance + 1;
+					continue;
+				}
+				else
+				{
+					size_t len = pos - distance - prev_word;
+					if(t_wptr + len < end_phrase)
+						t_wptr = mempcpy(t_wptr, &s[prev_word], len * sizeof(tchar_t));
+					else
+						goto out;
+				}
+			}
+			else
+			{
+				size_t len = pos - prev_word;
+				if(t_wptr + len < end_phrase)
+					t_wptr = mempcpy(t_wptr, &s[prev_word], len * sizeof(tchar_t));
+				else
+					goto out;
+				if((SC_NONE == boundary[1] && !character) ||
+				    ' ' == *wptr ||
+				   ((boundary[0] & (SC_HIRAGANA | SC_KATAKANA | SC_KANJI)) && !negativ)) {
+					if(t_wptr + 1 < end_phrase)
+						*t_wptr++ = ' ';
+					else
+						goto out;
+				}
+			}
+		}
+
+		prev_word = pos + distance;
+	}
+
+	p_ch = *(t_wptr - 2);
+	if(boundary[0] && boundary[1] &&
+	   (' ' == p_ch || '-' == p_ch || '"' == p_ch))
+	{
+		/*
+		 * Why this if is empty, plug from the shareaza code
+		 *
+		 * Join two phrases if the previous was a sigle characters word.
+		 * idea of joining single characters breaks GDF compatibility completely,
+		 * but because Shareaza 2.2 and above are not really following GDF about
+		 * word length limit for ASIAN chars, merging is necessary to be done.
+		 */
+	}
+	else if(' ' != *(t_wptr - 1) && boundary[1])
+	{
+		if(('-' != *(t_wptr - 1) || '"' != *(t_wptr - 1)) && !negativ) {
+			if(t_wptr + 1 < end_phrase)
+				*t_wptr++ = ' ';
+			else
+				goto out;
+		}
+	}
+	if(t_wptr + (pos - prev_word) < end_phrase)
+		t_wptr = mempcpy(t_wptr, &s[prev_word], (pos - prev_word) * sizeof(tchar_t));
+
+out:
+	*t_wptr-- = '\0';
+	/* trim left */
+	while(' ' == *phrase)
+		phrase++;
+	/* trim right space and minus */
+	while(t_wptr >= phrase)
+	{
+		if('-' == *t_wptr || ' ' == *t_wptr)
+			*t_wptr-- = '\0';
+		else
+			break;
+	}
+	return phrase;
+}
+
+struct skeyword
+{
+	struct list_head list;
+	uint32_t len;
+	tchar_t data[DYN_ARRAY_LEN];
+};
+
+static void fill_word_list(struct list_head *word_list, const tchar_t *in, struct zpad *zmem)
+{
+	bool quote = false, negate = false, space = true;
+	const tchar_t *wptr = in, *word_ptr = in;
+
+	for(; *wptr; wptr++)
+	{
+		if(tischaracter(*wptr))
+			space = false;
+		else
+		{
+			if(word_ptr < wptr && !negate)
+			{
+				bool word, digit, mix;
+				tistypemix(word_ptr, wptr - word_ptr, &word, &digit, &mix);
+				if(word || mix || (digit && (wptr - word_ptr) > 3))
+				{
+					struct skeyword *nword;
+					nword = qht_zpad_alloc(zmem, 1, sizeof(*nword) + ((wptr - word_ptr) + 1) * sizeof(tchar_t));
+					if(nword)
+					{
+						INIT_LIST_HEAD(&nword->list);
+						nword->len = wptr - word_ptr;
+						memcpy(nword->data, word_ptr, nword->len * sizeof(tchar_t));
+						nword->data[nword->len] = '\0';
+						list_add_tail(&nword->list, word_list);
+					}
+				}
+			}
+
+			word_ptr = wptr + 1;
+			if('\"' == *wptr) {
+				quote = !quote;
+				space = true;
+			} else if('-' == *wptr && ' ' != wptr[1] && space && !quote) {
+				negate = true;
+				space = false;
+			} else
+				space = ' ' == *wptr;
+
+			if(negate && !quote && '-' != *wptr)
+				negate = false;
+		}
+	}
+
+	if(word_ptr < wptr && !negate)
+	{
+		bool word, digit, mix;
+		tistypemix(word_ptr, wptr - word_ptr, &word, &digit, &mix);
+		if(word || mix || (digit && (wptr - word_ptr) > 3))
+		{
+			struct skeyword *nword;
+			nword = qht_zpad_alloc(zmem, 1, sizeof(*nword) + ((wptr - word_ptr) + 1) * sizeof(tchar_t));
+			if(nword)
+			{
+				INIT_LIST_HEAD(&nword->list);
+				nword->len = wptr - word_ptr;
+				memcpy(nword->data, word_ptr, nword->len * sizeof(tchar_t));
+				nword->data[nword->len] = '\0';
+				list_add_tail(&nword->list, word_list);
+			}
+		}
+	}
+}
+
+static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *word_list)
+{
+	static const tchar_t common_words[][8] =
+	{
+		/* audio */
+		{'m', 'p', '3', '\0'}, {'o', 'g', 'g', '\0'}, {'a', 'c', '3', '\0'},
+		/* picture */
+		{'j', 'p', 'g', '\0'}, {'g', 'i', 'f', '\0'}, {'p', 'n', 'g', '\0'}, {'b', 'm', 'p', '\0'},
+		/* video */
+		{'a', 'v', 'i', '\0'}, {'m', 'p', 'g', '\0'}, {'a', 'v', 'i', '\0'}, {'m', 'k', 'v', '\0'},
+		{'w', 'm', 'v', '\0'}, {'m', 'o', 'v', '\0'}, {'o', 'g', 'm', '\0'}, {'m', 'p', 'a', '\0'},
+		{'m', 'p', 'v', '\0'}, {'m', '2', 'v', '\0'}, {'m', 'p', '2', '\0'}, {'m', 'p', '4', '\0'},
+		{'d', 'v', 'd', '\0'}, {'m', 'p', 'e', 'g', '\0'}, {'d', 'i', 'v', 'x', '\0'}, {'x', 'v', 'i', 'd', '\0'},
+		/* archive */
+		{'e', 'x', 'e', '\0'}, {'z', 'i', 'p', '\0'}, {'r', 'a', 'r', '\0'}, {'i', 's', 'o', '\0'},
+		{'b', 'i', 'n', '\0'}, {'c', 'u', 'e', '\0'}, {'i', 'm', 'g', '\0'}, {'l', 'z', 'h', '\0'},
+		{'b', 'z', '2', '\0'}, {'r', 'p', 'm', '\0'}, {'d', 'e', 'b', '\0'}, {'7', 'z', '\0'},
+		{'a', 'c', 'e', '\0'}, {'a', 'r', 'j', '\0'}, {'l', 'z', 'm', 'a', '\0'},
+		/* profanity */
+		{'x', 'x', 'x', '\0'}, {'s', 'e', 'x', '\0'}, {'f', 'u', 'c', 'k', '\0'},
+		{'t', 'o', 'r', 'r', 'e', 'n', 't', '\0'},
+	};
+	struct skeyword *lcursor;
+	unsigned num_common = 0, num_valid = 0;
+
+	list_for_each_entry(lcursor, word_list, list)
+	{
+		size_t valid_chars = 0;
+		uint32_t w_len = lcursor->len;
+		tchar_t f_ch = lcursor->data[0];
+
+		if(!w_len)
+			continue;
+		if(!tischaracter(f_ch)) /* char valid? */
+			continue;
+		else if(w_len > 3) /* anything longer than 3 char is OK */
+			valid_chars = w_len;
+		else if(0x007f >= f_ch) /* basic ascii? */
+			valid_chars = w_len;
+		else if(0x0080 <= f_ch && 0x07ff >= f_ch) /* simple utf-8 stuff? */
+			valid_chars = w_len * 2;
+		else if(0x3041 <= f_ch && 0x30fe >= f_ch) /* asian stuff, count with 2 to get 2 chars min  */
+			valid_chars = w_len * 2;
+		else if(0x0800 <= f_ch) /* other stuff */
+			valid_chars = w_len * 3;
+		else if(w_len > 2) /* huh? inspect it... */
+		{
+			bool word, digit, mix;
+			tistypemix(lcursor->data, w_len, &word, &digit, &mix);
+			if(word || mix)
+				valid_chars = w_len;
+		}
+
+		if(valid_chars > 2) /* if more than 3 utf-8 chars, everything is fine */
+		{
+			size_t i;
+			bool found = false;
+			for(i = 0; i < anum(common_words); i++) {
+				if(0 == tstrncmp(common_words[i], lcursor->data, w_len)) {
+					found = true;
+					break;
+				}
+			}
+			if(found)
+				num_common++;
+			else
+				num_valid++;
+			shb->hashes[shb->num++] = g2_qht_search_number_word(lcursor->data, 0, w_len);
+			if(shb->num >= shb->size)
+				break;
+		}
+	}
+
+	/* if we had a search scheme in the metadata... */
+	if(false)
+		num_valid += num_common > 1;
+	else
+		num_valid += num_common > 2;
+
+	return !!num_valid;
 }
 
 bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t dn_len, void *data, bool had_urn, bool hubs)
@@ -607,6 +918,12 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 
 	if(!had_urn && ((metadata && metadata_len) || (dn && dn_len)))
 	{
+		LIST_HEAD(word_list);
+		struct zpad *zmem = qht_get_zpad(); /* dipping into all mem rescources.. */
+
+		if(!zmem)
+			goto cont;
+
 		/*
 		 * metadata (XML) and dn (Desciptive Search lang) have to be groked
 		 * and keywords have to be extracted to build hashes to match against
@@ -678,7 +995,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * And there is another problem:
 		 * Normalization.
 		 * You can express one character sometimes as a direct code point, and
-		 * also as a composed contruct. For example an angstrom (an 'a' with a
+		 * also as a composed construct. For example an angstrom (an 'a' with a
 		 * circle at the top) can be expressed as 'ANGSTROM SIGN (U+212B)' or
 		 * as a 'LATIN CAPITAL LETTER A WITH RING ABOVE' (U+00C5) (old latin1
 		 * coding), wich can be decomposed as 'LATIN CAPITAL LETTER A' (U+0041)
@@ -694,26 +1011,111 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * At the end of the day this does not help us. We have to create hashes
 		 * like Shareaza or it will not blend^Wmatch the hash.
 		 * And for this we have to create a bunch of code ourself.
+		 * Which is ugly, bug prone and...
+		 * ... will have similaryties to Shareaza code and includes defines from
+		 * the winapi.
 		 *
-		 * So ATM left out.
 		 */
 		if(metadata && metadata_len)
 		{
 			char *str_buf = (char *)qht_get_scratch2(metadata_len + 10);
+			if(!str_buf)
+				goto check_dn;
 			memcpy(str_buf, metadata, metadata_len);
 			str_buf[metadata_len] = '\0';
 // TODO: grok metadata
+			/*
+			for_each_xml(str_buf) {
+				tbuf = get_value_as_tchar(xml)
+				fill_word_list(&word_list, tbuf, zmem);
+			}
+			*/
 		}
+check_dn:
 		if(dn && dn_len)
 		{
-			char *str_buf = (char *)qht_get_scratch2(dn_len + 10);
-			memcpy(str_buf, dn, dn_len);
-			str_buf[dn_len] = '\0';
-// TODO: grok dn
-			shb->hashes[shb->num++] = g2_qht_search_number_word(str_buf, 0, dn_len);
-		}
-	}
+			static const tchar_t URN_MAGNET[] = {'m', 'a', 'g', 'n', 'e', 't', ':', '?', '\0'};
+			static const tchar_t URN_URN[] = {'u', 'r', 'n', ':', '\0'};
+			tchar_t *str_buf = qht_zpad_alloc(zmem, dn_len + 10, sizeof(tchar_t));
+			tchar_t *wptr, *str_buf_orig;
+			size_t dn_tlen;
 
+			if(!str_buf)
+				goto work_list;
+			str_buf_orig = str_buf;
+
+			dn_tlen = utf8totcs(str_buf, dn_len + 9, dn, &dn_len);
+			if(!dn_tlen || dn_len) /* no output or input not consumed? */
+				goto work_list;
+
+			str_buf[dn_tlen] = '\0';
+			dn_tlen = tstrptolower(str_buf) - str_buf;
+			if(!dn_tlen)
+				goto work_list;
+			wptr = tstr_trimleft(str_buf);
+			dn_tlen -= (size_t)(wptr - str_buf) <= dn_tlen ?
+			           (size_t)(wptr - str_buf) : dn_tlen;
+			if(!dn_tlen)
+				goto work_list;
+
+			if(0 == tstrncmp(str_buf, URN_MAGNET, tstr_size(URN_MAGNET)))
+			{
+				/* magnet url */
+				str_buf += tstr_size(URN_MAGNET);
+				dn_tlen -= tstr_size(URN_MAGNET);
+// TODO: parse magnet urls
+				had_urn = true;
+			}
+
+			while(0 == tstrncmp(str_buf, URN_URN, tstr_size(URN_URN)))
+			{
+				/* urns */
+// TODO: extract hashes from urns
+				had_urn = true;
+
+				wptr = tstrchrnul(str_buf, ' ');
+				if(*wptr) {
+					wptr = tstr_trimleft(wptr);
+					dn_tlen -= (size_t)(wptr - str_buf) <= dn_tlen ?
+					           (size_t)(wptr - str_buf) : dn_tlen;
+					str_buf  = wptr;
+				} else {
+					str_buf = wptr;
+					dn_tlen = 0;
+					break;
+				}
+			}
+
+			if(dn_tlen)
+			{
+				wptr = tstr_trimleft(str_buf);
+				dn_tlen -= (size_t)(wptr - str_buf) <= dn_tlen ?
+				           (size_t)(wptr - str_buf) : dn_tlen;
+				str_buf = wptr;
+			}
+			if(dn_tlen)
+			{
+				wptr = tstr_trimright(str_buf);
+				if(wptr >= str_buf)
+					dn_tlen = (wptr - str_buf) + 1;
+				else
+					dn_tlen = 0;
+			}
+			if(dn_tlen)
+			{
+				wptr = make_keywords(str_buf);
+				qht_zpad_free(zmem, str_buf_orig);
+				if(wptr)
+					fill_word_list(&word_list, wptr, zmem);
+			}
+		}
+
+work_list:
+		/* refuse query if no "valid" word and no urn */
+		if(!hash_word_list(shb, &word_list) && !had_urn)
+			return false;
+	}
+cont:
 	shb->num = introsort_u32(shb->hashes, shb->num);
 	if(!shb->num)
 		return false;
@@ -739,10 +1141,10 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 		hzp_ref(HZP_QHT, table = con->qht);
 	} while(table != con->qht);
 
-	if(!table)
-		return 0;
+	if(!table) /* if we have no table, we have to assume a match */
+		return g2_packet_hub_qht_match(con, rdata->data);
 
-	if(table->flags.reset_needed)
+	if(table->flags.reset_needed) /* table empty, no mathc possible */
 		goto out;
 
 	do {
@@ -750,8 +1152,8 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));
 	} while(qd != container_of(table->data, struct qht_data, data));
 
-	if(!table->data)
-		goto out_unref;
+	if(!table->data) /* no data? We have to assume a match */
+		goto out_match;
 
 	if(COMP_RLE == table->compressed) {
 		if(bitfield_lookup(rdata->hashes, rdata->num, table->data, table->data_length))
@@ -769,7 +1171,6 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 		}
 	}
 
-out_unref:
 	hzp_unref(HZP_QHTDAT);
 out:
 	hzp_unref(HZP_QHT);

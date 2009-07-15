@@ -137,9 +137,11 @@
 	FEATURE4( 3DNOWPRE ,  8, "3DNow! Prefetch instructions"      ), \
 	FEATURE4( OSVW     ,  9, "OS Visible Workaround"             ), \
 	FEATURE4( IBS      , 10, "Instruction Based Sampling"        ), \
-	FEATURE4( SSE5     , 11, "SSE5 Extensions"                   ), \
+	FEATURE4( XOP      , 11, "XOP Extensions"                    ), \
 	FEATURE4( SKINIT   , 12, "SKINIT avail."                     ), \
 	FEATURE4( WDT      , 13, "Watchdog timer"                    ), \
+	FEATURE4( FMA4     , 16, "FMA AMD-Style"                     ), \
+	FEATURE4( CVT16    , 18, "Half Float extention"              ), \
 	FEATURE5( PL_RNG   ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE5( PL_RNG_E ,  3, "Padlock RNG enabled"               ), \
 	FEATURE5( PL_ACE   ,  6, "Padlock Advanced Coding ..."       ), \

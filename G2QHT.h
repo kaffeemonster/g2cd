@@ -33,6 +33,7 @@
 /* Own */
 # include "lib/hzp.h"
 # include "lib/atomic.h"
+# include "lib/tchar.h"
 
 enum g2_qht_comp
 {
@@ -93,7 +94,7 @@ struct qht_search_walk
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(bool g2_qht_search_prepare(void));
-_G2QHT_EXTRN(void g2_qht_search_add_word(const char *s, size_t start, size_t len));
+_G2QHT_EXTRN(void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len));
 _G2QHT_EXTRN(void g2_qht_search_add_sha1(const unsigned char *h));
 _G2QHT_EXTRN(void g2_qht_search_add_ttr(const unsigned char *h));
 _G2QHT_EXTRN(void g2_qht_search_add_ed2k(const unsigned char *h));

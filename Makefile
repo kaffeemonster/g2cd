@@ -33,6 +33,12 @@
 # system)
 #
 
+# Target endianess
+# little endian
+#TARGET_ENDIAN = big
+# big endian
+TARGET_ENDIAN = little
+
 #
 # Name of your Programs
 #	compiler
@@ -798,7 +804,7 @@ G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
-G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h
+G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h lib/tchar.h
 G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h
@@ -811,7 +817,7 @@ G2ConRegistry.h: G2Connection.h lib/combo_addr.h
 G2QueryKey.h: lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
-G2QHT.h: lib/hzp.h lib/atomic.h
+G2QHT.h: lib/hzp.h lib/atomic.h lib/tchar.h
 timeout.h: lib/list.h lib/hzp.h
 
 #

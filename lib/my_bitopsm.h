@@ -81,6 +81,11 @@
 	 */
 # define has_greater(x, n) \
 	((((x) + ~0UL/255*(127-(n))) | (x)) & ~0UL/255*128)
+	/* true if any word in x is greater than n
+	 * n has to be 15 Bit!
+	 */
+# define has_word_greater(x, n) \
+	((((x) + ~0UL/65535*(32767-(n))) | (x)) & ~0UL/65535*32767)
 	/* The wonders of binary foo
 	 * true if any byte in the number is zero
 	 */
@@ -100,6 +105,16 @@
 	 *	3210987654321098765432109876543210987654321098765432109876543210
 	 *	1000000010000000100000001000000010000000100000001000000010000000
 	 */
+# define has_nul_word(x) \
+	(((x) -  MK_C(0x00010001)) & ~(x) &  MK_C(0x80008000))
+# define nul_word_index_l32(x) \
+	((x) & 0x8000U ? 0 : ((x) & 0x80000000U ? 1 : 0))
+# define nul_word_index_b32(x) \
+	((x) & 0x80000000U ? 0 : ((x) & 0x8000U ? 1 : 0))
+# define nul_word_index_l64(x) \
+	(0x80008000U & (x) ? nul_word_index_l32(x) : nul_word_index_l32((x)>>32) + 2)
+# define nul_word_index_b64(x) \
+	(0x80008000U & ((x)>>32) ? nul_word_index_b32((x)>>32) : nul_word_index_b32(x) + 2)
 # define packedmask_832(x) \
 	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F);
 # define packedmask_864(x) \

@@ -9,10 +9,20 @@ AES_TABS = \
 	$(MPL)/aes_it_tab.bin \
 	$(MPL)/aes_il_tab.bin
 
+TCHAR_TABS_BE = \
+	$(MPL)/tchar_tolower_be.bin \
+	$(MPL)/tchar_c1table_be.bin \
+	$(MPL)/tchar_c3table_be.bin
+
+TCHAR_TABS = \
+	$(MPL)/tchar_tolower.bin \
+	$(MPL)/tchar_c1table.bin \
+	$(MPL)/tchar_c3table.bin
+
 TARED_FILES += \
 	$(MPL)/module.make \
 	$(MPL)/aes_tab_gen.c \
-	$(AES_TABS) \
+	$(TCHAR_TABS_BE) \
 	$(LIBHEADS) \
 	$(LIBASRCS)
 
@@ -40,6 +50,7 @@ LIBHEADS = \
 	$(MPL)/my_bitops.h \
 	$(MPL)/my_bitopsm.h \
 	$(MPL)/my_epoll.h \
+	$(MPL)/tchar.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
 	$(MPL)/combo_addr.h \
@@ -140,6 +151,14 @@ STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \
 	$(MPL)/ppc/strnpcpy.c
+TSTRLENSRC = \
+	$(MPL)/generic/tstrlen.c \
+	$(MPL)/x86/tstrlen.c \
+	$(MPL)/ppc/tstrlen.c
+TSTRCHRNULSRC = \
+	$(MPL)/generic/tstrchrnul.c
+TSTRNCMPSRC = \
+	$(MPL)/generic/tstrncmp.c
 ADLER32SRC = \
 	$(MPL)/generic/adler32.c \
 	$(MPL)/x86/adler32.c \
@@ -165,6 +184,9 @@ LIBASRCS = \
 	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
+	$(TSTRLENSRC) \
+	$(TSTRCHRNULSRC) \
+	$(TSTRNCMPSRC) \
 	$(ADLER32SRC) \
 	$(MY_BITOPSSRC)
 
@@ -202,6 +224,10 @@ LIBSRCS = \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
+	$(MPL)/tstrlen.c \
+	$(MPL)/tstrchrnul.c \
+	$(MPL)/tstrncmp.c \
+	$(MPL)/tchar.c \
 	$(MPL)/vsnprintf.c
 
 BITOPOBJS = \
@@ -226,13 +252,21 @@ BITOPOBJS = \
 	$(MPL)/strnpcpy.o \
 	$(MPL)/my_bitops.o
 
+TCHAROBJS = \
+	$(MPL)/tstrlen.o \
+	$(MPL)/tstrchrnul.o \
+	$(MPL)/tstrncmp.o \
+	$(MPL)/tchar.o
+
 LIBBINOBJS = \
 	$(MPL)/aes_tab.o \
-	$(MPL)/five_tab.o
+	$(MPL)/five_tab.o \
+	$(MPL)/tchar_tab.o
 
 # base objectfiles
 LIBOBJS = \
 	$(BITOPOBJS) \
+	$(TCHAROBJS) \
 	$(LIBBINOBJS) \
 	$(MPL)/aes.o \
 	$(MPL)/atomic.o \
@@ -260,6 +294,10 @@ $(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 	$(RANLIB) $@
 $(LIBCOMMON)($(LIBOBJS)): arflock
 
+#$(LIBCOMMON): $(LIBOBJS)
+#	$(AR) $(ARFLAGS) $@ $^
+#	$(RANLIB) $@
+
 $(MPL)/aes_tab_gen: $(MPL)/aes_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/aes_tab_gen.c -o $@
 
@@ -278,8 +316,33 @@ $(MPL)/five_tab.bin: $(MPL)/five_tab_gen
 $(MPL)/five_tab.o: $(MPL)/five_tab.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(MPL)/five_tab.bin
 
+$(MPL)/tchar_tab.o: $(TCHAR_TABS) bin2o
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(TCHAR_TABS)
+
+$(MPL)/tchar_tolower.bin: $(MPL)/tchar_tolower_be.bin
+	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_tolower_be.bin conv=swab of=$@ ; \
+	else \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_tolower_be.bin of=$@ ; \
+	fi
+$(MPL)/tchar_c1table.bin: $(MPL)/tchar_c1table_be.bin
+	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c1table_be.bin conv=swab of=$@ ; \
+	else \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c1table_be.bin of=$@ ; \
+	fi
+$(MPL)/tchar_c3table.bin: $(MPL)/tchar_c3table_be.bin
+	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c3table_be.bin conv=swab of=$@ ; \
+	else \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin of=$@ ; \
+	fi
+
+$(TCHAR_TABS): $(MPL)/module.make Makefile
+
 # Dependencies
 $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
+$(TCHAROBJS): $(MPL)/tchar.h $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h
 $(MPL)/flsst.o: $(FLSSTSRC)
 $(MPL)/popcountst.o: $(POPCOUNTSTSRC)
 $(MPL)/cpy_rest.o: $(CPY_RESTSRC)
@@ -292,6 +355,9 @@ $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
+$(MPL)/tstrlen.o: $(TSTRLENSRC)
+$(MPL)/tstrchrnul.o: $(TSTRCHRNULSRC)
+$(MPL)/tstrncmp.o: $(TSTRNCMPSRC)
 $(MPL)/adler32.o: $(ADLER32SRC)
 $(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
 $(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
@@ -325,7 +391,7 @@ libclean:
 	$(RM) $(LIBCOMMON) $(LIBOBJS) $(MPL)/aes_tab_gen $(MPL)/five_tab_gen
 
 libdclean: libclean
-	$(RM) $(AES_TABS) $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.bin $(MPL)/*.rtl
+	$(RM) $(AES_TABS) $(TCHAR_TABS) $(MPL)/five_tab.bin $(MPL)/*.bb $(MPL)/*.bbg $(MPL)/*.da $(MPL)/*.i $(MPL)/*.s $(MPL)/*.rtl
 
 libdepend: $(LIBSRCS)
 	@$(PORT_PR) "\tDEP[$(MPL)/$@]\n"; $(CC) -MM -MG $(CFLAGS) $(CPPFLAGS) $(LIBSRCS) > $(MPL)/$@;
