@@ -127,6 +127,9 @@ MEMNEGSRC = \
 	$(MPL)/x86/memneg.c \
 	$(MPL)/x86/memneg_tmpl.c \
 	$(MPL)/ppc/memneg.c
+MEMPOPCNTSRC = \
+	$(MPL)/generic/mempopcnt.c \
+	$(MPL)/x86/mempopcnt.c
 MEM_SEARCHRNSRC = \
 	$(MPL)/generic/mem_searchrn.c \
 	$(MPL)/x86/mem_searchrn.c \
@@ -178,6 +181,7 @@ LIBASRCS = \
 	$(MEMXORCPYSRC) \
 	$(MEMANDSRC) \
 	$(MEMNEGSRC) \
+	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
 	$(STRCHRNULSRC) \
@@ -208,6 +212,7 @@ LIBSRCS = \
 	$(MPL)/memxorcpy.c \
 	$(MPL)/memand.c \
 	$(MPL)/memneg.c \
+	$(MPL)/mempopcnt.c \
 	$(MPL)/memcpy.c \
 	$(MPL)/mempcpy.c \
 	$(MPL)/mem_searchrn.c \
@@ -239,6 +244,7 @@ BITOPOBJS = \
 	$(MPL)/memxorcpy.o \
 	$(MPL)/memand.o \
 	$(MPL)/memneg.o \
+	$(MPL)/mempopcnt.o \
 	$(MPL)/memcpy.o \
 	$(MPL)/mempcpy.o \
 	$(MPL)/mem_searchrn.o \
@@ -349,6 +355,7 @@ $(MPL)/cpy_rest.o: $(CPY_RESTSRC)
 $(MPL)/memxorcpy.o: $(MEMXORCPYSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
+$(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
 $(MPL)/strlen.o: $(STRLENSRC)

@@ -1845,13 +1845,19 @@ static void qht_dump_deinit(void)
 
 static void qht_sdump(void *patch, size_t len)
 {
-	write(qht_sdump_fd, patch, len);
+	if(len != (size_t)write(qht_sdump_fd, patch, len)) {
+		/* it's a debug dump ... */
+	}
 }
 
 static void qht_dump(void *table, void *patch, size_t len)
 {
-	write(qht_tdump_fd, table, len);
-	write(qht_pdump_fd, patch, len);
+	if(len != (size_t)write(qht_tdump_fd, table, len)) {
+		/* ... cool down ... */
+	}
+	if(len != (size_t)write(qht_pdump_fd, patch, len)) {
+		/* ... everything is fine! */
+	}
 }
 #endif
 

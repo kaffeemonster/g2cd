@@ -34,11 +34,15 @@ F_NAME(size_t, popcountst, _generic) (size_t n)
 	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;
 	n = ((n >> 2) & MK_C(0x33333333L)) + (n & MK_C(0x33333333L));
 	n = ((n >> 4) + n) & MK_C(0x0f0f0f0fL);
+#ifdef HAVE_HW_MULT
+	n = (n * MK_C(0x01010101L)) >> (SIZE_T_BITS - 8);
+#else
 	n = ((n >> 8) + n);
 	n = ((n >> 16) + n);
 	if(SIZE_T_BITS >= 64)
 		n = ((n >> 32) + n);
 	n &= 0xff;
+#endif
 	return n;
 }
 #undef F_NAME

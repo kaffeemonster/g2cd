@@ -27,6 +27,7 @@ char *strchrnul(const char *s, int c)
 {
 	const char *p;
 	size_t r, mask, x;
+	unsigned shift;
 	prefetch(s);
 
 	/*
@@ -40,25 +41,25 @@ char *strchrnul(const char *s, int c)
 	 */
 	mask = (c & 0xFF) * MK_C(0x01010101);
 	p  = (const char *)ALIGN_DOWN(s, SOST);
+	shift = ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
 	x  = *(const size_t *)p;
+	if(!HOST_IS_BIGENDIAN)
+		x >>= shift;
 	r  = has_nul_byte(x);
 	x ^= mask;
 	r |= has_nul_byte(x);
-	if(!HOST_IS_BIGENDIAN)
-		r >>= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	else
-		r <<= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	if(r)
-		return (char *)(uintptr_t)s + nul_byte_index(r);
+	r <<= shift;
+	if(HOST_IS_BIGENDIAN)
+		r >>= shift;
 
-	do
+	while(!r)
 	{
 		p += SOST;
 		x  = *(const size_t *)p;
 		r  = has_nul_byte(x);
 		x ^= mask;
 		r |= has_nul_byte(x);
-	} while(!r);
+	}
 	r = nul_byte_index(r);
 	return (char *)(uintptr_t)p + r;
 }

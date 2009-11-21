@@ -27,6 +27,7 @@ size_t tstrlen(const tchar_t *s)
 {
 	const char *p;
 	size_t r;
+	unsigned shift;
 	prefetch(s);
 
 	/*
@@ -39,11 +40,13 @@ size_t tstrlen(const tchar_t *s)
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
 	p = (const char *)ALIGN_DOWN(s, SOST);
-	r = has_nul_word(*(const size_t *)p);
+	shift = ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
+	r = *(const size_t *)p;
 	if(!HOST_IS_BIGENDIAN)
-		r >>= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	else
-		r <<= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
+		r >>= shift;
+	r = has_nul_word(r);
+	if(HOST_IS_BIGENDIAN)
+		r <<= shift;
 	if(r)
 		return nul_word_index(r);
 

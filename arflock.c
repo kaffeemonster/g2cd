@@ -66,7 +66,9 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	ret_val = sprintf(pid_buf, "%i\n", getpid());
-	write(fd_gate, pid_buf, ret_val);
+	if(ret_val != write(fd_gate, pid_buf, ret_val)) {
+		/* nothing we can do about, it's only nice to put our pid inside */
+	}
 
 	/* register alarm handler for timeout */
 	if(SIG_ERR == signal(SIGALRM, sig_alarm))

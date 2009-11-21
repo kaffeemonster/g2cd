@@ -92,6 +92,15 @@ void backtrace_init(void)
 # include "log_facility.h"
 # include "itoa.h"
 
+static inline void write_panic(int fd, const void *buf, size_t len)
+{
+	ssize_t res = write(fd, buf, len);
+	if((size_t)res != len)
+	{
+		/* we can do nothing if the write fails */
+	}
+}
+
 static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 {
 /*	unsigned char *org_addr = addr;*/
@@ -169,7 +178,7 @@ We crashed hard!!! Please fasten your seat belts...\n\
 We will now try scary things to aid debuging the situation.\n\
 (you may see unrelated program output spilling out of buffers)\n"
 
-	write(stderrfd, DEATHSTR_1, str_size(DEATHSTR_1));
+	write_panic(stderrfd, DEATHSTR_1, str_size(DEATHSTR_1));
 	/* lock out the other threads, if another one apears, simply deadlock */
 	if(SIGSEGV == signr && critical) {
 		/* maybe we caught a sigsegv in our own sighandler, try to resume */
@@ -181,7 +190,7 @@ We will now try scary things to aid debuging the situation.\n\
 		{
 # define DEATHSTR_2 "\"I'm scared Dave. Will i dream?\"\n\
 Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
-			write(stderrfd, DEATHSTR_2, str_size(DEATHSTR_2));
+			write_panic(stderrfd, DEATHSTR_2, str_size(DEATHSTR_2));
 			goto out;
 		}
 	}
@@ -297,12 +306,12 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	*wptr++ = ' '; *wptr++ = '(';
 	wptr = itoa(wptr, si->si_code);
 	*wptr++ = ')'; *wptr++ = '\n';
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 	/* errno set? */
 	if(si->si_errno) {
 		wptr = itoa(strplitcpy(path, "Errno: "), si->si_errno);
 		*wptr++ = '\n';
-		write(stderrfd, path, wptr - path);
+		write_panic(stderrfd, path, wptr - path);
 	}
 
 	/* Dump registers, a better dump would be plattformspecific */
@@ -325,7 +334,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 # endif
 		*wptr++ = '\n';
 	}
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 
 	/* Stackinfo */
 	wptr = strplitcpy(path, "Stack ref:\t0x");
@@ -335,7 +344,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	wptr = strplitcpy(wptr, "\tflags: ");
 	wptr = itoa(wptr, uc->uc_stack.ss_flags);
 	*wptr++ = '\n';
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 
 	wptr = path;
 	if(SIGSEGV != signr && uc->uc_stack.ss_sp)
@@ -350,12 +359,12 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		critical = 0; 
 	}
 	*wptr++= '\n'; *wptr++ = '\0';
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 	
 	/* whats at the memref */
 	wptr = ultoXa_0fix(strplitcpy(path, "Memory ref:\t0x"), (unsigned long)si->si_addr, 16);
 	*wptr++ = '\n';
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 
 	wptr = path;
 	if(SIGSEGV != signr && si->si_addr)
@@ -369,13 +378,13 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		critical = 0;
 	}
 	*wptr++= '\n'; *wptr++ = '\0';
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 
 	fflush(NULL);
 
 	/* Now get the real bt */
 # define DEATHSTR_31 "\ntrying to get backtrace...\n"
-	write(stderrfd, DEATHSTR_31, str_size(DEATHSTR_31));
+	write_panic(stderrfd, DEATHSTR_31, str_size(DEATHSTR_31));
 	wptr = strplitcpy(path, DEBUG_CMD);
 	ret_val = 0;
 # ifndef __sun__
@@ -401,10 +410,10 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	}
 	*wptr = '\0';
 
-	write(stderrfd, path, wptr - path);
+	write_panic(stderrfd, path, wptr - path);
 #define DEATHSTR_32 \
 	"-------------- start of backtrace --------------\n"
-	write(stderrfd, DEATHSTR_32, str_size(DEATHSTR_32));
+	write_panic(stderrfd, DEATHSTR_32, str_size(DEATHSTR_32));
 
 	if(-1 == ret_val || system(path))
 	{
@@ -413,13 +422,13 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		backtrace_symbols_fd(buffer, ret_val, stderrfd);
 # else
 # define DEATHSTR_4 "No real backtrace available ;-(\n"
-		write(stderrfd, DEATHSTR_4, str_size(DEATHSTR_4));
+		write_panic(stderrfd, DEATHSTR_4, str_size(DEATHSTR_4));
 # endif
 	}
 # define DEATHSTR_5 \
 "\n--------------- end of backtrace ---------------\n" \
 "+++++++++++++++ start of mappings ++++++++++++++\n"
-	write(stderrfd, DEATHSTR_5, str_size(DEATHSTR_5));
+	write_panic(stderrfd, DEATHSTR_5, str_size(DEATHSTR_5));
 	if(!access("/proc/self/maps", R_OK))
 	{
 		int mfd = open("/proc/self/maps", O_RDONLY);
@@ -431,7 +440,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 				rret = read(mfd, path, sizeof(path));
 	
 				if(rret > 0)
-					write(stderrfd, path, rret);
+					write_panic(stderrfd, path, rret);
 			} while(rret > 0);
 			close(mfd);
 		}
@@ -439,7 +448,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 # define DEATHSTR_6 \
 "++++++++++++++++ end of mappings ++++++++++++++\n\n" \
 "Now the same SIG again, so you can get a CORE-file:\n"
-	write(stderrfd, DEATHSTR_6, str_size(DEATHSTR_6));
+	write_panic(stderrfd, DEATHSTR_6, str_size(DEATHSTR_6));
 
 out:
 	/* do not reregister, we want to crash again after

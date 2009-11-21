@@ -206,11 +206,14 @@ void g2_guid_end(void)
 	signature[1] = sizeof(struct guid_entry);
 	signature[2] = GUID_DUMP_VERSION;
 
-	fwrite(signature, sizeof(signature[0]), 3, guid_dump);
-
-	for(i = 0; i < GUID_CACHE_SIZE; i++) {
-		if(cache.entrys[i].used)
-			fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, guid_dump);
+	if(3 == fwrite(signature, sizeof(signature[0]), 3, guid_dump))
+	{
+		for(i = 0; i < GUID_CACHE_SIZE; i++) {
+			if(cache.entrys[i].used) {
+				if(1 != fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, guid_dump))
+					break;
+			}
+		}
 	}
 	fclose(guid_dump);
 }

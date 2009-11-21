@@ -27,6 +27,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
 	size_t r, mask, x;
+	unsigned shift;
 	prefetch(s);
 
 	/*
@@ -40,25 +41,25 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	 */
 	mask = (((size_t)c) & 0xFFFF) * MK_C(0x00010001);
 	p  = (const char *)ALIGN_DOWN(s, SOST);
+	shift = ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
 	x  = *(const size_t *)p;
+	if(!HOST_IS_BIGENDIAN)
+		x >>= shift;
 	r  = has_nul_word(x);
 	x ^= mask;
 	r |= has_nul_word(x);
-	if(!HOST_IS_BIGENDIAN)
-		r >>= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	else
-		r <<= ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	if(r)
-		return ((tchar_t *)(uintptr_t)s) + nul_word_index(r);
+	r <<= shift;
+	if(HOST_IS_BIGENDIAN)
+		r >>= shift;
 
-	do
+	while(!r)
 	{
 		p += SOST;
 		x  = *(const size_t *)p;
 		r  = has_nul_word(x);
 		x ^= mask;
 		r |= has_nul_word(x);
-	} while(!r);
+	}
 	r = nul_word_index(r);
 	return ((tchar_t *)(uintptr_t)p) + r;
 }

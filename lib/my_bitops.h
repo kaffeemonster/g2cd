@@ -54,6 +54,7 @@ static inline void *memxor(void *dst, const void *src, size_t len)
 }
 LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(size_t mempopcnt(const void *s, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 # ifndef HAVE_MEMCPY
 void *memcpy(void *restrict dst, const void *restrict src, size_t len);

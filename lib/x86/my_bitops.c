@@ -195,7 +195,12 @@ static inline bool is_486(void)
 	return toggle_eflags_test(1 << 18);
 }
 
-static bool cpu_feature(int f)
+static inline void cpu_feature_clear(int f)
+{
+	our_cpu.features[f / 32] &= ~(1 << (f % 32));
+}
+
+static inline bool cpu_feature(int f)
 {
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
 }
@@ -340,6 +345,24 @@ static void identify_cpu(void)
 		our_cpu.features[4] = a.r.edx;
 	}
 
+	/*
+	 * First gen. x86-64 left out the "legacy" lahf/sahf instruction
+	 * in 64 bit mode.
+	 * Later gen. added it back, indicated by a cpuid flag.
+	 * Unfortunatly some AMD chips forgot to set this cpuid flag.
+	 * The AMD erratum says the BIOS sould enable it by poking some
+	 * MSR for the affected processors.
+	 * But no BIOS without bugs: Some BIOS _always_ enable it, even
+	 * if the underlying CPU does not support it...
+	 * Since we do not need lahf/sahf, only document this.
+#ifdef(__x86_64__)
+	if(our_cpu.vendor == X86_VENDOR_AMD &&
+	   our_cpu.family == 0x0F &&
+	   our_cpu.model  <  0x14)
+		cpu_feature_clear(CFEATURE_LAHF);
+#endif
+	 */
+
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
 	logg_posd(LOGF_DEBUG,
 		"Vendor: \"%s\" Family: %d Model: %d Stepping: %d Name: \"%s\"\n",
@@ -354,7 +377,38 @@ static void identify_cpu(void)
 	/*
 	 * Gosh, some weeks after the fact and you look mystified
 	 * at your code...
-	 * This is only a problem if we are on multicore chips???
+	 *
+	 * Update:
+	 * Finally problem officaly affirmed.
+	 *
+	 * AMD erratum 147 check.
+	 *
+	 * Get the "Revision Guide for AMD Athlon 64 (TM) and AMD
+	 * Opteron (TM) Processors", Revision >= 3.79, at least issue Date
+	 * >= July 2009.
+	 * Have a look at Errata 147.
+	 * We should check for MSRC001_1023h bit 33 set, on every cpu,
+	 * unfortunatly rdmsr is a privileged instruction...
+	 * So stick to model tests.
+	 *
+	 * From the Erratum:
+	 * "This erratum can only occur in multiprocessor or
+	 * multicore configurations."
+	 * (Hmmm, interresting race with the coherent HT links?
+	 *  No coherent link involved, no race?)
+	 *
+	 * So we need the number of CPUs.
+	 *
+	 * We should check the SMP case more thoroughly, and maybe
+	 * default to give the warning to be on the safe side.
+	 *
+	 * Unfortunatly this is a PITA:
+	 * - Switched off processors, single cpu cpu sets, or only one
+	 *   processor in a SMP config is faulty and we are not running
+	 *   at test time on it (or would have to play with affinity
+	 *   masks, after finding a precise num_possible_cpus in the
+	 *   first place -> goto 1).
+	 * - Always crying wolf is also not very fruitfull...
 	 */
 	if(our_cpu.max_ext >= 0x80000008) {
 		cpuids(&a, 0x80000008UL);
@@ -362,6 +416,8 @@ static void identify_cpu(void)
 		if(1 == our_cpu.num_cores)
 			return;
 		our_cpu.count = our_cpu.num_cores;
+// TODO: count total CPU count
+		/* maybe single core, but multi cpu */
 	}
 	else
 	{
@@ -383,7 +439,7 @@ static void identify_cpu(void)
 			read_buf[0] = '\n';
 			ret = fread(read_buf + 1, 1, sizeof(read_buf) - 2, f);
 			/* if we couldn't read it, simply check */
-			read_buf[ret + 1] = '\0';
+			read_buf[ret + 1] = '\0'; /* ret should be -1 at worst */
 			w_ptr = read_buf;
 			while((w_ptr = strstr(w_ptr, S_STR))) {
 				our_cpu.count++;
@@ -400,23 +456,34 @@ static void identify_cpu(void)
 #endif
 	}
 	/*
-	 * early AMD Opterons and everything remotely derived from them
+	 * Early AMD Opterons and everything remotely derived from them
 	 * seem to drop the ball on read-modify-write instructions _directly
-	 * after_ a locked instruction ("lock foo; bla reg, mem", missing
-	 * internal lfence, they say). Ok, you also need > 1 Processor.
-	 * This is unfortunatly all heavy speculation, no (visible) Errata,
-	 * no info, but:
+	 * after_ a locked instruction ("lock foo; bla %reg, mem"), missing
+	 * internal lfence, they say. Ok, you also need > 1 Processor,
+	 * and this beeing a bad thing to happen (for example: a variable is
+	 * modified before the locked instruction is visible, for example to
+	 * take a lock).
+	 *
+	 * I don't know if we are affected (depends on code gererated by the
+	 * compiler...) and how to fix it sanely to not add an if() or always
+	 * a lfence (self modifing code anyone?), at least warn that something
+	 * may be amiss, 'til we know what to do or if we even hit this prob.
+	 *
+	 * Real world evidence before the errata release (which took a long time,
+	 * look at the low number...):
+	 * LKML discusion pointing to perftools and MySQL
+	 *  (But lost in the noise with a "let's wait for official errata")
 	 * Google speaks of Opteron Rev. E Model 32..63 in their perftools stuff.
-	 * MySQL seem to hit it on 64Bit (Bugreport).
+	 *  (Good informed high volume customer? Internal QA with enough
+	 *   problematic machines in their cluster?)
+	 * MySQL seem to hit it on 64Bit (Bugreport and triaging).
+	 *  (nice finding: i wouldn't had put the blame on the CPU in the first
+	 *   place but MySQL in general, esp. since it takes some time to hit it
+	 *   (right timing), one would chalk it up to a fluke)
 	 * Slowlaris trys to detect it, marks everything affected < Model 0x40
 	 *  (but since they don't build machines with every avail. AMD
 	 *   processor (only Servers with Opterons...), this smells like a
 	 *   sledgehammer)
-	 *
-	 * I don't know if we are affected (depends on code gererated by
-	 * compiler...) and how to fix it sanely to not add an if() or always
-	 * an lfence (self modifing code anyone?) at least warn that something
-	 * may be amiss, 'til we know what to do or if we even hit this prob.
 	 */
 	if(our_cpu.vendor == X86_VENDOR_AMD &&
 	   our_cpu.family == 0x0F &&
@@ -425,7 +492,7 @@ static void identify_cpu(void)
 	{
 		int ologlevel = server.settings.logging.act_loglevel;
 		server.settings.logging.act_loglevel = LOGF_WARN;
-		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, they say.\nThis may lead to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
+		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, Errata 147.\nThis may lead to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
 		server.settings.logging.act_loglevel = ologlevel;
 	}
 	return;
@@ -541,7 +608,7 @@ int test_cpu_feature_3dnow_callback(void)
  * will not affect, but you are better save than sorry, compilers
  * are suposed to autovectorize, use SSE for fp-math etc.
  *
- * Even while Intel tried to not fuck it up, no they not thought
+ * Even while Intel tried to not fuck it up, no, they not thought
  * it through (or maybe they did in a different problem space?
  * "Mo'money")...
  *
@@ -573,7 +640,8 @@ int test_cpu_feature_3dnow_callback(void)
  * side (first lacking, than pompous) to bring more dynamic
  * to those hardware dependencies.
  * Plans to "transparently" extend the AVX-registers to 512-bit
- * and more are already anounced in the first AVX release.
+ * and more are already anounced in the first AVX "paper-only"
+ * release.
  *
  * Other extensions may find their way into HW now that
  * frequency doesn't scale, more cores start to stop scaling
@@ -592,11 +660,12 @@ int test_cpu_feature_3dnow_callback(void)
  * With Intels wild west style to include new instructions and
  * not thinking about regularity of the instruction set but
  * "need" (as in application->bussiness: "MpegDecoder"->"$$$"),
- * and whining how expensive a requested "generic" feature is while
- * integrating MByte of cache and other transitor eater, someone
- * is lost in hoping their needed (missing) instruction will show
- * up if he has no billion dollar business plan and a platinium Intel
- * support contract...
+ * and whining how expensive a requested "generic" feature is
+ * (e.g. good usable SIMD permutation, not all this (un)pack BS)
+ * while integrating MByte of cache and other transitor eater,
+ * someone is lost in hoping their needed (missing) instruction
+ * will show up if he has no billion dollar business plan and a
+ * platinium Intel support contract...
  * So additions once in a while can be seen as the "new green" and
  * be very likely. (Until politics change again...)
  *
@@ -612,7 +681,8 @@ int test_cpu_feature_3dnow_callback(void)
  * there will be a long time when people do have the most bleeding
  * edge distro (type 3 times "foo-bar update") and hardware, but
  * not a new install with dual ABI (or only new ABI) capability +
- * software making use of the new fooo (because its moot).
+ * software making use of the new fooo (because its moot with all
+ * this pain).
  * (Switching this during an simple update can be deadly, like i
  * once saw someone trying to upgrade his SuSE. Deinstalling perl
  * to resolve conflicts and prepare installing of a new perl was

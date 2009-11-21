@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, generic implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,15 +47,16 @@ size_t strnlen(const char *s, size_t maxlen)
 	k = k > 0 ? k  : 0;
 
 	p = (const char *)ALIGN_DOWN(s, SOST);
-	r = has_nul_byte(*(const size_t *)p);
-	if(!HOST_IS_BIGENDIAN) {
-		r <<= k * BITS_PER_CHAR;
-		r >>= k * BITS_PER_CHAR;
+	r = *(const size_t *)p;
+	if(!HOST_IS_BIGENDIAN)
 		r >>= f * BITS_PER_CHAR;
+	r = has_nul_byte(r);
+	if(!HOST_IS_BIGENDIAN) {
+		r <<= (k + f) * BITS_PER_CHAR;
+		r >>= (k + f) * BITS_PER_CHAR;
 	} else {
-		r >>= k * BITS_PER_CHAR;
-		r <<= k * BITS_PER_CHAR;
-		r <<= f * BITS_PER_CHAR;
+		r >>=  k      * BITS_PER_CHAR;
+		r <<= (k + f) * BITS_PER_CHAR;
 	}
 	if(r)
 		return nul_byte_index(r);

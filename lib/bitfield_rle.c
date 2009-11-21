@@ -31,7 +31,7 @@
 /*
  * General note:
  * despite their general name, these functions use a fixed rle sheme
- * optimized for sparsely populated bitfields (like QHTs).
+ * invented by me optimized for sparsely populated bitfields (like QHTs).
  *
  * - Bytes with one bit cleared are expressed by a prefix (0xE0)
  *   or'ed with the bit index.
@@ -180,7 +180,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 					"shr	$2, %0\n\t"
 					"jz	1f\n\t"
 					"mov	%0, %3\n\t"
-					"repe scasl\n\t"
+					"repe scasl\n\t" /* (0x0051D59A) */
 					"sub	$4, %1\n\t"
 					"inc	%0\n\t"
 					"sub	%0, %3\n\t"

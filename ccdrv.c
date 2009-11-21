@@ -339,9 +339,13 @@ static int handle_output(int *fds, int c_pid, int *c_exit_status)
 	 * hopefully fflush allows us to
 	 */
 	fflush(NULL);
-	write(STDOUT_FILENO, buffer_start(data[0]), buffer_remaining(data[0]));
-	write(STDERR_FILENO, buffer_start(data[1]), buffer_remaining(data[1]));
-	
+	if((size_t)write(STDOUT_FILENO, buffer_start(data[0]), buffer_remaining(data[0])) !=
+	   buffer_remaining(data[0])) {
+	}
+	if((size_t)write(STDERR_FILENO, buffer_start(data[1]), buffer_remaining(data[1])) !=
+	   buffer_remaining(data[1])) {
+	}
+
 	return true;
 }
 

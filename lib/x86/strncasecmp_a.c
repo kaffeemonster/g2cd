@@ -541,14 +541,14 @@ int strncasecmp_a(const char *s1, const char *s2, size_t n)
  *
  * Since this will not work (memory protection), it is disabled and only
  * kept for reference.
- * .  .  . . pause .  .  .  .
+ * .  .  .  . pause .  .  .  .
  * Ok, it works under specific circumstances, which are normaly OK on
  * Linux, but depending on those is fragile and brittle.
  * And we modify the .text segment, so we break the cow mapping (Ram +
  * pagetable usage). It's like a textrel, which are bad.
  *
  * The ideal solution is a segment on its own with min. page size and
- * alignment aggregating all jmp where we control the mapping flags.
+ * alignment, aggregating all jmp where we control the mapping flags.
  * (bad example .got: recently changed - GNU_RELRO. Make readonly on old
  * systems -> boom. Simply write on new systems -> boom)
  * But this needs a linker script -> heavy sysdep -> ouch.
