@@ -109,6 +109,12 @@
 # define GCC_ATTR_VIS(x)
 #endif /* _GNUC_PREREQ (3,3) && !__CYGWIN__ */
 
+#if _GNUC_PREREQ (3,0)
+# define GCC_ATTR_MALLOC GCC_ATTRIB(__malloc__)
+#else
+# define GCC_ATTR_MALLOC
+#endif
+
 #if _GNUC_PREREQ (2,3)
 # define GCC_ATTR_PRINTF(str_ind, to_check) GCC_ATTRIB(format (__printf__ , (str_ind), (to_check)))
 #else

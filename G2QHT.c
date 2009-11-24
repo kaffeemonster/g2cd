@@ -109,7 +109,7 @@ static pthread_key_t key2qht_scratch2;
 	/* do not remove this proto, our it won't work... */
 static void qht_init(void) GCC_ATTR_CONSTRUCT;
 static void qht_deinit(void) GCC_ATTR_DESTRUCT;
-static void *qht_zpad_alloc(void *, unsigned int, unsigned int);
+static void *qht_zpad_alloc(void *, unsigned int, unsigned int) GCC_ATTR_MALLOC;
 static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
 static inline struct zpad *qht_get_zpad(void);
@@ -311,7 +311,7 @@ static inline struct zpad *qht_get_zpad(void)
 }
 
 /**/
-static inline unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
+static inline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
 {
 	struct scratch *scratch = pthread_getspecific(scratch_key);
 
@@ -590,6 +590,13 @@ void g2_qht_search_add_md5(const unsigned char *h)
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
+/*
+ * This function has to produce the same keywords as Shareaza.
+ * So no wonder it is quite similar to the Shareaza one.
+ *
+ * Thank god they are Open Source now, "back then" this would have been
+ * a nightmare...
+ */
 static tchar_t *make_keywords(const tchar_t *s)
 {
 	enum script_type
@@ -657,7 +664,7 @@ static tchar_t *make_keywords(const tchar_t *s)
 			   !tisdigit(*(t_wptr - (pos < 3 ? 1 : 3))))
 			{
 				/*
-				 * Why this if is empty, plug from the shareaza code
+				 * Why this "if" is empty, plug from the shareaza code:
 				 *
 				 * Join two phrases if the previous was a sigle characters word.
 				 * idea of joining single characters breaks GDF compatibility completely,
@@ -718,7 +725,7 @@ static tchar_t *make_keywords(const tchar_t *s)
 	   (' ' == p_ch || '-' == p_ch || '"' == p_ch))
 	{
 		/*
-		 * Why this if is empty, plug from the shareaza code
+		 * Why this "if" is empty, plug from the shareaza code:
 		 *
 		 * Join two phrases if the previous was a sigle characters word.
 		 * idea of joining single characters breaks GDF compatibility completely,
@@ -1006,7 +1013,8 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * but for example hangul, thanks to their system, can also be written
 		 * either completely decomposed (Jamo) or as composed 'fixed' graphemes.
 		 * This will mostly hurt with MacOS, because the APIs there normalize
-		 * everthing to decomposed form.
+		 * everthing to decomposed form (filenames, etc. tranfered as one name
+		 * to the Mac, get a different hash back).
 		 *
 		 * At the end of the day this does not help us. We have to create hashes
 		 * like Shareaza or it will not blend^Wmatch the hash.

@@ -2,7 +2,7 @@
  * G2QHT.h
  * Header for the G2 QHT
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -109,8 +109,8 @@ _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable *, struct qht_fragment *));
 _G2QHT_EXTRN(void g2_qht_aggregate(struct qhtable *, struct qhtable *));
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *, uint8_t *data));
 _G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent, bool try_compress));
-_G2QHT_EXTRN(struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *, const struct qhtable *));
-_G2QHT_EXTRN(struct qht_fragment *g2_qht_frag_alloc(size_t len));
+_G2QHT_EXTRN(struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *, const struct qhtable *) GCC_ATTR_MALLOC);
+_G2QHT_EXTRN(struct qht_fragment *g2_qht_frag_alloc(size_t len) GCC_ATTR_MALLOC);
 _G2QHT_EXTRN(void g2_qht_frag_free(struct qht_fragment *));
 /* funcs for the global qht are in the G2ConRegistry */
 _G2QHT_EXTRN(size_t g2_qht_global_get_ent(void));

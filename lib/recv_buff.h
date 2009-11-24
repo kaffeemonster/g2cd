@@ -2,7 +2,7 @@
  * recv_buff.h
  * Header for the recvieve buffer allocator.
  *
- * Copyright (c) 2007 Jan Seiffert
+ * Copyright (c) 2007-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,10 +31,10 @@
 
 # define LIB_RECV_BUFF_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
-LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_local_get(void));
+LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_local_get(void) GCC_ATTR_MALLOC);
 LIB_RECV_BUFF_EXTRN(void recv_buff_local_ret(struct norm_buff *));
 LIB_RECV_BUFF_EXTRN(void recv_buff_local_refill(void));
-LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_alloc(void));
+LIB_RECV_BUFF_EXTRN(struct norm_buff *recv_buff_alloc(void) GCC_ATTR_MALLOC);
 LIB_RECV_BUFF_EXTRN(void recv_buff_free(struct norm_buff *) GCC_ATTR_FASTCALL );
 
 #endif /* LIB_RECV_BUFF_H */
