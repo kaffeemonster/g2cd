@@ -28,6 +28,7 @@
 
 # define SOVUC (sizeof(vector unsigned char))
 # define SOVUCM1 (SOVUC - 1)
+# define SOVUI (sizeof(vector unsigned int))
 
 /* you have to love GCC, it does not take NULL on vec_lvsl ... */
 static inline vector unsigned char vec_identl(unsigned level)

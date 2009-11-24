@@ -56,13 +56,15 @@ AS = as
 #AS = powerpc-linux-gnu-as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
-AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ ar
-#AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ x86_64-pc-linux-gnu-ar
-#AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ powerpc-linux-gnu-ar
+AR_PROG = ar
+#AR_PROG = x86_64-pc-linux-gnu-ar
+#AR_PROG = powerpc-linux-gnu-ar
+AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ $(AR_PROG)
 ARFLAGS = cru
-RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ ranlib
-#RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ x86_64-pc-linux-gnu-ranlib
-#RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ powerpc-linux-gnu-ranlib
+RANLIB_PROG = ranlib
+#RANLIB_PROG = x86_64-pc-linux-gnu-ranlib
+#RANLIB_PROG = powerpc-linux-gnu-ranlib
+RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ $(RANLIB_PROG)
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
@@ -139,7 +141,7 @@ ARCH_FLAGS += -march=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
 # x86
-ARCH_FLAGS += -momit-leaf-frame-pointer
+#ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors
 # unfortunatly second class citizians
 #ARCH_FLAGS += -minline-all-stringops

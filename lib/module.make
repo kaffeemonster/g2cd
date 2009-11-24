@@ -129,6 +129,10 @@ MEMNEGSRC = \
 	$(MPL)/ppc/memneg.c
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
+	$(MPL)/alpha/mempopcnt.c \
+	$(MPL)/sparc64/mempopcnt.c \
+	$(MPL)/ia64/mempopcnt.c \
+	$(MPL)/ppc/mempopcnt.c \
 	$(MPL)/x86/mempopcnt.c
 MEM_SEARCHRNSRC = \
 	$(MPL)/generic/mem_searchrn.c \
@@ -329,19 +333,19 @@ $(MPL)/tchar_tolower.bin: $(MPL)/tchar_tolower_be.bin
 	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_tolower_be.bin conv=swab of=$@ ; \
 	else \
-		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_tolower_be.bin of=$@ ; \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_tolower_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c1table.bin: $(MPL)/tchar_c1table_be.bin
 	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c1table_be.bin conv=swab of=$@ ; \
 	else \
-		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c1table_be.bin of=$@ ; \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c1table_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c3table.bin: $(MPL)/tchar_c3table_be.bin
 	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c3table_be.bin conv=swab of=$@ ; \
 	else \
-		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin of=$@ ; \
+		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin $@ ; \
 	fi
 
 $(TCHAR_TABS): $(MPL)/module.make Makefile

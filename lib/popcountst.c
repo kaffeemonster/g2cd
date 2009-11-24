@@ -44,7 +44,7 @@
 # elif defined(__IA64__)
 #  include "ia64/popcountst.c"
 # elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
-/* 
+/*
  * gcc sets __sparcv8 even if you say "gimme v9" to not confuse solaris
  * tools. This will Bomb on a real v8 (maybe not a v8+)...
  */

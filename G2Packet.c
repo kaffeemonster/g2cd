@@ -2314,7 +2314,7 @@ static bool handle_Q2_DN(struct ptype_action_args *parg)
 
 	rdata->dn_len = buffer_remaining(source->data_trunk);
 	rdata->dn     = buffer_start(source->data_trunk);
-	logg_develd("/Q2/DN - %zu \"%.*s\"\n", rdata->dn_len, rdata->dn_len, rdata->dn);
+	logg_develd("/Q2/DN - %zu \"%.*s\"\n", rdata->dn_len, (int)rdata->dn_len, rdata->dn);
 	return false;
 }
 

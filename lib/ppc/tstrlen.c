@@ -31,16 +31,17 @@
 size_t tstrlen(const tchar_t *s)
 {
 	vector unsigned short v0;
-	vector unsigned short v1;
+	vector unsigned char v1;
 	vector unsigned char v_perm;
-	vector unsigned short c;
+	vector unsigned char c;
+	vector unsigned short x;
 	uint32_t r;
-	char *p;
+	tchar_t *p;
 
 	prefetch(s);
 
 	v0 = vec_splat_u16(0);
-	v1 = vec_splat_u16(1);
+	v1 = vec_splat_u8(1);
 
 	p = (tchar_t *)ALIGN_DOWN(s, SOVUC);
 	c = vec_ldl(0, (vector const unsigned short *)p);
@@ -48,16 +49,17 @@ size_t tstrlen(const tchar_t *s)
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned short *)(uintptr_t)s);
 	c = vec_perm(v1, c, v_perm);
+	x = (vector unsigned short)c;
 
-	while(!vec_any_eq(c, v0)) {
-		p += SOVUC;
-		c = vec_ldl(0, (vector const unsigned short *)p);
+	while(!vec_any_eq(x, v0)) {
+		p += SOVUC/sizeof(*p);
+		x = vec_ldl(0, (vector const unsigned short *)p);
 	}
-	r = vec_pmovmskb((vector bool char)vec_cmpeq(c, v0));
+	r = vec_pmovmskb((vector bool char)vec_cmpeq((vector unsigned char)x, (vector unsigned char)v0));
 	return (p - s + __builtin_clz(r) - 16)/sizeof(tchar_t);
 }
 
-static char const rcsid_tsl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tslp[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "../generic/tstrlen.c"
 #endif

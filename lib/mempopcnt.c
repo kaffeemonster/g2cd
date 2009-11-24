@@ -32,6 +32,9 @@
  *
  * WARNING: Make sure your memory region is not to large
  *          so the number of possible bits overflows size_t
+ *          and sometimes less.
+ *          In other words: This is not meant for very large
+ *          arrays (rule of thumb: stay within 256MB).
  */
 
 #include "../config.h"
@@ -44,8 +47,18 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/mempopcnt.c"
-// # elif defined(__powerpc__) || defined(__powerpc64__)
-// #  include "ppc/mempopcnt.c"
+# elif defined(__IA64__)
+#  include "ia64/popcountst.c"
+# elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
+/*
+ * gcc sets __sparcv8 even if you say "gimme v9" to not confuse solaris
+ * tools. This will Bomb on a real v8 (maybe not a v8+)...
+ */
+#  include "sparc64/popcountst.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/mempopcnt.c"
+# elif __alpha__
+#  include "alpha/popcountst.c"
 # else
 #  include "generic/mempopcnt.c"
 # endif

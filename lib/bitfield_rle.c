@@ -595,7 +595,7 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 			if(unlikely(!(c & 0x10)))
 			{
 				if(dist < 8) { /* dist in this byte? */
-					if((c & ~0xE0) == dist)
+					if((unsigned)(c & ~0xE0) == dist)
 						return -1; /* match */
 					break; /* no match, next val */
 				}
