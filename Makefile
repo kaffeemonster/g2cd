@@ -217,6 +217,8 @@ OPT_FLAGS += -fivopts
 OPT_FLAGS += -freorder-blocks-and-partition
 OPT_FLAGS += -fmove-loop-invariants
 OPT_FLAGS += -fbranch-target-load-optimize
+# Heaviely broken, but nice...
+#OPT_FLAGS += -fschedule-insns
 #	better not autovectorize, for some functions we already did this our self,
 #	this would only double the code...
 #OPT_FLAGS += -ftree-vectorize
@@ -225,6 +227,8 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #OPT_FLAGS += -fvisibility=hidden
 #	want to see whats gcc doing (and how long it needs)?
 #OPT_FLAGS += -ftime-report
+#OPT_FLAGS += -fmem-report
+#	
 #OPT_FLAGS += -fwhole-program -combine
 #	sun studio is ...
 #	icc has looots of options, but those are the simple ones...
