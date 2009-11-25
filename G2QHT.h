@@ -100,6 +100,7 @@ _G2QHT_EXTRN(void g2_qht_search_add_ttr(const unsigned char *h));
 _G2QHT_EXTRN(void g2_qht_search_add_ed2k(const unsigned char *h));
 _G2QHT_EXTRN(void g2_qht_search_add_bth(const unsigned char *h));
 _G2QHT_EXTRN(void g2_qht_search_add_md5(const unsigned char *h));
+_G2QHT_EXTRN(bool g2_qht_search_add_hash_urn(const tchar_t *str, size_t len));
 _G2QHT_EXTRN(bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t dn_len, void *data, bool had_urn, bool hubs));
 _G2QHT_EXTRN(void g2_qht_match_hubs(uint32_t hashes[], size_t num, void *data));
 _G2QHT_EXTRN(void g2_qht_match_leafs(uint32_t hashes[], size_t num, void *data));
