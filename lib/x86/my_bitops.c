@@ -540,6 +540,14 @@ int test_cpu_feature_3dnow_callback(void)
 }
 
 /*
+ * Callback test if we have CMOV (thanks VIA)
+ */
+int test_cpu_feature_cmov_callback(void)
+{
+	return cpu_feature(CFEATURE_CMOV);
+}
+
+/*
  * Callback test if AVX can be used
  *
  * Unfortunatly Intel *always* fucks it up...

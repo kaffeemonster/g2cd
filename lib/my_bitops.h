@@ -102,5 +102,6 @@ struct test_cpu_feature
 LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
 LIB_MY_BITOPS_EXTRN(int test_cpu_feature_avx_callback(void));
 LIB_MY_BITOPS_EXTRN(int test_cpu_feature_3dnow_callback(void));
+LIB_MY_BITOPS_EXTRN(int test_cpu_feature_cmov_callback(void));
 
 # endif
