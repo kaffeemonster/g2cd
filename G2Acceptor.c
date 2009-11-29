@@ -82,7 +82,7 @@ static int accept_timeout(void *);
  */
 static void clean_up_a(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
-struct
+static struct
 {
 	int epoll_fd;
 } ac_data;
@@ -118,8 +118,18 @@ void *G2Accept(void *param)
 	{
 		bool ipv4_ready;
 		bool ipv6_ready;
-		ipv4_ready = server.settings.bind.use_ip4 ? init_con_a(&accept_so4, &server.settings.bind.ip4) : false;
-		ipv6_ready = server.settings.bind.use_ip6 ? init_con_a(&accept_so6, &server.settings.bind.ip6) : false;
+		if(server.settings.bind.use_ip4)
+			ipv4_ready = init_con_a(&accept_so4, &server.settings.bind.ip4);
+		else {
+			ipv4_ready = false;
+			accept_so4 = 0;
+		}
+		if(server.settings.bind.use_ip6)
+			ipv6_ready =  init_con_a(&accept_so6, &server.settings.bind.ip6);
+		else {
+			ipv6_ready = false;
+			accept_so6 = 0;
+		}
 		if(accept_so4 > 0x00FF || accept_so6 > 0x00FF)
 		{
 			if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
@@ -422,12 +432,15 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	if(setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)))
 		OUT_ERR("setsockopt reuse");
 
+#ifdef HAVE_IPV6_V6ONLY
 	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*accept_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
+#endif
 
-	if(bind(*accept_so, casa(our_addr), sizeof(*our_addr)))
+	if(bind(*accept_so, casa(our_addr),
+	        AF_INET == our_addr->s_fam ? sizeof(our_addr->in) : sizeof(our_addr->in6)))
 		OUT_ERR("binding accept fd");
 
 	if(listen(*accept_so, BACKLOG))
@@ -726,13 +739,13 @@ static noinline void header_handle_line(g2_connection_t *to_con, char *line, siz
 		goto out_fixup;
 
 	/* filter leading garbage */
-	for(f_start = line; f_start < ret_val && !isalnum(*f_start);)
+	for(f_start = line; f_start < ret_val && !isalnum((int)*f_start);)
 		f_start++;
 	if(unlikely(1 >= ret_val - f_start)) /* nothing left? */
 		goto out_fixup;
 
 	/* filter trailing garbage */
-	for(f_end = ret_val - 1; f_end >= f_start && !isgraph(*f_end);)
+	for(f_end = ret_val - 1; f_end >= f_start && !isgraph((int)*f_end);)
 		f_end--;
 	f_dist = (f_end + 1) - f_start;
 	if(unlikely(1 > f_dist)) /* something left? */
@@ -770,7 +783,7 @@ static noinline void header_handle_line(g2_connection_t *to_con, char *line, siz
 	c_dist = (line + len) - c_start;
 
 	/* remove leading white-spaces in field-data */
-	for(; c_dist > 0 && isspace(*c_start); c_dist--)
+	for(; c_dist > 0 && isspace((int)*c_start); c_dist--)
 		c_start++, to_con->recv->pos++;
 
 	/* now call the associated action for this field */

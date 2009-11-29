@@ -23,6 +23,7 @@
  * $Id: $
  */
 
+#include "other.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
@@ -34,7 +35,6 @@
 #include "log_facility.h"
 #include "atomic.h"
 #include "hzp.h"
-#include "other.h"
 
 static union lists
 {

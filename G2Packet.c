@@ -349,14 +349,14 @@ static const g2_ptype_action_func HAW_packet_dict[PT_MAXIMUM] =
 };
 
 #define ENUM_CMD(x, y) str_it(x)
-const char const g2_ptype_names[][8] GCC_ATTR_VIS("hidden") =
+const char g2_ptype_names[][8] GCC_ATTR_VIS("hidden") =
 {
 	G2_PACKET_TYPES
 };
 #undef ENUM_CMD
 
 #define ENUM_CMD(x, y) str_size(str_it(x))
-const uint8_t const g2_ptype_names_length[] GCC_ATTR_VIS("hidden") =
+const uint8_t g2_ptype_names_length[] GCC_ATTR_VIS("hidden") =
 {
 	G2_PACKET_TYPES
 };

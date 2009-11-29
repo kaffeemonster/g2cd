@@ -23,10 +23,10 @@
  * $Id:$
  */
 
-void *memxorcpy(void *dst, const void *src1 const void *src2, size_t len)
+void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
 {
 	char *dst_char = dst;
-	const char *src_char1;
+	const char *src_char1 = src1;
 	const char *src_char2 = src2;
 
 	if(!dst || !src1 || !src2)
@@ -109,15 +109,15 @@ no_alignment_possible:
 	if(!UNALIGNED_OK)
 	{
 		size_t small_len, cycles;
+		size_t *dst_sizet = (size_t *)dst_char;
 		if(dst_char == src_char1) /* we are actually called for 2 args... */
 		{
-			size_t *dst_sizet = (size_t *)dst_char;
 			const size_t *src_sizet;
 			register size_t c, c_ex;
 			register unsigned shift1, shift2;
 
 			cycles = small_len = (len / SOST) - 1;
-			shift1 = (unsigned) ALIGN_DOWN_DIFF(src_char, SOST);
+			shift1 = (unsigned) ALIGN_DOWN_DIFF(src_char2, SOST);
 			shift2 = SOST - shift1;
 			shift1 *= BITS_PER_CHAR;
 			shift2 *= BITS_PER_CHAR;
@@ -141,8 +141,7 @@ no_alignment_possible:
 		}
 		else
 		{
-			size_t *dst_sizet = (size_t *)dst_char;
-			const size_t *src_sizet1, src_sizet2;
+			const size_t *src_sizet1, *src_sizet2;
 			register size_t c1, c_ex1, c2, c_ex2;
 			register unsigned shift11, shift12, shift21, shift22;
 
@@ -155,8 +154,8 @@ no_alignment_possible:
 			shift22 = SOST - shift21;
 			shift21 *= BITS_PER_CHAR;
 			shift22 *= BITS_PER_CHAR;
-			src_sizet = (const size_t *)ALIGN_DOWN(src_char1, SOST);
-			src_sizet = (const size_t *)ALIGN_DOWN(src_char2, SOST);
+			src_sizet1 = (const size_t *)ALIGN_DOWN(src_char1, SOST);
+			src_sizet2 = (const size_t *)ALIGN_DOWN(src_char2, SOST);
 			c_ex1 = *src_sizet1++;
 			c_ex2 = *src_sizet2++;
 			while(small_len--)

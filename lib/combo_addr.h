@@ -123,6 +123,10 @@ struct sockaddr_in6
 #  define INET6_ADDRSTRLEN 46
 # endif /* HAVE_INET6_ADDRSTRLEN */
 
+# ifndef s6_addr32
+#  define s6_addr32 _S6_un._S6_u32
+# endif
+
 # ifndef HAVE_INET_NTOP
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
 # endif

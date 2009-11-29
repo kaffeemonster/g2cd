@@ -34,9 +34,6 @@
 #include <unistd.h>
 //#include <ctype.h>
 #include <zlib.h>
-#ifdef HAVE_ALLOCA_H
-# include <alloca.h>
-#endif
 /* System net-includes */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -72,7 +69,7 @@ static int handler_active_timeout(void *);
 /* do not inline, we take a pointer of it, and when its called, performance doesn't matter */
 static void clean_up_h(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
-struct
+static struct
 {
 	int epoll_fd;
 } h_data;

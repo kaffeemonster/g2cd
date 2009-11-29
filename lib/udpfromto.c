@@ -42,6 +42,7 @@
 #ifdef HAVE_SYS_UIO_H
 # include <sys/uio.h>
 #endif
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
@@ -49,6 +50,23 @@
 #include <string.h>
 /* own */
 #include "udpfromto.h"
+#include "combo_addr.h"
+
+#ifdef HAVE_IP_RECVDSTADDR
+# ifndef IPV6_RECVDSTADDR
+#  define IPV6_RECVDSTADDR IP_RECVDSTADDR
+# endif
+#endif
+
+#if !defined(CMSG_LEN) || !defined(CMSG_SPACE)
+# define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int)) & ~sizeof(int))
+# ifndef CMSG_LEN
+#  define CMSG_LEN(len)   (__CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
+# endif
+# ifndef CMSG_SPACE
+#  define CMSG_SPACE(len) (__CMSG_ALIGN(sizeof(struct cmsghdr)) + __CMSG_ALIGN(len))
+# endif
+#endif
 
 int udpfromto_init(int s, int fam)
 {
@@ -71,6 +89,13 @@ int udpfromto_init(int s, int fam)
 	else
 		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
 // TODO: IPv6? Does someone has a bsd at hand?
+#elif defined(HAVE_IP_RECVIF)
+	if(AF_INET == fam)
+		err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
+#else
+	opt = opt;
+	s = s;
+	fam = fam;
 #endif
 	return err;
 }
@@ -165,7 +190,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
 			struct in6_addr *ipv6 = (struct in6_addr *)CMSG_DATA(cmsg);
 
-			toi->sin_family = AF_INET6;
+			toi6->sin6_family = AF_INET6;
 			memcpy(&toi6->sin6_addr, ipv6, INET6_ADDRLEN);
 			*tolen = sizeof(*toi6);
 			break;
@@ -266,5 +291,5 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 }
 
 /*@unused@*/
-static const char rcsid_uft[] GCC_ATTR_USED = "$Id: udpfromto.c,v 1.4.4.1 2006/03/15 15:37:58 nbk Exp $";
+static const char rcsid_uft[] GCC_ATTR_USED_VAR = "$Id: udpfromto.c,v 1.4.4.1 2006/03/15 15:37:58 nbk Exp $";
 /* EOF */

@@ -75,9 +75,10 @@ STRIP = strip
 #STRIP = x86_64-pc-linux-gnu-strip
 #STRIP = powerpc-linux-gnu-strip
 RM = rm -f
+#BIN2O_OPTS = -d sun
 
 # split up host and target CFLAGS
-HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_SVID_SOURCE
+HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE
 
 #
 # the C-Standart the compiler should work with
@@ -104,7 +105,8 @@ WARN_FLAGS = -Wall
 #	icc is mostly gcc compatible, mostly...
 WARN_FLAGS += -Wimplicit -Wwrite-strings -Wmissing-prototypes  
 #	middle
-WARN_FLAGS += -Wpointer-arith -Wcast-align
+WARN_FLAGS += -Wpointer-arith
+#WARN_FLAGS += -Wcast-align
 #  ok, if you want to get picky...
 WARN_FLAGS += -W -Wcast-qual -Wunused
 #	strange warnings under Cygwin, i tripple checked it, to
@@ -265,7 +267,7 @@ LDLIBS_BASE += -ldl #-lm
 #	a lib providing dbm_*, berkleydb will fit, prop. also anything else
 LDLIBS_BASE += -ldb
 #	on old solaris it's in the dbm lib, part of system
-#LDLIBS_BASE += ldbm
+#LDLIBS_BASE += -ldbm
 LDLIBS_Z = -lz $(LDLIBS_BASE)
 #	All libs if we don't use modules
 LDLIBS = -lcommon $(LDLIBS_Z)
@@ -300,6 +302,7 @@ LDFLAGS += -pthread
 #LDFLAGS += -Wl,-M,.mapfile
 # solaris Linker magic
 #LDFLAGS += -Wl,-B,direct
+#LDFLAGS += -L/usr/ucblib/
 # gnarf, on Linux only external Patch, and other syntax...
 #LDFLAGS += -Wl,-Bdirect
 # get some more symbols in the executable, so backtraces
@@ -350,6 +353,11 @@ CFLAGS += -D_GNU_SOURCE
 #	of size if your compiler is not smart enough
 #CFLAGS += -D__USE_STRING_INLINES
 #	on solaris this may be needed for some non std-things
+#CFLAGS += -D_POSIX_SOURCE
+#CFLAGS += -D_POSIX_C_SOURCE
+#CFLAGS += -D_SVID_SOURCE
+#CFLAGS += -D_XOPEN_SOURCE
+#CFLAGS += -D_XPG4_2
 #CFLAGS += -D__EXTENSIONS__
 
 #
@@ -798,7 +806,7 @@ version.h: Makefile
 #	$(PORT_PR)	"$(TOEOL)\b\b\b[OK]\n"
 
 data.o: sbox.bin bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) -o $@ sbox.bin
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) $(BIN2O_OPTS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h

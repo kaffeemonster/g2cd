@@ -1,56 +1,221 @@
 {
 	local:
+	# main
 		main;
-	# tasks
-		G2UDP;
+		g2_set_thread_name;
+	# Threads
 		G2Accept;
 		G2Handler;
+		G2UDP;
 		timeout_timer_task;
-	# packet handling
-		g2_packet_decide_spec;
-		g2_packet_extract_from_stream;
-		g2_packet_clean;
-		_g2_packet_free;
-	# con handling
-		g2_con_free;
-		g2_con_alloc;
+	# vars
+		KNOWN_ENCODINGS;
+		KNOWN_HEADER_FIELDS;
+		g2_ptype_names;
+		g2_ptype_names_length;
+		local_time_now;
+		server;
+	# G2Con stuff
 		_g2_con_clear;
-	# con pooling
-		get_free_con;
-		return_free_con;
+		_g2_con_get_free;
+		_g2_con_ret_free;
+		g2_con_alloc;
+		g2_con_free;
 		recycle_con;
-	# io helper
+	# G2ConHelper
 		do_read;
 		do_write;
+		do_writev;
 		handle_socket_abnorm;
-	# time outs
-		cancel_timeout;
-		add_timeout;
-	# epoll compat
-		my_epoll_wait;
-		my_epoll_ctl;
-		my_epoll_create;
-		my_epoll_close;
+		manage_buffer_after;
+		manage_buffer_before;
+	# G2ConReg
+		g2_conreg_add;
+		g2_conreg_all_hub;
+		g2_conreg_cleanup;
+		g2_conreg_demote_hub;
+		g2_conreg_for_addr;
+		g2_conreg_for_ip;
+		g2_conreg_have_ip;
+		g2_conreg_is_neighbour_hub;
+		g2_conreg_mark_dirty;
+		g2_conreg_promote_hub;
+		g2_conreg_random_hub;
+		g2_conreg_remove;
+	# G2GUID
+		g2_guid_add;
+		g2_guid_end;
+		g2_guid_init;
+		g2_guid_lookup;
+	# G2Handler
+		g2_handler_con_mark_write;
+	# G2KHL
+		g2_khl_add;
+		g2_khl_end;
+		g2_khl_fill_p;
+		g2_khl_get_url;
+		g2_khl_init;
+		g2_khl_tick;
+	# G2Packet
+		g2_packet_alloc;
+		g2_packet_calloc;
+		g2_packet_clean;
+		g2_packet_clone;
+		g2_packet_decide_spec;
+		g2_packet_decode;
+		g2_packet_decode_from_packet;
+		g2_packet_dict;
+		g2_packet_dict_udp;
+		g2_packet_extract_from_stream;
+		g2_packet_find_type;
+		g2_packet_free;
+		g2_packet_hub_qht_done;
+		g2_packet_hub_qht_match;
+		g2_packet_init;
+		g2_packet_leaf_qht_match;
+		g2_packet_search_finalize;
+	# G2PacketSerializer
+		g2_packet_serialize_prep;
+		g2_packet_serialize_prep_min;
+		g2_packet_serialize_to_buff;
+	# G2QHT
+		g2_qht_add_frag;
+		g2_qht_aggregate;
+		g2_qht_clean;
+		g2_qht_diff_get_frag;
+		g2_qht_frag_alloc;
+		g2_qht_frag_free;
+		g2_qht_global_get;
+		g2_qht_global_get_ent;
+		g2_qht_global_get_hzp;
+		g2_qht_global_search;
+		g2_qht_global_search_bucket;
+		g2_qht_global_search_chain;
+		g2_qht_global_update;
+		g2_qht_match_hubs;
+		g2_qht_match_leafs;
+		g2_qht_patch;
+		g2_qht_put;
+		g2_qht_reset;
+		g2_qht_search_add_bth;
+		g2_qht_search_add_ed2k;
+		g2_qht_search_add_hash_urn;
+		g2_qht_search_add_md5;
+		g2_qht_search_add_sha1;
+		g2_qht_search_add_ttr;
+		g2_qht_search_add_word;
+		g2_qht_search_drive;
+		g2_qht_search_prepare;
+	# G2QueryKey
+		g2_qk_add;
+		g2_qk_check;
+		g2_qk_generate;
+		g2_qk_init;
+		g2_qk_lookup;
+		g2_qk_tick;
+	# G2UDP
+		g2_udp_send;
+	# timeout
+		timeout_add;
+		timeout_advance;
+		timeout_cancel;
+		timeout_timer_task_abort;
+# compat and special FX
+	# aes stuff
+		aes_ecb_encrypt;
+		aes_encrypt_key128;
+		aes_fl_tab;
+		aes_fl_tab_base_data;
+		aes_ft_tab;
+		aes_ft_tab_base_data;
+		aes_il_tab;
+		aes_il_tab_base_data;
+		aes_it_tab;
+		aes_it_tab_base_data;
+	# bitfield rle
+		bitfield_decode;
+		bitfield_encode;
+		bitfield_lookup;
 	# hzp
 		hzp_alloc;
 		hzp_deferfree;
+		hzp_free;
 		hzp_ref;
-		hzp_unref;
 		hzp_scan;
-	# bitops
-		memxor;
-		flsst;
-		popcountst;
-	# more compat
-		strnlen;
+		hzp_unref;
+	# epoll compat
+		my_epoll_close;
+		my_epoll_create;
+		my_epoll_ctl;
+		my_epoll_wait;
 	# logging
-		logg;
-		logg_more;
-	# vars
-		KNOWN_HEADER_FIELDS;
-		KNOWN_ENCODINGS;
-		g2_packet_dict;
-		packet_uprod;
-		packet_uprod_length;
-		server;
+		logg_ent;
+		logg_more_ent;
+	# rbtree
+		rb_erase;
+		rb_first;
+		rb_insert_color;
+		rb_last;
+		rb_next;
+		rb_prev;
+		rb_replace_node;
+	# recv_buff
+		recv_buff_alloc;
+		recv_buff_free;
+		recv_buff_local_get;
+		recv_buff_local_refill;
+		recv_buff_local_ret;
+	# vsnprintf
+		five_tab;
+		five_tab_base_data;
+		my_snprintf;
+		my_vsnprintf;
+		backtrace_init;
+	# flsst
+		flsst;
+	# inet stuff
+		inet_ntop;
+		inet_ntop_c;
+		inet_pton;
+	# intro sort
+		introsort_u32;
+	# mem stuff
+		cpy_rest;
+		cpy_rest0;
+		cpy_rest_o;
+		mem_searchrn;
+		memand;
+		memcpy;
+		memneg;
+		mempcpy;
+		memxorcpy;
+	# popcnt
+		popcountst;
+	# ansi prng
+		random_bytes_get;
+		random_bytes_init;
+	# udp from to
+		recvfromto;
+		sendtofrom;
+	# str stuff
+		strchr;
+		strchrnul;
+		strlen;
+		strncasecmp_a;
+		strnlen;
+		strnpcpy;
+		strpcpy;
+	# tchar stuff
+		tchar_c1table;
+		tchar_c1table_base_data;
+		tchar_c3table;
+		tchar_c3table_base_data;
+		tchar_tolower;
+		tchar_tolower_base_data;
+		tistypemix;
+		tstrchrnul;
+		tstrncmp;
+		tstrptolower;
+		udpfromto_init;
+		utf8totcs;
 };

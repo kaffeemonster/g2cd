@@ -82,8 +82,9 @@ C4:
 	}
 	else
 	{
-		while(i--)
-			dst[i] = src[i];
+		unsigned n;
+		for(n = 0; n < i; n++)
+			dst[n] = src[n];
 	}
 	return dst + i;
 }

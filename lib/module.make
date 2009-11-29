@@ -22,6 +22,7 @@ TCHAR_TABS = \
 TARED_FILES += \
 	$(MPL)/module.make \
 	$(MPL)/aes_tab_gen.c \
+	$(MPL)/five_tab_gen.c \
 	$(TCHAR_TABS_BE) \
 	$(LIBHEADS) \
 	$(LIBASRCS)
@@ -315,7 +316,7 @@ $(AES_TABS): $(MPL)/aes_tab_gen
 	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/aes_tab_gen $@
 
 $(MPL)/aes_tab.o: $(AES_TABS) bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(AES_TABS)
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(AES_TABS)
 
 $(MPL)/five_tab_gen: $(MPL)/five_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/five_tab_gen.c -o $@
@@ -324,25 +325,25 @@ $(MPL)/five_tab.bin: $(MPL)/five_tab_gen
 	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/five_tab_gen $@
 
 $(MPL)/five_tab.o: $(MPL)/five_tab.bin bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(MPL)/five_tab.bin
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(MPL)/five_tab.bin
 
 $(MPL)/tchar_tab.o: $(TCHAR_TABS) bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) -o $@ $(TCHAR_TABS)
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(TCHAR_TABS)
 
 $(MPL)/tchar_tolower.bin: $(MPL)/tchar_tolower_be.bin
-	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_tolower_be.bin conv=swab of=$@ ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_tolower_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c1table.bin: $(MPL)/tchar_c1table_be.bin
-	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c1table_be.bin conv=swab of=$@ ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c1table_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c3table.bin: $(MPL)/tchar_c3table_be.bin
-	@if [[ "$(TARGET_ENDIAN)" == "little" ]] ; then \
+	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
 		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c3table_be.bin conv=swab of=$@ ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin $@ ; \

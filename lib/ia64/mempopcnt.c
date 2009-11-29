@@ -24,7 +24,7 @@
  */
 
 
-static inline size_t popcountst_int(size_t n)
+static inline size_t popcountst_int1(size_t n)
 {
 	size_t tmp;
 #  ifdef __INTEL_COMPILER
@@ -39,50 +39,37 @@ static inline size_t popcountst_int(size_t n)
 	return tmp;
 }
 
-size_t mempopcnt(const void *s, size_t len)
+static inline size_t popcountst_int2(size_t n, size_t m)
 {
-	const unsigned char *p;
-	size_t r;
-	size_t sum = 0;
-	unsigned shift = ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR;
-	prefetch(s);
-
-	p = (const unsigned char *)ALIGN_DOWN(s, SOST);
-	r = *(const size_t *)p;
-	if(!HOST_IS_BIGENDIAN)
-		r >>= shift;
-	else
-		r <<= shift;
-	if(len >= SOST || len + shift >= SOST)
-	{
-		/*
-		 * Sometimes you need a new perspective, like the altivec
-		 * way of handling things.
-		 * Lower address bits? Totaly overestimated.
-		 *
-		 * We don't precheck for alignment.
-		 * Instead we "align hard", do one load "under the address",
-		 * mask the excess info out and afterwards we are fine to go.
-		 */
-		p += SOST;
-		len -= SOST - shift;
-		sum += popcountst_int(r);
-
-		r = len / SOST;
-		for(; r; r--, p += SOST)
-			sum += popcountst_int(*(const size_t *)p);
-		len %= SOST;
-		if(len)
-			r = *(const size_t *)p;
-	}
-	if(len) {
-		if(!HOST_IS_BIGENDIAN)
-			r <<= SOST - len;
-		else
-			r >>= SOST - len;
-		sum += popcountst_int(r);
-	}
-	return sum;
+	size_t tmp;
+#  ifdef __INTEL_COMPILER
+	tmp = _m64_popcnt(n) + _m64_popcnt(m);
+#  else
+#   if _GNUC_PREREQ(3,4)
+	tmp = __builtin_popcntl(n) + __builtin_popcntl(m);
+#   else
+	tmp = popcountst_int1(n) + popcountst_int1(m);
+#   endif /* _GNUC_PREREQ(3,4) */
+#  endif /* __INTEL_COMPILER */
+	return tmp;
 }
+
+static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
+{
+	size_t tmp;
+#  ifdef __INTEL_COMPILER
+	tmp = _m64_popcnt(n) + _m64_popcnt(m) + _m64_popcnt(o) + _m64_popcnt(p);
+#  else
+#   if _GNUC_PREREQ(3,4)
+	tmp = __builtin_popcntl(n) + __builtin_popcntl(m) + __builtin_popcntl(o) + __builtin_popcntl(p);
+#   else
+	tmp = popcountst_int1(n) + popcountst_int1(m) + popcountst_int1(o) + popcountst_int1(p);
+#   endif /* _GNUC_PREREQ(3,4) */
+#  endif /* __INTEL_COMPILER */
+	return tmp;
+}
+
+#define NO_GEN_POPER
+#include "../generic/mempopcnt.c"
 
 static char const rcsid_mpia[] GCC_ATTR_USED_VAR = "$Id: $";

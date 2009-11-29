@@ -23,10 +23,6 @@
  */
 # include "other.h"
 
-# ifndef UNALIGNED_OK
-#  define UNALIGNED_OK 0
-# endif
-
 /*
  * 'MRATIO' and 'MSHIFT' are mixing constants generated offline.
  * They're not really 'magic', they just happen to work well.

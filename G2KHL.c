@@ -40,6 +40,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <pthread.h>
 #ifdef HAVE_DB
 # define DB_DBM_HSEARCH 1
@@ -501,8 +502,10 @@ static bool gwc_resolv(void)
 		unsigned port;
 		*wptr++ = '\0'; /* terminate */
 		if(1 == sscanf(wptr, "%u", &port)) {
-			if(port <= 0xFFFF)
+			if(port <= 0xFFFF) {
 				act_gwc.port = port;
+				service = wptr;
+			}
 		}
 		/* failure? ignore, try 80 */
 	}
@@ -513,8 +516,10 @@ static bool gwc_resolv(void)
 	if(ret_val) {
 		if(EAI_AGAIN  == ret_val || EAI_MEMORY == ret_val)
 			ret_val = true;
-		else
+		else {
+			logg_posd(LOGF_NOTICE, "resolving faild: %s\n", gai_strerror(ret_val));
 			goto resolv_fail;
+		}
 	}
 	act_gwc.next_addrinfo = act_gwc.addrinfo = res_res;
 
@@ -658,7 +663,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 
 	logg_develd_old("gwc \"%s\" response: \"%s\"\n", act_gwc.data.url, line);
 	/* skip whitespace */
-	for(wptr = line; *wptr && isblank(*wptr); wptr++);
+	for(wptr = line; *wptr && isblank((int)*wptr); wptr++);
 
 	response = *wptr++;
 	/* make shure there is a field seperator */
@@ -678,8 +683,8 @@ static void gwc_handle_line(char *line, time_t lnow)
 				break;
 			wptr = next + str_size("access|period|");
 			/* skip whitespace at period start */
-			for(; *wptr && isblank(*wptr); wptr++);
-			if(*wptr && isdigit(*wptr))
+			for(; *wptr && isblank((int)*wptr); wptr++);
+			if(*wptr && isdigit((int)*wptr))
 				period = atoi(wptr);
 			else
 				break;
@@ -699,13 +704,13 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(next) {
 				*next++ = '\0';
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank(*next); next++);
-				if(*next && isdigit(*next))
+				for(; *next && isblank((int)*next); next++);
+				if(*next && isdigit((int)*next))
 					since = atoi(next);
 			}
 
 			/* skip whitespace at addr start */
-			for(; *wptr && isblank(*wptr); wptr++);
+			for(; *wptr && isblank((int)*wptr); wptr++);
 			/*
 			 * playing with fire here, a moron maybe forgot the [ ] needed
 			 * around literal IPv6 addresses where a port may be specified
@@ -722,15 +727,15 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(port)
 				*port++ = '\0';
 			/* skip whitespace at port start */
-			for(; *port && isblank(*port); port++);
-			if(!(*port && isdigit(*port)))
+			for(; *port && isblank((int)*port); port++);
+			if(!(*port && isdigit((int)*port)))
 				port = NULL;
 
 			memset(&a, 0, sizeof(a));
 			if(0 >= combo_addr_read(wptr, &a))
 				break; /* nothing to read */
 
-			if(port && isdigit(*port))
+			if(port && isdigit((int)*port))
 				combo_addr_set_port(&a, htons(atoi(port)));
 			else
 				combo_addr_set_port(&a, htons(6551));
@@ -760,8 +765,8 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(next) {
 				*next++ = '\0';
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank(*next); next++);
-				if(*next && isdigit(*next))
+				for(; *next && isblank((int)*next); next++);
+				if(*next && isdigit((int)*next))
 					since = atoi(next);
 			}
 			/* trim trailing whitespace */
@@ -847,7 +852,7 @@ static int gwc_handle_response(void)
 				char c = *buffer_start(*buff) & 0x7F;
 				if(isblank(c))
 					buff->pos++;
-				else if(isdigit(c)) {
+				else if(isdigit((int)c)) {
 					act_gwc.state++;
 					goto_to_next = true;
 					break;

@@ -163,8 +163,8 @@ struct format_spec
 
 typedef const char *(*fmt_func)(char *buf, const char *fmt, struct format_spec *);
 
-#define HEXUC_STRING "0123456789ABCDEFGHIJKL"
-#define HEXLC_STRING "0123456789abcdefghijkl"
+static const char HEXUC_STRING[] = "0123456789ABCDEFGHIJKL";
+static const char HEXLC_STRING[] = "0123456789abcdefghijkl";
 
 #define format_dispatch(buf, fmt, f) format_table[*(const unsigned char *)(fmt)]((buf), ((fmt)+1), (f))
 static const fmt_func format_table[256];
@@ -1454,7 +1454,7 @@ static const char *widthn(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned w = 0;
 	char c;
-	for(c = *(fmt-1); c && isdigit(c); c = *fmt++) {
+	for(c = *(fmt-1); c && isdigit((int)c); c = *fmt++) {
 		w *= 10;
 		w += c - '0';
 	}
@@ -1475,7 +1475,7 @@ static const char *prec_p(char *buf, const char *fmt, struct format_spec *spec)
 		if(t > 0)
 			p = (unsigned)t;
 	} else {
-		for(; c && isdigit(c); c = *fmt++) {
+		for(; c && isdigit((int)c); c = *fmt++) {
 			p *= 10;
 			p += c - '0';
 		}

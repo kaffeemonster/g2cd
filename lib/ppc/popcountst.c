@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, ppc64 implementation
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,15 +30,8 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 {
 	/* according to POWER5 spec */
 	size_t tmp;
-	__asm__ __volatile__(
-		"popcntb\t%0, %1\n\t"
-		"mulld\t%0, %0, %2\n\t" /*(RB) = 0x0101_0101_0101_0101*/
-		"srdi\t%0, %0, 56\n"
-		: "=r" (tmp)
-		: "r" (n), "r" (0x0101010101010101)
-		: "cc"
-	);
-	return tmp;
+	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n) : "cc");
+	return (tmp * 0x0101010101010101ULL) >> 56;
 }
 #endif
 

@@ -238,7 +238,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 				asm ("bsr	%1, %0" : "=r" (v) : "rm" (f_row));
 				cnt = (v / BITS_PER_CHAR) + 1;
 #else
-				cnt = (((sizeof(f_row) * BITS_PER_CHAR) - __builtin_clzl(f_row)) / BITS_PER_CHAR) + 1;
+				cnt = ((flsst(f_row) - 1) / BITS_PER_CHAR) + 1;
 #endif
 				*r_wptr++ = cnt | 0xF0;
 				t_len--;

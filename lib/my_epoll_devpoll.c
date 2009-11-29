@@ -55,7 +55,7 @@ struct dev_poll_data
 	int max_fd;
 	epoll_data_t data[DYN_ARRAY_LEN];
 };
-static volatile struct dev_poll_data *fds;
+static struct dev_poll_data * volatile fds;
 
 /*
  * Must be called with the writerlock held!
@@ -133,9 +133,11 @@ static void my_epoll_init(void)
 
 static void my_epoll_deinit(void)
 {
+	struct dev_poll_data *tmp;
 	fds->max_fd = 0;
-	free(fds);
+	tmp = fds;
 	fds = NULL;
+	free(tmp);
 //	pthread_mutex_destroy(&my_epoll_mutex);
 }
 
@@ -294,7 +296,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 // TODO: close it or not, racy...
 				/* fd may be not in set, but reassigned to someone else */
 				close(poll_buf->fd);
-				logg_pos(LOGF_INFO, "hit FD out of lockup arry?")
+				logg_pos(LOGF_INFO, "hit FD out of lockup arry?");
 				continue;
 			}
 // TODO: handle POLLNVAL, epoll does not deliver it

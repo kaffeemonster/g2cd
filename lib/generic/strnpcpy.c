@@ -95,7 +95,7 @@ DO_LARGE:
 			size_t c = *src_b;
 			r = has_nul_byte(c);
 			if(r)
-				return cpy_rest0(dst, src, nul_byte_index(r));
+				return cpy_rest0((char *)dst_b, (const char *)src_b, nul_byte_index(r));
 			*dst_b = c;
 		}
 

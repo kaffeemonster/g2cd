@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, generic implementation
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *

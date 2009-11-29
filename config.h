@@ -39,6 +39,9 @@
 #define HAVE___THREAD
 /* does the comiler support 128bit vars on this arch */
 //#define HAVE_TIMODE
+/* oh man, no end in broken ness */
+#define HAVE_RESTRICT
+#define HAVE_ISBLANK
 
 /* do we have IPv6 and other net stuff */
 #define HAVE_SA_FAMILY_T
@@ -48,6 +51,7 @@
 #define HAVE_INET6_ADDRSTRLEN
 #define HAVE_INET_NTOP
 #define HAVE_INET_PTON
+#define HAVE_IPV6_V6ONLY
 
 /* need epoll compat? */
 //#define NEED_EPOLL_COMPAT

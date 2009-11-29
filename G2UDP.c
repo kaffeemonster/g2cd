@@ -96,7 +96,7 @@ static void udp_deinit(void) GCC_ATTR_DESTRUCT;
 
 static void udp_init(void)
 {
-	if(pthread_key_create(&key2udp_lsb, recv_buff_free))
+	if(pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free))
 		diedie("couln't create TLS key for logging");
 }
 
@@ -357,7 +357,7 @@ static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t pa
 	put_unaligned(seq, ((uint16_t *)buffer_start(*d_hold)));
 	d_hold->pos += 2;
 	/* part */
-	num_ptr = (uint8_t *) buffer_start(*d_hold);
+	num_ptr = (uint8_t *)buffer_start(*d_hold);
 	*num_ptr = part;
 	d_hold->pos++;
 	/* count */
@@ -754,12 +754,15 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
 		OUT_ERR("setsockopt reuse");
 
+#ifdef HAVE_IPV6_V6ONLY
 	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
+#endif
 
-	if(bind(*udp_so, casa(our_addr), sizeof(*our_addr)))
+	if(bind(*udp_so, casa(our_addr),
+	        AF_INET == our_addr->s_fam ? sizeof(our_addr->in) : sizeof(our_addr->in6)))
 		OUT_ERR("bindding udp fd");
 
 #if 0

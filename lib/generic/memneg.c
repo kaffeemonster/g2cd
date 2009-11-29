@@ -2,7 +2,7 @@
  * memneg.c
  * neg a memory region efficient, generic implementation
  *
- * Copyright (c) 2006 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -70,7 +70,7 @@ void *memneg(void *dst, const void *src, size_t len)
 			if(!(i & SOSTM1))
 				goto alignment_size_t;
 		}
-		goto no_alignment_possible
+		goto no_alignment_possible;
 	}
 
 	/* fall throuh if alignment fails */
@@ -153,4 +153,4 @@ handle_remaining:
 	return dst;
 }
 
-static char const rcsid_mn[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mng[] GCC_ATTR_USED_VAR = "$Id:$";

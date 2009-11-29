@@ -1,7 +1,7 @@
 /* bin2o.c
  * little helper to make a .o from (data)files
  *
- * Copytight (c) 2006 - 2008 Jan Seiffert
+ * Copytight (c) 2006 - 2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -190,10 +190,20 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 	}
 
-	if(verbose)
-		(void)writestr(STDOUT_FILENO, "\t.section .rodata,\"a\",@progbits\n");
-	if(!writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
-		goto out;
+	if(GAS == as_dia)
+	{
+		if(verbose)
+			(void)writestr(STDOUT_FILENO, "\t.section .rodata,\"a\",@progbits\n");
+		if(!writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
+			goto out;
+	}
+	else
+	{
+		if(verbose)
+			(void)writestr(STDOUT_FILENO, "\t.section \".rodata\"\n");
+		if(!writestr(as_fd, "\t.section \".rodata\"\n"))
+			goto out;
+	}
 
 	for(i = 0; i < num_i_file; i++)
 	{
@@ -296,7 +306,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 			w_ptr += sprintf(w_ptr, "\t.hidden %s_base_data\n", buf->name);
 		w_ptr += sprintf(w_ptr, ".globl %s_base_data\n", buf->name);
 	}
-	w_ptr += sprintf(w_ptr, "\t.type %s_base_data,@object\n%s_base_data:\n", buf->name, buf->name);
+	w_ptr += sprintf(w_ptr, "\t.type %s_base_data,%cobject\n%s_base_data:\n", buf->name, GAS == as_dia ? '@' : '#', buf->name);
 	for(pos = 0; (pos + 16) < buf->len; pos += 16)
 	{
 		if(w_ptr > (pbuf + PBUF_SIZE - 240))
@@ -322,7 +332,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 	if(GAS == as_dia)
 		w_ptr += sprintf(w_ptr, "\t.hidden %s\n", buf->name);
 	w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
-	w_ptr += sprintf(w_ptr, "\t.type %s,@object\n%s:\n", buf->name, buf->name);
+	w_ptr += sprintf(w_ptr, "\t.type %s,%cobject\n%s:\n", buf->name, GAS == as_dia ? '@' : '#', buf->name);
 	w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
 	w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n\n", buf->name, buf->name);
 	if(verbose) {

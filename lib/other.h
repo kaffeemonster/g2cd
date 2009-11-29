@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2008 Jan Seiffert
+ * Copyright (c) 2004 - 2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,6 +30,10 @@
 # include "../config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifndef UNALIGNED_OK
+# define UNALIGNED_OK 0
+#endif
+
 #ifndef HAVE_C99
 /* Non C99 compiler with no extensions don't know about the following keywords */
 # ifdef __GNUC__
@@ -41,6 +45,17 @@
 #else
 # define DYN_ARRAY_LEN
 #endif /* HAVE_C99 */
+
+#ifndef HAVE_RESTRICT
+# define restrict
+#endif
+
+#ifndef HAVE_ISBLANK
+static inline int isblank(int c)
+{
+	return ' ' == c || '\t' == c;
+}
+#endif
 
 /*
  * some Magic for determining the attrib-capabilitie of an gcc or just set it
@@ -244,7 +259,8 @@ typedef void (*sighandler_t)(int);
 # endif
 #endif
 
-#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || defined(HAVE_STDINT_H)
+/* (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) */
+#if defined(HAVE_STDINT_H)
 # include <stdint.h>
 #else
 # include <inttypes.h>
@@ -294,9 +310,38 @@ typedef void (*sighandler_t)(int);
 #if defined(__GNUC__) || _SUNC_PREREQ(0x5100)
 # ifdef __linux__
 #  include <endian.h>
-# else
+# elif defined(__NetBSD__)
 #  include <sys/endian.h>
+# elif defined(__FreeBSD__) || defined(BSD)
+#  include <machine/endian.h>
+# elif defined(SOLARIS)
+#  include <sys/isa_defs.h>
+#  define __LITTLE_ENDIAN 1234
+#  define __BIG_ENDIAN 4321
+#  ifdef _LITTLE_ENDIAN
+#   define __BYTE_ORDER __LITTLE_ENDIAN
+#  elif defined(_BIG_ENDIAN)
+#   define __BYTE_ORDER __BIG_ENDIAN
+#  else
+#   error "Oh solaris, your header are ..."
+#  endif
 # endif
+
+/* maybe we picked it up by accident, otherwise give up */
+# if !defined(__BYTE_ORDER) && !defined(BYTE_ORDER)
+#  error "no byte order info for your plattform, giving up!"
+# endif
+/* BSDs sometimes calls it BYTE_ORDER, fix up */
+# ifndef __BYTE_ORDER
+#  define __BYTE_ORDER  BYTE_ORDER
+# endif
+# ifndef __LITTLE_ENDIAN
+#  define __LITTLE_ENDIAN  LITTLE_ENDIAN
+# endif
+# ifndef __BIG_ENDIAN
+#  define __BIG_ENDIAN  BIG_ENDIAN
+# endif
+
 /* let the compiler handle unaligned access */
 # define get_unaligned(dest, ptr) \
 do { \

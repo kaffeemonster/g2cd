@@ -119,7 +119,8 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 	/* find run of zeros */
 	for(i = 0; i < INET6_ADDRLEN/2; i++)
 	{
-		if(!src->s6_addr16[i]) {
+		uint16_t a_word = src->s6_addr[i * 2] | (src->s6_addr[i * 2 + 1] << 8);
+		if(!a_word) {
 			if(-1 == cur.start)
 				cur.start = i, cur.len = 1;
 			else
@@ -144,6 +145,7 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 	/* print it */
 	for(i = 0, wptr = tbuf; i < INET6_ADDRLEN/2; i++)
 	{
+		uint16_t a_word;
 		if(-1 != best.start &&
 		   i >= best.start &&
 		   i < (best.start + best.len)) {
@@ -153,7 +155,8 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 		}
 		if(i)
 			*wptr++ = ':';
-		wptr = ustoxa(wptr, htons(src->s6_addr16[i]));
+		a_word = src->s6_addr[i * 2] | (src->s6_addr[i * 2 + 1] << 8);
+		wptr = ustoxa(wptr, htons(a_word));
 	}
 	if(-1 != best.start && INET6_ADDRLEN/2 == (best.start + best.len))
 		*wptr++ = ':';
