@@ -50,7 +50,8 @@
 # elif defined(__ARM_ARCH_5__) || defined(__ARM_ARCH_5T__) || \
 	defined(__ARM_ARCH_5TE__) || defined(__ARM_ARCH_5TEJ__) || \
 	defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
+	defined(__ARM_ARCH_7A__)
 #  include "arm/flsst.c"
 # else
 #  include "generic/flsst.c"

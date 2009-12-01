@@ -314,7 +314,7 @@ typedef void (*sighandler_t)(int);
 #  include <sys/endian.h>
 # elif defined(__FreeBSD__) || defined(BSD)
 #  include <machine/endian.h>
-# elif defined(SOLARIS)
+# elif defined(__sun__)
 #  include <sys/isa_defs.h>
 #  define __LITTLE_ENDIAN 1234
 #  define __BIG_ENDIAN 4321

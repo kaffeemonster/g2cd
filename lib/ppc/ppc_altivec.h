@@ -33,7 +33,7 @@
 /* you have to love GCC, it does not take NULL on vec_lvsl ... */
 static inline vector unsigned char vec_identl(unsigned level)
 {
-	return vec_lvsl(0, (const unsigned char *)level);
+	return vec_lvsl(0, (const unsigned char *)(uintptr_t)level);
 }
 
 static inline vector unsigned char vec_ident_rev()
@@ -93,11 +93,12 @@ static inline uint32_t vec_pmovmskb(vector bool char vr)
 //	vector unsigned char swap_ident;
 	vector unsigned char factor;
 	vector unsigned int vri;
-	vector int vr_hi, vr_li, v0 = vec_splat_u8(0);
+	vector int vr_hi, vr_li, v0;
 	vector unsigned short vr_h, vr_l;
 	uint32_t r;
 
-	vr = vec_and(vr, vec_splat_u8(1)); /* single bit */
+	v0 = (vector int)vec_splat_u8(0);
+	vr = vec_and(vr, (vector bool char)vec_splat_u8(1)); /* single bit */
 	factor = vec_ident_rev(); /* get reverse ident */
 	vr_h = vec_sl((vector unsigned short)vec_unpackh(vr), (vector unsigned short)vec_unpackh((vector signed char)factor)); /* shift */
 	vr_l = vec_sl((vector unsigned short)vec_unpackl(vr), (vector unsigned short)vec_unpackl((vector signed char)factor));

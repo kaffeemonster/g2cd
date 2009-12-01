@@ -558,7 +558,7 @@ static inline void print_big(struct big_num *x)
 	i = x->l;
 
 	for(; i >= 0; i--)
-		printf("%016llx", x->d[i]);
+		printf("%016llx", (unsigned long long)x->d[i]);
 }
 
 static int estimate(int n)

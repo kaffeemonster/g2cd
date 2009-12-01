@@ -510,6 +510,7 @@ static bool gwc_resolv(void)
 		/* failure? ignore, try 80 */
 	}
 
+//TODO: is passing service usefull? Seems to make trouble when setup b0rken
 	/* resolve */
 	ret_val = getaddrinfo(node, service, NULL, &res_res);
 	/* transient errors are bad, but not "kill that entry" bad */

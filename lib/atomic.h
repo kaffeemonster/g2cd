@@ -99,13 +99,8 @@ typedef union xxxxxx4
 #   include "x86/atomic.h"
 #  elif defined(__IA64__)
 #   include "ia64/atomic.h"
-#  elif defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
-/*
- * gcc sometimes sets __sparcv8 even if you say "gimme v9" to not confuse
- * solaris tools. This will Bomb on a real v8 (maybe not a v8+)...
- */
-#   include "sparc64/atomic.h"
 #  elif defined(__sparc__) || defined(__sparc)
+	/* for both archs */
 #   include "sparc/atomic.h"
 #  elif defined(__mips)
 #   include "mips/atomic.h"
@@ -114,7 +109,8 @@ typedef union xxxxxx4
 #  elif defined(__alpha__)
 #   include "alpha/atomic.h"
 #  elif defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-        defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+        defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
+        defined(__ARM_ARCH_7A__)
 #   include "arm/atomic.h"
 #  else
 #   if _GNUC_PREREQ(4, 1)

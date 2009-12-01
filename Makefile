@@ -45,6 +45,8 @@ TARGET_ENDIAN = little
 CC = gcc
 #CC = x86_64-pc-linux-gnu-gcc
 #CC = powerpc-linux-gnu-gcc
+#CC = powerpc64-linux-gnu-gcc
+#CC = arm-unknown-linux-gnu-gcc
 HOSTCC = gcc
 # gcc
 CC_VER_INFO = --version
@@ -54,16 +56,22 @@ CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $
 AS = as
 #AS = x86_64-pc-linux-gnu-as
 #AS = powerpc-linux-gnu-as
+#AS = powerpc64-linux-gnu-as
+#AS = arm-unknown-linux-gnu-as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR_PROG = ar
 #AR_PROG = x86_64-pc-linux-gnu-ar
 #AR_PROG = powerpc-linux-gnu-ar
+#AR_PROG = powerpc64-linux-gnu-ar
+#AR_PROG = arm-unknown-linux-gnu-ar
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ $(AR_PROG)
 ARFLAGS = cru
 RANLIB_PROG = ranlib
 #RANLIB_PROG = x86_64-pc-linux-gnu-ranlib
 #RANLIB_PROG = powerpc-linux-gnu-ranlib
+#RANLIB_PROG = powerpc64-linux-gnu-ranlib
+#RANLIB_PROG = arm-unknown-linux-gnu-ranlib
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ $(RANLIB_PROG)
 #	ctags, anyone?
 CTAGS = ctags
@@ -71,14 +79,18 @@ CSCOPE = cscope
 OBJCOPY = objcopy
 #OBJCOPY = x86_64-pc-linux-gnu-objcopy
 #OBJCOPY = powerpc-linux-gnu-objcopy
+#OBJCOPY = powerpc64-linux-gnu-objcopy
+#OBJCOPY = arm-unknown-linux-gnu-objcopy
 STRIP = strip
 #STRIP = x86_64-pc-linux-gnu-strip
 #STRIP = powerpc-linux-gnu-strip
+#STRIP = powerpc64-linux-gnu-strip
+#STRIP = arm-unknown-linux-gnu-strip
 RM = rm -f
-#BIN2O_OPTS = -d sun
+#BIN2O_OPTS = -d sun -l 8
 
 # split up host and target CFLAGS
-HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE
+HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE _D__EXTENSIONS__
 
 #
 # the C-Standart the compiler should work with
@@ -133,15 +145,19 @@ ARCH = athlon64-sse3
 #ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
+#ARCH = power6
 #ARCH = G4
 #ARCH = G3
 #ARCH = ultrasparc
 #ARCH = niagara
+#ARCH = cortex-a8
 # set the march
 ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)
 # mtune on newer gcc
 #ARCH_FLAGS += -mtune=$(ARCH)
+# 64 Bit?
+#ARCH_FLAGS += -m64
 # x86
 #ARCH_FLAGS += -momit-leaf-frame-pointer
 # x86 stringops are in modern processors

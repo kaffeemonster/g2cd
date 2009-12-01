@@ -2,7 +2,7 @@
  * memneg.c
  * neg a memory region efficient
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -52,6 +52,9 @@
 # elif defined(__powerpc__) || defined(__powerpc64__)
 	/* works for both */
 #  include "ppc/memneg.c"
+# elif defined(__sparc__) || defined(__sparc__)
+	/* works for both */
+#  include "sparc/memneg.c"
 # else
 #  include "generic/memneg.c"
 # endif

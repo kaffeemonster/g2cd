@@ -61,7 +61,7 @@
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	vector unsigned int v0_32 = vec_splat_u32(0);
-	vector unsigned int   vsh = vec_splat_u8(4);
+	vector unsigned int   vsh = vec_splat_u32(4);
 	vector unsigned char   v1 = vec_splat_u8(1);
 	vector unsigned char vord = vec_ident_rev() + v1;
 	vector unsigned char   v0 = vec_splat_u8(0);
@@ -152,7 +152,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				v1_a   = vec_perm(v1, v0, vperm);
 
 				/* add k times vs1 for this trailer */
-				vk = vec_lvsl(0, (unsigned *)k);
+				vk = (vector unsigned int)vec_lvsl(0, (unsigned *)(uintptr_t)k);
 				vk = (vector unsigned)vec_mergeh(v0, (vector unsigned char)vk);
 				vk = (vector unsigned)vec_mergeh((vector unsigned short)v0, (vector unsigned short)vk);
 				vk = vec_splat(vk, 0);

@@ -28,6 +28,9 @@ char *strchrnul(const char *s, int c)
 	const char *p;
 	size_t r, mask, x;
 	unsigned shift;
+
+	if(unlikely(!c))
+		return (char *)(intptr_t)s + strlen(s);
 	prefetch(s);
 
 	/*

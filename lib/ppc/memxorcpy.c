@@ -160,8 +160,8 @@ alignment_16:
 	if(len / SOVUC)
 	{
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
-		register vector const unsigned char *src_vec1 = (vector const unsigned char *) src_char1;
-		register vector const unsigned char *src_vec2 = (vector const unsigned char *) src_char2;
+		register const vector unsigned char *src_vec1 = (const vector unsigned char *) src_char1;
+		register const vector unsigned char *src_vec2 = (const vector unsigned char *) src_char2;
 		register vector unsigned char v[8];
 		size_t small_len = len / SOVUC;
 		register size_t smaller_len = small_len / 4;
@@ -237,8 +237,8 @@ no_alignment_wanted:
 		/* dst and src1 is aligned */
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		/* only src2 sucks */
-		register vector const unsigned char *src_vec1;
-		register vector const unsigned char *src_vec2;
+		register const vector unsigned char *src_vec1;
+		register const vector unsigned char *src_vec2;
 		vector unsigned char v[9];          /* 0-8 */
 		vector unsigned char vd[8];         /* 9-16 */
 		vector unsigned char fix_alignment; /* 17 */
@@ -247,8 +247,8 @@ no_alignment_wanted:
 		small_len %= 8;
 
 		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char2);
-		src_vec1 = (vector const unsigned char *) src_char1;
-		src_vec2 = (vector const unsigned char *) src_char2;
+		src_vec1 = (const vector unsigned char *) src_char1;
+		src_vec2 = (const vector unsigned char *) src_char2;
 		v[8] = vec_ldl(0, src_vec2);
 		while(smaller_len--)
 		{
@@ -330,8 +330,8 @@ both_unaligned:
 		/* dst is aligned */
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		/* both src'es suck */
-		register vector const unsigned char *src_vec1;
-		register vector const unsigned char *src_vec2;
+		register const vector unsigned char *src_vec1;
+		register const vector unsigned char *src_vec2;
 		vector unsigned char v[9];          /* 0-8 */
 		vector unsigned char vd[9];         /* 9-17 */
 		vector unsigned char fix_alignment1; /* 18 */
@@ -342,8 +342,8 @@ both_unaligned:
 
 		fix_alignment1 = vec_lvsl(0, (const volatile unsigned char *)src_char1);
 		fix_alignment2 = vec_lvsl(0, (const volatile unsigned char *)src_char2);
-		src_vec1 = (vector const unsigned char *) src_char1;
-		src_vec2 = (vector const unsigned char *) src_char2;
+		src_vec1 = (const vector unsigned char *) src_char1;
+		src_vec2 = (const vector unsigned char *) src_char2;
 		vd[8] = vec_ldl(0, src_vec1);
 		v[8]  = vec_ldl(0, src_vec2);
 		while(smaller_len--)

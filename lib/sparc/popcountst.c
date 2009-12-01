@@ -1,8 +1,8 @@
 /*
  * popcountst.c
- * calculate popcount in size_t, sparc64 implementation
+ * calculate popcount in size_t, sparc/sparc64 implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,6 +23,18 @@
  * $Id:$
  */
 
+#if 0
+/* ================================================================
+ * do NOT use these sparc instuctions, they are glacialy slow, only
+ * for reference. Generic is 50 times faster.
+ * ================================================================
+ */
+/*
+ * gcc sets __sparcv8 even if you say "gimme v9" to not confuse solaris
+ * tools and signal "32 bit mode". So how to detect a real v9 to do
+ * v9ish stuff, mister sun? Great tennis! This will Bomb on a real v8...
+ */
+# if defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 {
 	size_t tmp;
@@ -30,4 +42,10 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 	return tmp;
 }
 
+# else
+#  include "../generic/popcountst.c"
+# endif
 static char const rcsid_pc[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# include "../generic/popcountst.c"
+#endif

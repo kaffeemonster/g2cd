@@ -38,6 +38,8 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
+/* memcpy as a macro... */
+#undef memcpy
 #ifndef MEMCPY_DEFINED
 void *memcpy(void *restrict dst, const void *restrict src, size_t len);
 #define MEMCPY_DEFINED

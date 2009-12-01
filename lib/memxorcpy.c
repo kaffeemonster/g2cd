@@ -2,7 +2,7 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -94,6 +94,9 @@
 # elif defined(__powerpc__) || defined(__powerpc64__)
 	/* works for both */
 #  include "ppc/memxorcpy.c"
+# elif defined(__sparc) || defined(__sparc__)
+	/* works for both */
+#  include "sparc/memxorcpy.c"
 # else
 #  include "generic/memxorcpy.c"
 # endif

@@ -144,6 +144,7 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 	const char *osl = NULL, *isl = NULL;
 	char *wptr = NULL; 
 	struct ucontext *uc = vuc;
+	unsigned long *greg_iter;
 # ifdef __GLIBC__
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
 	void **buffer = (void **) path;
@@ -316,22 +317,28 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 
 	/* Dump registers, a better dump would be plattformspecific */
 	wptr = strplitcpy(path, "\nRegisters:\n");
+# if defined __powerpc__ || defined __powerpc64__
+	/* whoever made the powerpc-linux-gnu header...
+	 * I mean, an old sun an a new Linux i386 have it in sync, gnarf
+ 	*/
+#  if __WORDSIZE == 32
+	greg_iter = (unsigned long *)&uc->uc_mcontext.uc_regs->gregs[i];
+#  else
+	greg_iter = (unsigned long *)&uc->uc_mcontext.gp_regs[i];
+#  endif
+# elif defined(__arm__)
+	/* and again, hey, lets define something somehow different.
+	 * Please, and where are those 18 gregs now?
+	 */
+	greg_iter = (unsigned long *)&uc->uc_mcontext.arm_r0;
+# else
+	greg_iter = (unsigned long *)&uc->uc_mcontext.gregs[0];
+# endif
 	for(i = 0; i < NGREG; i++)
 	{
 		*wptr++ = '[';
 		wptr = strplitcpy(itoa_sfix(wptr, i, 3), "]: 0x");
-# if defined __powerpc__ || defined __powerpc64__
-/* whoever made the powerpc-linux-gnu header...
- * I mean, an old sun an a new Linux i386 have it in sync, afaik only ppc, gnarf
- */
-#  if __WORDSIZE == 32
-		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.uc_regs->gregs[i], 16);
-#  else
-		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.gp_regs[i], 16);
-#  endif
-# else
-		wptr = ultoXa_0fix(wptr, (unsigned long)uc->uc_mcontext.gregs[i], 16);
-# endif
+		wptr = ultoXa_0fix(wptr, greg_iter[i], 16);
 		*wptr++ = '\n';
 	}
 	write_panic(stderrfd, path, wptr - path);
@@ -349,7 +356,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	wptr = path;
 	if(SIGSEGV != signr && uc->uc_stack.ss_sp)
 	{
-		/* blaerch, catch a sigsegv in our own signalhandler, memref can be bogus */
+		/* blaerch, catch a sigsegv in our own signalhandler, stackref can be bogus */
 		if(!sigsetjmp(catch_sigsegv, 0))
 		{
 			wptr = path;

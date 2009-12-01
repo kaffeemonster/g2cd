@@ -47,12 +47,12 @@ void *mem_searchrn(void *s, size_t len)
 	v_cr = vec_splat_u8('\r');
 	v_nl = vec_splat_u8('\n');
 	v0   = vec_splat_u8(0);
-	last_rr = v0;
+	last_rr = (vector bool char)v0;
 
 	k = SOVUC - ALIGN_DOWN_DIFF(s, SOVUC) - (ssize_t)len;
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (vector const unsigned char *)p);
+	c = vec_ldl(0, (const vector unsigned char *)p);
 	if(unlikely(k > 0))
 		goto K_SHIFT;
 	v_perm = vec_lvsl(0, (unsigned char *)s);
@@ -68,7 +68,7 @@ void *mem_searchrn(void *s, size_t len)
 	do
 	{
 		p += SOVUC;
-		c = vec_ldl(0, (vector const unsigned char *)p);
+		c = vec_ldl(0, (const vector unsigned char *)p);
 		k -= SOVUC;
 		if(k > 0)
 		{

@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient, generic implementation
  *
- * Copyright (c) 2006,2007 Jan Seiffert
+ * Copyright (c) 2006-2007 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -138,9 +138,9 @@ no_alignment_possible:
 		goto handle_remaining;
 	}
 
-no_alignment_wanted:
 handle_remaining:
-	/* xor whats left to do from alignment and other datatype */
+no_alignment_wanted:
+	/* and whats left to do from alignment and other datatype */
 	while(len--)
 		*dst_char++ &= *src_char++;
 

@@ -1,6 +1,6 @@
 /*
  * mempopcnt.c
- * popcount a mem region, sparc64 implementation
+ * popcount a mem region, sparc/sparc64 implementation
  *
  * Copyright (c) 2009 Jan Seiffert
  *
@@ -23,6 +23,19 @@
  * $Id: $
  */
 
+#if 0
+/* =================================================================
+ * do NOT use these sparc instructions, they are glacialy slow, only
+ * for reference. Generic is 50 times faster.
+ * =================================================================
+ */
+/*
+ * gcc sets __sparcv8 even if you say "gimme v9" to not confuse solaris
+ * tools and signal "32 bit mode". So how to detect a real v9 to do
+ * v9ish stuff, mister sun? Great tennis! This will Bomb on a real v8...
+ */
+# if defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
+
 static inline size_t popcountst_int1(size_t n)
 {
 	size_t tmp;
@@ -44,7 +57,12 @@ static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
 	       popcountst_int1(p);
 }
 
-#define NO_GEN_POPER
-#include "../generic/mempopcnt.c"
-
+#  define NO_GEN_POPER
+#  include "../generic/mempopcnt.c"
 static char const rcsid_mps[] GCC_ATTR_USED_VAR = "$Id: $";
+# else
+#  include "../generic/mempopcnt.c"
+# endif
+#else
+# include "../generic/mempopcnt.c"
+#endif

@@ -76,6 +76,7 @@ static const char *o_file_name;
 static char **i_file_name;
 static int num_i_file;
 static const char *opt_pack = NULL;
+static unsigned balignment = 16;
 static int verbose;
 static int export_base_data;
 #define PBUF_SIZE (1<<15)
@@ -107,7 +108,7 @@ int main(int argc, char **argv)
 					fputs("stray '-' in args!?\n", stderr);
 				else if('-' == argv[i][1])
 					no_more_opt = true;
-				else if('a' == argv[i][1] || 'd' == argv[i][1] || 'p' == argv[i][1] || 'o' == argv[i][1])
+				else if('a' == argv[i][1] || 'd' == argv[i][1] || 'p' == argv[i][1] || 'o' == argv[i][1] || 'l' == argv[i][1])
 				{
 					char opt_c = argv[i][1];
 					if((i + 1) < argc)
@@ -129,6 +130,8 @@ int main(int argc, char **argv)
 							else
 								fprintf(stderr, "'%s' is an unknown assembler dialect!\n", argv[i]);
 						}
+						else if('l' == opt_c)
+							balignment = atoi(argv[i]);
 					}
 					else
 						fprintf(stderr, "option '-%c' needs an arg!\n", opt_c);
@@ -285,7 +288,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		memmove(buf->name, c_ptr+1, strlen(c_ptr+1)+1);
 	if(0 == strlen(buf->name))
 		sprintf(buf->name, "%X", e_sym++);
-	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align 16\n", buf->name);
+	w_ptr = pbuf + sprintf(pbuf, "\t.file \"%s\"\n\t.align %u\n", buf->name, balignment);
 
 	if((c_ptr = strrchr(buf->name, '.')))
 		*c_ptr = '\0';

@@ -302,6 +302,11 @@ static char *strchrnul_x86(const char *s, int c)
 	const char *p;
 	char *ret;
 	size_t t, t2, mask;
+
+	/* only do this in scalar code the SIMD versions are fast,
+	 * better avoid the overhead there */
+	if(unlikely(!c))
+		return (char *)(intptr_t)s + strlen(s);
 	asm (
 #ifndef __x86_64__
 		"imul	$0x01010101, %4, %4\n\t"

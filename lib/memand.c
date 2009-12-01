@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -90,6 +90,9 @@
 # elif defined(__powerpc__) || defined(__powerpc64__)
 	/* works for both */
 #  include "ppc/memand.c"
+# elif defined(__sparc) || defined(__sparc__)
+	/* works for both */
+#  include "sparc/memand.c"
 # else
 #  include "generic/memand.c"
 # endif

@@ -34,7 +34,6 @@ TARED_DIRS += \
 	$(MPL)/mips \
 	$(MPL)/ppc \
 	$(MPL)/sparc \
-	$(MPL)/sparc64 \
 	$(MPL)/ia64 \
 	$(MPL)/alpha \
 	$(MPL)/arm
@@ -78,7 +77,7 @@ EPOLLSRS = \
 	$(MPL)/my_epoll_poll.c \
 	$(MPL)/my_epoll_kqueue.c
 
-# 
+# atomic sources
 ATOMSRC = \
 	$(MPL)/generic/atomic.h \
 	$(MPL)/generic/atomic.c \
@@ -87,7 +86,6 @@ ATOMSRC = \
 	$(MPL)/ia64/atomic.h \
 	$(MPL)/ppc/atomic.h \
 	$(MPL)/sparc/atomic.h \
-	$(MPL)/sparc64/atomic.h \
 	$(MPL)/alpha/atomic.h \
 	$(MPL)/arm/atomic.h
 
@@ -106,7 +104,7 @@ POPCOUNTSTSRC = \
 	$(MPL)/generic/popcountst.c \
 	$(MPL)/x86/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
-	$(MPL)/sparc64/popcountst.c \
+	$(MPL)/sparc/popcountst.c \
 	$(MPL)/ppc/popcountst.c \
 	$(MPL)/alpha/popcountst.c
 CPY_RESTSRC = \
@@ -117,21 +115,24 @@ MEMXORCPYSRC = \
 	$(MPL)/generic/memxorcpy.c \
 	$(MPL)/x86/memxorcpy.c \
 	$(MPL)/x86/memxorcpy_tmpl.c \
-	$(MPL)/ppc/memxorcpy.c
+	$(MPL)/ppc/memxorcpy.c \
+	$(MPL)/sparc/memxorcpy.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
 	$(MPL)/x86/memand.c \
 	$(MPL)/x86/memand_tmpl.c \
-	$(MPL)/ppc/memand.c
+	$(MPL)/ppc/memand.c \
+	$(MPL)/sparc/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
 	$(MPL)/x86/memneg.c \
 	$(MPL)/x86/memneg_tmpl.c \
-	$(MPL)/ppc/memneg.c
+	$(MPL)/ppc/memneg.c \
+	$(MPL)/sparc/memneg.c
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
-	$(MPL)/sparc64/mempopcnt.c \
+	$(MPL)/sparc/mempopcnt.c \
 	$(MPL)/ia64/mempopcnt.c \
 	$(MPL)/ppc/mempopcnt.c \
 	$(MPL)/x86/mempopcnt.c

@@ -43,7 +43,7 @@ size_t strlen(const char *s)
 	v1 = vec_splat_u8(1);
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (vector const unsigned char *)p);
+	c = vec_ldl(0, (const vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
@@ -51,7 +51,7 @@ size_t strlen(const char *s)
 
 	while(!vec_any_eq(c, v0)) {
 		p += SOVUC;
-		c = vec_ldl(0, (vector const unsigned char *)p);
+		c = vec_ldl(0, (const vector unsigned char *)p);
 	}
 	r = vec_pmovmskb(vec_cmpeq(c, v0));
 	return p - s + __builtin_clz(r) - 16;

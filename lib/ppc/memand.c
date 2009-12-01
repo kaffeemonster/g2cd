@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient, ppc implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -72,7 +72,7 @@ void *memand(void *dst, const void *src, size_t len)
 	else
 	{
 		/* align dst, we will see what src looks like afterwards */
-		size_t i = ((char *)ALIGN(dst_char, ALIGNMENT_WANTED)) - dst_char;
+		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
 #ifdef __ALTIVEC__
 		i += SOVUC; /* make sure src is at least one vector in the memblock */
 #endif
@@ -158,7 +158,7 @@ alignment_16:
 	if(len / SOVUC)
 	{
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
-		register vector const unsigned char *src_vec = (vector const unsigned char *) src_char;
+		register const vector unsigned char *src_vec = (const vector unsigned char *) src_char;
 		register vector unsigned char v[8];
 		size_t small_len = len / SOVUC;
 		register size_t smaller_len = small_len / 4;
@@ -214,7 +214,7 @@ no_alignment_wanted:
 		/* dst is aligned */
 		register vector unsigned char *dst_vec = (vector unsigned char *) dst_char;
 		/* only src sucks */
-		register vector const unsigned char *src_vec;
+		register const vector unsigned char *src_vec;
 		vector unsigned char v[9];          /* 0-8 */
 		vector unsigned char vd[8];         /* 9-16 */
 		vector unsigned char fix_alignment; /* 17 */
@@ -223,7 +223,7 @@ no_alignment_wanted:
 		small_len %= 8;
 
 		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
-		src_vec = (vector const unsigned char *) src_char;
+		src_vec = (const vector unsigned char *) src_char;
 		v[8] = vec_ldl(0, src_vec);
 		while(smaller_len--)
 		{

@@ -39,7 +39,7 @@
 #define HAVE___THREAD
 /* does the comiler support 128bit vars on this arch */
 //#define HAVE_TIMODE
-/* oh man, no end in broken ness */
+/* oh man, no end in brokenness */
 #define HAVE_RESTRICT
 #define HAVE_ISBLANK
 
@@ -56,10 +56,10 @@
 /* need epoll compat? */
 //#define NEED_EPOLL_COMPAT
 /* if we need epoll compat-layer, wich? Only use _ONE_! */
-//#define HAVE_POLL
+//#define HAVE_POLL	/* BROKEN ? */
 //#define HAVE_KEPOLL	/* Linux with old userland and 2.6 Kernel */
-//#define HAVE_DEVPOLL	/* Solaris, TODO */
-//#define HAVE_KQUEUE	/* BSD, TODO */
+//#define HAVE_DEVPOLL	/* Solaris, EXPERIMENTAL */
+//#define HAVE_KQUEUE	/* BSD, EXPERIMENTAL */
 
 /* do we have sighandler_t */
 #define HAVE_SIGHANDLER_T
@@ -105,7 +105,7 @@
  * (even virtual processors)
  */
 #define HAVE_SMP
-/* if we have SMP, do we have Spinlocks? Solaris has none! */
+/* if we have SMP, do we have Spinlocks? Old Solaris has none! */
 #define HAVE_SPINLOCKS
 
 /* do we want to use my inline-asm's */
@@ -130,7 +130,8 @@
  * We sometimes need to find the index of a bit. This can be
  * done fast and cheap if your arch has instructions to scan
  * for a bit (bsf, cntlz). (popcnt is a bad idea if your
- * shifter are slow, sparc)
+ * shifter are slow, sparc, 50 times slower than our generic
+ * bitmagic)
  */
 #define HAVE_BIT_INSTR
 
@@ -142,6 +143,20 @@
  * another aproach (add, shifts, xor, etc.) can be faster.
  */
 #define HAVE_HW_MULT
+
+/*
+ * Solaris likes to hide the capabilities of their Sparc
+ * v9 behind silly games of 32 bit compat and "user space
+ * is better of 32 Bit, 64 Bit is for databases", so if not
+ * forcing 64 bit builds, everthing looks like a v8
+ * even if you have a v9 (issued with the UltraSparc in
+ * 1995, more than a dekade in IT ago).
+ * This way you miss new "real" atomic instr. and can do
+ * 64 bit arith. just fine. If only the program knew...
+ * So here is a switch, only kill it if you are certain
+ * you have an real old Sparc.
+ */
+#define HAVE_REAL_V9
 
 /*
  * how many bytes must be avail to switch away

@@ -87,7 +87,10 @@ char *strchr(const char *s, int c);
 
 char *strchr(const char *s, int c)
 {
-	char *ret_val = strchrnul(s, c);
+	char *ret_val;
+	if(unlikely(!c))
+		return (char *)(intptr_t)s + strlen(s);
+	ret_val = strchrnul(s, c);
 	return likely('\0' != *ret_val) ? ret_val : NULL;
 }
 

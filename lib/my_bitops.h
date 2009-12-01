@@ -57,7 +57,10 @@ LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(size_t mempopcnt(const void *s, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 # ifndef HAVE_MEMCPY
+#  ifndef memcpy
+/* outch! memcpy as a macro is ... evil */
 void *memcpy(void *restrict dst, const void *restrict src, size_t len);
+#  endif
 #  define MEMCPY_DEFINED
 # endif
 # ifndef HAVE_MEMPCPY

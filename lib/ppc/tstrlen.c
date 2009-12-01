@@ -44,16 +44,16 @@ size_t tstrlen(const tchar_t *s)
 	v1 = vec_splat_u8(1);
 
 	p = (tchar_t *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (vector const unsigned short *)p);
-	v_perm = vec_lvsl(0, (unsigned short *)(uintptr_t)s);
+	c = vec_ldl(0, (const vector unsigned char *)p);
+	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
-	v_perm = vec_lvsr(0, (unsigned short *)(uintptr_t)s);
+	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(v1, c, v_perm);
 	x = (vector unsigned short)c;
 
 	while(!vec_any_eq(x, v0)) {
 		p += SOVUC/sizeof(*p);
-		x = vec_ldl(0, (vector const unsigned short *)p);
+		x = vec_ldl(0, (const vector unsigned short *)p);
 	}
 	r = vec_pmovmskb((vector bool char)vec_cmpeq((vector unsigned char)x, (vector unsigned char)v0));
 	return (p - s + __builtin_clz(r) - 16)/sizeof(tchar_t);

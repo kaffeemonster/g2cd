@@ -27,25 +27,94 @@
 static inline size_t popcountst_int1(size_t n)
 {
 	size_t tmp;
-	__asm__ __volatile__("popcntb	%1, %0" : "=r" (tmp) : "r" (n) : "cc");
-	return (tmp * 0x0101010101010101ULL) >> 56;
+	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
+	return (tmp * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8);
 }
 
 static inline size_t popcountst_int2(size_t n, size_t m)
 {
 	size_t tmp1, tmp2;
-	__asm__ __volatile__("popcntb	%1, %0" : "=r" (tmp1) : "r" (n) : "cc");
-	__asm__ __volatile__("popcntb	%1, %0" : "=r" (tmp2) : "r" (m) : "cc");
-	return ((tmp1 + tmp2) * 0x0101010101010101ULL) >> 56;
+	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp1) : "r" (n));
+	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp2) : "r" (m));
+	return ((tmp1 + tmp2) * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8);
 }
 
-static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
+static inline size_t popcntb(size_t n)
 {
-	return popcountst_int2(n, m) + popcountst_int2(o, p);
+	size_t tmp;
+	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
+	return tmp;
 }
 
-# define NO_GEN_POPER
-# include "../generic/mempopcnt.c"
+size_t mempopcnt(const void *s, size_t len)
+{
+	const size_t *p;
+	size_t r;
+	size_t sum = 0;
+	unsigned shift = ALIGN_DOWN_DIFF(s, SOST);
+	prefetch(s);
+
+	p = (const size_t *)ALIGN_DOWN(s, SOST);
+	r = *p;
+	if(!HOST_IS_BIGENDIAN)
+		r >>= shift * BITS_PER_CHAR;
+	else
+		r <<= shift * BITS_PER_CHAR;
+	if(len >= SOST || len + shift >= SOST)
+	{
+		size_t mask = MK_C(0x00ff00ffL);
+		/*
+		 * Sometimes you need a new perspective, like the altivec
+		 * way of handling things.
+		 * Lower address bits? Totaly overestimated.
+		 *
+		 * We don't precheck for alignment.
+		 * Instead we "align hard", do one load "under the address",
+		 * mask the excess info out and afterwards we are fine to go.
+		 */
+		p++;
+		len -= SOST - shift;
+		sum += popcountst_int1(r);
+
+		while(len >= SOST * 4)
+		{
+			size_t sumb = 0;
+
+			r    = len / (SOST * 4);
+			r    = r > 7 ? 7 : r;
+			len -= r * SOST * 4;
+			for(; r; r--, p += 4) {
+				sumb += popcntb(p[0]);
+				sumb += popcntb(p[1]);
+				sumb += popcntb(p[2]);
+				sumb += popcntb(p[3]);
+			}
+			sumb = ((sumb & ~mask) >>  8) + (sumb & mask);
+			sum += (sumb * MK_C(0x00010001L)) >> (SIZE_T_BITS - 16);
+		}
+		if(len >= SOST * 2) {
+			sum += popcountst_int2(p[0], p[1]);
+			p += 2;
+			len -= SOST * 2;
+		}
+		if(len >= SOST) {
+			sum += popcountst_int1(p[0]);
+			p++;
+			len -= SOST;
+		}
+		if(len)
+			r =*p;
+	}
+	if(len) {
+		if(!HOST_IS_BIGENDIAN)
+			r <<= (SOST - len) * BITS_PER_CHAR;
+		else
+			r >>= (SOST - len) * BITS_PER_CHAR;
+		sum += popcountst_int1(r);
+	}
+	return sum;
+}
+
 #else
 # if defined(__ALTIVEC__) && defined(__GNUC__)
 /* We use the GCC vector internals, to make things simple for us. */
@@ -84,7 +153,7 @@ size_t mempopcnt(const void *s, size_t len)
 	 */
 	p = (unsigned char *)ALIGN_DOWN(s, SOVUC);
 	shift = ALIGN_DOWN_DIFF(s, SOVUC) * BITS_PER_CHAR;
-	c = vec_ldl(0, (vector const unsigned char *)p);
+	c = vec_ldl(0, (const vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v_0, v_perm);
 	if(len >= SOVUC || len + shift >= SOVUC)
@@ -101,22 +170,22 @@ size_t mempopcnt(const void *s, size_t len)
 			r    = r > 15 ? 15 : r;
 			len -= r * SOVUC * 2;
 			for(; r; r--, p += SOVUC * 2) {
-				c      = vec_ldl(0, (vector const unsigned char *)p);
+				c      = vec_ldl(0, (const vector unsigned char *)p);
 				v_sumb = vec_add(v_sumb, vec_popcnt(c));
-				c      = vec_ldl(0, (vector const unsigned char *)(p + SOVUC));
+				c      = vec_ldl(0, (const vector unsigned char *)(p + SOVUC));
 				v_sumb = vec_add(v_sumb, vec_popcnt(c));
 			}
 			v_sum = vec_sum4s(v_sumb, v_sum);
 		}
 		if(len >= SOVUC) {
-			c     = vec_ldl(0, (vector const unsigned char *)p);
+			c     = vec_ldl(0, (const vector unsigned char *)p);
 			p    += SOVUC;
 			v_sum = vec_sum4s(vec_popcnt(c), v_sum);
 			len  -= SOVUC;
 		}
 
 		if(len)
-			c = vec_ldl(0, (vector const unsigned char *)p);
+			c = vec_ldl(0, (const vector unsigned char *)p);
 	}
 	if(len) {
 		v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)(SOVUC - len));

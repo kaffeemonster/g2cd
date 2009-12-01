@@ -54,7 +54,7 @@ char *strchrnul(const char *s, int c)
 	v1 = vec_splat_u8(1);
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	x = vec_ldl(0, (vector const unsigned char *)p);
+	x = vec_ldl(0, (const vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	x = vec_perm(x, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
@@ -65,12 +65,12 @@ char *strchrnul(const char *s, int c)
 
 	while(vec_all_eq(m1, v0)) {
 		p += SOVUC;
-		x = vec_ldl(0, (vector const unsigned char *)p);
+		x = vec_ldl(0, (const vector unsigned char *)p);
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
-	r = vec_pmovmskb((vector unsigned char)m1);
+	r = vec_pmovmskb(m1);
 	return (char *)(uintptr_t)p + __builtin_clz(r) - 16;
 }
 
