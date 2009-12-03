@@ -68,7 +68,8 @@ LIBHEADS = \
 	$(MPL)/backtrace.h \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h \
-	$(MPL)/ppc/ppc_altivec.h
+	$(MPL)/ppc/ppc_altivec.h \
+	$(MPL)/sparc/sparc_vis.h
 
 # epoll emuls
 EPOLLSRS = \
@@ -110,6 +111,7 @@ POPCOUNTSTSRC = \
 CPY_RESTSRC = \
 	$(MPL)/generic/cpy_rest.c \
 	$(MPL)/ppc/cpy_rest.c \
+	$(MPL)/sparc/cpy_rest.c \
 	$(MPL)/x86/cpy_rest.c
 MEMXORCPYSRC = \
 	$(MPL)/generic/memxorcpy.c \
@@ -129,6 +131,12 @@ MEMNEGSRC = \
 	$(MPL)/x86/memneg_tmpl.c \
 	$(MPL)/ppc/memneg.c \
 	$(MPL)/sparc/memneg.c
+MEMCPYSRC = \
+	$(MPL)/generic/memcpy.c \
+	$(MPL)/sparc/memcpy.c
+MEMPCPYSRC = \
+	$(MPL)/generic/mempcpy.c \
+	$(MPL)/sparc/mempcpy.c
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
@@ -187,6 +195,8 @@ LIBASRCS = \
 	$(MEMXORCPYSRC) \
 	$(MEMANDSRC) \
 	$(MEMNEGSRC) \
+	$(MEMCPYSRC) \
+	$(MEMPCPYSRC) \
 	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
@@ -361,6 +371,8 @@ $(MPL)/cpy_rest.o: $(CPY_RESTSRC)
 $(MPL)/memxorcpy.o: $(MEMXORCPYSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
+$(MPL)/memcpy.o: $(MEMCPYSRC)
+$(MPL)/mempcpy.o: $(MEMPCPYSRC)
 $(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)

@@ -210,10 +210,11 @@ static const g2_ptype_action_func KHLR_packet_dict[PT_MAXIMUM] =
 /* KHL-childs */
 static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 {
-	[PT_TO] = empty_action_p,
-	[PT_TS] = handle_KHL_TS,
-	[PT_NH] = handle_KHL_NH,
-	[PT_CH] = handle_KHL_CH,
+	[PT_TO    ] = empty_action_p,
+	[PT_TS    ] = handle_KHL_TS,
+	[PT_NH    ] = handle_KHL_NH,
+	[PT_CH    ] = handle_KHL_CH,
+	[PT_YOURIP] = empty_action_p,
 };
 
 /* KHL/NH-childs */
@@ -1126,7 +1127,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 {
 	struct khl_entry khle[16];
 	struct ptype_action_args cparg;
-	g2_packet_t *khl, *ts;
+	g2_packet_t *khl, *ts, *yourip;
 	size_t res;
 	bool ret_val = false, keep_decoding;
 
@@ -1155,8 +1156,9 @@ static bool handle_KHL(struct ptype_action_args *parg)
 		return ret_val;
 
 	/* build package */
-	khl = g2_packet_calloc();
-	ts  = g2_packet_calloc();
+	khl    = g2_packet_calloc();
+	ts     = g2_packet_calloc();
+	yourip = g2_packet_calloc();
 
 	if(!(khl && ts))
 		goto out_fail;
@@ -1172,6 +1174,14 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	}
 	else
 		goto out_fail;
+
+	if(yourip)
+	{
+		if(write_sna_to_packet(yourip, &parg->connec->remote_host))
+			list_add_tail(&yourip->list, &khl_children);
+		else
+			g2_packet_free(yourip);
+	}
 
 	res = g2_khl_fill_p(khle, anum(khle), parg->connec->remote_host.s_fam);
 	while(res--)
@@ -1195,6 +1205,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	parg->connec->u.handler.send_stamps.KHL = local_time_now;
 	return true;
 out_fail:
+	g2_packet_free(yourip);
 	g2_packet_free(ts);
 	g2_packet_free(khl);
 	return false;

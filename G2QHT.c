@@ -663,41 +663,46 @@ bool g2_qht_search_add_hash_urn(const tchar_t *str, size_t len)
 	} urn_types[] =
 	{
 #define E(f, e, a, b, c, d) .type_add=(f), .de_enc=(e), .m_len=(a), .s_len=(c), .h_off=(b), .b_cnt=(d)
-#define ES(a, b, c, d) E(g2_qht_search_add_sha1, from_base32, a, b, c, d)
-#define ET(a, b, c, d) E(g2_qht_search_add_ttr , from_base32, a, b, c, d)
-#define EE(a, b, c, d) E(g2_qht_search_add_ed2k, from_base16, a, b, c, d)
-#define EM(a, b, c, d) E(g2_qht_search_add_md5 , from_base16, a, b, c, d)
-#define EB(a, b, c, d) E(g2_qht_search_add_bth , from_base32, a, b, c, d)
+#define ES(a, b, c) E(g2_qht_search_add_sha1, from_base32, a, b, c, 5*4)
+#define ET(a, b, c) E(g2_qht_search_add_ttr , from_base32, a, b, c, 3*8)
+#define EE(a, b, c) E(g2_qht_search_add_ed2k, from_base16, a, b, c, 4*4)
+#define EM(a, b, c) E(g2_qht_search_add_md5 , from_base16, a, b, c, 4*4)
+#define EB32(a, b, c) E(g2_qht_search_add_bth , from_base32, a, b, c, 5*4)
+#define EB16(a, b, c) E(g2_qht_search_add_bth , from_base16, a, b, c, 5*4)
 		/* sha1 */
-		{ES(32+ 9,  9,  9, 5*4), .sig={'u','r','n',':','s','h','a','1',':','\0'}},
-		{ES(32+ 5,  5,  5, 5*4), .sig={'s','h','a','1',':','\0'}},
-		{ES(85   , 13, 13, 5*4), .sig={'u','r','n',':','b','i','t','p','r','i','n','t',':','\0'}},
-		{ES(81   ,  9,  9, 5*4), .sig={'b','i','t','p','r','i','n','t',':','\0'}},
+		{ES(32+ 9,  9,  9), .sig={'u','r','n',':','s','h','a','1',':','\0'}},
+		{ES(32+ 5,  5,  5), .sig={'s','h','a','1',':','\0'}},
+		{ES(85   , 13, 13), .sig={'u','r','n',':','b','i','t','p','r','i','n','t',':','\0'}},
+		{ES(81   ,  9,  9), .sig={'b','i','t','p','r','i','n','t',':','\0'}},
 		/* tiger tree */
-		{ET(39+16, 16, 16, 3*8), .sig={'u','r','n',':','t','r','e','e',':','t','i','g','e','r','/',':','\0'}},
-		{ET(39+12, 12, 12, 3*8), .sig={'t','r','e','e',':','t','i','g','e','r','/',':','\0'}},
-		{ET(85   , 46, 13, 3*8), .sig={'u','r','n',':','b','i','t','p','r','i','n','t',':','\0'}},
-		{ET(81   , 42,  9, 3*8), .sig={'b','i','t','p','r','i','n','t',':','\0'}},
-		{ET(39+15, 15, 15, 3*8), .sig={'u','r','n',':','t','r','e','e',':','t','i','g','e','r',':','\0'}},
-		{ET(39+11, 11, 11, 3*8), .sig={'t','r','e','e',':','t','i','g','e','r',':','\0'}},
+		{ET(39+16, 16, 16), .sig={'u','r','n',':','t','r','e','e',':','t','i','g','e','r','/',':','\0'}},
+		{ET(39+12, 12, 12), .sig={'t','r','e','e',':','t','i','g','e','r','/',':','\0'}},
+		{ET(39+46, 46, 13), .sig={'u','r','n',':','b','i','t','p','r','i','n','t',':','\0'}},
+		{ET(39+42, 42,  9), .sig={'b','i','t','p','r','i','n','t',':','\0'}},
+		{ET(39+15, 15, 15), .sig={'u','r','n',':','t','r','e','e',':','t','i','g','e','r',':','\0'}},
+		{ET(39+11, 11, 11), .sig={'t','r','e','e',':','t','i','g','e','r',':','\0'}},
+		{ET(39+11, 11, 11), .sig={'u','r','n',':','t','t','r','o','o','t',':','\0'}},
 		/* ed2k */
-		{EE(32+13, 13, 13, 4*4), .sig={'u','r','n',':','e','d','2','k','h','a','s','h',':','\0'}},
-		{EE(32+ 5,  5,  5, 4*4), .sig={'e','d','2','k',':','\0'}},
-		{EE(32+ 9,  9,  9, 4*4), .sig={'u','r','n',':','e','d','2','k',':','\0'}},
-		{EE(32+ 9,  9,  9, 4*4), .sig={'e','d','2','k','h','a','s','h',':','\0'}},
+		{EE(32+13, 13, 13), .sig={'u','r','n',':','e','d','2','k','h','a','s','h',':','\0'}},
+		{EE(32+ 5,  5,  5), .sig={'e','d','2','k',':','\0'}},
+		{EE(32+ 9,  9,  9), .sig={'u','r','n',':','e','d','2','k',':','\0'}},
+		{EE(32+ 9,  9,  9), .sig={'e','d','2','k','h','a','s','h',':','\0'}},
 		/* md5 */
-		{EM(32+ 8,  8,  8, 4*4), .sig={'u','r','n',':','m','d','5',':','\0'}},
-		{EM(32+ 4,  4,  4, 4*4), .sig={'m','d','5',':','\0'}},
+		{EM(32+ 8,  8,  8), .sig={'u','r','n',':','m','d','5',':','\0'}},
+		{EM(32+ 4,  4,  4), .sig={'m','d','5',':','\0'}},
 		/* bth */
-		{EB(32+ 9,  9,  9, 5*4), .sig={'u','r','n',':','b','t','i','h',':','\0'}},
-		{EB( 5   ,  5,  5, 5*4), .sig={'b','t','i','h',':','\0'}},
+		{EB32(32+ 9,  9,  9), .sig={'u','r','n',':','b','t','i','h',':','\0'}},
+		{EB32(32+ 5,  5,  5), .sig={'b','t','i','h',':','\0'}},
+		{EB16(40+ 9,  9,  9), .sig={'u','r','n',':','b','t','i','h',':','\0'}},
+		{EB16(40+ 5,  5,  5), .sig={'b','t','i','h',':','\0'}},
 	};
 #undef E
 #undef ES
 #undef ET
 #undef EE
 #undef EM
-#undef EB
+#undef EB32
+#undef EB16
 	unsigned char hash_val[32];
 	unsigned i;
 

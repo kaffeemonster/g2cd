@@ -518,7 +518,7 @@ static bool gwc_resolv(void)
 		if(EAI_AGAIN  == ret_val || EAI_MEMORY == ret_val)
 			ret_val = true;
 		else {
-			logg_posd(LOGF_NOTICE, "resolving faild: %s\n", gai_strerror(ret_val));
+			logg_posd(LOGF_NOTICE, "resolving failed: %s\n", gai_strerror(ret_val));
 			goto resolv_fail;
 		}
 	}

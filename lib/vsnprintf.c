@@ -808,8 +808,8 @@ union dblou64
 
 static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	struct big_num Sbox[9];
-	struct big_num R, MP, MM;
+	/* this eats stack big time! ~4k */
+	struct big_num Sbox[9], R, MP, MM;
 	big_digit f;
 	double v;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
@@ -843,7 +843,7 @@ do \
 	if(sign)
 		ADD_CHAR_TO_BUF('-');
 
-	if(0 == f) {
+	if(unlikely(0 == f)) {
 		ADD_CHAR_TO_BUF('0');
 		return end_format(buf, fmt, spec);
 	}

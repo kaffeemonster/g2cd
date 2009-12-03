@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -40,6 +40,17 @@
  * over and over, put it together.
  */
 /*
+ * cpy_rest_o - copy a low byte count from src to dst
+ * dst: where to copy to
+ * src: where to read from
+ * i: how much bytes to copy
+ *
+ * return value: dst
+ *
+ * NOTE: handles at most 15 bytes!!
+ * See above
+ */
+/*
  * cpy_rest0 - copy a low byte count from src to dst and zero term
  * dst: where to copy to
  * src: where to read from
@@ -48,6 +59,7 @@
  * return value: dst + i
  *
  * NOTE: handles at most 15 bytes!!
+ * This function 0 terminates dst at dst[i]
  */
 
 #include "../config.h"
@@ -62,6 +74,8 @@
 #  include "x86/cpy_rest.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/cpy_rest.c"
+# elif defined(__sparc) || defined(__sparc__)
+#  include "sparc/cpy_rest.c"
 # else
 #  include "generic/cpy_rest.c"
 # endif

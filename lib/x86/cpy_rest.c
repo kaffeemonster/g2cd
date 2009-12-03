@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer, x86 impl
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -21,33 +21,6 @@
  * MA  02111-1307  USA
  *
  * $Id: $
- */
-
-/*
- * cpy_rest - copy a low byte count from src to dst
- * dst: where to copy to
- * src: where to read from
- * i: how much bytes to copy
- *
- * return value: dst + i
- *
- * NOTE: handles at most 15 bytes!!
- *
- * This function is a little bit wired. On most copy routines
- * (memcpy, strcpy) at some point a trailer emerges. You know
- * the length, but it is odd and does not fit into the main
- * copy loop. Before repeating the trailer handling over and
- * over and over, put it together.
- */
-/*
- * cpy_rest0 - copy a low byte count from src to dst and zero term
- * dst: where to copy to
- * src: where to read from
- * i: how much bytes to copy
- *
- * return value: dst + i
- *
- * NOTE: handles at most 15 bytes!!
  */
 
 /*
@@ -251,3 +224,6 @@ char GCC_ATTR_FASTCALL *cpy_rest0(char *dst, const char *src, unsigned i)
 	dst[i] = '\0';
 	return cpy_rest(dst, src, i);
 }
+
+static char const rcsid_cprx[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

@@ -24,15 +24,8 @@
  */
 
 #if defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__)
-# define SOVV (sizeof(unsigned long long))
+# include "sparc_vis.h"
 # define ALIGNMENT_WANTED SOVV
-/* vec_lvl */
-static inline void *alignaddr(const void *ptr, int off)
-{
-	void *t;
-	asm volatile("alignaddr	%1, %2, %0" : "=r" (t) : "r" (ptr), "r" (off));
-	return t;
-}
 #else
 # define ALIGNMENT_WANTED SOST
 #endif

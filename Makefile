@@ -90,7 +90,12 @@ RM = rm -f
 #BIN2O_OPTS = -d sun -l 8
 
 # split up host and target CFLAGS
-HOSTCFLAGS = -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE _D__EXTENSIONS__
+#	solaris is so anal... can someone please wake them with a 2 by 4?
+#	Old solaris misses everything, new solaris spews ERRORS!!!
+#	when it sees "illegal" feature combinations (stdbool only when C99,
+#	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
+#	Hello?
+HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE -D_XPG6 -D__EXTENSIONS__
 
 #
 # the C-Standart the compiler should work with
@@ -374,6 +379,7 @@ CFLAGS += -D_GNU_SOURCE
 #CFLAGS += -D_SVID_SOURCE
 #CFLAGS += -D_XOPEN_SOURCE
 #CFLAGS += -D_XPG4_2
+#CFLAGS += -D_XPG6
 #CFLAGS += -D__EXTENSIONS__
 
 #

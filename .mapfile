@@ -174,9 +174,7 @@
 	# flsst
 		flsst;
 	# inet stuff
-		inet_ntop;
 		inet_ntop_c;
-		inet_pton;
 	# intro sort
 		introsort_u32;
 	# mem stuff
@@ -185,7 +183,6 @@
 		cpy_rest_o;
 		mem_searchrn;
 		memand;
-		memcpy;
 		memneg;
 		mempcpy;
 		memxorcpy;
@@ -198,9 +195,7 @@
 		recvfromto;
 		sendtofrom;
 	# str stuff
-		strchr;
 		strchrnul;
-		strlen;
 		strncasecmp_a;
 		strnlen;
 		strnpcpy;

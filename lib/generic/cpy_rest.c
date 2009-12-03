@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer, generic implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -159,3 +159,6 @@ GCC_ATTR_FASTCALL char *cpy_rest0(char *dst, const char *src, unsigned i)
 	dst[i] = '\0';
 	return cpy_rest(dst, src, i);
 }
+
+static char const rcsid_cprg[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */
