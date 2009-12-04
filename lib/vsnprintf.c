@@ -94,6 +94,10 @@
  * - And surely not std. conform
  */
 
+#ifdef HAVE_TIMODE
+typedef unsigned __uint128 __attribute__((mode(TI)));
+#endif
+
 union all_types
 {
 	signed char c;
@@ -129,6 +133,9 @@ enum length_mod
 	MOD_INTMAX_T,
 	MOD_SIZE_T,
 	MOD_PTRDIFF_T,
+	MOD_DECIMAL32,
+	MOD_DECIMAL64,
+	MOD_DECIMAL128,
 	MOD_MAX_NUM
 } GCC_ATTR_PACKED;
 
@@ -400,7 +407,7 @@ static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *
 { \
 	type n GCC_ATTRIB_UNUSED = va_arg(spec->ap, type); \
 	return nop_finish(buf, fmt, spec); \
-} \
+}
 
 MAKE_NFUNC(  n, unsigned)
 MAKE_NFUNC( nl, unsigned long)
@@ -408,6 +415,25 @@ MAKE_NFUNC(nll, unsigned long long)
 MAKE_NFUNC( nj, uintmax_t)
 MAKE_NFUNC( nz, size_t)
 MAKE_NFUNC( nt, ptrdiff_t)
+MAKE_NFUNC( nH, unsigned)
+MAKE_NFUNC( nD, unsigned long long)
+
+static const char *vnDDtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+#ifdef HAVE_TIMODE
+	/* this will let the compiler barf... */
+	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
+#else
+	/*
+	 * _Decimal128 is 16 byte, lets remove two times 8. That's plain _WRONG_,
+	 * but better than nothing, who knows what will be the calling convention
+	 * for that...
+	 */
+	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long);
+	n = va_arg(spec->ap, unsigned long long);
+#endif
+	return nop_finish(buf, fmt, spec);
+}
 
 /*
  * FLOTING POINT - ROUGHLY (UN)IMPLEMENTED
@@ -440,10 +466,6 @@ struct big_num
 	big_digit d[BIGSIZE];
 	int l;
 };
-
-#ifdef HAVE_TIMODE
-typedef unsigned __uint128 __attribute__((mode(TI)));
-#endif
 
 #define five_tab five_tab_base_data
 extern const struct big_num five_tab[MAX_FIVE];
@@ -1050,19 +1072,86 @@ static noinline const char *fp_finish(char *buf, const char *fmt, struct format_
 
 static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	long double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, long double);
+	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
 static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, double);
+	double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, double);
 	return fp_finish(buf, fmt, spec);
 }
 static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	long double GCC_ATTRIB_UNUSED n = va_arg(spec->ap, long double);
+	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
+
+
+/*
+ * DECIMAL
+ */
+static noinline const char *decifp_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	size_t fmt_len = fmt - spec->fmt_start;
+	printf("[DECIMAL] unimplemented format \"%.*s\": '%c'\n",
+	       (int)fmt_len, spec->fmt_start, *(fmt-1));
+	return nop_finish(buf, fmt, spec);
+}
+
+static const char *vHtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	unsigned n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned); /* _Decimal32 */
+	return decifp_finish(buf, fmt, spec);
+}
+static const char *vDtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal64 */
+	return decifp_finish(buf, fmt, spec);
+}
+static const char *vDDtoa(char *buf, const char *fmt, struct format_spec *spec)
+{
+#ifdef HAVE_TIMODE
+	/* this will let the compiler barf... */
+	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
+#else
+	/*
+	 * _Decimal128 is 16 byte, lets remove two times 8. That's plain _WRONG_,
+	 * but better than nothing, who knows what will be the calling convention
+	 * for that...
+	 */
+	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal128 */
+	n = va_arg(spec->ap, unsigned long long);
+#endif
+	return decifp_finish(buf, fmt, spec);
+}
+/* Hex */
+static const char *vHtoxa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	unsigned n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned); /* _Decimal32 */
+	return decifp_finish(buf, fmt, spec);
+}
+static const char *vDtoxa(char *buf, const char *fmt, struct format_spec *spec)
+{
+	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal64 */
+	return decifp_finish(buf, fmt, spec);
+}
+static const char *vDDtoxa(char *buf, const char *fmt, struct format_spec *spec)
+{
+#ifdef HAVE_TIMODE
+	/* this will let the compiler barf... */
+	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
+#else
+	/*
+	 * _Decimal128 is 16 byte, lets remove two times 8. That's plain _WRONG_,
+	 * but better than nothing, who knows what will be the calling convention
+	 * for that...
+	 */
+	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal128 */
+	n = va_arg(spec->ap, unsigned long long);
+#endif
+	return decifp_finish(buf, fmt, spec);
+}
+
 
 /*
  * decider...
@@ -1072,25 +1161,25 @@ static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
  * pointers would be cool...
  */
 static const fmt_func num_format_table[][MOD_MAX_NUM] =
-{	/*                                                     l
-	 *                                                      o
-	 *                                             l         n                                    p
-	 *                                              o         g                  i                 t
-	 *                                               n                            n                 r
-	 *                                                g         d                  t        s        d
-	 *                                                           o                  m        i        i
-	 *               n       c       s        l         l         u         q        a        z        f
-	 *                o       h       o        o         o         b         u        x        e        f
-	 *                 n       a       r        n         n         l         a        _        _        _
-	 *                  e       r       t        g         g         e         d        t        t        t
-	 *     HEXL */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa}, /* 0 */
-	/*     HEXU */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa}, /* 1 */
-	/* UNSIGNED */ {  vutoa,  vutoa,  vutoa,  vultoa,  vulltoa,  vulltoa,  vulltoa,  vujtoa,  vuztoa,  vuttoa}, /* 2 */
-	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa}, /* 3 */
-	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa}, /* 4 */
-	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa}, /* 5 */
-	/*    FPHEX */ { vdtoxa, vdtoxa, vdtoxa,  vdtoxa,   vdtoxa,  vldtoxa,   vdtoxa,  vdtoxa,  vdtoxa,  vdtoxa}, /* 6 */
-	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa}  /* 7 */
+{	/*                                                     l                                                             _
+	 *                                                      o                                            _       _        D
+	 *                                             l         n                                    p       D       D        e
+	 *                                              o         g                  i                 t       e       e        c
+	 *                                               n                            n                 r       c       c        i
+	 *                                                g         d                  t        s        d       i       i        m
+	 *                              s                            o                  m        i        i       m       m        a
+	 *               n       c       h        l         l         u         q        a        z        f       a       a        l
+	 *                o       h       o        o         o         b         u        x        e        f       l       l        1
+	 *                 n       a       r        n         n         l         a        _        _        _       3       6        2
+	 *                  e       r       t        g         g         e         d        t        t        t       2       4        8
+	 *     HEXL */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa, vnHtoa, vnDtoa, vnDDtoa}, /* 0 */
+	/*     HEXU */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa, vnHtoa, vnDtoa, vnDDtoa}, /* 1 */
+	/* UNSIGNED */ {  vutoa,  vutoa,  vutoa,  vultoa,  vulltoa,  vulltoa,  vulltoa,  vujtoa,  vuztoa,  vuttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 2 */
+	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 3 */
+	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa, vnHtoa, vnDtoa, vnDDtoa}, /* 4 */
+	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa,  vHtoa,  vDtoa,  vDDtoa}, /* 5 */
+	/*    FPHEX */ { vdtoxa, vdtoxa, vdtoxa,  vdtoxa,   vdtoxa,  vldtoxa,   vdtoxa,  vdtoxa,  vdtoxa,  vdtoxa, vHtoxa, vDtoxa, vDDtoxa}, /* 6 */
+	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa, vnHtoa, vnDtoa, vnDDtoa}  /* 7 */
 };
 
 static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
@@ -1527,6 +1616,16 @@ static const char *lmod_L(char *buf, const char *fmt, struct format_spec *spec)
 	spec->mod = MOD_LONGDOUBLE;
 	return format_dispatch(buf, fmt, spec);
 }
+static const char *lmod_H(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->mod = MOD_DECIMAL32;
+	return format_dispatch(buf, fmt, spec);
+}
+static const char *lmod_D(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->mod = MOD_DECIMAL64 != spec->mod ? MOD_DECIMAL64 : MOD_DECIMAL128;
+	return format_dispatch(buf, fmt, spec);
+}
 static const char *lmod_q(char *buf, const char *fmt, struct format_spec *spec)
 {
 	spec->mod = MOD_QUAD;
@@ -1596,7 +1695,7 @@ static const fmt_func format_table[256] =
 	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
 	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
-	/* 40 */ fmtnop,  f_fpx, fmtnop,    f_c, fmtnop,   f_fp,   f_fp,   f_fp, fmtnop, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
+	/* 40 */ fmtnop,  f_fpx, fmtnop,    f_c, lmod_D,   f_fp,   f_fp,   f_fp, lmod_H, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
 	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
 	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */

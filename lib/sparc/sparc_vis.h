@@ -46,11 +46,36 @@ static inline void *alignaddrl(const void *ptr, int off)
 	return t;
 }
 
-#define EDGE_FUNC(x) \
+#ifndef HAVE_VIS2
+# define EDGE_FUNC(x) \
 static GCC_ATTR_CONST inline unsigned edge##x(const void *p1, const void *p2) { \
 	unsigned t; \
 	asm ("edge"mkstr(x)"	%1, %2, %0" : "=r" (t) : "r" (p1), "r" (p2)); \
 	return t; }
+#else
+# define EDGE_FUNC(x) \
+static GCC_ATTR_CONST inline unsigned edge##x(const void *p1, const void *p2) { \
+	unsigned t; \
+	asm ("edgencc"mkstr(x)"	%1, %2, %0" : "=r" (t) : "r" (p1), "r" (p2)); \
+	return t; }
+
+static inline void write_bmask1(unsigned a)
+{
+	asm volatile ("bmask	%0, %%g0, %%g0" : : "r" (a));
+}
+
+static inline void write_bmask2(unsigned a, unsigned b)
+{
+	asm volatile ("bmask	%0, %1, %%g0" : : "r" (a), "r" (b));
+}
+
+static inline unsigned long long bshuffle(unsigned long long a, unsigned long long b)
+{
+	unsigned long long ret;
+	asm volatile ("bshuffle	%1, %2, %0" : "=e" (ret) : "e" (a), "e" (b));
+	return ret;
+}
+#endif
 
 EDGE_FUNC(8)
 EDGE_FUNC(8l)
@@ -59,14 +84,28 @@ EDGE_FUNC(16l)
 EDGE_FUNC(32)
 EDGE_FUNC(32l)
 
-static inline unsigned read_gsr(void)
+static inline unsigned read_gsr_32(void)
 {
-	int t;
+	unsigned t;
 	asm volatile ("rd %%gsr, %0" : "=r" (t));
 	return t;
 }
 
-static inline void write_gsr(int t)
+static inline void write_gsr_32(unsigned t)
+{
+	asm volatile ("wr %%g0, %0, %%gsr" : : "rH" (t));
+}
+#define read_gsr() read_gsr_32()
+#define write_gsr(x) write_gsr_32(x)
+
+static inline unsigned long long read_gsr_64(void)
+{
+	unsigned long long t;
+	asm volatile ("rd %%gsr, %0" : "=r" (t));
+	return t;
+}
+
+static inline void write_gsr_64(unsigned long long t)
 {
 	asm volatile ("wr %%g0, %0, %%gsr" : : "rH" (t));
 }
@@ -74,7 +113,6 @@ static inline void write_gsr(int t)
 static inline unsigned long long faligndata(unsigned long long a, unsigned long long b)
 {
 	unsigned long long ret;
-
 	asm volatile ("faligndata	%1, %2, %0" : "=e" (ret) : "e" (a), "e" (b));
 	return ret;
 }
@@ -128,21 +166,32 @@ static GCC_ATTR_CONST inline unsigned long long fexpand(unsigned a)
 	return t;
 }
 
+static GCC_ATTR_CONST inline unsigned fhigh(unsigned long long a)
+{
+	unsigned t;
+	asm ("fmovs	%H1, %0" : "=e" (t) : "e" (a));
+	return t;
+}
 
 #define CMP_FUNC(x) \
 static GCC_ATTR_CONST inline unsigned fcmp##x(unsigned long long a, unsigned long long b) { \
 	unsigned t; \
 	asm ("fcmp"mkstr(x)"	%1, %2, %0" : "=r" (t) : "e" (a), "e" (b)); \
 	return t; }
+#define CMPC_FUNC(x) \
+static GCC_ATTR_CONST inline unsigned fcmp##x(unsigned long long a, unsigned long long b) { \
+	unsigned t; \
+	asm ("fcmp"mkstr(x)"	%1, %2, %0" : "=r" (t) : "%e" (a), "e" (b)); \
+	return t; }
 
 CMP_FUNC(gt16)
 CMP_FUNC(gt32)
 CMP_FUNC(le16)
 CMP_FUNC(le32)
-CMP_FUNC(ne16)
-CMP_FUNC(ne32)
-CMP_FUNC(eq16)
-CMP_FUNC(eq32)
+CMPC_FUNC(ne16)
+CMPC_FUNC(ne32)
+CMPC_FUNC(eq16)
+CMPC_FUNC(eq32)
 
 #define LOGC_FUNC3(x) \
 static GCC_ATTR_CONST inline unsigned long long fp##x(unsigned long long a, unsigned long long b) { \

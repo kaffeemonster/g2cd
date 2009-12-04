@@ -157,6 +157,11 @@
  * you have an real old Sparc.
  */
 #define HAVE_REAL_V9
+/*
+ * You have an UltraSparc III or better (~2001)?
+ * don't know whats up with the Fujitsu SPARC64 III/IV/V etc.
+ */
+#define HAVE_VIS2
 
 /*
  * how many bytes must be avail to switch away
