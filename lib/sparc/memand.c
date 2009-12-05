@@ -23,12 +23,9 @@
  * $Id:$
  */
 
-#if defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__)
+#if defined(HAVE_VIS) && (defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__))
 # include "sparc_vis.h"
 # define ALIGNMENT_WANTED SOVV
-#else
-# define ALIGNMENT_WANTED SOST
-#endif
 
 void *memand(void *dst, const void *src, size_t len)
 {
@@ -40,13 +37,11 @@ void *memand(void *dst, const void *src, size_t len)
 
 	/* we will kick this mem, fetch it... */
 	prefetch(src_char);
-	prefetch(src_char + 32);
 	prefetch(src_char + 64);
-	prefetch(src_char + 96);
+	prefetch(src_char + 128);
 	prefetchw(dst_char);
-	prefetchw(dst_char + 32);
 	prefetchw(dst_char + 64);
-	prefetchw(dst_char + 96);
+	prefetchw(dst_char + 128);
 
 	if(SYSTEM_MIN_BYTES_WORK > len)
 		goto handle_remaining;
@@ -54,9 +49,7 @@ void *memand(void *dst, const void *src, size_t len)
 	{
 		/* blindly align dst ... */
 		size_t i = ALIGN_DIFF(dst_char, ALIGNMENT_WANTED);
-#if defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__)
 		i += SOVV; /* make sure src is at least one vector in the memblock */
-#endif
 		len -= i;
 		for(; i; i--)
 			*dst_char++ &= *src_char++;
@@ -81,7 +74,6 @@ void *memand(void *dst, const void *src, size_t len)
 
 alignment_16:
 alignment_8:
-#if defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__)
 	if(len / SOVV)
 	{
 		register unsigned long long *dst_vec = (unsigned long long *) dst_char;
@@ -95,11 +87,13 @@ alignment_8:
 			"bz	2f\n\t"
 			"nop	\n"
 			"1:\n\t"
+			"prefetch	[%0 + 128], 0\n\t"
 			"ldd	[%0 +  0], %%f0\n\t"
 			"ldd	[%0 +  8], %%f2\n\t"
 			"ldd	[%0 + 16], %%f4\n\t"
 			"ldd	[%0 + 24], %%f6\n\t"
 			"inc	4*8, %0\n\t"
+			"prefetch	[%1 + 128], 2\n\t"
 			"ldd	[%1 +  0], %%f8\n\t"
 			"ldd	[%1 +  8], %%f10\n\t"
 			"ldd	[%1 + 16], %%f12\n\t"
@@ -170,11 +164,13 @@ no_alignment_wanted:
 			"nop	\n"
 			"fmovd	%%f16, %%f0\n\t"
 			"1:\n\t"
+			"prefetch	[%0 + 128], 0\n\t"
 			"ldd	[%0 +  8], %%f2\n\t"
 			"ldd	[%0 + 16], %%f4\n\t"
 			"ldd	[%0 + 24], %%f6\n\t"
 			"ldd	[%0 + 32], %%f16\n\t"
 			"inc	4*8, %0\n\t"
+			"prefetch	[%0 + 128], 2\n\t"
 			"ldd	[%1 +  0], %%f8\n\t"
 			"ldd	[%1 +  8], %%f10\n\t"
 			"ldd	[%1 + 16], %%f12\n\t"
@@ -233,76 +229,6 @@ no_alignment_wanted:
 		src_char = (const char *) src_vec;
 		goto handle_remaining;
 	}
-#else
-alignment_size_t:
-	/*
-	 * All archs fallback-code
-	 * (hmmm, runs 3 times faster on Sparc)
-	 */
-	{
-		register size_t *dst_sizet = (size_t *)dst_char;
-		register const size_t *src_sizet = (const size_t *)src_char;
-		register size_t small_len = len / SOST;
-		len %= SOST;
-
-		while(small_len--)
-			*dst_sizet++ &= *src_sizet++;
-
-		dst_char = (char *) dst_sizet;
-		src_char = (const char *) src_sizet;
-		goto handle_remaining;
-	}
-no_alignment_wanted:
-no_alignment_possible:
-	/*
-	 * try to skim the data in place.
-	 * This is expensive, and maybe a loss. Generic CPUs are
-	 * no DSPs. Still, fiddling bytewise is expensive on most
-	 * CPUs, espec. those RISC which prohibit unaligned access.
-	 * So a big read/write and a little swizzle within the
-	 * registers (and some help from the compiler, unrolling,
-	 * scheduling) is hopefully faster.
-	 * If it is not an m68k...
-	 * We will see, since this is only the emergency fallback
-	 * iff no alignment is possible, which should not happen
-	 * on these buffers with a size_t wide stride.
-	 */
-	if(!UNALIGNED_OK)
-	{
-		size_t *dst_sizet = (size_t *)dst_char;
-		const size_t *src_sizet;
-		register size_t c, c_ex, small_len, cycles;
-		register unsigned shift1, shift2;
-
-		cycles = small_len = (len / SOST) - 1;
-		shift1 = (unsigned) ALIGN_DOWN_DIFF(src_char, SOST);
-		shift2 = SOST - shift1;
-		shift1 *= BITS_PER_CHAR;
-		shift2 *= BITS_PER_CHAR;
-		src_sizet = (const size_t *)ALIGN_DOWN(src_char, SOST);
-		c_ex = *src_sizet++;
-		while(small_len--)
-		{
-			c = c_ex;
-			c_ex = *src_sizet++;
-
-			if(HOST_IS_BIGENDIAN) {
-				c <<= shift1;
-				c  |= c_ex >> shift2;
-			} else {
-				c >>= shift1;
-				c  |= c_ex << shift2;
-			}
-
-			*dst_sizet++ &= c;
-		}
-
-		dst_char  = (char *) dst_sizet;
-		src_char += cycles * SOST;
-		len      -= cycles * SOST;
-		goto handle_remaining;
-	}
-#endif
 handle_remaining:
 no_alignment_possible:
 	/* and whats left to do from alignment and other datatype */
@@ -312,4 +238,7 @@ no_alignment_possible:
 	return dst;
 }
 
-static char const rcsid_ma[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_mas[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# include "../generic/memand.c"
+#endif

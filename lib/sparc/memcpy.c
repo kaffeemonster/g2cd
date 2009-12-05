@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-#if defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__)
+#if defined(HAVE_VIS) && (defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__))
 # include "sparc_vis.h"
 # define ALIGNMENT_WANTED SOVV
 

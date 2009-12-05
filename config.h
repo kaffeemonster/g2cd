@@ -149,7 +149,7 @@
  * v9 behind silly games of 32 bit compat and "user space
  * is better of 32 Bit, 64 Bit is for databases", so if not
  * forcing 64 bit builds, everthing looks like a v8
- * even if you have a v9 (issued with the UltraSparc in
+ * even if you have a v9 (issued with the UltraSPARC in
  * 1995, more than a dekade in IT ago).
  * This way you miss new "real" atomic instr. and can do
  * 64 bit arith. just fine. If only the program knew...
@@ -157,6 +157,17 @@
  * you have an real old Sparc.
  */
 #define HAVE_REAL_V9
+/*
+ * You have an UltraSPARC with VIS?
+ * The anwser is prop. yes, see above.
+ * Still you may want to disable the VIS code, for example for
+ * the Niagara T1. VIS is part of the FPU (now called FGU),
+ * and Niagara has 32 cores, which all share a single FPU.
+ * So on such CPUs it would be faster if the 32 cores are
+ * busy coping and doing stuff, even bytewise, than all waiting
+ * on one FPU.
+ */
+#define HAVE_VIS
 /*
  * You have an UltraSparc III or better (~2001)?
  * don't know whats up with the Fujitsu SPARC64 III/IV/V etc.
