@@ -119,7 +119,7 @@ void *G2Handler(void *param)
 	/* Setting first entry to be polled, our Pipe from Acceptor */
 	eevents->events = EPOLLIN;
 	/* Attention - very ugly, but i have to distinguish these two sockets, and all the other */
-	eevents->data.ptr = (void *)1;
+	eevents->data.ptr = (void *)(1 << 1);
 	if(0 > my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_ADD, from_accept, eevents)) {
 		logg_errno(LOGF_ERR, "adding acceptor-pipe to epoll");
 		clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
@@ -154,7 +154,7 @@ void *G2Handler(void *param)
 				/* A common Socket? */
 				if(e_wptr->data.ptr)
 				{
-					if(likely(((void *)1) != e_wptr->data.ptr))
+					if(likely(((void *)(1 << 1)) != e_wptr->data.ptr))
 					{
 						logg_develd_old("-------- Events: 0x%0X, PTR: %p\n", e_wptr->events, e_wptr->data.ptr);
 						// Any problems?

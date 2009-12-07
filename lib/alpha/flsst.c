@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t, alpha implementation
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,14 +23,16 @@
  * $Id: $
  */
 
-#include "../my_bitopsm.h"
+#ifdef __alpha_cix__
+# include "../my_bitopsm.h"
+# include "alpha.h"
 
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
-	size_t found;
-	/* alpha knows clz */
-	__asm__("ctlz\t%1, %0\n" : "=r" (found) : "r" (find));
-	return SIZE_T_BITS - found;
+	return SIZE_T_BITS - ctlz(find); /* alpha knows clz */
 }
 
 static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# include "../generic/flsst.c"
+#endif

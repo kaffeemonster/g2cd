@@ -51,18 +51,18 @@ typedef struct xxxxxx1
 
 typedef struct xxxxxx2
 {
-	volatile void *d;
+	void * volatile d;
 } atomicptr_t;
 
 /* keep layout in sync with above */
 typedef struct xxxxxx3
 {
-	volatile struct xxxxxx3 *next;
+	struct xxxxxx3 * volatile next;
 } atomicst_t;
 
 typedef union xxxxxx4
 {
-	volatile void *d;
+	void * volatile d;
 	 /* some archs build atomic ops by the mean of an "atomic"
 	  * load and store (notably ppc and alpha). When a load
 	  * is executed, the CPU magicaly starts bookkeeping of
@@ -88,10 +88,10 @@ typedef union xxxxxx4
 } atomicptra_t;
 
 /* atomicptra_t and atomicptr_t should be abi compatible */
-#define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)((void *)(ptr))))
-#define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)((void *)(ptr))))
+#define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
+#define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
 /* same for atomicptr_t and atomicst_t */
-#define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), (atomicptr_t *)(ptr)))
+#define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), ((atomicptr_t *)(ptr))))
 
 # if !(defined NEED_GENERIC) && (defined I_LIKE_ASM)
 #  if defined(__i386__) || defined(__x86_64__)
@@ -114,7 +114,7 @@ typedef union xxxxxx4
 #   include "arm/atomic.h"
 #  else
 #   if _GNUC_PREREQ(4, 1)
-#    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval))
+#    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
 #    define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
 #    define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #    define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
@@ -124,7 +124,7 @@ typedef union xxxxxx4
 #  endif
 # else
 #  if _GNUC_PREREQ(4, 1)
-#   define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap((intptr_t *)&(ptr)->d, (oval), (nval)))
+#   define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
 #   define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
 #   define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #   define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
@@ -137,11 +137,11 @@ typedef union xxxxxx4
 static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
 	void *tmp1, *tmp2;
-	tmp2 = deatomic(atomic_sread(head));
+	tmp2 = atomic_sread(head);
 	do {
 		node->next = tmp2;
 		tmp1 = tmp2;
-		tmp2 = deatomic(atomic_cmpalx(node, tmp2, head));
+		tmp2 = atomic_cmpalx(node, tmp2, head);
 	} while(unlikely(tmp1 != tmp2));
 }
 # endif
@@ -149,12 +149,12 @@ static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 static always_inline atomicst_t *atomic_pop(atomicst_t *head)
 {
 	atomicst_t *tmp1, *tmp2;
-	if(!(tmp2 = deatomic(atomic_sread(head))))
+	if(!(tmp2 = atomic_sread(head)))
 		return NULL;
 	do
 	{
 		tmp1 = tmp2;
-		tmp2 = deatomic(atomic_cmpalx(atomic_sread(tmp2), tmp2, head));
+		tmp2 = atomic_cmpalx(atomic_sread(tmp2), tmp2, head);
 		if(!tmp2)
 			break;
 	} while(unlikely(tmp1 != tmp2));

@@ -3,27 +3,27 @@
  * atomic primitves for ppc
  *
  * Thanks Linux Kernel
- * 
- * Copyright (c) 2006, 2008 Jan Seiffert
- * 
+ *
+ * Copyright (c) 2006-2009 Jan Seiffert
+ *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA  02111-1307  USA
  *
  * $Id:$
- * 
+ *
  */
 
 #ifndef LIB_IMPL_ATOMIC_H
@@ -231,7 +231,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 }
 
 
-extern void *_illigal_ptr_size(volatile void *val, atomicptr_t *ptr);
+extern void *_illigal_ptr_size(void *val, atomicptr_t *ptr);
 static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 		switch(sizeof(val))
@@ -301,7 +301,7 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 	return _illigal_int_size(val, ptr);
 }
 
-static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 
@@ -327,7 +327,7 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 	return prev;
 }
 
-static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 
@@ -353,7 +353,7 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 	return prev;
 }
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{

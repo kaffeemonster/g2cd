@@ -59,6 +59,7 @@
 //#define HAVE_POLL	/* BROKEN ? */
 //#define HAVE_KEPOLL	/* Linux with old userland and 2.6 Kernel */
 //#define HAVE_DEVPOLL	/* Solaris, EXPERIMENTAL */
+//#define HAVE_EPORT	/* Solaris, BROKEN */
 //#define HAVE_KQUEUE	/* BSD, EXPERIMENTAL */
 
 /* do we have sighandler_t */
@@ -131,7 +132,8 @@
  * done fast and cheap if your arch has instructions to scan
  * for a bit (bsf, cntlz). (popcnt is a bad idea if your
  * shifter are slow, sparc, 50 times slower than our generic
- * bitmagic)
+ * bitmagic, sparclite/sparclet have a scan instruction (ffs)
+ * they might help)
  */
 #define HAVE_BIT_INSTR
 

@@ -76,7 +76,7 @@ static const char *o_file_name;
 static char **i_file_name;
 static int num_i_file;
 static const char *opt_pack = NULL;
-static unsigned balignment = 16;
+static unsigned balignment = 8;
 static int verbose;
 static int export_base_data;
 #define PBUF_SIZE (1<<15)

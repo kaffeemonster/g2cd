@@ -52,6 +52,8 @@ size_t strlen(const char *s);
 #  include "x86/strlen.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strlen.c"
+# elif defined(__alpha__)
+#  include "alpha/strlen.c"
 # else
 #  include "generic/strlen.c"
 # endif

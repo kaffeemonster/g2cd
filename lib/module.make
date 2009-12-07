@@ -66,6 +66,7 @@ LIBHEADS = \
 	$(MPL)/hlist.h \
 	$(MPL)/hthash.h \
 	$(MPL)/backtrace.h \
+	$(MPL)/alpha/alpha.h \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
@@ -76,6 +77,7 @@ EPOLLSRS = \
 	$(MPL)/my_epoll_kepoll.c \
 	$(MPL)/my_epoll_devpoll.c \
 	$(MPL)/my_epoll_poll.c \
+	$(MPL)/my_epoll_eport.c \
 	$(MPL)/my_epoll_kqueue.c
 
 # atomic sources
@@ -150,14 +152,17 @@ MEM_SEARCHRNSRC = \
 	$(MPL)/ppc/mem_searchrn.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
+	$(MPL)/alpha/strnlen.c \
 	$(MPL)/x86/strnlen.c \
 	$(MPL)/ppc/strnlen.c
 STRLENSRC = \
 	$(MPL)/generic/strlen.c \
+	$(MPL)/alpha/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
 STRCHRNULSRC = \
 	$(MPL)/generic/strchrnul.c \
+	$(MPL)/alpha/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
 STRNCASECMP_ASRC = \
@@ -360,7 +365,7 @@ $(MPL)/tchar_c3table.bin: $(MPL)/tchar_c3table_be.bin
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin $@ ; \
 	fi
 
-$(TCHAR_TABS): $(MPL)/module.make Makefile
+$(TCHAR_TABS): $(MPL)/module.make Makefile ./ccdrv
 
 # Dependencies
 $(BITOPOBJS): $(MPL)/my_bitops.h $(MPL)/my_bitopsm.h

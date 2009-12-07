@@ -67,7 +67,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 }
 # endif /* __INTEL_COMPILER */
 
-extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
+extern void *_illigal_ptr_size(void *,atomicptr_t *);
 static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(val))
@@ -191,7 +191,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 #  define atomic_cmppx_32(nval, oval, ptr) _InterlockedCompareExchange_acq(&atomic_pread(ptr), nval, oval)
 #  define atomic_cmppx_64(nval, oval, ptr) _InterlockedCompareExchange64_acq(&atomic_pread(ptr), nval, oval)
 # else
-static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *res;
 	__asm__ __volatile__(
@@ -211,7 +211,7 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 	return res;
 }
 
-static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *res;
 	__asm__ __volatile__(
@@ -232,7 +232,7 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 }
 # endif /* __INTEL_COMPILER */
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{

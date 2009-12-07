@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, alpha implementation
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,11 +23,14 @@
  * $Id:$
  */
 
+#ifdef __alpha_cix__
+# include "alpha.h"
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 {
-	size_t tmp;
-	__asm__ ("ctpop\t%1, %0\n" : "=r" (tmp) : "r" (n));
-	return tmp;
+	return ctpop(n);
 }
 
 static char const rcsid_pc[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# include "../generic/popcountst.c"
+#endif

@@ -2,19 +2,19 @@
  * my_epoll_poll.c
  * wrapper to get epoll on systems providing kqueue (BSDs)
  *
- * Copyright (c) 2004, 2005,2006 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -23,7 +23,6 @@
  * $Id: $
  */
 
-// TODO: write this stuff?
 #include <sys/event.h>
 #include <sys/time.h>
 
@@ -32,29 +31,25 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	struct timespec tsp;
 	struct kevent chg_ev[2];
 
-	memset(&tsp, 0, sizeof(tsp));
-	memset(chg_ev, 0, sizeof(chg_ev));
-	
-	if(0 > epfd)
-	{
+	if(0 > epfd) {
 		errno = EBADF;
 		return -1;
 	}
 
-	if(!event)
-	{
+	if(!event) {
 		errno = EFAULT;
 		return -1;
 	}
 
 	/* check for sane op before doing anything */
-	if(epfd == fd || !(EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op || EPOLL_CTL_DEL == op))
-	{
+	if(epfd == fd || !(EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op || EPOLL_CTL_DEL == op)) {
 		errno = EINVAL;
 		return -1;
 	}
-		  
 
+// TODO: do something about oneshot
+	memset(&tsp, 0, sizeof(tsp));
+	memset(chg_ev, 0, sizeof(chg_ev));
 	switch(op)
 	{
 	case EPOLL_CTL_ADD:
@@ -89,25 +84,21 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	struct timespec tsp, *tsp_tmp;
 	int ret_val = 0, ev_val, i;
 
-	if(0 > epfd)
-	{
+	if(0 > epfd) {
 		errno = EBADF;
 		return -1;
 	}
 
-	if(!events)
-	{
+	if(!events) {
 		errno = EFAULT;
 		return -1;
-	} 
+	}
 
-	if(-1 != timeout)
-	{
+	if(-1 != timeout) {
 		tsp.tv_sec = timeout / 1000;
 		tsp.tv_nsec = (timeout % 1000) * 1000 * 1000;
 		tsp_tmp = &tsp;
-	}
-	else
+	} else
 		tsp_tmp = NULL;
 
 	ev_val = kevent(epfd, NULL, 0, ev_list, maxevents, tsp_tmp);
@@ -126,21 +117,18 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 				ev_list[i].flags, ev_list[i].fflags, ev_list[i].data);
 			continue;
 		}
-		
-		for(epv_tmp = NULL, j = 0; j < ret_val; j++)
-		{
-			if(ev_list[i].udata == events[j].data.ptr)
-			{
+
+		for(epv_tmp = NULL, j = 0; j < ret_val; j++) {
+			if(ev_list[i].udata == events[j].data.ptr) {
 				epv_tmp = &events[j];
 				break;
 			}
 		}
-		if(!epv_tmp)
-		{
+		if(!epv_tmp) {
 			epv_tmp = &events[ret_val++];
 			epv_tmp->events = 0;
 		}
-		
+
 		switch(ev_list[i].filter)
 		{
 		case EVFILT_READ:
@@ -156,7 +144,6 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 			epv_tmp->events |= POLLERR;
 		epv_tmp->data.ptr = ev_list[i].udata;
 	}
-	
 
 	return ret_val;
 }
@@ -171,4 +158,6 @@ int my_epoll_close(int epfd)
 	return close(epfd);
 }
 
+/*@unused@*/
 static char const rcsid_mei[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

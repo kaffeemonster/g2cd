@@ -2,19 +2,19 @@
  * my_epoll_kepoll.c
  * wrapper to get epoll on systems with old libc
  *
- * Copyright (c) 2005,2006 Jan Seiffert
+ * Copyright (c) 2005-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -46,8 +46,10 @@
 # define SCALL_EPOLL_WAIT	256
 #endif
 
-/* hate doing this, but seems like libc segfaults if it sees 
- * an fd not allocated by a libc-func */
+/*
+ * hate doing this, but seems like libc segfaults if it sees
+ * an fd not allocated by a libc-func
+ */
 #define	SCALL_CLOSE	__NR_close
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
@@ -70,4 +72,6 @@ int my_epoll_close(int epfd)
 	return syscall(SCALL_CLOSE, epfd);
 }
 
+/*@unused@*/
 static char const rcsid_mei[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

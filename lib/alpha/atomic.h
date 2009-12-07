@@ -141,7 +141,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 		".previous\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  /* %1 */ "=&r" (cmp)
+		  /* %1 */ "=&r" (cmp),
 		  /* %2 */ "=m" (atomic_read(ptr))
 		: /* %3 */ "r" (oval),
 		  /* %4 */ "m" (atomic_read(ptr)),
@@ -149,7 +149,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return prev;
 }
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	unsigned long long cmp;
@@ -170,7 +170,7 @@ static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval
 		".previous\n"
 		: /* %0 */ "=&r" (prev),
 		/* gcc < 3 needs this, "+m" will not work reliable */
-		  /* %1 */ "=&r" (cmp)
+		  /* %1 */ "=&r" (cmp),
 		  /* %2 */ "=m" (atomic_pread(ptr))
 		: /* %3 */ "r" (oval),
 		  /* %4 */ "m" (atomic_pread(ptr)),
@@ -255,7 +255,7 @@ static always_inline void atomic_add(int i, atomic_t *ptr)
 		".previous"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
-		: /* %2 */ "m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "Ir" (i));
 }
 
@@ -275,7 +275,7 @@ static always_inline void atomic_sub(int i, atomic_t *ptr)
 		".previous\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
-		: /* %2 */ "m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "Ir" (i));
 }
 
@@ -302,6 +302,5 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 	return (int) ret_val;
 }
 
-# define atomic_dec_test(x) (atommic_dec_return((x)) == 0)
-
+# define atomic_dec_test(x) (atomic_dec_return((x)) == 0)
 #endif /* LIB_IMPL_ATOMIC_H */

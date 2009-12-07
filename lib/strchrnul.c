@@ -51,6 +51,8 @@ char *strchrnul(const char *s, int c);
 #  include "x86/strchrnul.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strchrnul.c"
+# elif defined(__alpha__)
+#  include "alpha/strchrnul.c"
 # else
 #  include "generic/strchrnul.c"
 # endif

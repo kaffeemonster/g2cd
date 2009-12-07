@@ -23,11 +23,12 @@
  * $Id: $
  */
 
+#ifdef __alpha_cix__
+# include "alpha.h"
+
 static inline size_t popcountst_int1(size_t n)
 {
-	size_t tmp;
-	__asm__ ("ctpop	%1, %0" : "=r" (tmp) : "r" (n));
-	return tmp;
+	return ctpop(n);
 }
 
 static inline size_t popcountst_int2(size_t n, size_t m)
@@ -44,6 +45,7 @@ static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
 	       popcountst_int1(p);
 }
 
-#define NO_GEN_POPER
-#include "../generic/mempopcnt.c"
 static char const rcsid_mpa[] GCC_ATTR_USED_VAR = "$Id: $";
+# define NO_GEN_POPER
+#endif
+#include "../generic/mempopcnt.c"

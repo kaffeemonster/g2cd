@@ -187,7 +187,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return prev;
 }
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev, *cmp;
 

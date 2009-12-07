@@ -97,24 +97,23 @@ int gen_atomic_x(int nval, atomic_t *oval)
 
 void *gen_atomic_px(void *nval, atomicptr_t *oval)
 {
-	intptr_t tmp;
+	void *tmp;
 	shortlock_t_lock(ATOMIC_HASH(oval));
-	tmp = (intptr_t) oval->d;
+	tmp = oval->d;
 	oval->d = nval;
 	shortlock_t_unlock(ATOMIC_HASH(oval));
-	return (void *) tmp;
+	return tmp;
 }
 
-void *gen_atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *x)
+void *gen_atomic_cmppx(void *nval, void *oval, atomicptr_t *x)
 {
-	intptr_t ret_val = (intptr_t) oval;
+	void *ret_val = oval;
 	shortlock_t_lock(ATOMIC_HASH(x));
-	if(oval == x->d)
+	ret_val = x->d;
+	if(oval == ret_val)
 		x->d = nval;
-	else
-		ret_val = (intptr_t) nval;
 	shortlock_t_unlock(ATOMIC_HASH(x));
-	return (void *) ret_val;
+	return ret_val;
 }
 
 static char const rcsid_ag[] GCC_ATTR_USED_VAR = "$Id:$";

@@ -56,7 +56,7 @@ struct hzp_free
 
 struct hzp
 {
-	volatile void *ptr[HZP_MAX];
+	void * volatile ptr[HZP_MAX];
 	struct hzp_flags
 	{
 		int used;
@@ -68,8 +68,10 @@ struct hzp
 LIB_HZP_EXTRNVAR(__thread struct hzp local_hzp);
 static inline void hzp_ref(enum hzps key, void *new_ref)
 {
-	if(key < HZP_MAX)
+	if(key < HZP_MAX) {
 		local_hzp.ptr[key] = new_ref;
+//TODO: some mem barrier needed here
+	}
 }
 static inline void hzp_unref(enum hzps key)
 {

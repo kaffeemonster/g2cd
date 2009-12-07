@@ -220,6 +220,7 @@ void hzp_ref(enum hzps key, void *new_ref)
 	}
 
 	t_hzp->ptr[key] = new_ref;
+//TODO: some mem barrier needed here
 }
 
 /*
@@ -334,6 +335,7 @@ int hzp_scan(int threshold)
 		struct hzp *entry = container_of(deatomic(atomic_sread(whead)), struct hzp, lst);
 		if(entry->flags.used)
 		{
+//TODO: some mem barrier needed here
 			for(i = 0; i < HZP_MAX; i++) {
 				if(deatomic(entry->ptr[i]))
 					hzp_fs_push(uhead, alloca(sizeof(*uhead)), deatomic(entry->ptr[i]));

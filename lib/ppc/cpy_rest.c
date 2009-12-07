@@ -53,7 +53,7 @@ char GCC_ATTR_FASTCALL *cpy_rest(char *dst, const char *src, unsigned i)
 	: /* %4 */ PPC_MEM_CONSTRAIN (*src));
 	asm volatile(
 		"stswx	%1, %y0"
-	: /* %0 */ PPC_MEM_CONSTRAIN (*dst)
+	: /* %0 */ "=" PPC_MEM_CONSTRAIN (*dst)
 	: /* %1 */ "r" (a),
 	  /* %2 */ "r" (b),
 	  /* %3 */ "r" (c),

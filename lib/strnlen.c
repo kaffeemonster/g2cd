@@ -68,6 +68,8 @@ size_t strnlen(const char *s, size_t maxlen);
 #  include "x86/strnlen.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strnlen.c"
+# elif defined(__alpha__)
+#  include "alpha/strnlen.c"
 # else
 #  include "generic/strnlen.c"
 # endif

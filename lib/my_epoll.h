@@ -2,7 +2,7 @@
  * my_epoll.h
  * epoll -> other multiplexed I/O glue header
  *
- * Copyright (c) 2004, 2005 Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -87,7 +87,7 @@ _MY_E_EXTRN(int my_epoll_create(int size));
 _MY_E_EXTRN(int my_epoll_close(int epfd));
 
 /* now do the things special to the compat-layer */
-# if defined HAVE_POLL || defined HAVE_KEPOLL || defined HAVE_KQUEUE || defined HAVE_DEVPOLL
+# if defined(HAVE_POLL) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)
 /* Solaris /dev/poll also wraps to some poll things */
 #  include <sys/poll.h>
 /* Basics */
@@ -110,7 +110,7 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 #  define EPOLLONESHOT (1 << 30)
 	/* Edge-Triggerd */
 #  define EPOLLET	(1 << 31)
-# endif /* HAVE_POLL || HAVE_KEPOLL || HAVE_DEVPOLL */
+# endif /* HAVE_POLL || HAVE_KEPOLL || HAVE_DEVPOLL || HAVE_EPORT */
 
 #endif /* NEED_EPOLL_COMPAT */
 #endif /* LIB_MY_EPOLL_H */

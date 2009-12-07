@@ -184,7 +184,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 				ssize_t w_val;
 
 				tmp_poll.fd     = fd;
-				tmp_poll.events = event->events;
+				tmp_poll.events = event->events & ~(EPOLLONESHOT | EPOLLET);
 				tmp_poll.revents = 0;
 
 				while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
@@ -226,7 +226,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 				if(EPOLL_CTL_MOD == op)
 				{
-					tmp_poll.events = event->events;
+					tmp_poll.events = event->events & ~(EPOLLONESHOT | EPOLLET);
 					while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 					if(sizeof(tmp_poll) == w_val)
 						fds->data[fd] = event->data;
@@ -302,6 +302,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 // TODO: handle POLLNVAL, epoll does not deliver it
 //			if(!(p_wptr->revents & POLLNVAL))
 
+// TODO: handle oneshot
 			wptr->data = loc_data->data[poll_buf->fd];
 			wptr->events = poll_buf->revents;
 			ret_val++;

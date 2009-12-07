@@ -1178,7 +1178,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	if(yourip)
 	{
 		if(write_sna_to_packet(yourip, &parg->connec->remote_host))
-			list_add_tail(&yourip->list, &khl_children);
+			list_add_tail(&yourip->list, &khl->children);
 		else
 			g2_packet_free(yourip);
 	}

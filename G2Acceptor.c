@@ -196,7 +196,7 @@ void *G2Accept(void *param)
 		 * that pointers to mem < 4k (normaly the Zero Page) are "invalid", or
 		 * in our case special data.
 		 */
-		eevents->data.ptr = (void *)(uintptr_t)accept_so4;
+		eevents->data.ptr = (void *)((uintptr_t)accept_so4 << 1);
 		if(0 > my_epoll_ctl(ac_data.epoll_fd, EPOLL_CTL_ADD, accept_so4, eevents))
 		{
 			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
@@ -209,7 +209,7 @@ void *G2Accept(void *param)
 	if(accept_so6 > -1)
 	{
 		eevents->events = (uint32_t)(EPOLLIN | EPOLLERR);
-		eevents->data.ptr = (void *)(uintptr_t)accept_so6;
+		eevents->data.ptr = (void *)((uintptr_t)accept_so6 << 1);
 		if(0 > my_epoll_ctl(ac_data.epoll_fd, EPOLL_CTL_ADD, accept_so6, eevents))
 		{
 			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
@@ -346,7 +346,7 @@ killit:
 					/* the accept-socket */
 					else
 					{
-						int accept_so = (int)(intptr_t)e_wptr->data.ptr;
+						int accept_so = (int)((uintptr_t)e_wptr->data.ptr >> 1);
 						/* Some data ready to be read in? */
 						if(e_wptr->events & ((uint32_t)EPOLLIN))
 						{

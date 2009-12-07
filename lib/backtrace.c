@@ -2,7 +2,7 @@
  * backtrace.c
  * try to spit out a backtrace on crashes
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -137,6 +137,9 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 
 static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 {
+#if defined(__alpha__)
+	static unsigned long greg_space[NGREG];
+#endif
 	static pthread_mutex_t bt_mutex = PTHREAD_MUTEX_INITIALIZER;
 	static sigjmp_buf catch_sigsegv;
 	static volatile sig_atomic_t critical = 0;
@@ -331,6 +334,12 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	 * Please, and where are those 18 gregs now?
 	 */
 	greg_iter = (unsigned long *)&uc->uc_mcontext.arm_r0;
+# elif defined(__alpha__)
+	/* make greg linear, fix name, again... */
+	for(i = 0; i < NGREG - 1; i++)
+		greg_space[i] = uc->uc_mcontext.sc_regs[i];
+	greg_space[32] = uc->uc_mcontext.sc_pc;
+	greg_iter = greg_space;
 # else
 	greg_iter = (unsigned long *)&uc->uc_mcontext.gregs[0];
 # endif

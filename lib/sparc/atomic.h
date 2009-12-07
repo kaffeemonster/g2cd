@@ -47,6 +47,7 @@
 # if defined(__sparcv7) || defined(__sparc_v7__) || defined(__sparcv8) || defined(__sparc_v8__) || defined(__sparcv9) || defined(__sparc_v9__)
 /* could make problems on _real_ old Fujitsu build sparcs */
 #  define atomic_px atomic_px
+#  define atomic_x atomic_x
 static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
 	__asm__ __volatile__(
@@ -70,7 +71,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 }
 #  endif
 
-extern void *_illigal_ptr_size(volatile void *,atomicptr_t *);
+extern void *_illigal_ptr_size(void *,atomicptr_t *);
 static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 {
 	switch(sizeof(val))
@@ -179,7 +180,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	return _illigal_int_size(nval, ptr);
 }
 
-static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_32(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -196,7 +197,7 @@ static always_inline void *atomic_cmppx_32(volatile void *nval, volatile void *o
 }
 
 // TODO: gcc happiliy chooses the 64 bit variant, but issues ld not ldx loads, sizeof gone berserk? BUG?
-static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
 	__asm__ __volatile__(
@@ -212,7 +213,7 @@ static always_inline void *atomic_cmppx_64(volatile void *nval, volatile void *o
 	return prev;
 }
 
-static always_inline void *atomic_cmppx(volatile void *nval, volatile void *oval, atomicptr_t *ptr)
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
 	switch(sizeof(nval))
 	{
