@@ -242,11 +242,12 @@ OUT_CPY:
 #define MAKE_SFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type n = va_arg(spec->ap, type); \
+	type t = va_arg(spec->ap, type); \
+	type n = t < 0 ? -t : t; \
 	char *wptr; \
 	wptr = spec->conv_buf; \
 	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
-	if(n < 0) \
+	if(t < 0) \
 		*wptr++ = '-'; \
 	else if(spec->u.flags.sign && !spec->u.flags.zero) \
 		*wptr++ = '+'; \

@@ -41,6 +41,14 @@
 
 # define ATOMIC_INIT(x) {(x)}
 
+
+/*
+ * smp_mb()  - order loads and stores
+ * smp_rmb() - order loads
+ * smp_wmb() - order stores
+ * smp_read_barrier_depends() - order subsequent ops that depend on prev ops., alpha only
+ *
+ */
 /* warm beer and cheap tricks... */
 # define deatomic(x) ((void *)(intptr_t)(x))
 
@@ -115,6 +123,7 @@ typedef union xxxxxx4
 #  else
 #   if _GNUC_PREREQ(4, 1)
 #    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
+#    define atomic_cmpx(nval, oval, ptr) ((int)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
 #    define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
 #    define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #    define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
@@ -125,6 +134,7 @@ typedef union xxxxxx4
 # else
 #  if _GNUC_PREREQ(4, 1)
 #   define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
+#   define atomic_cmpx(nval, oval, ptr) ((int)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
 #   define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
 #   define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #   define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
@@ -165,5 +175,19 @@ static always_inline atomicst_t *atomic_pop(atomicst_t *head)
 	 */
 	return tmp2;
 }
+
+# ifndef ATOMIC_BIT_SET_ARCH
+static always_inline void atomic_bit_set(atomic_t *a, int i)
+{
+	int mask = 1 << i;
+	int oval, nval;
+
+	oval = atomic_read(a);
+	do {
+		nval = oval;
+		oval = atomic_cmpx(nval | mask, oval, a);
+	} while(unlikely(nval != oval));
+}
+# endif
 
 #endif /* LIB_ATOMIC_H */

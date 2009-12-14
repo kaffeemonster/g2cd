@@ -718,8 +718,12 @@ int test_cpu_feature_avx_callback(void)
 		return 0;
 
 	asm volatile(
-#if HAVE_BINUTILS_VERSION >= 219
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
 		"xgetbv\n"
+# else
+		".byte 0x0F, 0x01, 0xD0"
+# endif
 #else
 		".byte 0x0F, 0x01, 0xD0"
 #endif

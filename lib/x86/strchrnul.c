@@ -56,6 +56,8 @@
 #define SOV16	16
 #define SOV8	8
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static char *strchrnul_SSE42(const char *s, int c)
 {
 	char *ret;
@@ -102,20 +104,22 @@ static char *strchrnul_SSE42(const char *s, int c)
 		  /* %1 */ "=&d" (z),
 		  /* %2 */ "=&c" (t),
 		  /* %3 */ "=&r" (p)
-#ifdef __i386__
+#  ifdef __i386__
 		: /* %4 */ "m" (s),
 		  /* %5 */ "m" (c)
-#else
+#  else
 		: /* %4 */ "r" (s),
 		  /* %5 */ "r" (c)
-#endif
-#ifdef __SSE2__
+#  endif
+#  ifdef __SSE2__
 		: "xmm0", "xmm1"
-#endif
+#  endif
 	);
 	return ret;
 }
+# endif
 
+#if HAVE_BINUTILS >= 217
 static char *strchrnul_SSSE3(const char *s, int c)
 {
 	char *ret;
@@ -163,19 +167,21 @@ static char *strchrnul_SSSE3(const char *s, int c)
 		: /* %0 */ "=&r" (ret),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t)
-#ifdef __i386__
+#  ifdef __i386__
 		: /* %4 */ "m" (s),
 		  /* %5 */ "m" (c)
-#else
+#  else
 		: /* %4 */ "r" (s),
 		  /* %5 */ "r" (c)
-#endif
-#ifdef __SSE2__
+#  endif
+#  ifdef __SSE2__
 		: "xmm0", "xmm1", "xmm2", "xmm3"
-#endif
+#  endif
 	);
 	return ret;
 }
+# endif
+#endif
 
 static char *strchrnul_SSE2(const char *s, int c)
 {
@@ -403,8 +409,14 @@ static char *strchrnul_x86(const char *s, int c)
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strchrnul_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+# endif
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))strchrnul_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))strchrnul_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strchrnul_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

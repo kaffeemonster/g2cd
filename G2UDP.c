@@ -287,7 +287,7 @@ void *G2UDP(void *param)
 		if(server.settings.bind.use_ip6 && !ipv6_ready)
 		{
 			if(ipv4_ready)
-				logg(LOGF_ERR, "Error starting IPv6, continueing, but maybe not what you want!\n");
+				logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
 			else
 				goto out;
 		}

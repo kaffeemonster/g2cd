@@ -57,6 +57,11 @@
 #  define IPV6_RECVDSTADDR IP_RECVDSTADDR
 # endif
 #endif
+#ifdef HAVE_IP_SENDSRCADDR
+# ifndef IPV6_SENDSRCADDR
+#  define IPV6_SENDSRCADDR IP_SENDSRCADDR
+# endif
+#endif
 
 #if !defined(CMSG_LEN) || !defined(CMSG_SPACE)
 # define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int)) & ~sizeof(int))

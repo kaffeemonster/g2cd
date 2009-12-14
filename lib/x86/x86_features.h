@@ -94,7 +94,7 @@
 	FEATURE2( AVX      , 28, "AVX Extensions"                    ), \
 	FEATURE2( RES_2_29 , 29, "Reserved"                          ), \
 	FEATURE2( RES_2_30 , 30, "Reserved"                          ), \
-	FEATURE2( RAZ      , 31, "WTF? found in AMD CPUID spec."     ), \
+	FEATURE2( RAZ      , 31, "On a Hypervisor??"                 ), \
 	FEATURE3( MIR_FPU  ,  0, "FPU on Chip, mirrored"             ), \
 	FEATURE3( MIR_VME  ,  1, "Virtual Mode Extensions, mirrored" ), \
 	FEATURE3( MIR_DE   ,  2, "Debugging Extensions, mirrored"    ), \
@@ -114,7 +114,7 @@
 	FEATURE3( MIR_PAT  , 16, "Page Attribute Table, mirrored"    ), \
 	FEATURE3( MIR_PSE36, 17, "Page Size Extention, mirrored"     ), \
 	FEATURE3( RES_3_18 , 18, "Reserverd"                         ), \
-	FEATURE3( RES_3_19 , 19, "Reserverd"                         ), \
+	FEATURE3( MP       , 19, "MP Capable"                        ), \
 	FEATURE3( NX       , 20, "Execute Disable"                   ), \
 	FEATURE3( RES_3_21 , 21, "Reserverd"                         ), \
 	FEATURE3( MMXEXT   , 22, "MMX Technology Extensions"         ), \
@@ -140,6 +140,7 @@
 	FEATURE4( XOP      , 11, "XOP Extensions"                    ), \
 	FEATURE4( SKINIT   , 12, "SKINIT avail."                     ), \
 	FEATURE4( WDT      , 13, "Watchdog timer"                    ), \
+	FEATURE4( LWP      , 15, "Lightweight Profiling"             ), \
 	FEATURE4( FMA4     , 16, "FMA AMD-Style"                     ), \
 	FEATURE4( CVT16    , 18, "Half Float extention"              ), \
 	FEATURE5( PL_RNG   ,  2, "Padlock Random Number Generator"   ), \

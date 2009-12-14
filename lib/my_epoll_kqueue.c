@@ -26,10 +26,22 @@
 #include <sys/event.h>
 #include <sys/time.h>
 
+#define built_flags(action, events, en) \
+	(((en) ? EV_ENABLE : EV_DISABLE) | \
+	(((events) & EPOLLONESHOT) ? EV_ONESHOT : 0) | \
+	(((events) & EPOLLET) ? EV_CLEAR : 0) | \
+	 action )
+#define ep_i(events) ((events) & EPOLLIN)
+#define ep_o(events) ((events) & EPOLLOUT)
+
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
 	struct timespec tsp;
 	struct kevent chg_ev[2];
+	struct kevent ev_list[2];
+	struct kevent *ev;
+	int num, i;
+	unsigned short flags;
 
 	if(0 > epfd) {
 		errno = EBADF;
@@ -47,35 +59,51 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 		return -1;
 	}
 
-// TODO: do something about oneshot
 	memset(&tsp, 0, sizeof(tsp));
 	memset(chg_ev, 0, sizeof(chg_ev));
+	num = 0;
+	ev = &chg_ev[0];
 	switch(op)
 	{
 	case EPOLL_CTL_ADD:
-		/* we first have to add them, so we can disable the unneeded later */
-		EV_SET(&chg_ev[0], fd, EVFILT_READ,
-			EV_ADD, 0, 0, event->data.ptr);
-		EV_SET(&chg_ev[1], fd, EVFILT_WRITE,
-			EV_ADD, 0, 0, event->data.ptr);
-		if(-1 == kevent(epfd, chg_ev, 2, NULL, 0, &tsp))
-			return -1;
 	case EPOLL_CTL_MOD:
-		EV_SET(&chg_ev[0], fd, EVFILT_READ,
-			(event->events & EPOLLIN) ? EV_ENABLE : EV_DISABLE,
-			0, 0, event->data.ptr);
-		EV_SET(&chg_ev[1], fd, EVFILT_WRITE,
-			(event->events & EPOLLOUT) ? EV_ENABLE : EV_DISABLE,
-			0, 0, event->data.ptr);
+		flags = built_flags(EV_ADD, event->events, ep_i(event->events));
+		EV_SET(ev, fd, EVFILT_READ, flags, 0, 0, event->data.ptr);
+		ev++;
+		num++;
+		flags = built_flags(EV_ADD, event->events, ep_o(event->events));
+		EV_SET(ev, fd, EVFILT_WRITE, flags, 0, 0, event->data.ptr);
+		num++;
 		break;
 	case EPOLL_CTL_DEL:
-		EV_SET(&chg_ev[0], fd, EVFILT_READ,
-			EV_DELETE, 0, 0, 0);
-		EV_SET(&chg_ev[1], fd, EVFILT_WRITE,
-			EV_DELETE, 0, 0, 0);
+		EV_SET(ev, fd, EVFILT_READ, EV_DELETE, 0, 0, 0);
+		ev++;
+		num++;
+		EV_SET(ev, fd, EVFILT_WRITE, EV_DELETE, 0, 0, 0);
+		num++;
 		break;
 	}
-	return kevent(epfd, chg_ev, 2, NULL, 0, &tsp);
+#if 0
+	for(i = 0; i < num; i++) {
+		logg_develd("p: %p i: %d fi: %i fl: 0x%hx ffl: %u d: %d\n",
+			chg_ev[i].udata, chg_ev[i].ident, chg_ev[i].filter,
+			chg_ev[i].flags, chg_ev[i].fflags, chg_ev[i].data);
+	}
+#endif
+	num = kevent(epfd, chg_ev, num, ev_list, 2, &tsp);
+	if(-1 == num)
+		return num;
+	for(i = 0; i < num; i++)
+	{
+		if(!(ev_list[i].flags & EV_ERROR))
+			continue;
+		errno = ev_list[i].data;
+		logg_develd("p: %p i: %d fi: %hi fl: 0x%hx ffl: %u d: %d\n",
+			ev_list[i].udata, ev_list[i].ident, ev_list[i].filter,
+			ev_list[i].flags, ev_list[i].fflags, ev_list[i].data);
+		return -1;
+	}
+	return 0;
 }
 
 int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
@@ -112,7 +140,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 
 		if(ev_list[i].filter != EVFILT_READ && ev_list[i].filter != EVFILT_WRITE)
 		{
-			logg_develd("Unknown filter! p: %p i: %d fi: %hi fl: %hu ffl: %u d: %X\n",
+			logg_develd("Unknown filter! p: %p i: %d fi: %hi fl: 0x%hx ffl: %u d: 0x%X\n",
 				ev_list[i].udata, ev_list[i].ident, ev_list[i].filter,
 				ev_list[i].flags, ev_list[i].fflags, ev_list[i].data);
 			continue;
@@ -142,6 +170,10 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 			epv_tmp->events |= POLLHUP;
 		if (ev_list[i].flags & EV_ERROR)
 			epv_tmp->events |= POLLERR;
+		if (ev_list[i].flags & EV_ONESHOT) {
+// TODO: disable other event at oneshot
+			epv_tmp->events |= EPOLLONESHOT;
+		}
 		epv_tmp->data.ptr = ev_list[i].udata;
 	}
 

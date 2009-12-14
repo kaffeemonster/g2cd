@@ -71,7 +71,7 @@
 /* internal prototypes */
 static inline bool init_memory_a(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
 static inline bool init_con_a(int *, union combo_addr *);
-static bool handle_accept_in(int, g2_connection_t *, int);
+static bool handle_accept_in(struct epoll_event *, int, g2_connection_t *, int);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
 static inline g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd);
 static noinline bool initiate_g2(g2_connection_t *);
@@ -157,7 +157,7 @@ void *G2Accept(void *param)
 				pthread_exit(NULL);
 			}
 			else
-				logg(LOGF_ERR, "Error starting IPv6, but continueing, maybe not what you wanted!\n");
+				logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
 		}
 	}
 	/* getting memory for our FD's and everything else */
@@ -187,7 +187,7 @@ void *G2Accept(void *param)
 	/* Setting first entry to be polled, our Acceptsocket */
 	if(accept_so4 > -1)
 	{
-		eevents->events = (uint32_t)(EPOLLIN | EPOLLERR);
+		eevents->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 		/*
 		 * Attention - very ugly, but i have to distinguish these two sockets,
 		 * and all the other.
@@ -208,7 +208,7 @@ void *G2Accept(void *param)
 	}
 	if(accept_so6 > -1)
 	{
-		eevents->events = (uint32_t)(EPOLLIN | EPOLLERR);
+		eevents->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 		eevents->data.ptr = (void *)((uintptr_t)accept_so6 << 1);
 		if(0 > my_epoll_ctl(ac_data.epoll_fd, EPOLL_CTL_ADD, accept_so6, eevents))
 		{
@@ -351,7 +351,7 @@ killit:
 						if(e_wptr->events & ((uint32_t)EPOLLIN))
 						{
 							/* If our accept_so is ready reading, we have to handle it differently */
-							if(handle_accept_in(accept_so, work_entry, ac_data.epoll_fd))
+							if(handle_accept_in(e_wptr, accept_so, work_entry, ac_data.epoll_fd))
 							{
 								work_entry = g2_con_get_free();
 								if(unlikely(!work_entry)) {
@@ -368,7 +368,7 @@ killit:
 						 * Any problems? 'Where did you go my lovely...'
 						 * Accept_socket become invalid? Dooh
 						 */
-						if(e_wptr->events & ~((uint32_t)EPOLLIN))
+						if(e_wptr->events & ~((uint32_t)EPOLLIN|EPOLLONESHOT))
 							keep_going = handle_accept_abnorm(e_wptr, ac_data.epoll_fd, accept_so);
 					}
 				}
@@ -498,9 +498,9 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 	}
 }
 
-static bool handle_accept_in(int accept_so, g2_connection_t *work_entry, int epoll_fd)
+static bool handle_accept_in(struct epoll_event *accept_ptr, int accept_so, g2_connection_t *work_entry, int epoll_fd)
 {
-	struct epoll_event tmp_eevent = {0,{0}};
+	struct epoll_event tmp_eevent;
 	socklen_t sin_size = sizeof(work_entry->remote_host); /* what to do with this info??? */
 	int tmp_fd;
 	int fd_flags;
@@ -513,6 +513,12 @@ static bool handle_accept_in(int accept_so, g2_connection_t *work_entry, int epo
 		return false;
 	}
 	work_entry->com_socket = tmp_fd;
+
+	tmp_eevent = *accept_ptr;
+	tmp_eevent.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, accept_so, &tmp_eevent))
+		logg_errno(LOGF_NOTICE, "resetting accept-fd in EPoll to default-interrests");
+	/* if we couldn't rearm our accept fd, we are screwed... */
 
 	/* increase and check if our total server connection limit is reached */
 	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum) {
@@ -550,6 +556,7 @@ static bool handle_accept_in(int accept_so, g2_connection_t *work_entry, int epo
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
 	tmp_eevent.events = work_entry->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
+	tmp_eevent.data.u64 = 0;
 	tmp_eevent.data.ptr = work_entry;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, work_entry->com_socket, &tmp_eevent)) {
 		logg_errno(LOGF_NOTICE, "adding new socket to EPoll");
@@ -588,7 +595,7 @@ static inline bool handle_accept_abnorm(struct epoll_event *accept_ptr, int epol
 	
 	if(accept_ptr->events & (uint32_t)EPOLLOUT)
 	{
-		accept_ptr->events = (uint32_t)(EPOLLIN | EPOLLERR);
+		accept_ptr->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, accept_so, accept_ptr))
 			logg_errno(LOGF_NOTICE, "resetting accept-fd in EPoll to default-interrests");
 
@@ -601,7 +608,7 @@ static inline bool handle_accept_abnorm(struct epoll_event *accept_ptr, int epol
 		ret_val = false;
 		extra_msg = "\n\tSTOPPING";
 		if(accept_ptr->events & (uint32_t)EPOLLERR)
-			msg = "error set forAccept-FD!";
+			msg = "error set for Accept-FD!";
 		if(accept_ptr->events & (uint32_t)EPOLLHUP)
 			msg = "HUP set for Accept-FD?";
 /*

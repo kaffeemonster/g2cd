@@ -105,6 +105,17 @@ void *gen_atomic_px(void *nval, atomicptr_t *oval)
 	return tmp;
 }
 
+int gen_atomic_cmpx(int nval, int oval, atomic_t *x)
+{
+	int ret_val = oval;
+	shortlock_t_lock(ATOMIC_HASH(x));
+	ret_val = x->d;
+	if(oval == ret_val)
+		x->d = nval;
+	shortlock_t_unlock(ATOMIC_HASH(x));
+	return ret_val;
+}
+
 void *gen_atomic_cmppx(void *nval, void *oval, atomicptr_t *x)
 {
 	void *ret_val = oval;

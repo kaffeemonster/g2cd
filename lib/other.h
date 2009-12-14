@@ -328,18 +328,30 @@ typedef void (*sighandler_t)(int);
 # endif
 
 /* maybe we picked it up by accident, otherwise give up */
-# if !defined(__BYTE_ORDER) && !defined(BYTE_ORDER)
+# if !(defined(__BYTE_ORDER) || defined(BYTE_ORDER) || defined(_BYTE_ORDER))
 #  error "no byte order info for your plattform, giving up!"
 # endif
 /* BSDs sometimes calls it BYTE_ORDER, fix up */
 # ifndef __BYTE_ORDER
-#  define __BYTE_ORDER  BYTE_ORDER
+#  ifdef _BYTE_ORDER
+#   define __BYTE_ORDER  _BYTE_ORDER
+#  else
+#   define __BYTE_ORDER  BYTE_ORDER
+#  endif
 # endif
 # ifndef __LITTLE_ENDIAN
-#  define __LITTLE_ENDIAN  LITTLE_ENDIAN
+#  ifdef _LITTLE_ENDIAN
+#   define __LITTLE_ENDIAN _LITTLE_ENDIAN
+#  else
+#   define __LITTLE_ENDIAN  LITTLE_ENDIAN
+#  endif
 # endif
 # ifndef __BIG_ENDIAN
-#  define __BIG_ENDIAN  BIG_ENDIAN
+#  ifdef _BIG_ENDIAN
+#   define __BIG_ENDIAN _BIG_ENDIAN
+#  else
+#   define __BIG_ENDIAN  BIG_ENDIAN
+#  endif
 # endif
 
 /* let the compiler handle unaligned access */

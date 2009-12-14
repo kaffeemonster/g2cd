@@ -301,6 +301,70 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 	return _illigal_int_size(val, ptr);
 }
 
+static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
+{
+	int prev;
+
+	__asm__ __volatile__ (
+		"1:\n\t"
+		"lwarx	%0,%y2 \n\t"
+		"cmpw	0,%0,%3 \n\t"
+		"bne	2f\n\t"
+		PPC405_ERR77(%y2)
+		"stwcx.	%4,%y2 \n\t"
+		"bne-	1b"
+		SYNC
+		"\n2:"
+		: /* %0 */ "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "r" (oval),
+		  /* %4 */ "r" (nval),
+		  /* %5 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+
+	return prev;
+}
+
+static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
+{
+	int prev;
+
+	__asm__ __volatile__ (
+		"1:\n\t"
+		"ldarx	%0,%y2 \n\t"
+		"cmpd	0,%0,%3 \n\t"
+		"bne	2f\n\t"
+		PPC405_ERR77(%y2)
+		"stdcx.	%4,%y2 \n\t"
+		"bne-	1b"
+		SYNC
+		"\n2:"
+		: /* %0 */ "=&r" (prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ PPC_MEM_CONSTRAIN (atomic_read(ptr)),
+		  /* %3 */ "r" (oval),
+		  /* %4 */ "r" (nval),
+		  /* %5 */ "m" (atomic_read(ptr)) /* dependency only, see above */
+		: "cc");
+
+	return prev;
+}
+
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+{
+	switch(sizeof(nval))
+	{
+	case 4:
+		return atomic_cmpx_32(nval, oval, ptr);
+	case 8:
+		return atomic_cmpx_64(nval, oval, ptr);
+	}
+	return _illigal_int_size(nval, ptr);
+}
+
 static always_inline void *atomic_cmppx_32(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;

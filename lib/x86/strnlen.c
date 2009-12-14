@@ -66,6 +66,8 @@
 #define SOV16	16
 #define SOV8	8
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static size_t strnlen_SSE42(const char *s, size_t maxlen)
 {
 	const char *p;
@@ -120,22 +122,24 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&d" (t),
 	  /* %3 */ "=&c" (f)
-#ifdef __i386__
+#  ifdef __i386__
 	: /* %4 */ "m" (maxlen),
 	  /* %5 */ "m" (s),
-#else
+#  else
 	: /* %4 */ "r" (maxlen),
 	  /* %5 */ "r" (s),
-#endif
+#  endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "2" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
-#ifdef __SSE__
+#  ifdef __SSE__
 	: "xmm0", "xmm1"
-#endif
+#  endif
 	);
 	return len;
 }
+# endif
+#endif
 
 static size_t strnlen_SSE2(const char *s, size_t maxlen)
 {
@@ -329,7 +333,11 @@ static size_t strnlen_x86(const char *s, size_t maxlen)
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strnlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))strnlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

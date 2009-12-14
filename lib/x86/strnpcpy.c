@@ -58,7 +58,11 @@
 #define SOV16	16
 #define SOV16M1	(SOV16-1)
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
+# endif
+#endif
 static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
 #ifndef __x86_64__
 static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
@@ -127,6 +131,8 @@ static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 	}
 #endif
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
@@ -180,9 +186,9 @@ CPY_NEXT:
 			  /* %5 */ "1" (src),
 			  /* %6 */ "2" (dst),
 			  /* %7 */ "3" (0)
-#ifdef __SSE__
+#  ifdef __SSE__
 			: "xmm0", "xmm1", "xmm2"
-#endif
+#  endif
 		);
 		if(likely(r))
 			return dst;
@@ -206,6 +212,8 @@ CPY_NEXT:
 		*dst = '\0';
 	return dst;
 }
+# endif
+#endif
 
 static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
 {
@@ -419,7 +427,11 @@ CPY_NEXT:
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strnpcpy_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))strnpcpy_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strnpcpy_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

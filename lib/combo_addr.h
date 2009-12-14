@@ -124,7 +124,19 @@ struct sockaddr_in6
 # endif /* HAVE_INET6_ADDRSTRLEN */
 
 # ifndef s6_addr32
-#  define s6_addr32 _S6_un._S6_u32
+/*
+ * All in6_addr member besides a basic char array are nonstandard
+ * So we have to see if we have a s6_addr32.
+ * There is either no define, or hidden behind a #ifdef _KERNEL
+ * which does not sound like i want to set it.
+ */
+#  ifdef __sun__
+#   define s6_addr32 _S6_un._S6_u32
+#  elif defined(__FreeBSD__) || defined(BSD)
+#   define s6_addr32 __u6_addr.__u6_addr32
+#  else
+#   error "and how is your s6_addr32 obfuscated?"
+#  endif
 # endif
 
 # ifndef HAVE_INET_NTOP

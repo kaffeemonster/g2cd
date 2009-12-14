@@ -72,6 +72,9 @@
 # ifndef atomic_px
 #  define atomic_px(x, y)	gen_atomic_px((x), (y))
 # endif
+# ifndef atomic_cmpx
+#  define atomic_cmpx(x, y, z)	gen_atomic_cmpx((x), (y), (z))
+# endif
 # ifndef atomic_cmppx
 #  define atomic_cmppx(x, y, z)	gen_atomic_cmppx((x), (y), (z))
 # endif
@@ -82,6 +85,7 @@ extern void gen_atomic_dec(atomic_t *);
 extern int  gen_atomic_dec_test(atomic_t *);
 extern int  gen_atomic_x(int, atomic_t *);
 extern void *gen_atomic_px(void *, atomicptr_t *);
+extern int gen_atomic_cmpx(int nval, int oval, atomic_t *);
 extern void *gen_atomic_cmppx(void *nval, void *oval, atomicptr_t *);
 
 #endif /* LIB_IMPL_ATOMIC_H */

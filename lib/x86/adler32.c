@@ -110,6 +110,8 @@
 		}
 #endif
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1 = adler & 0xffff;
@@ -171,9 +173,9 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 			  /*    */ "1" (s1),
 			  /*    */ "2" (s2),
 			  /*    */ "3" (k)
-#ifdef __SSE__
+#  ifdef __SSE__
 			: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6"
-#endif
+#  endif
 			);
 		}
 
@@ -185,12 +187,12 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 			k /= 16;
 
 			asm(
-#ifdef __i386__
-# ifndef __PIC__
-# define CLOB
+#  ifdef __i386__
+#   ifndef __PIC__
+#    define CLOB
 				"lea	1f(,%5,8), %4\n\t"
-# else
-# define CLOB "&"
+#   else
+#    define CLOB "&"
 				"call	i686_get_pc\n\t"
 				"lea	1f-.(%4,%5,8), %4\n\t"
 				".subsection 2\n"
@@ -198,14 +200,14 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 				"movl	(%%esp), %4\n\t"
 				"ret\n\t"
 				".previous\n\t"
-# endif
+#   endif
 				"jmp	*%4\n\t"
-#else
-# define CLOB "&"
+#  else
+#   define CLOB "&"
 				"lea	1f(%%rip), %q4\n\t"
 				"lea	(%q4,%q5,8), %q4\n\t"
 				"jmp	*%q4\n\t"
-#endif
+#  endif
 				".p2align 1\n"
 				"1:\n\t"
 			/* 128 */
@@ -294,6 +296,8 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	}
 	return (s2 << 16) | s1;
 }
+# endif
+#endif
 
 static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -757,7 +761,11 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))adler32_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))adler32_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))adler32_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},

@@ -317,13 +317,14 @@ alll:
 	$(MAKE) -C .. $(LIBCOMMON)
 
 # not parralel compatible
-$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
-	$(RANLIB) $@
-$(LIBCOMMON)($(LIBOBJS)): arflock
-
-#$(LIBCOMMON): $(LIBOBJS)
-#	$(AR) $(ARFLAGS) $@ $^
+#$(LIBCOMMON): $(LIBCOMMON)($(LIBOBJS))
 #	$(RANLIB) $@
+#$(LIBCOMMON)($(LIBOBJS)): arflock
+
+$(LIBCOMMON): $(LIBOBJS)
+	$(AR) $(ARFLAGS) $@ $(LIBOBJS)
+	$(RANLIB) $@
+$(LIBCOMMON): arflock
 
 $(MPL)/aes_tab_gen: $(MPL)/aes_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/aes_tab_gen.c -o $@
@@ -348,19 +349,19 @@ $(MPL)/tchar_tab.o: $(TCHAR_TABS) bin2o
 
 $(MPL)/tchar_tolower.bin: $(MPL)/tchar_tolower_be.bin
 	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
-		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_tolower_be.bin conv=swab of=$@ ; \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_tolower_be.bin conv=swab of=$@ > /dev/null ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_tolower_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c1table.bin: $(MPL)/tchar_c1table_be.bin
 	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
-		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c1table_be.bin conv=swab of=$@ ; \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c1table_be.bin conv=swab of=$@ > /dev/null ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c1table_be.bin $@ ; \
 	fi
 $(MPL)/tchar_c3table.bin: $(MPL)/tchar_c3table_be.bin
 	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
-		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c3table_be.bin conv=swab of=$@ ; \
+		./ccdrv -s$(VERBOSE) "SWAP[$@]" dd bs=1 if=$(MPL)/tchar_c3table_be.bin conv=swab of=$@ > /dev/null ; \
 	else \
 		./ccdrv -s$(VERBOSE) "CP[$@]" cp -f $(MPL)/tchar_c3table_be.bin $@ ; \
 	fi

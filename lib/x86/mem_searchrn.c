@@ -69,13 +69,19 @@
 #define SOV16	16
 #define SOV16M1	(SOV16-1)
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static void *mem_searchrn_SSE42(void *src, size_t len);
+# endif
+#endif
 static void *mem_searchrn_SSE2(void *src, size_t len);
 #ifndef __x86_64__
 static void *mem_searchrn_SSE(void *src, size_t len);
 #endif
 static void *mem_searchrn_x86(void *src, size_t len);
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static void *mem_searchrn_SSE42(void *s, size_t len)
 {
 	char *p, *f;
@@ -132,14 +138,14 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 		"je	4b\n" /* last char matched? - > continue */
 		"jmp	7f\n\t"
 		"2:\n\t"
-#ifndef __x86_64__
+# ifndef __x86_64__
 		"setc	%b0\n\t" /* create a 0 if no match was generated */
 		"cmovnc	%0, %2\n\t" /* no match, set rr to zero */
 		"cmovnc	%0, %1\n" /* no match, set p to zero */
-#else
+# else
 		"cmovnc	%8, %2\n\t" /* no match, set rr to zero */
 		"cmovnc	%8, %1\n" /* no match, set p to zero */
-#endif
+# endif
 		"7:\n\t"
 		"movzx	%w2, %2\n\t" /* clear upper half, result is small */
 		"lea	(%1, %2), %0\n" /* add match index to p */
@@ -156,18 +162,20 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 	  /*  %5 */ "1" (s),
 	  /*  %6 */ "3" (len),
 	  /*  %7 */ "2" (0x0A0D),
-#ifndef __x86_64__
+#  ifndef __x86_64__
 	  /*  %8 */ "m" (t)
-#else
+#  else
 	  /* amd64 has enough call clobbered regs not to spill */
 	  /*  %8 */ "r" (t)
-#endif
-#ifdef __SSE__
+#  endif
+#  ifdef __SSE__
 	: "xmm0", "xmm1", "xmm2"
-#endif
+#  endif
 	);
 	return f;
 }
+# endif
+#endif
 
 static void *mem_searchrn_SSE2(void *s, size_t len)
 {
@@ -472,7 +480,11 @@ void *mem_searchrn_x86(void *s, size_t len)
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))mem_searchrn_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))mem_searchrn_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))mem_searchrn_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

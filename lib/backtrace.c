@@ -146,7 +146,7 @@ static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 	static char path[4096];
 	const char *osl = NULL, *isl = NULL;
 	char *wptr = NULL; 
-	struct ucontext *uc = vuc;
+	ucontext_t *uc = vuc;
 	unsigned long *greg_iter;
 # ifdef __GLIBC__
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
@@ -320,7 +320,10 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 
 	/* Dump registers, a better dump would be plattformspecific */
 	wptr = strplitcpy(path, "\nRegisters:\n");
-# if defined __powerpc__ || defined __powerpc64__
+# ifdef __FreeBSD__
+#  define NGREG (uc->uc_mcontext.mc_len)
+	greg_iter = (unsigned long *)&uc->uc_mcontext.mc_onstack;
+# elif defined __powerpc__ || defined __powerpc64__
 	/* whoever made the powerpc-linux-gnu header...
 	 * I mean, an old sun an a new Linux i386 have it in sync, gnarf
  	*/

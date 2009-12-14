@@ -101,7 +101,7 @@ RM = rm -f
 #	when it sees "illegal" feature combinations (stdbool only when C99,
 #	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
 #	Hello?
-HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE -D_XPG6 -D__EXTENSIONS__
+HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
 
 #
 # the C-Standart the compiler should work with
@@ -373,7 +373,7 @@ CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
 #CFLAGS += -DHELGRIND_ME
-#CFLAGS += -DHAVE_BINUTILS=219
+CFLAGS += -DHAVE_BINUTILS=217
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
 CFLAGS += -D_GNU_SOURCE

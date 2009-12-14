@@ -96,6 +96,21 @@ static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr
 	return prev;
 }
 
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
+{
+	int prev;
+	__asm__ __volatile__(
+		LOCK "cmpxchg %2,%3"
+		: /* %0 */ "=a"(prev),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_read(ptr))
+		: /* %2 */ "r"(nval),
+		  /* %3 */ "m"(atomic_read(ptr)),
+		  /* %4 */ "0"(oval)
+		: "cc");
+	return prev;
+}
+
 static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 {
 	void *prev, *tmp;
@@ -117,6 +132,21 @@ static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
 		: "cc");
 }
 # define ATOMIC_PUSH_ARCH
+
+static always_inline void atomic_bit_set(atomic_t *a, int i)
+{
+	__asm__ __volatile__(
+		LOCK "bts" ASIZE " %2, %0"
+		: /* %0 */ "=m" (atomic_read(a))
+		: /* %1 */ "m" (atomic_read(a)),
+#ifndef __x86_64__
+		  /* %2 */ "rI" (i)
+#else
+		  /* %2 */ "rJ" (i)
+#endif
+		: "cc");
+}
+# define ATOMIC_BIT_SET_ARCH
 
 static always_inline void atomic_inc(atomic_t *ptr)
 {

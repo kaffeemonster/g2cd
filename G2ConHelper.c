@@ -39,6 +39,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#ifdef HAVE_SYS_UIO_H
+# include <sys/uio.h>
+#endif
 /* other */
 #include "lib/other.h"
 /* Own includes */

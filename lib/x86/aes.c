@@ -30,6 +30,8 @@ static void aes_encrypt_key128_generic(struct aes_encrypt_ctx *, const void *);
 static void aes_ecb_encrypt_generic(const struct aes_encrypt_ctx *, void *, const void *);
 static void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *, void *, const void *);
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	size_t k;
@@ -79,11 +81,13 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 		  /* %1 */ "=m" (*ctx->k)
 		: /* %2 */ "r" (in),
 		  /* %4 */ "m" (*(const char *)in)
-#ifdef __SSE__
+#  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm4"
-#endif
+#  endif
 	);
 }
+# endif
+#endif
 
 #define PL_R128 10
 #define PL_R192 12
@@ -191,6 +195,8 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 #endif
 }
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	size_t k;
@@ -229,25 +235,35 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
 		  /* %3 */ "r" (out),
 		  /* %4 */ "0" (&ctx->k),
 		  /* %5 */ "m" (*(const char *)in)
-#ifdef __SSE__
+#  ifdef __SSE__
 		: "xmm0", "xmm1"
-#endif
+#  endif
 	);
 }
+# endif
+#endif
 
 #define ARCH_NAME_SUFFIX _generic
 #include "../generic/aes.c"
 
 static const struct test_cpu_feature key_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))aes_encrypt_key128_SSEAES, .flags_needed = CFEATURE_AES},
+# endif
+#endif
 	{.func = (void (*)(void))aes_encrypt_key128_generic, .flags_needed = -1 },
 };
 
 static const struct test_cpu_feature enc_feat[] =
 {
 	{.func = (void (*)(void))aes_ecb_encrypt_padlock, .flags_needed = CFEATURE_PL_ACE_E},
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))aes_ecb_encrypt_SSEAES, .flags_needed = CFEATURE_AES},
+# endif
+#endif
 	{.func = (void (*)(void))aes_ecb_encrypt_generic, .flags_needed = -1 },
 };
 

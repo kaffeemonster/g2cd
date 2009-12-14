@@ -25,8 +25,14 @@
 
 #include "x86_features.h"
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static size_t mempopcnt_SSE4(const void *s, size_t len);
+# endif
+# if HAVE_BINUTILS >= 217
 static size_t mempopcnt_SSSE3(const void *s, size_t len);
+# endif
+#endif
 static size_t mempopcnt_SSE2(const void *s, size_t len);
 #ifndef __x86_64__
 static size_t mempopcnt_SSE(const void *s, size_t len);
@@ -56,6 +62,8 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 	{0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff}
 };
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINTUILS >= 218
 static inline size_t popcountst_intSSE4(size_t n)
 {
 	size_t tmp;
@@ -93,13 +101,13 @@ static size_t mempopcnt_SSE4(const void *s, size_t len)
 		if(r)
 		{
 			size_t t1, t2;
-#ifndef __PIC__
+#  ifndef __PIC__
 			size_t t3;
-#endif
+#  endif
 			asm (
-#ifdef __PIC__
+#  ifdef __PIC__
 				"push	"BX"\n"
-#endif
+#  endif
 				".p2align	2\n\t"
 				"1:\n\t"
 				"prefetchnta	0x60(%1)\n\t"
@@ -114,19 +122,19 @@ static size_t mempopcnt_SSE4(const void *s, size_t len)
 				"dec	%0\n\t"
 				"lea	4*"DI"(%1), %1\n\t"
 				"jnz	1b\n\t"
-#ifdef __PIC__
+#  ifdef __PIC__
 				"pop "BX"\n\t"
-#endif
+#  endif
 				: /* %0 */ "=r" (r),
 				  /* %1 */ "=r" (p),
 				  /* %2 */ "=r" (sum),
 				  /* %3 */ "=r" (t1),
-#ifndef __PIC__
+#  ifndef __PIC__
 				  /* %4 */ "=r" (t2),
 				  /* %5 */ "=b" (t3)
-#else
+#  else
 				  /* %4 */ "=r" (t2)
-#endif
+#  endif
 				: /* %6 */ "0" (r),
 				  /* %7 */ "4" (sum),
 				  /* %8 */ "5" (p)
@@ -157,7 +165,9 @@ static size_t mempopcnt_SSE4(const void *s, size_t len)
 	}
 	return sum;
 }
+# endif
 
+# if HAVE_BINUTILS >= 217
 static size_t mempopcnt_SSSE3(const void *s, size_t len)
 {
 	static const uint8_t lut_st[16] GCC_ATTR_ALIGNED(16) =
@@ -303,11 +313,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	%%xmm5, %%xmm0\n\t"
 		"punpckhqdq	%%xmm0, %%xmm0\n\t"
 		"paddq	%%xmm5, %%xmm0\n\t"
-#ifdef __x86_64__
+#  ifdef __x86_64__
 		"movq	%%xmm0, %0\n\t"
-#else
+#  else
 		"movd	%%xmm0, %0\n\t"
-#endif
+#  endif
 	: /* %0 */ "="CL"r" (ret),
 	  /* %1 */ "="CL"r" (cnt1),
 	  /* %2 */ "="CL"r" (cnt2),
@@ -317,13 +327,15 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 	  /* %6 */ CO  (len),
 	  /* %7 */ "m" (*reg_num_mask),
 	  /* %8 */ "m" (*sh_mask)
-#ifdef __SSE__
+#  ifdef __SSE__
 	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
-#endif
+#  endif
 	);
 
 	return ret;
 }
+# endif
+#endif
 
 static size_t mempopcnt_SSE2(const void *s, size_t len)
 {
@@ -850,9 +862,15 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINTUILS >= 218
 	{.func = (void (*)(void))mempopcnt_SSE4, .flags_needed = CFEATURE_POPCNT},
 	{.func = (void (*)(void))mempopcnt_SSE4, .flags_needed = CFEATURE_SSE4A},
+# endif
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))mempopcnt_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},
+# endif
+#endif
 	{.func = (void (*)(void))mempopcnt_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
 #ifndef __x86_64__
 	{.func = (void (*)(void))mempopcnt_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},

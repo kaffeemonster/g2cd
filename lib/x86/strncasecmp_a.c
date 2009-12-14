@@ -61,6 +61,8 @@ static const char ucd[16] GCC_ATTR_ALIGNED(16) =
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
 };
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 static int strncasecmp_a_SSE42(const char *s1, const char *s2, size_t n)
 {
 	size_t m1;
@@ -167,6 +169,8 @@ LOOP_AGAIN:
 
 	return 0;
 }
+# endif
+#endif
 
 static int strncasecmp_a_SSE2(const char *s1, const char *s2, size_t n)
 {
@@ -495,7 +499,11 @@ LOOP_AGAIN:
 
 static const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strncasecmp_a_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))strncasecmp_a_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strncasecmp_a_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},

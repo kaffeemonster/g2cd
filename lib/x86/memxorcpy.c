@@ -89,12 +89,14 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 #include "memxorcpy_tmpl.c"
 #undef HAVE_3DNOW
 
-#if HAVE_BINUTILS >= 219
-# define HAVE_AVX
-# undef ARCH_NAME_SUFFIX
-# define ARCH_NAME_SUFFIX _AVX
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+#  define HAVE_AVX
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _AVX
 static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len);
-# include "memxorcpy_tmpl.c"
+#  include "memxorcpy_tmpl.c"
+# endif
 #endif
 
 /*
@@ -102,8 +104,10 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
  */
 static const struct test_cpu_feature t_feat[] =
 {
-#if HAVE_BINUTILS >= 219
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))memxorcpy_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+# endif
 #endif
 	{.func = (void (*)(void))memxorcpy_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memxorcpy_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},

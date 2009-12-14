@@ -382,8 +382,8 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-			size_t err_str_len;
 #if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
+			size_t err_str_len;
 # ifdef HAVE_GNU_STRERROR_R
 			/*
 			 * the f***ing GNU-Version of strerror_r wich returns
