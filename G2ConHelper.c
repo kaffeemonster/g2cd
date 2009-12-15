@@ -2,7 +2,7 @@
  * G2ConHelper.c
  * G2-specific network-helper functions
  *
- * Copyright (c) 2004-2008, Jan Seiffert
+ * Copyright (c) 2004-2009, Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -167,7 +167,8 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			shortlock_t_unlock(&w_entry->pts_lock);
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+			if(!(p_entry->events & EPOLLONESHOT) &&
+			   0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				result = -1;
@@ -194,7 +195,8 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			shortlock_t_unlock(&w_entry->pts_lock);
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+			if(!(p_entry->events & EPOLLONESHOT) &&
+			   0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				result = -1;
@@ -252,7 +254,8 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 
 		if(more_write)
 		{
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+			if(!(p_entry->events & EPOLLONESHOT) &&
+			   0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;
@@ -279,7 +282,8 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 			shortlock_t_lock(&w_entry->pts_lock);
 			p_entry->events = w_entry->poll_interrests &= ~((uint32_t)EPOLLOUT);
 			shortlock_t_unlock(&w_entry->pts_lock);
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+			if(!(p_entry->events & EPOLLONESHOT) &&
+			   0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 				logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 				w_entry->flags.dismissed = true;
 				ret_val = false;

@@ -73,7 +73,7 @@ static inline bool init_memory_a(struct epoll_event **, struct norm_buff **, str
 static inline bool init_con_a(int *, union combo_addr *);
 static bool handle_accept_in(struct epoll_event *, int, g2_connection_t *, int);
 static inline bool handle_accept_abnorm(struct epoll_event *, int, int);
-static inline g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd);
+static inline g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff);
 static noinline bool initiate_g2(g2_connection_t *);
 static int accept_timeout(void *);
 /*
@@ -219,7 +219,7 @@ void *G2Accept(void *param)
 			pthread_exit(NULL);
 		}
 	}
-	eevents->events = (uint32_t)EPOLLIN;
+	eevents->events = (uint32_t)(EPOLLIN|EPOLLONESHOT);
 	eevents->data.ptr = (void *)0;
 	if(0 > my_epoll_ctl(ac_data.epoll_fd, EPOLL_CTL_ADD, sock2main, eevents))
 	{
@@ -283,63 +283,33 @@ void *G2Accept(void *param)
 						 * Any problems? 'Where did you go my lovely...'
 						 * Any invalid FD's remained in PollData?
 						 */
-						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT))) {
+						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT|EPOLLONESHOT))) {
 							g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
 							recycle_con(tmp_con_holder, ac_data.epoll_fd, false);
 						}
 						else
 						{
 							/* Some FD's ready to be filled? Some data ready to be read in? */
-							g2_connection_t *tmp_con_holder;
-							g2_connection_t *tmp_con_b = e_wptr->data.ptr;
-							tmp_con_holder = tmp_con_b;
-							if(!manage_buffer_before(&tmp_con_b->recv, &lrecv_buff))
-								goto killit;
-							if(!manage_buffer_before(&tmp_con_b->send, &lsend_buff))
-								goto killit;
-
-							tmp_con_holder = handle_socket_io_a(e_wptr, ac_data.epoll_fd);
-							if(tmp_con_holder)
+							g2_connection_t *tmp_con;
+							tmp_con = handle_socket_io_a(e_wptr, ac_data.epoll_fd, &lrecv_buff, &lsend_buff);
+							if(tmp_con)
 							{
-								if(!tmp_con_holder->flags.dismissed &&
-								   G2CONNECTED == tmp_con_holder->connect_state)
+								tmp_con->poll_interrests &= ~((uint32_t)EPOLLONESHOT);
+								recycle_con(tmp_con, ac_data.epoll_fd, true);
+								g2_con_helgrind_transfer(tmp_con);
+								if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
 								{
-									g2_connection_t *tmp_con = tmp_con_holder;
-									manage_buffer_after(&tmp_con->recv, &lrecv_buff);
-									manage_buffer_after(&tmp_con->send, &lsend_buff);
-									recycle_con(tmp_con_holder, ac_data.epoll_fd, true);
-									g2_con_helgrind_transfer(tmp_con);
-									if(sizeof(tmp_con) != write(to_handler, &tmp_con, sizeof(tmp_con)))
-									{
-										logg_errno(LOGF_NOTICE, "sending connection to Handler");
-										/*
-										 * we have to do the recycle stuff here which was
-										 * not done because we said we want to keep it
-										 */
-										close(tmp_con->com_socket);
-										atomic_dec(&server.status.act_connection_sum);
-										g2_conreg_remove(tmp_con);
-										g2_con_clear(tmp_con);
-										g2_con_ret_free(tmp_con);
-									}
-								}	
-								else
-								{
-killit:
-									if(lrecv_buff && tmp_con_holder->recv == lrecv_buff) {
-										tmp_con_holder->recv = NULL;
-										buffer_clear(*lrecv_buff);
-									}
-									if(lsend_buff && tmp_con_holder->send == lsend_buff) {
-										tmp_con_holder->send = NULL;
-										buffer_clear(*lsend_buff);
-									}
-									recycle_con(tmp_con_holder, ac_data.epoll_fd, false);
+									logg_errno(LOGF_NOTICE, "sending connection to Handler");
+									/*
+									 * we have to do the recycle stuff here which was
+									 * not done because we said we want to keep it
+									 */
+									close(tmp_con->com_socket);
+									atomic_dec(&server.status.act_connection_sum);
+									g2_conreg_remove(tmp_con);
+									g2_con_clear(tmp_con);
+									g2_con_ret_free(tmp_con);
 								}
-							}
-							else {
-								manage_buffer_after(&tmp_con_b->recv, &lrecv_buff);
-								manage_buffer_after(&tmp_con_b->send, &lsend_buff);
 							}
 						}
 					}
@@ -377,12 +347,12 @@ killit:
 				{
 // TODO: Check for a proper stop-sequence ??
 					/* everything but 'ready for write' means: we're finished... */
-					if(e_wptr->events & ~((uint32_t)EPOLLOUT))
+					if(e_wptr->events & ~((uint32_t)EPOLLOUT|EPOLLONESHOT))
 						keep_going = false;
 					else
 					{
 						/* else stop this write interrest */
-						e_wptr->events = EPOLLIN;
+						e_wptr->events = EPOLLIN|EPOLLONESHOT;
 						if(0 > my_epoll_ctl(ac_data.epoll_fd, EPOLL_CTL_MOD, sock2main, e_wptr)) {
 							logg_errno(LOGF_ERR, "changing epoll-interrests for socket-2-main");
 							keep_going = false;
@@ -555,7 +525,7 @@ static bool handle_accept_in(struct epoll_event *accept_ptr, int accept_so, g2_c
 	}
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
-	tmp_eevent.events = work_entry->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
+	tmp_eevent.events = work_entry->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLONESHOT);
 	tmp_eevent.data.u64 = 0;
 	tmp_eevent.data.ptr = work_entry;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, work_entry->com_socket, &tmp_eevent)) {
@@ -624,14 +594,19 @@ static inline bool handle_accept_abnorm(struct epoll_event *accept_ptr, int epol
 	return ret_val;
 }
 
-static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd)
+static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
+	g2_connection_t *ret_val = NULL;
 
-	if(p_entry->events & (uint32_t)EPOLLOUT)
-	{
+	if(!manage_buffer_before(&w_entry->recv, lrecv_buff))
+		goto killit;
+	if(!manage_buffer_before(&w_entry->send, lsend_buff))
+		goto killit;
+
+	if(p_entry->events & (uint32_t)EPOLLOUT) {
 		if(!do_write(p_entry, epoll_fd))
-			return w_entry;
+			goto killit_silent;
 	}
 
 	if(p_entry->events & (uint32_t)EPOLLIN)
@@ -639,28 +614,53 @@ static inline g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, i
 		w_entry->last_active = local_time_now;
 		timeout_advance(&w_entry->active_to, ACCEPT_ACTIVE_TIMEOUT);
 		if(!do_read(p_entry))
-			return w_entry;
+			goto killit_silent;
 
-		if(initiate_g2(w_entry))
-		{
-			p_entry->events = w_entry->poll_interrests |= (uint32_t) EPOLLOUT;
-			if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
-				logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");
-				w_entry->flags.dismissed = true;
-				return w_entry;
-			}
-		}
-		else
-		{
-			if(G2CONNECTED == w_entry->connect_state)
-				return w_entry;
-			else if(w_entry->flags.dismissed) {
-				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
-				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
-				return w_entry;
-			}
+		if(initiate_g2(w_entry)) {
+			shortlock_t_lock(&w_entry->pts_lock);
+			w_entry->poll_interrests |= (uint32_t) EPOLLOUT;
+			shortlock_t_unlock(&w_entry->pts_lock);
+		} else if(w_entry->flags.dismissed)
+			goto killit;
+		else if (G2CONNECTED == w_entry->connect_state)
+			ret_val = w_entry;
+	}
+
+	manage_buffer_after(&w_entry->recv, lrecv_buff);
+	manage_buffer_after(&w_entry->send, lsend_buff);
+	if(!ret_val)
+	{
+		p_entry->events = w_entry->poll_interrests;
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+			logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");
+			w_entry->flags.dismissed = true;
+			goto killit;
 		}
 	}
+	return ret_val;
+
+killit:
+	if(!w_entry->flags.dismissed &&
+	   G2CONNECTED == w_entry->connect_state) {
+		manage_buffer_after(&w_entry->recv, lrecv_buff);
+		manage_buffer_after(&w_entry->send, lsend_buff);
+		return w_entry;
+	}
+
+	logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+	          w_entry->flags.dismissed ? "Dismissed!" : "Problem!",
+	          &w_entry->remote_host, w_entry->com_socket);
+
+killit_silent:
+	if(*lrecv_buff && w_entry->recv == *lrecv_buff) {
+		w_entry->recv = NULL;
+		buffer_clear(**lrecv_buff);
+	}
+	if(*lsend_buff && w_entry->send == *lsend_buff) {
+		w_entry->send = NULL;
+		buffer_clear(**lsend_buff);
+	}
+	recycle_con(w_entry, epoll_fd, false);
 	return NULL;
 }
 
