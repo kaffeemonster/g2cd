@@ -48,9 +48,9 @@ static always_inline enum loglevel get_act_loglevel(void);
 
 # define OWN_VENDOR_CODE    "G2CD"
 
-# define THREAD_ACCEPTOR    0
-# define THREAD_HANDLER     1
-# define THREAD_UDP         2
+# define THREAD_HANDLER     0
+# define THREAD_UDP         1
+# define THREAD_GUP         2
 # define THREAD_TIMER       3
 # define THREAD_SUM_COM     3
 # define THREAD_SUM         4

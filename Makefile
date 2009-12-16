@@ -463,7 +463,8 @@ HEADS = \
 	G2GUIDCache.h \
 	G2QueryKey.h \
 	builtin_defaults.h \
-	timeout.h
+	timeout.h \
+	gup.h
 #	whith gmake all could be so simple $(wildcard *.h)
 #
 #	All sourcefiles
@@ -482,7 +483,8 @@ MSRCS = \
 	G2KHL.c \
 	G2GUIDCache.c \
 	G2QueryKey.c \
-	timeout.c
+	timeout.c \
+	gup.c
 SRCS = \
 	$(MSRCS) \
 	G2PacketTyperGenerator.c \
@@ -527,7 +529,8 @@ OBJS = \
 	G2GUIDCache.o \
 	G2QueryKey.o \
 	data.o \
-	timeout.o
+	timeout.o \
+	gup.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
 #OBJS = $(patsubst %.c,%.o,$(MSRCS))
 
@@ -838,8 +841,8 @@ data.o: sbox.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) $(BIN2O_OPTS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
-G2MainServer.o: G2Acceptor.h G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
-G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h lib/hzp.h
+G2MainServer.o: G2Handler.h G2UDP.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h version.h builtin_defaults.h
+G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
@@ -852,6 +855,7 @@ G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_b
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h
 timeout.o: timeout.h
+gup.o: gup.h G2Acceptor.h G2Connection.h  lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
 G2Connection.h: G2Packet.h G2QHT.h timeout.h lib/hzp.h lib/combo_addr.h lib/list.h lib/hlist.h version.h

@@ -47,7 +47,7 @@
 #define _G2MAINSERVER_C
 #include "lib/other.h"
 #include "G2MainServer.h"
-#include "G2Acceptor.h"
+#include "gup.h"
 #include "G2Handler.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
@@ -170,21 +170,22 @@ int main(int argc, char **args)
 	setup_resources();
 
 	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_ACCEPTOR], &server.settings.t_def_attr, (void *(*)(void *))&G2Accept, (void *)&sock_com[THREAD_ACCEPTOR][IN])) {
-		logg_errno(LOGF_CRIT, "pthread_create G2Accept");
+	if(pthread_create(&main_threads[THREAD_HANDLER], &server.settings.t_def_attr, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
+	{
+		logg_errno(LOGF_CRIT, "pthread_create G2Handler");
 		clean_up_m();
 		return EXIT_FAILURE;
 	}
 
-	if(pthread_create(&main_threads[THREAD_HANDLER], &server.settings.t_def_attr, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
-	{
-		logg_errno(LOGF_CRIT, "pthread_create G2Handler");
+	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][IN])) {
+		logg_errno(LOGF_CRIT, "pthread_create gup");
 		/*
 		 * Critical Moment: we could not run further for normal
 		 * shutdown, but when clean_up'ed now->undefined behaivor
 		 */
 		return EXIT_FAILURE;
 	}
+
 
 	if(pthread_create(&main_threads[THREAD_UDP], &server.settings.t_def_attr, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN])) {
 		logg_errno(LOGF_CRIT, "pthread_create G2UDP");
@@ -198,7 +199,7 @@ int main(int argc, char **args)
 	/* threads startet */
 
 	/* send the pipe between Acceptor and Handler */
-	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_ACCEPTOR][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0)) {
+	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_GUP][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0)) {
 		logg_errno(LOGF_CRIT, "sending IPC Pipe");
 		server_running = false;
 	}
@@ -336,8 +337,8 @@ int main(int argc, char **args)
 	}
 	
 	/* collect the threads */
-	pthread_join(main_threads[THREAD_ACCEPTOR], NULL);
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
+	pthread_join(main_threads[THREAD_GUP], NULL);
 	pthread_join(main_threads[THREAD_UDP], NULL);
 	/* Join THREAD_TIMER??? Hmmm, there was a reason... */
 

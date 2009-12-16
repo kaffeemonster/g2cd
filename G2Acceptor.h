@@ -2,7 +2,7 @@
  * G2Acceptor.h
  * header-file for G2Acceptor.c
  *
- * Copyright (c) 2004, Jan Seiffert
+ * Copyright (c) 2004-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,6 +26,11 @@
 #ifndef G2ACCEPTOR_H
 # define G2ACCEPTOR_H
 
+# include "lib/other.h"
+# include "gup.h"
+# include "lib/my_epoll.h"
+# include "lib/sec_buffer.h"
+
 # define BACKLOG 12
 
 # ifndef _G2ACCEPTOR_C
@@ -34,7 +39,11 @@
 #  define _G2ACC_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _G2ACCEPTOR_C */
 
-_G2ACC_EXTRN(void *G2Accept(void *));
+_G2ACC_EXTRN(bool init_accept(int));
+_G2ACC_EXTRN(void clean_up_accept(void));
+_G2ACC_EXTRN(bool handle_accept_abnorm(struct simple_gup *, struct epoll_event *, int));
+_G2ACC_EXTRN(bool handle_accept_in(struct simple_gup *, void *, int)); /* put a g2_connection_t in for void * */
+_G2ACC_EXTRN(void handle_con_a(struct epoll_event *, struct norm_buff *[2], int, int));
 
 #endif /* G2ACCEPTOR_H */
 /* EOF */

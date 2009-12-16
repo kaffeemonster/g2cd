@@ -97,7 +97,7 @@ static void udp_deinit(void) GCC_ATTR_DESTRUCT;
 static void udp_init(void)
 {
 	if(pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free))
-		diedie("couln't create TLS key for logging");
+		diedie("couln't create TLS key for local UDP send buffer");
 }
 
 static void udp_deinit(void)

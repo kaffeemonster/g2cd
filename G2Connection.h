@@ -69,6 +69,7 @@ enum g2_connection_encodings
 # include "G2QHT.h"
 # include "version.h"
 # include "timeout.h"
+# include "gup.h"
 # include "lib/sec_buffer.h"
 # include "lib/combo_addr.h"
 # include "lib/log_facility.h"
@@ -78,6 +79,7 @@ enum g2_connection_encodings
 
 typedef struct g2_connection
 {
+	enum guppies     gup; /* keep this first */
 	struct hzp_free  hzp;
 	struct hlist_node registry;
 	struct list_head hub_list;

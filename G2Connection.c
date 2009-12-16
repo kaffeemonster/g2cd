@@ -224,6 +224,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	 * reinitialise stuff
 	 */
 	/* networking */
+	work_entry->gup = GUP_G2CONNEC_HANDSHAKE;
 	work_entry->com_socket = -1;
 
 	/* Internal States */
