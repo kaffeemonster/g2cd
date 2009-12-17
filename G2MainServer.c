@@ -187,11 +187,6 @@ int main(int argc, char **args)
 	}
 
 
-	if(pthread_create(&main_threads[THREAD_UDP], &server.settings.t_def_attr, (void *(*)(void *))&G2UDP, (void *)&sock_com[THREAD_UDP][IN])) {
-		logg_errno(LOGF_CRIT, "pthread_create G2UDP");
-		server_running = false;
-	}
-
 	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
 		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
 		server_running = false;
@@ -339,7 +334,6 @@ int main(int argc, char **args)
 	/* collect the threads */
 	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_GUP], NULL);
-	pthread_join(main_threads[THREAD_UDP], NULL);
 	/* Join THREAD_TIMER??? Hmmm, there was a reason... */
 
 	/*

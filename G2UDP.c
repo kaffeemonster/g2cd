@@ -48,9 +48,11 @@
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
 #include "G2UDP.h"
+#include "gup.h"
 #include "G2MainServer.h"
 #include "G2PacketSerializer.h"
 #include "lib/atomic.h"
+#include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
@@ -66,11 +68,9 @@
 
 /* internal prototypes */
 static inline ssize_t udp_sock_send(struct norm_buff *, const union combo_addr *, int);
-static inline void handle_udp_sock(struct pollfd *, struct norm_buff *, union combo_addr *, union combo_addr *);
-static noinline void handle_udp_packet(struct norm_buff *, union combo_addr *, union combo_addr *, int);
-//static inline bool init_memory();
+static inline bool handle_udp_sock(struct epoll_event *, struct norm_buff *, union combo_addr *, union combo_addr *, int);
+static noinline bool handle_udp_packet(struct norm_buff *, union combo_addr *, union combo_addr *, int);
 static inline bool init_con_u(int *, union combo_addr *);
-static inline void clean_up_u(int, struct pollfd[2]);
 
 #define G2UDP_FD_SUM 3
 
@@ -78,14 +78,7 @@ static inline void clean_up_u(int, struct pollfd[2]);
 static int out_file;
 static int udp_outfd_ipv4;
 static int udp_outfd_ipv6;
-static struct pollfd poll_me[G2UDP_FD_SUM];
-static struct worker_sync {
-	pthread_mutex_t lock;
-	pthread_cond_t cond;
-	volatile bool wait;
-	volatile bool keep_going;
-} worker;
-
+static struct simple_gup udp_sos[2];
 
 #ifndef HAVE___THREAD
 static pthread_key_t key2udp_lsb;
@@ -143,198 +136,97 @@ static struct norm_buff *udp_get_lsbuf(void)
 	return ret_buf;
 }
 
-static void *G2UDP_loop(void *param)
+void handle_udp(struct epoll_event *ev,struct norm_buff *d_hold,  int epoll_fd)
 {
-	struct norm_buff d_hold = { .pos = 0, .limit = NORM_BUFF_CAPACITY, .capacity = NORM_BUFF_CAPACITY, .data = {0}};
 	/* other variables */
+	struct simple_gup *sg = ev->data.ptr;
 	union combo_addr from, to;
-	int answer_fd = -1;
 
-	/* make our hzp ready */
-	hzp_alloc();
-
-	my_snprintf(d_hold.data, d_hold.limit, OUR_PROC " UDP %ti", (intptr_t)param);
-	g2_set_thread_name(d_hold.data);
-
-	while(worker.keep_going)
-	{
-		bool repoll;
-		/*
-		 * let only one thread at a time poll and recieve a packet
-		 *
-		 * We could keep them out with a simple lock, but to avoid
-		 * a "thundering herd" Problem, when the reciever leaves the
-		 * section, we put them on a conditional (in the hope,
-		 * cond_signal to wake one is implemented sensible...)
-		 */
-		pthread_mutex_lock(&worker.lock);
-		while(worker.wait)
-			pthread_cond_wait(&worker.cond, &worker.lock);
-		worker.wait = worker.keep_going ? true : false;
-		pthread_mutex_unlock(&worker.lock);
-		if(!worker.keep_going) {
-			pthread_cond_broadcast(&worker.cond);
-			break;
-		}
-
-		do
-		{
-			int num_poll = poll(poll_me, G2UDP_FD_SUM, 9000);
-			repoll = false;
-			switch(num_poll)
-			{
-			default:
-				if(poll_me[0].revents)
-				{
-// TODO: Check for a proper stop-sequence ??
-					/*
-					 * everything but 'ready for write' means:
-					 * we're finished...
-					 */
-					if(poll_me[0].revents & ~POLLOUT)
-						worker.keep_going = false;
-					/* mask out any write interrest */
-					poll_me[0].events &= ~POLLOUT;
-					if(!--num_poll)
-						break;
-				}
-				if(poll_me[1].revents) {
-					handle_udp_sock(&poll_me[1], &d_hold, &from, &to);
-					answer_fd = poll_me[1].fd;
-					if(!--num_poll)
-						break;
-				} else if(poll_me[2].revents) {
-					answer_fd = poll_me[2].fd;
-					handle_udp_sock(&poll_me[2], &d_hold, &from, &to);
-					if(!--num_poll)
-						break;
-				}
-				logg_pos(LOGF_ERR, "too much in poll\n");
-				worker.keep_going = false;
-				break;
-			/* Something bad happened */
-			case -1:
-				if(EINTR != errno)
-				{
-					/* Print what happened */
-					logg_errno(LOGF_ERR, "poll");
-					/* and get out here (at the moment) */
-					worker.keep_going = false;
-					break;
-				}
-			/* Nothing happened (or just the Timeout) */
-			case 0:
-				repoll = true;
-				break;
-			}
-		} while(repoll);
-
-		pthread_mutex_lock(&worker.lock);
-		worker.wait = false;
-		pthread_cond_signal(&worker.cond);
-		pthread_mutex_unlock(&worker.lock);
-		if(!worker.keep_going)
-			break;
-
-		buffer_flip(d_hold);
-		/* if we reach here, we know that there is at least no error or the logik above failed... */
-		handle_udp_packet(&d_hold, &from, &to, answer_fd);
-		buffer_clear(d_hold);
+	buffer_clear(*d_hold);
+	if(!handle_udp_sock(ev, d_hold, &from, &to, sg->fd)) {
+		/* bad things */ ;
+// TODO: handle bad things
+	}
+	/*
+	 * We have extracted the data from the UDP socket, now work on it
+	 * but first we return the UDP socket back into epoll, so other
+	 * threads can receive the next packet.
+	 */
+	ev->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sg->fd, ev)) {
+		logg_errno(LOGF_ERR, "reactivating udp-socket in epoll");
+// TODO: handle bad things
 	}
 
-	/* clean up our hzp */
-	hzp_free();
-
-	if(param)
-		pthread_exit(NULL);
-	/* only the creator thread should get out here */
-	return NULL;
+	buffer_flip(*d_hold);
+	/* if we reach here, we know that there is at least no error or the logic above failed... */
+	handle_udp_packet(d_hold, &from, &to, sg->fd);
 }
 
-void *G2UDP(void *param)
+bool init_udp(int epoll_fd)
 {
-	static pthread_t *helper;
-// TODO: get number of helper threads
-	size_t num_helper = 1, i;
+	char tmp_nam[sizeof("./G2UDPincomming.bin") + 12];
+	bool ipv4_ready;
+	bool ipv6_ready;
 
-	poll_me[0].fd = *((int *)param);
-	logg(LOGF_INFO, "UDP:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", poll_me[0].fd, *(((int *)param)-1));
+	udp_outfd_ipv4 = udp_sos[0].fd = -1;
+	udp_outfd_ipv6 = udp_sos[1].fd = -1;
+	/* Setting up the UDP Socket */
+	ipv4_ready = server.settings.bind.use_ip4 ? init_con_u(&udp_sos[0].fd, &server.settings.bind.ip4) : false;
+	ipv6_ready = server.settings.bind.use_ip6 ? init_con_u(&udp_sos[1].fd, &server.settings.bind.ip6) : false;
+	udp_outfd_ipv4 = udp_sos[0].fd;
+	udp_outfd_ipv6 = udp_sos[1].fd;
+	udp_sos[0].gup = GUP_UDP;
+	udp_sos[1].gup = GUP_UDP;
 
-	helper = malloc(num_helper*sizeof(*helper));
-	if(!helper) {
-		logg_errno(LOGF_CRIT, "No mem for UDP helper threads, will run with one");
-		num_helper = 0;
+	if(server.settings.bind.use_ip4 && !ipv4_ready) {
+		clean_up_udp();
+		return false;
 	}
-	/* Setup locks */
-	if(pthread_mutex_init(&worker.lock, NULL))
-		goto out_lock;
-	if(pthread_cond_init(&worker.cond, NULL))
-		goto out_cond;
+	if(server.settings.bind.use_ip6 && !ipv6_ready)
 	{
-		char tmp_nam[sizeof("./G2UDPincomming.bin") + 12];
-		bool ipv4_ready;
-		bool ipv6_ready;
-
-		poll_me[2].fd = poll_me[1].fd = -1;
-		/* Setting up the UDP Socket */
-		ipv4_ready = server.settings.bind.use_ip4 ? init_con_u(&poll_me[1].fd, &server.settings.bind.ip4) : false;
-		ipv6_ready = server.settings.bind.use_ip6 ? init_con_u(&poll_me[2].fd, &server.settings.bind.ip6) : false;
-		udp_outfd_ipv4 = poll_me[1].fd;
-		udp_outfd_ipv6 = poll_me[2].fd;
-	
-		if(server.settings.bind.use_ip4 && !ipv4_ready)
-			goto out;
-		if(server.settings.bind.use_ip6 && !ipv6_ready)
+		if(ipv4_ready)
+			logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
+		else {
+			clean_up_udp();
+			return false;
+		}
+	}
+	if(udp_sos[0].fd > -1)
+	{
+		struct epoll_event tmp_ev;
+		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+		tmp_ev.data.u64 = 0;
+		tmp_ev.data.ptr = &udp_sos[0];
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_sos[0].fd, &tmp_ev))
 		{
-			if(ipv4_ready)
-				logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
-			else
-				goto out;
-		}
-
-		my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2UDPincomming%lu.bin", (unsigned long)getpid());
-		if(0 > (out_file = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR))) {
-			logg_errno(LOGF_ERR, "opening UDP-file");
-			goto out;
+			logg_errno(LOGF_ERR, "adding udp-socket to epoll");
+			clean_up_udp();
+			return false;
 		}
 	}
-	
-	/* Setting first entry to be polled, our UDPsocket */
-	poll_me[0].events = POLLIN;
-	poll_me[1].events = POLLIN | POLLERR;
-
-	worker.keep_going = true;
-	for(i = 0; i < num_helper; i++)
+	if(udp_sos[1].fd > -1)
 	{
-		if(pthread_create(&helper[i], &server.settings.t_def_attr, G2UDP_loop, (void *)(i + 1))) {
-			logg_errnod(LOGF_WARN, "starting UDP helper threads, will run with %zu", i);
-			num_helper = i;
-			break;
-		}
-	}
-	/* we become one of them, only the special one which cleans up */
-	/* we are up and running */
-	server.status.all_abord[THREAD_UDP] = true;
-	G2UDP_loop(NULL);
-
-	for(i = 0; i < num_helper; i++)
-	{
-		if(pthread_join(helper[i], NULL)) {
-			logg_errno(LOGF_WARN, "taking down UDP helper threads");
-			break;
+		struct epoll_event tmp_ev;
+		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+		tmp_ev.data.u64 = 0;
+		tmp_ev.data.ptr = &udp_sos[1];
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_sos[1].fd, &tmp_ev))
+		{
+			logg_errno(LOGF_ERR, "adding udp-socket to epoll");
+			clean_up_udp();
+			return false;
 		}
 	}
 
-out:
-	pthread_cond_destroy(&worker.cond);
-out_cond:
-	pthread_mutex_destroy(&worker.lock);
-out_lock:
-	clean_up_u(poll_me[0].fd, &poll_me[1]);
-	free(helper);
-	pthread_exit(NULL);
-	/* to avoid warning about reaching end of non-void function */
-	return NULL;
+	my_snprintf(tmp_nam, sizeof(tmp_nam), "./G2UDPincomming%lu.bin", (unsigned long)getpid());
+	if(0 > (out_file = open(tmp_nam, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR))) {
+		logg_errno(LOGF_ERR, "opening UDP-file");
+		clean_up_udp();
+		return false;
+	}
+
+	return true;
 }
 
 static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t part, uint8_t count)
@@ -398,7 +290,7 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		logg_devel("encode not finished!\n");
 }
 
-static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to, int answer_fd)
+static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to, int answer_fd)
 {
 	gnd_packet_t tmp_packet;
 	g2_packet_t g_packet;
@@ -408,17 +300,17 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	uint8_t tmp_byte;
 
 	if(!buffer_remaining(*d_hold))
-		return;
+		return true;
 
 	/* is it long enough to be a GNutella Datagram? */
 	if(UDP_RELIABLE_LENGTH > buffer_remaining(*d_hold)) {
 		logg_devel("really short packet recieved\n");
-		return;
+		return true;
 	}
 
 	/* is it a GND? */
 	if('G' != *buffer_start(*d_hold) || 'N' != *(buffer_start(*d_hold)+1) || 'D' != *(buffer_start(*d_hold)+2))
-		return;
+		return true;
 	d_hold->pos += 3;
 
 	/* get the flags */
@@ -432,7 +324,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	 */
 	if(tmp_byte & FLAG_CRITICAL) {
 		logg_develd("packet with other critical flags: 0x%02X\n", tmp_byte);
-		return;
+		return true;
 	}
 	tmp_packet.flags.deflate = (tmp_byte & FLAG_DEFLATE) ? true : false;
 	tmp_packet.flags.ack_me = (tmp_byte & FLAG_ACK) ? true : false;
@@ -490,7 +382,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 					"EOF reached!",
 					errno,
 					out_file);
-				worker.keep_going = false;
+				return false;
 			}
 			else
 				logg_devel("Nothing to write!\n");
@@ -500,7 +392,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 			//putchar('+');
 			//p_entry->events &= ~POLLIN;
 		}
-		return;
+		return true;
 	case -1:
 		if(EAGAIN != errno)
 		{
@@ -508,9 +400,9 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 				"write",
 				errno,
 				out_file);
-			worker.keep_going = false;
+			return false;
 		}
-		return;
+		return true;
 	}
 	}
 /************ DEBUG *****************/
@@ -518,7 +410,7 @@ static void handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	if(!tmp_packet.count) {
 // TODO: Do an appropriate action on a recived ACK
 		logg_devel("ACK recived!\n");
-		return;
+		return true;
 	}
 
 // TODO: Handle multipart UDP packets
@@ -586,7 +478,7 @@ out:
 		udp_sock_send(d_hold, from, answer_fd);
 	}
 
-	return;
+	return true;
 }
 
 void g2_udp_send(const union combo_addr *to, struct list_head *answer)
@@ -653,7 +545,7 @@ static inline ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_
 			if(EAGAIN != errno) {
 				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
 				         "error writing?!", errno, fd, to);
-				worker.keep_going = false;
+				return -1;
 			} else
 				logg_devel("Nothing to write!\n");
 		}
@@ -667,31 +559,25 @@ static inline ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_
 		if(EAGAIN != errno) {
 			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i",
 			            "sendto:", errno, fd);
-			worker.keep_going = false;
+			return -1;
 		}
 		break;
 	}
 	return result;
 }
 
-static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to)
+static inline bool handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to, int from_fd)
 {
 	ssize_t result;
 
-	if(udp_poll->revents & ~(POLLIN|POLLOUT))
-	{
-		/* If our udp sock is not ready reading or writing -> fus */
-		worker.keep_going = false;
+	if(udp_poll->events & ~(POLLIN|POLLOUT)) {
+		/* If our udp sock is not ready reading or writing -> fuzz */
 		logg_pos(LOGF_ERR, "udp_so NVAL|ERR|HUP\n");
-		return;
+		return false;
 	}
 
-	/* stop this write interrest */
-	if(udp_poll->revents &   POLLOUT)
-	   udp_poll->events  &= ~POLLOUT;
-
-	if(!(udp_poll->revents & POLLIN))
-		return;
+	if(!(udp_poll->events & POLLIN))
+		return true;
 
 	do
 	{
@@ -700,7 +586,7 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 /* ssize_t  recvfromto(int s, void *buf, size_t len, int flags,
  *                     struct sockaddr *from, socklen_t *fromlen
  *                     struct sockaddr *to, socklen_t *tolen); */
-		result = recvfromto(udp_poll->fd, buffer_start(*d_hold), buffer_remaining(*d_hold),
+		result = recvfromto(from_fd, buffer_start(*d_hold), buffer_remaining(*d_hold),
 		                    0, casa(from), &from_len, casa(to), &to_len);
 	} while(-1 == result && EINTR == errno);
 
@@ -715,8 +601,8 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 		{
 			if(EAGAIN != errno) {
 				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
-				          "error reading?!", errno, udp_poll->fd, from);
-				worker.keep_going = false;
+				          "error reading?!", errno, from_fd, from);
+				return false;
 			} else
 				logg_devel("Nothing to read!\n");
 		}
@@ -729,11 +615,12 @@ static inline void handle_udp_sock(struct pollfd *udp_poll, struct norm_buff *d_
 	case -1:
 		if(EAGAIN != errno) {
 			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i",
-			            "recvfrom:", errno, udp_poll->fd);
-			worker.keep_going = false;
+			            "recvfrom:", errno, from_fd);
+			return false;
 		}
 		break;
 	}
+	return true;
 }
 
 #define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
@@ -782,20 +669,14 @@ out_err:
 	return false;
 }
 
-static inline void clean_up_u(int who_to_say, struct pollfd udp_so[2])
+void clean_up_udp(void)
 {
-	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
-		diedie("initiating stop"); // hate doing this, but now it's to late
-	logg_pos(LOGF_NOTICE, "should go down\n");
-
-	if(0 <= udp_so[0].fd)
-		close(udp_so[0].fd);
-	if(0 <= udp_so[1].fd)
-		close(udp_so[1].fd);
+	if(0 <= udp_sos[0].fd)
+		close(udp_sos[0].fd);
+	if(0 <= udp_sos[1].fd)
+		close(udp_sos[1].fd);
 	if(0 <= out_file)
 		close(out_file);
-
-	server.status.all_abord[THREAD_UDP] = false;
 }
 
 /*@unsused@*/

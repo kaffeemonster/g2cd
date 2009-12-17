@@ -249,6 +249,8 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	}
 
 retry:
+	while(read(poll_pipe_fd, some_buf, sizeof(some_buf)) == sizeof(some_buf))
+		/* empty poll wake pipe beforehand */;
 	keep_going = 0;
 	wptr = events;
 	/* acquire a reference on the data array */

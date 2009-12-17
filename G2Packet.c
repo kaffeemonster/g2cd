@@ -1788,7 +1788,7 @@ static bool handle_PI_UDP(struct ptype_action_args *parg)
 {
 	struct PI_data *rdata = parg->opaque;
 
-	logg_packet(STDSF, "/PI/UDP\n");
+	logg_packet(STDSF, "/PI/UDP");
 	if(unlikely(!skip_unexpected_child(parg->source, "/PI/UDP")))
 		return false;
 
@@ -1801,7 +1801,7 @@ static bool handle_PI_RELAY(struct ptype_action_args *parg)
 {
 	struct PI_data *rdata = parg->opaque;
 
-	logg_packet(STDSF, "/PI/RELAY\n");
+	logg_packet(STDSF, "/PI/RELAY");
 	rdata->relay = true;
 	return false;
 }

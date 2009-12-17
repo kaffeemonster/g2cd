@@ -49,6 +49,7 @@
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2Acceptor.h"
+#include "G2UDP.h"
 #include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
 #include "lib/recv_buff.h"
@@ -214,6 +215,21 @@ static void *gup_loop(void *param)
 			if(ev.events & ~((uint32_t)EPOLLIN|EPOLLONESHOT))
 				kg = handle_accept_abnorm(&guppie->s_gup, &ev, worker.epollfd);
 			break;
+		case GUP_UDP:
+			{
+				struct norm_buff *t_buff;
+				t_buff = lbuff[0] ? lbuff[0] : (lbuff[1] ? lbuff[1] : NULL);
+				if(!t_buff)
+				{
+					if(!(lbuff[0] = t_buff = recv_buff_local_get())) {
+						logg_errno(LOGF_ERR, "no recv buff!!");
+						kg = false;
+						break;
+					}
+				}
+				handle_udp(&ev, t_buff, worker.epollfd);
+			}
+			break;
 		case GUP_ABORT:
 			kg = handle_abort(&guppie->s_gup, &ev);
 			break;
@@ -285,6 +301,8 @@ void *gup(void *param)
 
 	if(!init_accept(worker.epollfd))
 		goto out_no_accept;
+	if(!init_udp(worker.epollfd))
+		goto out_no_udp;
 
 	worker.keep_going = true;
 	for(i = 0; i < num_helper; i++)
@@ -309,6 +327,8 @@ void *gup(void *param)
 		}
 	}
 
+	clean_up_udp();
+out_no_udp:
 	clean_up_accept();
 out_no_accept:
 	clean_up_gup(from_main.fd);

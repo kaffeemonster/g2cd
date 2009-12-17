@@ -208,18 +208,19 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	do {
 		tmp_fd = accept(sg->fd, casa(&work_entry->remote_host), &sin_size);
 	} while(0 > tmp_fd && EINTR == errno);
-	if(-1 == tmp_fd) {
-		logg_errno(LOGF_NOTICE, "accepting");
-		return false;
-	}
-	work_entry->com_socket = tmp_fd;
 
 	tmp_eevent.data.u64 = 0;
 	tmp_eevent.data.ptr = sg;
 	tmp_eevent.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sg->fd, &tmp_eevent))
 		logg_errno(LOGF_NOTICE, "resetting accept-fd in EPoll to default-interrests");
-	/* if we couldn't rearm our accept fd, we are screwed... */
+		/* if we couldn't rearm our accept fd, we are screwed... */
+
+	if(-1 == tmp_fd) {
+		logg_errno(LOGF_NOTICE, "accepting");
+		return false;
+	}
+	work_entry->com_socket = tmp_fd;
 
 	/* increase and check if our total server connection limit is reached */
 	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum) {

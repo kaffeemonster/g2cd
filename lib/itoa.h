@@ -2,7 +2,7 @@
  * itoa.h
  * number print helper
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,6 +34,7 @@
 # define SIGNED_KERNEL(buff, wptr, n) \
 	if(n < 0) \
 		*buff++ = '-'; \
+	n = n < 0 ? -n : n; \
 	wptr = buff; \
 	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n)
 
@@ -47,6 +48,7 @@
 		rem--; \
 	} \
 	if(likely(rem)) { \
+		n = n < 0 ? -n : n; \
 		wptr = buff; \
 		do { *wptr++ = (n % 10) + '0'; n /= 10; } while(--rem && n); \
 	} else \
