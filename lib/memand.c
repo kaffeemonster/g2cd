@@ -93,6 +93,8 @@
 # elif defined(__sparc) || defined(__sparc__)
 	/* works for both */
 #  include "sparc/memand.c"
+# elif defined(__arm__)
+#  include "arm/memand.c"
 # else
 #  include "generic/memand.c"
 # endif

@@ -43,6 +43,8 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/strnpcpy.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/strnpcpy.c"
 # else
 #  include "generic/strnpcpy.c"
 # endif

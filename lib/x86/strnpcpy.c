@@ -314,7 +314,7 @@ CPY_NEXT:
 			"sub	$8, %0\n\t"
 			"add	$8, %1\n\t"
 			"movq	%%mm1, (%2)\n\t"
-			"add	$8, %1\n\t"
+			"add	$8, %2\n\t"
 			"cmp	$7, %0\n\t"
 			"jbe	2f\n"
 			"1:\n\t"

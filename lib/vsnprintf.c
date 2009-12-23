@@ -539,6 +539,20 @@ static void mul10(struct big_num *x)
 		*p = k, x->l = l+1;
 }
 
+#if 0
+static void mul16(struct big_num *x)
+{
+	int i, l;
+	big_digit *p, k;
+
+	l = x->l;
+	for(i = l, p = &x->d[0], k = 0; i >= 0; i--)
+		SLL_BIG(*p, 4, *p++, k);
+	if(k != 0)
+		*p = k, x->l = l+1;
+}
+#endif
+
 static void big_short_mul(const struct big_num *x, big_digit y, struct big_num *z)
 {
 	int i, xl, zl;
@@ -1060,8 +1074,8 @@ out_of_fp:
 //	putchar('\n');
 	return end_format(buf, fmt, spec);
 }
-#undef ADD_CHAR_TO_BUF
 #undef OUTDIG
+#undef ADD_CHAR_TO_BUF
 
 static noinline const char *fp_finish(char *buf, const char *fmt, struct format_spec *spec)
 {

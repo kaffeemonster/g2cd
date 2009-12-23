@@ -27,11 +27,11 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 {
 	if(UNALIGNED_OK)
 	{
-		uint16_t *dst_w = (uint16_t *)dst;
+		uint16_t *dst_w = (uint16_t *)dst, t16;
 		const uint16_t *src_w = (const uint16_t *)src;
-		uint32_t *dst_dw = (uint32_t *)dst;
+		uint32_t *dst_dw = (uint32_t *)dst, t32;
 		const uint32_t *src_dw = (const uint32_t *)src;
-		uint64_t *dst_qw = (uint64_t *)dst;
+		uint64_t *dst_qw = (uint64_t *)dst, t64;
 		const uint64_t *src_qw = (const uint64_t *)src;
 
 		switch(i)
@@ -39,40 +39,47 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 		case 15:
 			dst[14] = src[14];
 		case 14:
-			dst_w[6] = src_w[6];
+			t16 = get_unaligned(&src_w[6]);
+			put_unaligned(t16, &dst_w[6]);
 			goto C12;
 		case 13:
 			dst[12] = src[12];
 		case 12:
 C12:
-			dst_dw[2] = src_dw[2];
+			t32 = get_unaligned(&src_dw[2]);
+			put_unaligned(t32, &dst_dw[2]);
 			goto C8;
 		case 11:
 			dst[10] = src[10];
 		case 10:
-			dst_w[4] = src_w[4];
+			t16 = get_unaligned(&src_w[4]);
+			put_unaligned(t16, &dst_w[4]);
 			goto C8;
 		case  9:
 			dst[8] = src[8];
 		case  8:
 C8:
-			dst_qw[0] = src_qw[0];
+			t64 = get_unaligned(&src_qw[0]);
+			put_unaligned(t64, &dst_qw[0]);
 			break;
 		case  7:
 			dst[6] = src[6];
 		case  6:
-			dst_w[2] = src_w[2];
+			t16 = get_unaligned(&src_w[2]);
+			put_unaligned(t16, &dst_w[2]);
 			goto C4;
 		case  5:
 			dst[4] = src[4];
 		case  4:
 C4:
-			dst_dw[0] = src_dw[0];
+			t32 = get_unaligned(&src_dw[0]);
+			put_unaligned(t32, &dst_dw[0]);
 			break;
 		case  3:
 			dst[2] = src[2];
 		case  2:
-			dst_w[0] = src_w[0];
+			t16 = get_unaligned(&src_w[0]);
+			put_unaligned(t16, &dst_w[0]);
 			break;
 		case  1:
 			dst[0] = src[0];
@@ -93,11 +100,11 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest_o(char *dst, const char *src, unsigned
 {
 	if(UNALIGNED_OK)
 	{
-		uint16_t *dst_w = (uint16_t *)dst;
+		uint16_t *dst_w = (uint16_t *)dst, t16;
 		const uint16_t *src_w = (const uint16_t *)src;
-		uint32_t *dst_dw = (uint32_t *)dst;
+		uint32_t *dst_dw = (uint32_t *)dst, t32;
 		const uint32_t *src_dw = (const uint32_t *)src;
-		uint64_t *dst_qw = (uint64_t *)dst;
+		uint64_t *dst_qw = (uint64_t *)dst, t64;
 		const uint64_t *src_qw = (const uint64_t *)src;
 
 		switch(i)
@@ -105,40 +112,47 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest_o(char *dst, const char *src, unsigned
 		case 15:
 			dst[14] = src[14];
 		case 14:
-			dst_w[6] = src_w[6];
+			t16 = get_unaligned(&src_w[6]);
+			put_unaligned(t16, &dst_w[6]);
 			goto C12;
 		case 13:
 			dst[12] = src[12];
 		case 12:
 C12:
-			dst_dw[2] = src_dw[2];
+			t32 = get_unaligned(&src_dw[2]);
+			put_unaligned(t32, &dst_dw[2]);
 			goto C8;
 		case 11:
 			dst[10] = src[10];
 		case 10:
-			dst_w[4] = src_w[4];
+			t16 = get_unaligned(&src_w[4]);
+			put_unaligned(t16, &dst_w[4]);
 			goto C8;
 		case  9:
 			dst[8] = src[8];
 		case  8:
 C8:
-			dst_qw[0] = src_qw[0];
+			t64 = get_unaligned(&src_qw[0]);
+			put_unaligned(t64, &dst_qw[0]);
 			break;
 		case  7:
 			dst[6] = src[6];
 		case  6:
-			dst_w[2] = src_w[2];
+			t16 = get_unaligned(&src_w[2]);
+			put_unaligned(t16, &dst_w[2]);
 			goto C4;
 		case  5:
 			dst[4] = src[4];
 		case  4:
 C4:
-			dst_dw[0] = src_dw[0];
+			t32 = get_unaligned(&src_dw[0]);
+			put_unaligned(t32, &dst_dw[0]);
 			break;
 		case  3:
 			dst[2] = src[2];
 		case  2:
-			dst_w[0] = src_w[0];
+			t16 = get_unaligned(&src_w[0]);
+			put_unaligned(t16, &dst_w[0]);
 			break;
 		case  1:
 			dst[0] = src[0];

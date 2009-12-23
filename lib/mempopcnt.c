@@ -55,6 +55,8 @@
 #  include "ppc/mempopcnt.c"
 # elif defined(__alpha__)
 #  include "alpha/mempopcnt.c"
+# elif defined(__arm__)
+#  include "arm/mempopcnt.c"
 # else
 #  include "generic/mempopcnt.c"
 # endif

@@ -25,6 +25,8 @@
 #  include "x86/adler32.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/adler32.c"
+# elif defined(__arm__)
+#  include "arm/adler32.c"
 # else
 #  include "generic/adler32.c"
 # endif

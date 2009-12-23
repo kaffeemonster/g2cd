@@ -152,7 +152,7 @@ size_t mempopcnt(const void *s, size_t len)
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
 	p = (unsigned char *)ALIGN_DOWN(s, SOVUC);
-	shift = ALIGN_DOWN_DIFF(s, SOVUC) * BITS_PER_CHAR;
+	shift = ALIGN_DOWN_DIFF(s, SOVUC);
 	c = vec_ldl(0, (const vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v_0, v_perm);
@@ -172,7 +172,7 @@ size_t mempopcnt(const void *s, size_t len)
 			for(; r; r--, p += SOVUC * 2) {
 				c      = vec_ldl(0, (const vector unsigned char *)p);
 				v_sumb = vec_add(v_sumb, vec_popcnt(c));
-				c      = vec_ldl(0, (const vector unsigned char *)(p + SOVUC));
+				c      = vec_ldl(SOVUC, (const vector unsigned char *)p);
 				v_sumb = vec_add(v_sumb, vec_popcnt(c));
 			}
 			v_sum = vec_sum4s(v_sumb, v_sum);

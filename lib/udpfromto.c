@@ -63,6 +63,10 @@
 # endif
 #endif
 
+#ifndef SOL_IPV6
+# define SOL_IPV6 IPPROTO_IPV6
+#endif
+
 #if !defined(CMSG_LEN) || !defined(CMSG_SPACE)
 # define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int)) & ~sizeof(int))
 # ifndef CMSG_LEN
@@ -71,6 +75,10 @@
 # ifndef CMSG_SPACE
 #  define CMSG_SPACE(len) (__CMSG_ALIGN(sizeof(struct cmsghdr)) + __CMSG_ALIGN(len))
 # endif
+#endif
+
+#ifdef HAVE_IP_PKTINFO
+static int v6pktinfo;
 #endif
 
 int udpfromto_init(int s, int fam)
@@ -82,8 +90,22 @@ int udpfromto_init(int s, int fam)
 	/* Set the IP_PKTINFO option (Linux). */
 	if(AF_INET == fam)
 		err = setsockopt(s, SOL_IP, IP_PKTINFO, &opt, sizeof(opt));
-	else
+	else {
+		/* looks like they changed the name/ABI/API 3 times? */
+# ifdef IPV6_RECVPKTINFO
+		v6pktinfo = IPV6_RECVPKTINFO;
 		err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
+#  ifdef IPV6_2292PKTINFO
+		if(-1 == err && ENOPROTOOPT == errno) {
+			if(-1 != (err = setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
+				v6pktinfo = IPV6_2292PKTINFO;
+		}
+#  endif
+# else
+		v6pktinfo = IPV6_PKTINFO;
+		err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, &opt, sizeof(opt));
+# endif
+	}
 #elif defined(HAVE_IP_RECVDSTADDR)
 	/*
 	 * Set the IP_RECVDSTADDR option (BSD).
@@ -165,8 +187,8 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			*tolen = sizeof(*toi);
 			break;
 		}
-		if(SOL_IPV6         == cmsg->cmsg_level &&
-		   IPV6_RECVPKTINFO == cmsg->cmsg_type)
+		if(SOL_IPV6  == cmsg->cmsg_level &&
+		   v6pktinfo == cmsg->cmsg_type)
 		{
 			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
 			struct in6_pktinfo *ipv6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
@@ -257,6 +279,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 		struct in6_pktinfo *pi6_ptr;
 
 		cmsg->cmsg_level = SOL_IPV6;
+// TODO: also set to v6pktinfo?
 		cmsg->cmsg_type  = IPV6_PKTINFO;
 		cmsg->cmsg_len   = CMSG_LEN(sizeof(*pi6_ptr));
 		pi6_ptr          = (struct in6_pktinfo *)CMSG_DATA(cmsg);

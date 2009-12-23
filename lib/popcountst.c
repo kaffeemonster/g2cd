@@ -51,6 +51,8 @@
 #  include "ppc/popcountst.c"
 # elif defined(__alpha__)
 #  include "alpha/popcountst.c"
+# elif defined(__arm__)
+#  include "arm/popcountst.c"
 # else
 #  include "generic/popcountst.c"
 # endif

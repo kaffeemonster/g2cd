@@ -167,7 +167,9 @@ ARCH = athlon64-sse3
 ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)
 # mtune on newer gcc
-#ARCH_FLAGS += -mtune=$(ARCH)
+ARCH_FLAGS += -mtune=$(ARCH)
+# testest
+#ARCH_FLAGS += -mfpu=neon -mfloat-abi=softfp
 # 64 Bit?
 #ARCH_FLAGS += -m64
 # x86

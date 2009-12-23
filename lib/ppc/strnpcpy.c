@@ -30,87 +30,95 @@
 
 char *strnpcpy(char *dst, const char *src, size_t maxlen)
 {
-	size_t i = 0, cycles;
+	vector unsigned char v0, vff, c, v_perm, low, high, mask, t;
+	size_t i, s_diff, d_diff, r, u;
+	const unsigned char *s;
+	unsigned char *d;
 
 	prefetch(src);
 	prefetchw(dst);
-	prefetch((char *)cpy_rest);
 	if(unlikely(!src || !dst || !maxlen))
 		return dst;
 
-	i = ALIGN_DIFF(src, 4096);
-	i = i ? i : 4096;
-	i = i < maxlen ? i : maxlen;
-CPY_NEXT:
-	/* align dst for vector ops */
-	for(cycles = ALIGN_DIFF(dst, SO32); cycles && i && *src; cycles--, i--, maxlen--)
-		*dst++ = *src++;
-	if(!*src)
-		goto OUT;
-	for(cycles = ALIGN_DIFF(dst, SOVUC) / SOVUC;
-	    cycles && likely(SO32M1 < i); src += SO32, dst += SO32, maxlen -= SO32 i -= SO32, cycles--)
+	  d = (unsigned char *)dst;
+	  s = (const unsigned char *)src;
+	 v0 = vec_splat_u8(0);
+	vff = (vector unsigned char)vec_splat_s8(-1);
+
+	     c = vec_ldl(0, s);
+	   low = vec_ldl(0, d);
+	s_diff = ALIGN_DOWN_DIFF(src, SOVUC);
+	     i = s_diff + maxlen >= SOVUC ? 0 : SOVUC - s_diff - maxlen;
+
+	v_perm = vec_lvsl(0, s);
+	     c = vec_perm(c, vff, v_perm);
+	v_perm = vec_lvsr(i, s);
+	     c = vec_perm(vff, c, v_perm);
+	v_perm = vec_identl(i);
+	     c = vec_perm(c, vff, v_perm);
+
+	d_diff = ALIGN_DOWN_DIFF(d, SOVUC);
+	v_perm = vec_lvsr(0, d);
+	mask = vec_perm(v0, vff, v_perm);
+	   t = vec_perm(c, c, v_perm);
+	 low = vec_sel(low, t, mask);
+	high = vec_sel(t, v0, mask);
+	   r = vec_any_eq(c, v0);
+	if(r || i)
+		goto OUT_STORE;
+
+	vec_stl(low, 0, d);
+	     s += SOVUC - s_diff;
+	     d += SOVUC - s_diff;
+	maxlen -= SOVUC - s_diff;
+
+	v_perm = vec_lvsr(0, d);
+	d_diff = ALIGN_DOWN_DIFF(d, SOVUC);
+	d = (unsigned char *)ALIGN_DOWN(d, SOVUC);
+	mask = vec_perm(v0, vff, v_perm);
+
+	do
 	{
-		uint32_t c = *(const uint32_t *)src;
-		uint32_t r = has_nul_byte32(c);
-		if(likely(r)) {
-			asm ("cntlzw	%0, %1" : "=r" (r) : "0" (r));
-			return cpy_rest0(dst, src, r / 8);
-		}
-		*(uint32_t *)dst = c;
+		low  = high;
+		  c  = high = vec_ldl(0, s);
+		  s += SOVUC;
+		high = vec_perm(high, high, v_perm);
+		 low = vec_sel(low, high, mask);
+		   r = vec_any_eq(c , v0);
+		if(r)
+			break;
+		if(maxlen < SOVUC)
+			break;
+		maxlen -= SOVUC;
+		vec_stl(low, 0, d);
+		d += SOVUC;
+	} while(1);
+
+OUT_STORE:
+	if(!r) /* did we hit maxlen? */
+		u = maxlen - 1;
+	else {
+		r = vec_pmovmskb(vec_cmpeq(c, v0)); /* get mask && transfer */
+		u = __builtin_clz(r) - 16; /* get index */
+		r = 1;
 	}
 
-	if(i > (SOVUC * 2))
+	if(u >= d_diff)
 	{
-		vector unsigned char fix_alignment;
-		vector unsigned char v0;
-		vector unsigned char c, c_ex;
-
-		v0 = vec_splat_u8(0);
-		fix_alignment = vec_align(src);
-		c_ex = vec_ldl(0, (vector const unsigned char *)src);
-		for(cycles = i; likely(SOVUC < i); i -= SOVUC, src += SOVUC, dst += SOVUC) {
-			c = c_ex;
-			c_ex = vec_ldl(1 * SOVUC, (vector unsigned char *)src);
-			c = vec_perm(c, c_ex, fix_alignment);
-			if(vec_any_eq(c, v0)) /* zero byte? */
-			{
-				vector bool char vr;
-				uint32_t r;
-
-				vr = vec_cmpeq(vec_perm(c, v0, vec_ident_rev()), v0); /* get mask */
-				r = vec_pbmovmask(vr); /* transfer */
-				asm ("cntlzw	%0, %1" : "=r" (r) : "0" (r));
-				return cpy_rest0(dst, src, r - 16); /* get index */
-			}
-			vec_st(c, 0, (vector unsigned char *)dst);
-		}
-		maxlen -= (cycles - i);
+		vec_stl(low, 0, d);
+		   d += SOVUC;
+		 low  = high;
+		high  = v0;
+		   u -= d_diff;
+		if(!u)
+			return (char *)d - r;
 	}
-	/* approch page boundery */
-	for(; likely(SO32M1 < i); src += SO32, dst += SO32, maxlen -= SO32 i -= SO32)
-	{
-		uint32_t c = *(const uint32_t *)src;
-		uint32_t r = has_nul_byte32(c);
-		if(likely(r)) {
-			asm ("cntlzw	%0, %1" : "=r" (r) : "0" (r));
-			return cpy_rest0(dst, src, r / 8);
-		}
-		*(uint32_t *)dst = c;
-	}
-	/* slowly go over the page boundry */
-	for(; i && *src; i--, maxlen--)
-		*dst++ = *src++;
-
-	/* now src is aligned, life is good... */
-	if(likely(*src) && likely(maxlen)) {
-		i = 4096 < maxlen ? 4096 : maxlen;
-		/* since only src is aligned, simply continue with unaligned copy */
-		goto CPY_NEXT;
-	}
-OUT:
-	if(likely(maxlen))
-		*dst = '\0';
-	return dst;
+	high = vec_ldl(0, d);
+	   c = vec_splat(vec_identl(u), 0);
+	mask = (vector unsigned char)vec_cmpgt(c, vec_identl(0));
+	 low = vec_sel(low, high, mask);
+	vec_stl(low, 0, d);
+	return (char *)d + u - r;
 }
 
 static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";

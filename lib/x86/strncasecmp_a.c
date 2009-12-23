@@ -82,6 +82,8 @@ LOOP_AGAIN:
 	j = ALIGN_DIFF(s2, 4096);
 	j = j ? j : i;
 	i = i < j ? i : j;
+	if(unlikely(i < 16))
+		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
 
@@ -134,7 +136,7 @@ LOOP_AGAIN:
 	  /*  */ "1" (s2),
 	  /*  */ "2" (i)
 	);
-	cycles = ((cycles - i) / 16) * 16;
+	cycles = ROUND_TO(cycles - i, 16);
 	if(likely(m1 < 16)) {
 		if(cycles >= n)
 			cycles -= 16;
@@ -153,7 +155,8 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-	for(; i; i--, n--)
+BYTE_WISE:
+	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
 		c2 = (unsigned) *s2++;
@@ -191,14 +194,14 @@ LOOP_AGAIN:
 	j = ALIGN_DIFF(s2, 4096);
 	j = j ? j : i;
 	i = i < j ? i : j;
+	if(unlikely(i < 16))
+		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
 
 	cycles = i;
 	asm (
 		"xor	%3, %3\n\t"
-		"cmp	$16, %2\n\t"
-		"jb	3f\n\t"
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"movdqa	%5, %%xmm3\n\t"
 		"movdqa	%6, %%xmm4\n\t"
@@ -256,7 +259,7 @@ LOOP_AGAIN:
 	  /*  */ "1" (s2),
 	  /*  */ "2" (i)
 	);
-	cycles = ((cycles - i) / 16) * 16;
+	cycles = ROUND_TO(cycles - i, 16);
 	if(likely(m1)) {
 		if(cycles >= n)
 			cycles -= 16;
@@ -276,7 +279,8 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-	for(; i; i--, n--)
+BYTE_WISE:
+	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
 		c2 = (unsigned) *s2++;
@@ -311,16 +315,17 @@ LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
 	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
+	// check i & j against n?
 	j = j ? j : i;
 	i = i < j ? i : j;
+	if(unlikely(i < 8))
+		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 8);
 	i = i < j ? i : j;
 
 	cycles = i;
 	asm (
 		"xor	%3, %3\n\t"
-		"cmp	$8, %2\n\t"
-		"jb	3f\n\t"
 		"pxor	%%mm0, %%mm0\n\t"
 		"movq	%5, %%mm3\n\t"
 		"movq	%6, %%mm4\n\t"
@@ -330,7 +335,7 @@ LOOP_AGAIN:
 		"add	$8, %0\n\t"
 		"add	$8, %1\n"
 		"cmp	$8, %2\n\t"
-		"jbe	3f\n\t"
+		"jb	3f\n\t"
 		"2:\n\t"
 		"sub	$8, %2\n\t"
 		/* s1 */
@@ -378,7 +383,7 @@ LOOP_AGAIN:
 	  /*  */ "1" (s2),
 	  /*  */ "2" (i)
 	);
-	cycles = ((cycles - i) / 8) * 8;
+	cycles = ROUND_TO(cycles - i, 8);
 	if(likely(m1)) {
 		if(cycles >= n)
 			cycles -= 8;
@@ -398,7 +403,8 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-	for(; i; i--, n--)
+BYTE_WISE:
+	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
 		c2 = (unsigned) *s2++;
@@ -460,14 +466,14 @@ LOOP_AGAIN:
 			r1 = nul_byte_index(m1);
 			r2 = nul_byte_index(m2);
 			r1 = r1 < r2 ? r1 : r2;
-			cycles = (((cycles - i)) / SOST) * SOST;
+			cycles = ROUND_TO(cycles - i, SOST);
 			n -= cycles;
 			r1 = r1 < n - 1 ? r1 : n - 1;
 			r1 = r1 * BITS_PER_CHAR;
 			return (int)((w1 >> r1) & 0xFF) - (int)((w2 >> r1) & 0xFF);
 		}
 	}
-	cycles = ((cycles - i) / SOST) * SOST;
+	cycles = ROUND_TO(cycles - i, SOST);
 	if(cycles >= n)
 		return 0;
 	n -= cycles;
@@ -479,7 +485,7 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-	for(; i; i--, n--)
+	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
 		c2 = (unsigned) *s2++;

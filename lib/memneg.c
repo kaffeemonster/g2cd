@@ -55,6 +55,8 @@
 # elif defined(__sparc__) || defined(__sparc__)
 	/* works for both */
 #  include "sparc/memneg.c"
+# elif defined(__arm__)
+#  include "arm/memneg.c"
 # else
 #  include "generic/memneg.c"
 # endif

@@ -75,8 +75,13 @@ LOOP_AGAIN:
 LOOP_SOST:
 	for(cycles = i; likely(SOSTM1 < i); i -= SOST)
 	{
-		w1   = *(const size_t *)s1;
-		w2   = *(const size_t *)s2;
+		if(UNALIGNED_OK) {
+			w1 = get_unaligned((const size_t *)s1);
+			w2 = get_unaligned((const size_t *)s2);
+		} else {
+			w1 = *(const size_t *)s1;
+			w2 = *(const size_t *)s2;
+		}
 		s1  += SOST;
 		s2  += SOST;
 		m1   = has_between(w1, 0x60, 0x7B);
@@ -95,16 +100,16 @@ LOOP_SOST:
 			r1 = nul_byte_index(m1);
 			r2 = nul_byte_index(m2);
 			r1 = r1 < r2 ? r1 : r2;
-			cycles = (((cycles - i)) / SOST) * SOST;
+			cycles = ROUND_TO(cycles - i, SOST);
 			n -= cycles;
 			r1 = r1 < n - 1 ? r1 : n - 1;
 			if(HOST_IS_BIGENDIAN)
 				r1 = SOSTM1 - r1;
-			r1 = r1 * BITS_PER_CHAR;
+			r1 *= BITS_PER_CHAR;
 			return (int)((w1 >> r1) & 0xFF) - (int)((w2 >> r1) & 0xFF);
 		}
 	}
-	cycles = ((cycles - i) / SOST) * SOST;
+	cycles = ROUND_TO(cycles - i, SOST);
 	if(cycles >= n)
 		return 0;
 	n -= cycles;
@@ -137,9 +142,7 @@ SINGLE_BYTE:
 		else
 		{
 			i = n;
-			j = (((intptr_t)s1) & ((SOST * 2) - 1)) ^
-			    (((intptr_t)s2) & ((SOST * 2) - 1));
-			if(SOSTM1 & j)
+			if(ALIGN_DOWN_DIFF(s1, SOST) ^ ALIGN_DOWN_DIFF(s2, SOST))
 				goto SINGLE_BYTE;
 			else
 				goto LOOP_SOST;

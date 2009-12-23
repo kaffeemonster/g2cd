@@ -29,7 +29,7 @@
 /* can we have dyn arrays? */
 #define HAVE_C99
 /*
- * Is __thread keyword for thread local storage available?
+ * Is the __thread keyword for thread local storage available?
  * __thread should be cheaper since direct CPU-instructions
  * get generated (for example addressing over the %gs segment
  * selector on x86: movl %gs:-4, %eax) instead of a call
@@ -122,10 +122,22 @@
 #define WANT_BACKTRACES
 
 /*
- * Is unaligned access on this machine ok
- * If this is wrongly set, you may find a SIGBUS
+ * Is unaligned access on this machine ok.
+ * OK here is a little bit complicated. Your machine should be
+ * able to access unaligned memory possitions with "good" speed.
+ * Either native, or with a special instruction, doesn't matter.
+ *
+ * But PLEASE make sure to not set it if:
+ * - unaligned access is emulated by a exception handler
+ * - there is "special" unaligned handling, but it is still
+ *   complicated (ex.: Alpha, ARM, etc.)
+ * Or it will kill performance, because this turns a profitable
+ * optimisation into the exact oposite.
+ *
+ * Setting this totally wrong may lead to SIGBUS
  */
 #define UNALIGNED_OK 1
+
 /*
  * Does your arch has bit foo instructions?
  * We sometimes need to find the index of a bit. This can be
@@ -156,7 +168,7 @@
  * This way you miss new "real" atomic instr. and can do
  * 64 bit arith. just fine. If only the program knew...
  * So here is a switch, only kill it if you are certain
- * you have an real old Sparc.
+ * you have a real old Sparc.
  */
 #define HAVE_REAL_V9
 /*
@@ -180,12 +192,12 @@
  * how many bytes must be avail to switch away
  * from byte wise working
  */
-#define SYSTEM_MIN_BYTES_WORK 128
+#define SYSTEM_MIN_BYTES_WORK 64
 
 /* not needed anymore, simply hang it of sizeof(type) */
 /*
  * It is always a bad thing[tm] to fiddle around with the
- * System-dependend allingment, but sometimes...
+ * System-dependend alingment, but sometimes...
  * Meaning of all this:
  * We normaly let the Compiler do the dirty Stuff, it would be
  * insane to fiddle around with it. Also we are normaly

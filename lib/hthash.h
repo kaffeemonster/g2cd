@@ -21,7 +21,9 @@
  * today on x86 hardware >= P4/Athlon, but not so beefy/old hardware
  * one may want to use another hashing sheme, like jhash
  */
+// TODO: provide non mul hash
 # include "other.h"
+# include "my_bitopsm.h"
 
 /*
  * 'MRATIO' and 'MSHIFT' are mixing constants generated offline.
@@ -31,6 +33,21 @@
 # define MRATIO 0x5BD1E995
 # define MMHASH_MIX(h, k)	{ k *= MRATIO; k ^= k >> MSHIFT; k *= MRATIO; h *= MRATIO; h ^= k; }
 # define MMHASH_FINAL(h)	{ h ^= h >> 13; h *= MRATIO; h ^= h >> 15; }
+
+static inline uint32_t __hthash32_u(const uint32_t *key, size_t len, uint32_t seed)
+{
+	/* Initialise hash */
+	uint32_t h = seed ^ len * 4;
+	size_t i;
+
+	/* Mix 4 bytes at a time into the hash */
+	for(i = 0; i < len; i++) {
+		uint32_t k = get_unaligned(&key[i]);
+		MMHASH_MIX(h, k);
+	}
+
+	return h;
+}
 
 static inline uint32_t __hthash32(const uint32_t *key, size_t len, uint32_t seed)
 {
@@ -62,80 +79,80 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 {
 	const unsigned char *data = key;
 	uint32_t h;
-	unsigned align = (uintptr_t)key & 3;
+	unsigned align = ALIGN_DOWN_DIFF(key, SO32);
 
-	if(UNALIGNED_OK || !align || len < 4)
+	if(!align || UNALIGNED_OK)
 	{
-		h = __hthash32(key, len / 4, seed);
-		data = &data[len & ~((size_t)3)];
-		/* handle remainder */
-		switch(len % 4)
+		if(len >= SO32)
 		{
-		case 3: h ^= data[2] << 16;
-		case 2: h ^= data[1] << 8;
-		case 1: h ^= data[0];
-		        h *= MRATIO;
+			if(align)
+				h = __hthash32_u(key, len / SO32, seed);
+			else
+				h = __hthash32(key, len / SO32, seed);
+			data = &data[len & ~SO32M1];
+			len %= SO32;
+		}
+		if(len)
+		{
+			uint32_t t = get_unaligned((const uint32_t *)data);
+			if(HOST_IS_BIGENDIAN)
+				t >>= len * BITS_PER_CHAR;
+			else {
+				t <<= len * BITS_PER_CHAR;
+				t >>= len * BITS_PER_CHAR;
+			}
+			h ^= t;
+			h *= MRATIO;
 		}
 	}
 	else
 	{
+		const uint32_t *dt_32;
 		uint32_t t = 0, d = 0;
 		int32_t sl, sr;
 		h = seed ^ len;
 
-		switch(align)
-		{
-		case 1: t |= data[2] << 16;
-		case 2: t |= data[1] << 8;
-		case 3: t |= data[0];
-		}
-		t <<= (8 * align);
-
-		data += 4 - align;
-		len -= 4 - align;
-		sl = 8 * (4 - align);
-		sr = 8 * align;
-
-		for(; len >= 4; t = d, len -= 4, data += 4) {
-			d = *(const uint32_t *)data;
-			t = (t >> sr) | (d << sl);
+		dt_32 = (const uint32_t *)ALIGN_DOWN(data, SO32);
+		t     = *dt_32++;
+		len  -= SO32 - align;
+		sl    = BITS_PER_CHAR * (SO32 - align);
+		sr    = BITS_PER_CHAR * align;
+		for(; len >= SO32; t = d, len -= SO32, dt_32++) {
+			d = *dt_32;
+			if(HOST_IS_BIGENDIAN)
+				t = (t << sr) | (d >> sl);
+			else
+				t = (t >> sr) | (d << sl);
 			MMHASH_MIX(h, t);
 		}
 
-		d = 0;
+		d = *dt_32++;
+		if(HOST_IS_BIGENDIAN)
+			t = (t << sr) | (d >> sl);
+		else
+			t = (t >> sr) | (d << sl);
+
 		if(len >= align)
 		{
-			switch(len)
-			{
-			case 3: d |= data[2] << 16;
-			case 2: d |= data[1] << 8;
-			case 1: d |= data[0];
-			}
-			t = (t >> sr) | (d << sl);
-
 			MMHASH_MIX(h, t);
-
-			data += align;
-			len -= align;
-			/* handle remainder */
-			switch(len)
+			len  -= align;
+			if(len) /* shifting out everything is not supported on all plattforms */
 			{
-			case 3: h ^= data[2] << 16;
-			case 2: h ^= data[1] << 8;
-			case 1: h ^= data[0];
-			        h *= MRATIO;
+				t = d;
+				sl = (SO32 * BITS_PER_CHAR) - sl;
+				if(HOST_IS_BIGENDIAN) {
+					t <<=  sl;
+					t >>= (len * BITS_PER_CHAR) + sl;
+				} else {
+					t <<=  len * BITS_PER_CHAR;
+					t >>= (len * BITS_PER_CHAR) + sl;
+				}
 			}
 		}
-		else
+		if(len)
 		{
-			switch(len)
-			{
-			case 3: d |= data[2] << 16;
-			case 2: d |= data[1] << 8;
-			case 1: d |= data[0];
-			case 0: h ^= (t >> sr) | (d << sl);
-			        h *= MRATIO;
-			}
+			h ^= t;
+			h *= MRATIO;
 		}
 	}
 

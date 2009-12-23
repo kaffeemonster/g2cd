@@ -210,20 +210,28 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			);
 #else
 			f_row = 0;
-			if(s_len >= sizeof(uint32_t))
+			if(s_len >= SO32)
 			{
-				if(!UNALIGNED_OK)
+				size_t shift = SO32 - ALIGN_DOWN_DIFF(data, SO32);
+				const uint32_t *dt_32 = (const uint32_t *)ALIGN_DOWN(data, SO32);
+				uint32_t x;
+
+				x = *dt_32++;
+				if(HOST_IS_BIGENDIAN)
+					x |= 0xFFFFFFFFU << shift * BITS_PER_CHAR;
+				else
+					x |= 0xFFFFFFFFU >> shift * BITS_PER_CHAR;
+				if(likely(0xFFFFFFFFU == x))
 				{
-					size_t t = ALIGN_DIFF(data, sizeof(uint32_t));
-					for(s_len -= t; t; t--, data++, f_row++) {
-						if(unlikely(0xFF != *data))
+					s_len -= shift;
+					f_row += shift;
+
+					for(; likely(s_len >= SO32); s_len -= SO32,
+					    dt_32++, f_row += SO32) {
+						if(unlikely(0xFFFFFFFF != *dt_32))
 							break;
 					}
-				}
-				for(; likely(s_len >= sizeof(uint32_t)); s_len -= sizeof(uint32_t),
-				    data += sizeof(uint32_t), f_row += sizeof(uint32_t)) {
-					if(unlikely(0xFFFFFFFF != *(const uint32_t *)data))
-						break;
+					data = (const uint8_t *)dt_32;
 				}
 			}
 			for(; s_len; s_len--, data++, f_row++) {
@@ -246,42 +254,34 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 					s_len = 1;
 					break;
 				}
-				if(UNALIGNED_OK)
+				switch(cnt)
 				{
-					switch(cnt)
-					{
-					case 1:
-						*r_wptr++ = f_row;
-						t_len--;
-						break;
-					case 2:
-						*(uint16_t *)r_wptr = f_row;
-						r_wptr += sizeof(uint16_t);
-						t_len -= sizeof(uint16_t);
-						break;
-					case 3:
-						if(HOST_IS_BIGENDIAN) {
-							*r_wptr++ = (f_row >> (2 * BITS_PER_CHAR)) & 0xFF;
-							*(uint16_t *)r_wptr = f_row & 0xFFFF;
-						} else {
-							*r_wptr++ = f_row & 0xFF;
-							*(uint16_t *)r_wptr = (f_row >> BITS_PER_CHAR) & 0xFFFF;
-						}
-						r_wptr += sizeof(uint16_t);
-						t_len -= sizeof(uint16_t) + sizeof(uint8_t);
-						break;
-					case 4:
-						*(uint32_t *)r_wptr = f_row;
-						r_wptr += sizeof(uint32_t);
-						t_len -= sizeof(uint32_t);
-						break;
-					default:
-						goto write_out_manual;
+				case 1:
+					*r_wptr++ = f_row;
+					t_len--;
+					break;
+				case 2:
+					put_unaligned(f_row, (uint16_t *)r_wptr);
+					r_wptr += sizeof(uint16_t);
+					t_len  -= sizeof(uint16_t);
+					break;
+				case 3:
+					if(HOST_IS_BIGENDIAN) {
+						*r_wptr++ = (f_row >> (2 * BITS_PER_CHAR)) & 0xFF;
+						put_unaligned(f_row & 0xFFFF, (uint16_t *)(r_wptr));
+					} else {
+						*r_wptr++ = f_row & 0xFF;
+						put_unaligned((f_row >> BITS_PER_CHAR) & 0xFFFF, (uint16_t *)r_wptr);
 					}
-				}
-				else
-				{
-write_out_manual:
+					r_wptr += sizeof(uint16_t);
+					t_len  -= sizeof(uint16_t) + sizeof(uint8_t);
+					break;
+				case 4:
+					put_unaligned(f_row, (uint32_t *)r_wptr);
+					r_wptr += SO32;
+					t_len  -= SO32;
+					break;
+				default:
 					if(HOST_IS_BIGENDIAN) { /* write big endian data */
 						unsigned i = cnt - 1;
 						for(; t_len && cnt; t_len--, cnt--, i--)
@@ -349,7 +349,7 @@ write_out_manual:
 		}
 #else
 		/* align to 2 */
-		if(!UNALIGNED_OK && (((uintptr_t)data) & 1) && *data != 0xFF) {
+		if(!IS_ALIGN(data, sizeof(uint16_t))) {
 			o_row++;
 			data++;
 			s_len--;
@@ -450,42 +450,33 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		data++;
 		if(cnt > s_len)
 			break;
-		if(UNALIGNED_OK )
+		switch(cnt)
 		{
-			switch(cnt)
-			{
-			case 1:
-				cnt = *data++;
-				s_len--;
-				break;
-			case 2:
-				cnt    = *(const uint16_t *)data;
-				data  += sizeof(uint16_t);
-				s_len -= sizeof(uint16_t);
-				break;
-			case 3:
-				if(HOST_IS_BIGENDIAN) {
-					cnt  = ((size_t)(*data++)) << (2 * BITS_PER_CHAR);
-					cnt |= *(const uint16_t *)data;
-				} else {
-					cnt  = *data++;
-					cnt |= ((size_t)(*(const uint16_t *)data)) << BITS_PER_CHAR;
-				}
-				data  += sizeof(uint16_t);
-				s_len -= sizeof(uint16_t) + sizeof(uint8_t);
-				break;
-			case 4:
-				cnt    = *(const uint32_t *)data;
-				data  += sizeof(uint32_t);
-				s_len -= sizeof(uint32_t);
-				break;
-			default:
-				goto read_in_manual;
-			}
-		}
-		else
-		{
-read_in_manual:
+		case 1:
+			cnt = *data++;
+			s_len--;
+			break;
+		case 2:
+			cnt = get_unaligned((const uint16_t *)data);
+			data  += sizeof(uint16_t);
+			s_len -= sizeof(uint16_t);
+			break;
+		case 3:
+			cnt = get_unaligned((const uint16_t *)(data + 1));
+			if(HOST_IS_BIGENDIAN)
+				cnt |= ((size_t)(data[0])) << (2 * BITS_PER_CHAR);
+			else
+				cnt = (cnt << BITS_PER_CHAR) | data[0];
+			break;
+			data  += sizeof(uint16_t) + sizeof(uint8_t);
+			s_len -= sizeof(uint16_t) + sizeof(uint8_t);
+			break;
+		case 4:
+			cnt = get_unaligned((const uint32_t *)data);
+			data  += SO32;
+			s_len -= SO32;
+			break;
+		default:
 			t = cnt;
 			if(HOST_IS_BIGENDIAN) {
 				for(cnt = 0; likely(s_len) && likely(t); data++, s_len--, t--) {
@@ -508,8 +499,8 @@ write_out_ff:
 			: /* %0 */ "=c" (t),
 			  /* %1 */ "=D" (r_wptr)
 			: /* %2 */ "a" (0xFFFFFFFF),
-			  /* %3 */ "rm" (cnt / sizeof(uint32_t)),
-			  /* %4 */ "0" (cnt % sizeof(uint32_t)),
+			  /* %3 */ "rm" (cnt / SO32),
+			  /* %4 */ "0" (cnt % SO32),
 			  /* %5 */ "1" (r_wptr)
 		);
 #else
@@ -609,36 +600,26 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 			t = c & ~0xF0;
 			if(t >= rem_len)
 				break; /* somethings fishy here... */
-			if(UNALIGNED_OK )
-			{
-				switch(t)
-				{
-				case 1:
-					cnt = dwptr[1];
-					break;
-				case 2:
-					cnt    = *(const uint16_t *)(dwptr + 1);
-					break;
-				case 3:
-					if(HOST_IS_BIGENDIAN) {
-						cnt  = ((size_t)(dwptr[1])) << (2 * BITS_PER_CHAR);
-						cnt |= *(const uint16_t *)(data + 2);
-					} else {
-						cnt  = dwptr[1];
-						cnt |= ((size_t)(*(const uint16_t *)(dwptr + 2))) << BITS_PER_CHAR;
-					}
-					break;
-				case 4:
-					cnt    = *(const uint32_t *)(dwptr + 1);
-					break;
-				default:
-					goto read_in_manual;
-				}
-			}
-			else
+			switch(t)
 			{
 				unsigned j;
-read_in_manual:
+			case 1:
+				cnt = dwptr[1];
+				break;
+			case 2:
+				cnt = get_unaligned((const uint16_t *)(dwptr + 1));
+				break;
+			case 3:
+				cnt = get_unaligned((const uint16_t *)(dwptr + 2));
+				if(HOST_IS_BIGENDIAN)
+					cnt |= ((size_t)(dwptr[1])) << (2 * BITS_PER_CHAR);
+				else
+					cnt = (cnt << BITS_PER_CHAR) | dwptr[1];
+				break;
+			case 4:
+				cnt = get_unaligned((const uint32_t *)(dwptr + 1));
+				break;
+			default:
 				if(HOST_IS_BIGENDIAN) {
 					for(cnt = 0, j = 0; likely(j < t); j++) {
 						cnt <<= BITS_PER_CHAR;
@@ -646,7 +627,7 @@ read_in_manual:
 					}
 				} else {
 					for(cnt = 0, j = 0; likely(j < t); j++)
-						cnt |= ((size_t)data[1 + j]) << (j * BITS_PER_CHAR);
+						cnt |= ((size_t)dwptr[1 + j]) << (j * BITS_PER_CHAR);
 				}
 			}
 

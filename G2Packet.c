@@ -473,7 +473,7 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 	/* We Assume network byte order for the IP */
 	if(6 == rem) {
 		target->s_fam = AF_INET;
-		get_unaligned(target->in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
+		target->in.sin_addr.s_addr = get_unaligned((uint32_t *)buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
 	} else {
 		target->s_fam = AF_INET6;
@@ -482,7 +482,7 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 	}
 
 	/* load port and fix it for those, who sent it the wrong way round */
-	get_unaligned(tmp_port, (uint16_t *) buffer_start(source->data_trunk));
+	tmp_port = get_unaligned((uint16_t *)buffer_start(source->data_trunk));
 	if(!source->big_endian)
 		tmp_port = (tmp_port >> 8) | (tmp_port << 8);
 	combo_addr_set_port(target, tmp_port);
@@ -507,7 +507,7 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 	/* We Assume network byte order for the IP */
 	if(4 == rem) {
 		target->s_fam = AF_INET;
-		get_unaligned(target->in.sin_addr.s_addr, (uint32_t *) buffer_start(source->data_trunk));
+		target->in.sin_addr.s_addr = get_unaligned((uint32_t *) buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
 	} else {
 		target->s_fam = AF_INET6;
@@ -2278,29 +2278,31 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	      (((uint32_t)(b)) << 16) | \
 	      (((uint32_t)(c)) <<  8) | \
 	      (((uint32_t)(d)) <<  0))
+#define MAKE_TEST(a, b, c, d, t) \
+	(((MAKE_TYPE(a, b, c, d) | t) == t) && ((MAKE_TYPE(a, b, c, d) & t) == MAKE_TYPE(a, b, c, d)))
 
-		get_unaligned(type, (uint32_t *)urn);
+		type = get_unaligned((uint32_t *)urn);
 		if(HOST_IS_BIGENDIAN)
 			type &= (uint32_t)0xFFFFFFFF << ((4 - len) * 8);
 		else
 			type &= (uint32_t)0xFFFFFFFF >> ((4 - len) * 8);
 
-		if(MAKE_TYPE('s', 'h', 'a', '1') == type && 20 == remaining)
+		if(MAKE_TEST('s', 'h', 'a', '1', type) && 20 == remaining)
 			g2_qht_search_add_sha1(hash);
-		else if(MAKE_TYPE('b', 'p',  0,   0 ) == type && 44 == remaining)
+		else if(MAKE_TEST('b', 'p',  0 ,  0 , type) && 44 == remaining)
 		{
 handle_bitprint:
 			g2_qht_search_add_sha1(hash);
 			hash += 20;
 			g2_qht_search_add_ttr(hash);
 		}
-		else if(MAKE_TYPE('t', 't', 'r',  0 ) == type && 24 == remaining)
+		else if(MAKE_TEST('t', 't', 'r',  0 , type) && 24 == remaining)
 			g2_qht_search_add_ttr(hash);
-		else if(MAKE_TYPE('e', 'd', '2', 'k') == type && 16 == remaining)
+		else if(MAKE_TEST('e', 'd', '2', 'k', type) && 16 == remaining)
 			g2_qht_search_add_ed2k(hash);
-		else if(MAKE_TYPE('b', 't', 'i', 'h') == type && 20 == remaining)
+		else if(MAKE_TEST('b', 't', 'i', 'h', type) && 20 == remaining)
 			g2_qht_search_add_bth(hash);
-		else if(MAKE_TYPE('m', 'd', '5',  0 ) == type && 16 == remaining)
+		else if(MAKE_TEST('m', 'd', '5',  0 , type) && 16 == remaining)
 			g2_qht_search_add_md5(hash);
 #undef MAKE_TYPE
 	}

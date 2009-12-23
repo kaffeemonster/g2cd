@@ -334,7 +334,7 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	 * fortunately byte-sex doesn't matter, the
 	 * numbers must only be different or same
 	 */
-	get_unaligned(tmp_packet.sequence, ((uint16_t *)buffer_start(*d_hold)));
+	tmp_packet.sequence = get_unaligned((uint16_t *)buffer_start(*d_hold));
 	d_hold->pos += 2;
 
 	/* part */

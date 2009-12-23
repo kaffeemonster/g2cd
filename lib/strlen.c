@@ -2,7 +2,7 @@
  * strlen.c
  * strlen just for fun
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *

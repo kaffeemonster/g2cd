@@ -47,8 +47,9 @@ void *memneg(void *dst, const void *src, size_t len)
 		for(; i; i--)
 			*dst_char++ = ~(*src_char++);
 		/* ... and check the outcome */
-		i = (((intptr_t)dst_char) & ((SOST * 2) - 1)) ^
-		    (((intptr_t)src_char) & ((SOST * 2) - 1));
+		i = ALIGN_DOWN_DIFF(dst_char, SOST * 2) ^ ALIGN_DOWN_DIFF(src_char, SOST * 2);
+		if(!(i & SOSTM1))
+			goto alignment_size_t;
 		if(UNALIGNED_OK)
 		{
 			/*
@@ -62,14 +63,9 @@ void *memneg(void *dst, const void *src, size_t len)
 			 * the performance!
 			 * Don't set UNALIGNED_OK on such an architecture.
 			 */
-			goto alignment_size_t;
+			goto unaligned_ok;
 		}
-		else
-		{
-			/* uhoh... */
-			if(!(i & SOSTM1))
-				goto alignment_size_t;
-		}
+		/* uhoh... */
 		goto no_alignment_possible;
 	}
 
@@ -89,6 +85,24 @@ alignment_size_t:
 
 		while(small_len--)
 			*dst_sizet++ = ~(*src_sizet++);
+
+		dst_char = (char *) dst_sizet;
+		src_char = (const char *) src_sizet;
+		goto handle_remaining;
+	}
+unaligned_ok:
+	if(UNALIGNED_OK)
+	{
+		register size_t *dst_sizet = (size_t *)dst_char;
+		register const size_t *src_sizet = (const size_t *)src_char;
+		register size_t small_len = len / SOST, c;
+		len %= SOST;
+
+		while(small_len--) {
+			c = get_unaligned(src_sizet);
+			src_sizet++;
+			*dst_sizet++ = ~c;
+		}
 
 		dst_char = (char *) dst_sizet;
 		src_char = (const char *) src_sizet;
@@ -127,13 +141,10 @@ no_alignment_possible:
 			c = c_ex;
 			c_ex = *src_sizet++;
 
-			if(HOST_IS_BIGENDIAN) {
-				c <<= shift1;
-				c  |= c_ex >> shift2;
-			} else {
-				c >>= shift1;
-				c  |= c_ex << shift2;
-			}
+			if(HOST_IS_BIGENDIAN)
+				c = c << shift1 | c_ex >> shift2;
+			else
+				c = c >> shift1 | c_ex << shift2;
 
 			*dst_sizet++ = ~c;
 		}

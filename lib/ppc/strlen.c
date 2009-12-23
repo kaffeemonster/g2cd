@@ -35,14 +35,14 @@ size_t strlen(const char *s)
 	vector unsigned char v_perm;
 	vector unsigned char c;
 	uint32_t r;
-	char *p;
+	const char *p;
 
 	prefetch(s);
 
 	v0 = vec_splat_u8(0);
 	v1 = vec_splat_u8(1);
 
-	p = (char *)ALIGN_DOWN(s, SOVUC);
+	p = (const char *)ALIGN_DOWN(s, SOVUC);
 	c = vec_ldl(0, (const vector unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);

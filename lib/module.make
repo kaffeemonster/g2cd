@@ -30,6 +30,7 @@ TARED_FILES += \
 TARED_DIRS += \
 	$(MPL) \
 	$(MPL)/generic \
+	$(MPL)/unaligned \
 	$(MPL)/x86 \
 	$(MPL)/mips \
 	$(MPL)/ppc \
@@ -53,6 +54,7 @@ LIBHEADS = \
 	$(MPL)/tchar.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
+	$(MPL)/swab.h \
 	$(MPL)/combo_addr.h \
 	$(MPL)/recv_buff.h \
 	$(MPL)/udpfromto.h \
@@ -60,6 +62,7 @@ LIBHEADS = \
 	$(MPL)/atomic.h \
 	$(MPL)/ansi_prng.h \
 	$(MPL)/aes.h \
+	$(MPL)/byteorder.h \
 	$(MPL)/itoa.h \
 	$(MPL)/rbtree.h \
 	$(MPL)/list.h \
@@ -67,10 +70,34 @@ LIBHEADS = \
 	$(MPL)/hthash.h \
 	$(MPL)/backtrace.h \
 	$(MPL)/alpha/alpha.h \
+	$(MPL)/arm/my_neon.h \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
-	$(MPL)/sparc/sparc_vis.h
+	$(MPL)/sparc/sparc_vis.h \
+	$(MPL)/generic/little_endian.h \
+	$(MPL)/generic/big_endian.h
+
+# unaligned access
+UNALIGNEDSRC = \
+	$(MPL)/alpha/unaligned.h \
+	$(MPL)/arm/unaligned.h \
+	$(MPL)/ia64/unaligned.h \
+	$(MPL)/mips/unaligned.h \
+	$(MPL)/ppc/unaligned.h \
+	$(MPL)/sparc/unaligned.h \
+	$(MPL)/x86/unaligned.h \
+	$(MPL)/generic/unaligned.h \
+	$(MPL)/unaligned/access_ok.h \
+	$(MPL)/unaligned/be_byteshift.h \
+	$(MPL)/unaligned/be_memmove.h \
+	$(MPL)/unaligned/be_struct.h \
+	$(MPL)/unaligned/generic.h \
+	$(MPL)/unaligned/le_byteshift.h \
+	$(MPL)/unaligned/le_memmove.h \
+	$(MPL)/unaligned/le_struct.h \
+	$(MPL)/unaligned/memmove.h \
+	$(MPL)/unaligned/packed_struct.h
 
 # epoll emuls
 EPOLLSRS = \
@@ -105,6 +132,7 @@ FLSSTSRC = \
 	$(MPL)/arm/flsst.c
 POPCOUNTSTSRC = \
 	$(MPL)/generic/popcountst.c \
+	$(MPL)/arm/popcountst.c \
 	$(MPL)/x86/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
 	$(MPL)/sparc/popcountst.c \
@@ -117,18 +145,21 @@ CPY_RESTSRC = \
 	$(MPL)/x86/cpy_rest.c
 MEMXORCPYSRC = \
 	$(MPL)/generic/memxorcpy.c \
+	$(MPL)/arm/memxorcpy.c \
 	$(MPL)/x86/memxorcpy.c \
 	$(MPL)/x86/memxorcpy_tmpl.c \
 	$(MPL)/ppc/memxorcpy.c \
 	$(MPL)/sparc/memxorcpy.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
+	$(MPL)/arm/memand.c \
 	$(MPL)/x86/memand.c \
 	$(MPL)/x86/memand_tmpl.c \
 	$(MPL)/ppc/memand.c \
 	$(MPL)/sparc/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
+	$(MPL)/arm/memneg.c \
 	$(MPL)/x86/memneg.c \
 	$(MPL)/x86/memneg_tmpl.c \
 	$(MPL)/ppc/memneg.c \
@@ -142,6 +173,7 @@ MEMPCPYSRC = \
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
+	$(MPL)/arm/mempopcnt.c \
 	$(MPL)/sparc/mempopcnt.c \
 	$(MPL)/ia64/mempopcnt.c \
 	$(MPL)/ppc/mempopcnt.c \
@@ -183,6 +215,7 @@ TSTRNCMPSRC = \
 	$(MPL)/generic/tstrncmp.c
 ADLER32SRC = \
 	$(MPL)/generic/adler32.c \
+	$(MPL)/arm/adler32.c \
 	$(MPL)/x86/adler32.c \
 	$(MPL)/ppc/adler32.c
 MY_BITOPSSRC = \
@@ -191,6 +224,7 @@ MY_BITOPSSRC = \
 
 LIBASRCS = \
 	$(LIBSRCS) \
+	$(UNALIGNEDSRC) \
 	$(EPOLLSRS) \
 	$(ATOMSRC) \
 	$(AESSRC) \
@@ -408,6 +442,7 @@ $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h
 $(MPL)/combo_addr.h: $(MPL)/other.h $(MPL)/hthash.h
+$(MPL)/unaligned.h: $(UNALIGNEDSRC)
 $(MPL)/x86/memxorcpy.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h
 $(MPL)/x86/memxorcpy.c: $(MPL)/x86/memxorcpy_tmpl.c

@@ -42,9 +42,11 @@ void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
 		for(; i; i--)
 			*dst_char++ = *src_char1++ ^ *src_char2++;
 		/* ... and check the outcome */
-		i =  (((intptr_t)dst_char)  & ((SOST * 2) - 1)) ^
-		    ((((intptr_t)src_char1) & ((SOST * 2) - 1)) |
-		     (((intptr_t)src_char2) & ((SOST * 2) - 1)));
+		i =  ALIGN_DOWN_DIFF(dst_char, SOST * 2) ^
+		    (ALIGN_DOWN_DIFF(src_char1, SOST * 2) |
+		     ALIGN_DOWN_DIFF(src_char2, SOST * 2));
+		if(!(i & SOSTM1))
+			goto alignment_size_t;
 		if(UNALIGNED_OK)
 		{
 			/*
@@ -58,14 +60,9 @@ void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
 			 * the performance!
 			 * Don't set UNALIGNED_OK on such an architecture.
 			 */
-			goto alignment_size_t;
+			goto unaligned_ok;
 		}
-		else
-		{
-			/* uhoh... */
-			if(!(i & SOSTM1))
-				goto alignment_size_t;
-		}
+		/* uhoh... */
 		goto no_alignment_possible;
 	}
 
@@ -92,6 +89,43 @@ alignment_size_t:
 		src_char2 = (const char *) src_sizet2;
 		goto handle_remaining;
 	}
+unaligned_ok:
+	if(UNALIGNED_OK)
+	{
+		register size_t small_len, c1, c2;
+		register size_t *dst_sizet = (size_t *)dst_char;
+		register const size_t *src_sizet2 = (const size_t *)src_char2;
+
+		small_len = len / SOST;
+		if(dst_char == src_char1) /* we are actually called for 2 args... */
+		{
+			len %= SOST;
+
+			while(small_len--) {
+				c1 = get_unaligned(src_sizet2);
+				src_sizet2++;
+				*dst_sizet ^= c1;
+			}
+			src_char1 = (const char *) dst_sizet;
+		}
+		else
+		{
+			register const size_t *src_sizet1 = (const size_t *)src_char1;
+			len %= SOST;
+
+			while(small_len--) {
+				c1 = get_unaligned(src_sizet1);
+				src_sizet1++;
+				c2 = get_unaligned(src_sizet2);
+				src_sizet2++;
+				*dst_sizet = c1 ^ c2;
+			}
+			src_char1 = (const char *) src_sizet1;
+		}
+		dst_char = (char *) dst_sizet;
+		src_char2 = (const char *) src_sizet2;
+		goto handle_remaining;
+	}
 no_alignment_possible:
 	/*
 	 * try to skim the data in place.
@@ -110,13 +144,14 @@ no_alignment_possible:
 	{
 		size_t small_len, cycles;
 		size_t *dst_sizet = (size_t *)dst_char;
+
+		cycles = small_len = (len / SOST) - 1;
 		if(dst_char == src_char1) /* we are actually called for 2 args... */
 		{
 			const size_t *src_sizet;
 			register size_t c, c_ex;
 			register unsigned shift1, shift2;
 
-			cycles = small_len = (len / SOST) - 1;
 			shift1 = (unsigned) ALIGN_DOWN_DIFF(src_char2, SOST);
 			shift2 = SOST - shift1;
 			shift1 *= BITS_PER_CHAR;
@@ -128,13 +163,10 @@ no_alignment_possible:
 				c = c_ex;
 				c_ex = *src_sizet++;
 
-				if(HOST_IS_BIGENDIAN) {
-					c <<= shift1;
-					c  |= c_ex >> shift2;
-				} else {
-					c >>= shift1;
-					c  |= c_ex << shift2;
-				}
+				if(HOST_IS_BIGENDIAN)
+					c = c << shift1 | c_ex >> shift2;
+				else
+					c = c >> shift1 | c_ex << shift2;
 
 				*dst_sizet++ ^= c;
 			}
@@ -145,7 +177,6 @@ no_alignment_possible:
 			register size_t c1, c_ex1, c2, c_ex2;
 			register unsigned shift11, shift12, shift21, shift22;
 
-			cycles = small_len = (len / SOST) - 1;
 			shift11 = (unsigned) ALIGN_DOWN_DIFF(src_char1, SOST);
 			shift12 = SOST - shift11;
 			shift11 *= BITS_PER_CHAR;
@@ -166,15 +197,11 @@ no_alignment_possible:
 				c_ex2 = *src_sizet2++;
 
 				if(HOST_IS_BIGENDIAN) {
-					c1 <<= shift11;
-					c1  |= c_ex1 >> shift12;
-					c2 <<= shift21;
-					c2  |= c_ex2 >> shift22;
+					c1 = c1 << shift11 | c_ex1 >> shift12;
+					c2 = c2 << shift21 | c_ex2 >> shift22;
 				} else {
-					c1 >>= shift11;
-					c1  |= c_ex1 << shift12;
-					c2 >>= shift21;
-					c2  |= c_ex2 << shift22;
+					c1 = c1 >> shift11 | c_ex1 << shift12;
+					c2 = c2 >> shift21 | c_ex2 << shift22;
 				}
 
 				*dst_sizet++ = c1 ^ c2;

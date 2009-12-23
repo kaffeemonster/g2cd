@@ -41,6 +41,8 @@
 # define SIZE_T_BITS	(SOST * CHAR_BIT)
 # define ROUND_ALIGN(x, n) \
 	(((x)+(n) - 1L) & ~((n) - 1L))
+# define ROUND_TO(x , n) \
+	((x) & ~((n) - 1L))
 	/* is pointer x aligned on a power of n */
 # define IS_ALIGN(x, n)	(!(((intptr_t)(x)) & ((n) - 1L)))
 	/* align pointer x on a power of n */

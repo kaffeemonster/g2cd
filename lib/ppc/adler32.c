@@ -81,7 +81,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		k = len < NMAX ? (unsigned)len : NMAX;
 		len -= k;
 
-		if(likely(k >= 16))
+		if(likely(k >= SOVUC))
 		{
 			unsigned f, n;
 
@@ -97,9 +97,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			v1_a   = vec_perm(v0, v1_a, vperm);
 
 			/* align hard down */
-			f = (unsigned) ALIGN_DOWN_DIFF(buf, 16);
-			n = 16 - f;
-			buf = (const unsigned char *)ALIGN_DOWN(buf, 16);
+			f = (unsigned) ALIGN_DOWN_DIFF(buf, SOVUC);
+			n = SOVUC - f;
+			buf = (const unsigned char *)ALIGN_DOWN(buf, SOVUC);
 
 			/* add n times s1 to s2 for start round */
 			s2 += s1 * n;
@@ -119,10 +119,10 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			/* apply order, masking out excess data, add 4 byte horizontal and add to old dword */
 			vs2 = vec_msum(in16, vord_a, vs2);
 
-			buf += 16;
+			buf += SOVUC;
 			k -= n;
 
-			if(likely(k >= 16)) do
+			if(likely(k >= SOVUC)) do
 			{
 				/* add vs1 for this round (16 times) */
 				vs2 += vec_sl(vs1, vsh);
@@ -135,9 +135,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				/* apply order, add 4 byte horizontal and add to old dword */
 				vs2 = vec_msum(in16, vord, vs2);
 
-				buf += 16;
-				k -= 16;
-			} while (k >= 16);
+				buf += SOVUC;
+				k -= SOVUC;
+			} while (k >= SOVUC);
 
 			if(likely(k))
 			{
@@ -145,7 +145,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				/*
 				 * handle trailer
 				 */
-				f = 16 - k;
+				f = SOVUC - k;
 				/* swizzle masks in place */
 				vperm  = vec_identl(f);
 				vord_a = vec_perm(vord, v0, vperm);
@@ -279,7 +279,7 @@ static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsi
 
 uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	if(len < 16)
+	if(len < SOVUC)
 		return adler32_common(adler, buf, len);
 	return adler32_vec(adler, buf, len);
 }

@@ -218,6 +218,12 @@ static inline int isblank(int c)
 # define prefetchw_nt(x) (x)
 #endif
 
+#if _GNUC_PREREQ (3,0)
+# define GCC_CONSTANT_P(x) __builtin_constant_p(x)
+#else
+# define GCC_CONSTANT_P(x) (0)
+#endif
+
 #if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
 /*
  * According to man-page a GNU-Extension, mumbel mumbel...
@@ -306,153 +312,8 @@ typedef void (*sighandler_t)(int);
 #  define cpu_relax() barrier();
 # endif
 
-/* unaligned access */
-#if defined(__GNUC__) || _SUNC_PREREQ(0x5100)
-# ifdef __linux__
-#  include <endian.h>
-# elif defined(__NetBSD__)
-#  include <sys/endian.h>
-# elif defined(__FreeBSD__) || defined(BSD)
-#  include <machine/endian.h>
-# elif defined(__sun__)
-#  include <sys/isa_defs.h>
-#  define __LITTLE_ENDIAN 1234
-#  define __BIG_ENDIAN 4321
-#  ifdef _LITTLE_ENDIAN
-#   define __BYTE_ORDER __LITTLE_ENDIAN
-#  elif defined(_BIG_ENDIAN)
-#   define __BYTE_ORDER __BIG_ENDIAN
-#  else
-#   error "Oh solaris, your header are ..."
-#  endif
-# endif
-
-/* maybe we picked it up by accident, otherwise give up */
-# if !(defined(__BYTE_ORDER) || defined(BYTE_ORDER) || defined(_BYTE_ORDER))
-#  error "no byte order info for your plattform, giving up!"
-# endif
-/* BSDs sometimes calls it BYTE_ORDER, fix up */
-# ifndef __BYTE_ORDER
-#  ifdef _BYTE_ORDER
-#   define __BYTE_ORDER  _BYTE_ORDER
-#  else
-#   define __BYTE_ORDER  BYTE_ORDER
-#  endif
-# endif
-# ifndef __LITTLE_ENDIAN
-#  ifdef _LITTLE_ENDIAN
-#   define __LITTLE_ENDIAN _LITTLE_ENDIAN
-#  else
-#   define __LITTLE_ENDIAN  LITTLE_ENDIAN
-#  endif
-# endif
-# ifndef __BIG_ENDIAN
-#  ifdef _BIG_ENDIAN
-#   define __BIG_ENDIAN _BIG_ENDIAN
-#  else
-#   define __BIG_ENDIAN  BIG_ENDIAN
-#  endif
-# endif
-
-/* let the compiler handle unaligned access */
-# define get_unaligned(dest, ptr) \
-do { \
-	struct { \
-		__typeof__(*(ptr)) __v GCC_ATTR_PACKED; \
-	} *__p = (void *)(ptr); \
-	(dest) = __p->__v; \
-} while(0)
-
-# if (__BYTE_ORDER == __LITTLE_ENDIAN)
-#  define HOST_IS_BIGENDIAN	0
-#  if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
-#   define nul_byte_index32(x) (__builtin_ctz(x)/BITS_PER_CHAR)
-#   define nul_byte_index(x) (__builtin_ctzl(x)/BITS_PER_CHAR)
-#   define nul_word_index32(x) (__builtin_ctz(x)/(BITS_PER_CHAR * 2))
-#   define nul_word_index(x) (__builtin_ctzl(x)/(BITS_PER_CHAR * 2))
-#  else
-#   define nul_byte_index32(x) nul_byte_index_l32(x)
-#   define nul_byte_index(x) nul_byte_index_l64(x)
-#   define nul_word_index32(x) nul_word_index_l32(x)
-#   define nul_word_index(x) nul_word_index_l64(x)
-#  endif
-#  define get_unaligned_endian(dest, ptr, big_end) \
-do { \
-	if(!big_end) \
-		get_unaligned((dest), (ptr)); \
-	else { \
-		switch(sizeof(*(ptr)) * BITS_PER_CHAR) { \
-		case 32: \
-			(dest) = (((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF) << 24) | \
-				(((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF) << 16) | \
-				(((__typeof__(*(ptr)))(*(((char *)(ptr))+2))&0xFF) << 8) | \
-				((__typeof__(*(ptr)))(*(((char *)(ptr))+3))&0xFF); \
-			break; \
-		case 16: \
-			(dest) = (((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF) << 8) | \
-				((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF); \
-				break; \
-		default: \
-			{ \
-				unsigned i = 0, mask = (sizeof(*(ptr)) * BITS_PER_CHAR) - 8; \
-				for((dest) = 0; i < sizeof(*(ptr)); i++, mask -= 8) \
-					(dest) |= ((__typeof__(*(ptr)))(((char *)(ptr))[i]&0xFF)) << mask; \
-			} \
-		} \
-	} \
-} while(0)
-# elif (__BYTE_ORDER == __BIG_ENDIAN)
-#  define HOST_IS_BIGENDIAN	1
-#  if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
-#   define nul_byte_index32(x) (__builtin_clz(x)/BITS_PER_CHAR)
-#   define nul_byte_index(x) (__builtin_clzl(x)/BITS_PER_CHAR)
-#   define nul_word_index32(x) (__builtin_clz(x)/(BITS_PER_CHAR * 2))
-#   define nul_word_index(x) (__builtin_clzl(x)/(BITS_PER_CHAR * 2))
-#  else
-#   define nul_byte_index32(x) nul_byte_index_b32(x)
-#   define nul_byte_index(x) nul_byte_index_b64(x)
-#   define nul_word_index32(x) nul_word_index_b32(x)
-#   define nul_word_index(x) nul_word_index_b64(x)
-#  endif
-#  define get_unaligned_endian(dest, ptr, big_end) \
-do { \
-	if(big_end) \
-		get_unaligned((dest), (ptr)); \
-	else { \
-		switch(sizeof(*(ptr)) * BITS_PER_CHAR) { \
-		case 32: \
-			(dest) = (((__typeof__(*(ptr)))(*(((char *)(ptr))+4))&0xFF) << 24) | \
-				(((__typeof__(*(ptr)))(*(((char *)(ptr))+3))&0xFF) << 16) | \
-				(((__typeof__(*(ptr)))(*(((char *)(ptr))+2))&0xFF) << 8) | \
-				((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF); \
-			break; \
-		case 16: \
-			(dest) = (((__typeof__(*(ptr)))(*(((char *)(ptr))+1))&0xFF) << 8) | \
-				((__typeof__(*(ptr)))(*(char *)(ptr))&0xFF); \
-			break; \
-		default: \
-			{ \
-				unsigned i = 0; \
-				for((dest) = 0; i < sizeof(*(ptr)); i++) \
-					(dest) |= ((__typeof__(*(ptr)))(((char *)(ptr))[i]&0xFF)) << (i * 8); \
-			} \
-		} \
-	} \
-} while(0)
-# else
-#  error "You're kidding, you don't own a PDP11?"
-# endif
-
-# define put_unaligned(val, ptr) \
-do { \
-	struct { \
-		__typeof__(*(ptr)) __v GCC_ATTR_PACKED; \
-	}  *__p = (void *)(ptr); \
-	__p->__v = (val); \
-} while(0)
-#else
-# error "No unaligned access macros for your machine/compiler written yet"
-#endif /**/
+# include "byteorder.h"
+# include "unaligned.h"
 
 #define str_it2(x)	#x
 #define str_it(x)	str_it2(x)

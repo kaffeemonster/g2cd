@@ -97,6 +97,8 @@
 # elif defined(__sparc) || defined(__sparc__)
 	/* works for both */
 #  include "sparc/memxorcpy.c"
+# elif defined(__arm__)
+#  include "arm/memxorcpy.c"
 # else
 #  include "generic/memxorcpy.c"
 # endif
