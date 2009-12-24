@@ -47,8 +47,8 @@
 #define GUP_C
 #include "gup.h"
 #include "G2MainServer.h"
-#include "G2Connection.h"
 #include "G2Acceptor.h"
+#include "G2Handler.h"
 #include "G2UDP.h"
 #include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
@@ -59,7 +59,6 @@
 /* data-structures */
 static struct worker_sync {
 	int epollfd;
-	int to_handler;
 	char padding[128]; /* move at least a cacheline between data */
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
@@ -201,9 +200,10 @@ static void *gup_loop(void *param)
 		switch(guppie->gup)
 		{
 		case GUP_G2CONNEC_HANDSHAKE:
-			handle_con_a(&ev, lbuff, worker.epollfd, worker.to_handler);
+			handle_con_a(&ev, lbuff, worker.epollfd);
 			break;
 		case GUP_G2CONNEC:
+			handle_con(&ev, lbuff, worker.epollfd);
 			break;
 		case GUP_ACCEPT:
 			if(ev.events & (uint32_t)EPOLLIN)
@@ -271,12 +271,6 @@ void *gup(void *param)
 	from_main.gup = GUP_ABORT;
 	from_main.fd = *((int *)param);
 	logg(LOGF_INFO, "gup:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", from_main.fd, *(((int *)param)-1));
-
-	if(sizeof(worker.to_handler) != recv(from_main.fd, &worker.to_handler, sizeof(worker.to_handler), 0)) {
-		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		goto out;
-	}
-	logg(LOGF_DEBUG, "gup:\t\tto_handler -> %d\n", worker.to_handler);
 
 	worker.epollfd = my_epoll_create(PD_START_CAPACITY);
 	if(0 > worker.epollfd) {
@@ -350,6 +344,9 @@ out:
 	return NULL;
 }
 
+/*
+ * Epoll manipulators
+ */
 int accept_timeout(void *arg)
 {
 	struct epoll_event p_entry = {0,{0}};
@@ -368,8 +365,58 @@ int accept_timeout(void *arg)
 	return 0;
 }
 
+int handler_active_timeout(void *arg)
+{
+	struct epoll_event p_entry = {0,{0}};
+	g2_connection_t *con = arg;
+	int ret_val = 0;
 
+	logg_develd_old("%p is inactive for %lus! last: %lu\n",
+	                con, time(NULL) - con->last_active, con->last_active);
 
+	p_entry.data.ptr = con;
+	if(local_time_now > (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
+	{
+		shortlock_t_lock(&con->pts_lock);
+		con->flags.dismissed = true;
+		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+		shortlock_t_unlock(&con->pts_lock);
+	}
+	else
+	{
+		g2_packet_t *pi = g2_packet_alloc();
+
+		ret_val = HANDLER_ACTIVE_TIMEOUT;
+		if(!pi)
+			return ret_val;
+		pi->type = PT_PI;
+		shortlock_t_lock(&con->pts_lock);
+		list_add_tail(&pi->list, &con->packets_to_send);
+		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+		shortlock_t_unlock(&con->pts_lock);
+	}
+	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
+	return ret_val;
+}
+
+void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)
+{
+	struct epoll_event p_entry = {0,{0}};
+
+	p_entry.data.ptr = con;
+
+	shortlock_t_lock(&con->pts_lock);
+
+	list_add_tail(&p->list, &con->packets_to_send);
+	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+
+	shortlock_t_unlock(&con->pts_lock);
+	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
+}
+
+/*
+ * Utility
+ */
 static bool handle_abort(struct simple_gup *sg, struct epoll_event *ev)
 {
 	bool ret_val = true;

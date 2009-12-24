@@ -48,6 +48,7 @@
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
 #include "G2Handler.h"
+#include "gup.h"
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2ConHelper.h"
@@ -59,272 +60,59 @@
 #include "lib/my_epoll.h"
 #include "lib/hzp.h"
 
-#define HANDLER_ACTIVE_TIMEOUT (91 * 10)
-
 /* internal prototypes */
-static inline bool init_memory_h(struct epoll_event **, struct norm_buff **, struct norm_buff **, int *);
-static inline bool handle_from_accept(int, int);
 static inline g2_connection_t *handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
-static int handler_active_timeout(void *);
-/* do not inline, we take a pointer of it, and when its called, performance doesn't matter */
-static void clean_up_h(struct epoll_event *, struct norm_buff *, struct norm_buff *, int, int);
 
-static struct
+void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[2], int epoll_fd)
 {
-	int epoll_fd;
-} h_data;
-
-void *G2Handler(void *param)
-{
-	/* data-structures */
-	struct norm_buff *lrecv_buff = NULL, *lsend_buff = NULL;
-
-	/* sock-things */
-	int from_accept = -1;
-	int sock2main;
-
-	/* other variables */
-	struct epoll_event *eevents = NULL;
-	struct epoll_event *e_wptr = NULL;
-	size_t i;
-	int num_poll = 0;
-	bool keep_going = true;
-
-	h_data.epoll_fd = -1;
-
-	sock2main = *((int *)param);
-	logg(LOGF_DEBUG, "Handler:\tOur SockFD -> %d\tMain SockFD -> %d\n", sock2main, *(((int *)param)-1));
-
-	/* make our hzp ready */
-	hzp_alloc();
-
-	/* getting memory for our FD's and everything else */
-	if(!init_memory_h(&eevents, &lrecv_buff, &lsend_buff, &h_data.epoll_fd))
-	{
-		if(0 > send(sock2main, "All lost", sizeof("All lost"), 0))
-			diedie("initiating stop"); // hate doing this, but now it's to late
-		logg_pos(LOGF_ERR, "should go down\n");
-		server.status.all_abord[THREAD_HANDLER] = false;
-		pthread_exit(NULL);
-	}
-	logg(LOGF_DEBUG, "Handler:\tEPoll-FD -> %i\n", h_data.epoll_fd);
-
-	if(sizeof(from_accept) != recv(sock2main, &from_accept, sizeof(from_accept), 0)) {
-		logg_errno(LOGF_ERR, "retrieving IPC Pipe");
-		clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
-		pthread_exit(NULL);
-	}
-	logg(LOGF_DEBUG, "Handler:\tfrom_accept -> %i\n", from_accept);
-
-	/* Setting first entry to be polled, our Pipe from Acceptor */
-	eevents->events = EPOLLIN;
-	/* Attention - very ugly, but i have to distinguish these two sockets, and all the other */
-	eevents->data.ptr = (void *)(1 << 1);
-	if(0 > my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_ADD, from_accept, eevents)) {
-		logg_errno(LOGF_ERR, "adding acceptor-pipe to epoll");
-		clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
-		pthread_exit(NULL);
-	}
-	eevents->data.ptr = (void *)0;
-	if(0 > my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_ADD, sock2main, eevents)) {
-		logg_errno(LOGF_ERR, "adding main-pipe to epoll");
-		clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
-		pthread_exit(NULL);
-	}
-
-	/* we are up and running */
-	server.status.all_abord[THREAD_HANDLER] = true;
-
-	my_snprintf(buffer_start(*lsend_buff), buffer_remaining(*lsend_buff), OUR_PROC " Handler %i", 0);
-	g2_set_thread_name(buffer_start(*lsend_buff));
-
-	while(keep_going)
-	{
-		recv_buff_local_refill();
-		/* Let's do it */
-		num_poll = my_epoll_wait(h_data.epoll_fd, eevents, EVENT_SPACE, 8000);
-		e_wptr = eevents;
-		switch(num_poll)
-		{
-		/* Normally: see what has happened */
-		default:
-			local_time_now = time(NULL);
-			for(i = num_poll; i; i--, e_wptr++)
-			{
-				/* A common Socket? */
-				if(e_wptr->data.ptr)
-				{
-					if(likely(((void *)(1 << 1)) != e_wptr->data.ptr))
-					{
-						logg_develd_old("-------- Events: 0x%0X, PTR: %p\n", e_wptr->events, e_wptr->data.ptr);
-						// Any problems?
-						// 'Where did you go my lovely...'
-						// Any invalid FD's remained in PollData?
-						if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT)))
-						{
-							g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
-							if(tmp_con_holder)
-								recycle_con(tmp_con_holder, h_data.epoll_fd, false);
-							else {
-								logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
-								keep_going = false;
-							}
-						}
-						else
-						{
-							// Some FD's ready to be filled?
-							// Some data ready to be read in?
-							g2_connection_t *tmp_con_holder = handle_socket_io_h(e_wptr, h_data.epoll_fd, &lrecv_buff, &lsend_buff);
-							if(tmp_con_holder)
-							{
-								if(lrecv_buff && tmp_con_holder->recv == lrecv_buff) {
-									tmp_con_holder->recv = NULL;
-									buffer_clear(*lrecv_buff);
-								}
-								if(lsend_buff && tmp_con_holder->send == lsend_buff) {
-									tmp_con_holder->send = NULL;
-									buffer_clear(*lsend_buff);
-								}
-								recycle_con(tmp_con_holder, h_data.epoll_fd, false);
-							}
-						}
-					}
-					/* the from_acceptor-pipe */
-					else
-					{
-						if(e_wptr->events & (uint32_t) EPOLLIN)
-							handle_from_accept(from_accept, h_data.epoll_fd);
-						/* if there is no read-interrest, we're blown up */
-						else
-						{
-							logg_pos(LOGF_ERR, "from_acceptor-pipe is wired\n");
-							keep_going = false;
-							break;
-						}
-					}
-				}
-				/* the abort-socket */
-				else
-				{
-// TODO: Check for a proper stop-sequence ??
-					// everything but 'ready for write' means:
-					// we're finished...
-					if(e_wptr->events & ~((uint32_t)EPOLLOUT)) {
-						keep_going = false;
-						break;
-					}
-
-					/* else stop this write interrest */
-					e_wptr->events = (uint32_t)EPOLLIN;
-					if(0 > my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_MOD, sock2main, e_wptr)) {
-						logg_errno(LOGF_ERR, "changing epoll-interrests for socket-2-main");
-						keep_going = false;
-						break;
-					}
-				}
-			}
-			break;
-		/* Nothing happened (or just the Timeout) */
-		case 0:
-			break;
-		/* Something bad happened */
-		case -1:
-			if(EINTR == errno)
-				break;
-			/* Print what happened */
-			logg_errno(LOGF_ERR, "poll");
-			/* and get out here (at the moment) */
-			keep_going = false;
-			break;
-		}
-	}
-
-	clean_up_h(eevents, lrecv_buff, lsend_buff, h_data.epoll_fd, sock2main);
-	/* clean up our hzp */
-	hzp_free();
-	pthread_exit(NULL);
-	return NULL; /* to avoid warning about reaching end of non-void funktion */
-}
-
-static inline bool init_memory_h(struct epoll_event **poll_me, struct norm_buff **lrecv_buff,
-                                 struct norm_buff **lsend_buff, int *epoll_fd)
-{
-	*poll_me = calloc(EVENT_SPACE, sizeof(**poll_me));
-	if(NULL == *poll_me)
-	{
-		logg_errno(LOGF_ERR, "EPoll eventspace memory");
-		return false;
-	}
-
-	*lrecv_buff = recv_buff_local_get();
-	*lsend_buff = recv_buff_local_get();
-	if(!(*lrecv_buff && *lsend_buff))
-	{
-		logg_errno(LOGF_ERR, "allocating local buffer");
-		free(*poll_me);
-		return false;
-	}
-
-	*epoll_fd = my_epoll_create(PD_START_CAPACITY);
-	if(0 > *epoll_fd)
-	{
-		logg_errno(LOGF_ERR, "creating epoll-fd");
-		return false;
-	}
-
-	return true;
-}
-
-static inline bool handle_from_accept(int from_acceptor, int epoll_fd)
-{
-	struct epoll_event tmp_eevent = {0,{0}};
-	g2_connection_t *recvd_con = NULL;
-	ssize_t ret_val;
-
-	do {
-		ret_val = read(from_acceptor, &recvd_con, sizeof(recvd_con));
-	} while(-1 == ret_val && EINTR == errno);
-	if(sizeof(recvd_con) != ret_val) {
-		logg_errno(LOGF_INFO, "recieving new Connection");
-		return false;
-	}
-
-	tmp_eevent.events = recvd_con->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLONESHOT);
-	tmp_eevent.data.ptr = recvd_con;
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, recvd_con->com_socket, &tmp_eevent)) {
-		logg_errno(LOGF_DEBUG, "adding new socket to EPoll");
-		goto clean_up;
-	}
-
-	recvd_con->last_active = local_time_now;
-	/* promote here, now we are really connected */
-	if(recvd_con->flags.upeer)
-		g2_conreg_promote_hub(recvd_con);
-	recvd_con->active_to.fun = handler_active_timeout;
-	recvd_con->active_to.data = recvd_con;
-	timeout_add(&recvd_con->active_to, HANDLER_ACTIVE_TIMEOUT);
-
-	return true;
-
-clean_up:
-	while(-1 == close(recvd_con->com_socket) && EINTR == errno);
-	g2_con_clear(recvd_con);
-	g2_con_ret_free(recvd_con);
-	return false;
-}
-
-static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
-{
-	g2_connection_t *w_entry = p_entry->data.ptr;
+	g2_connection_t *w_entry = e_wptr->data.ptr;
 	int lock_res;
 
 	if((lock_res = pthread_mutex_trylock(&w_entry->lock))) {
 		/* somethings wrong */
 		if(EBUSY == lock_res)
-			return NULL; /* if already locked, do nothing */
+			return; /* if already locked, do nothing */
 // TODO: what to do on locking error?
-		return NULL;
+		return;
 	}
+
+	logg_develd_old("-------- Events: 0x%0X, PTR: %p\n", e_wptr->events, e_wptr->data.ptr);
+	/*
+	 * Any problems? 'Where did you go my lovely...'
+	 * Any invalid FD's remained in PollData?
+	 */
+	if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT|EPOLLONESHOT)))
+	{
+		g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
+		if(tmp_con_holder)
+			recycle_con(tmp_con_holder, epoll_fd, false);
+		else { /* this should not happen... */
+			logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
+			pthread_mutex_unlock(&w_entry->lock);
+		}
+		return;
+	}
+
+	/* Some FD's ready to be filled? Some data ready to be read in? */
+	g2_connection_t *tmp_con_holder = handle_socket_io_h(e_wptr, epoll_fd, &lbuff[0], &lbuff[1]);
+	if(tmp_con_holder)
+	{
+		if(lbuff[0] && tmp_con_holder->recv == lbuff[0]) {
+			tmp_con_holder->recv = NULL;
+			buffer_clear(*lbuff[0]);
+		}
+		if(lbuff[1] && tmp_con_holder->send == lbuff[1]) {
+			tmp_con_holder->send = NULL;
+			buffer_clear(*lbuff[1]);
+		}
+		recycle_con(tmp_con_holder, epoll_fd, false);
+	}
+}
+
+static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
+{
+	g2_connection_t *w_entry = p_entry->data.ptr;
+
 	/* get buffer */
 	if(!manage_buffer_before(&w_entry->recv, lrecv_buff)) {
 		w_entry->flags.dismissed = true;
@@ -579,89 +367,15 @@ nothing_to_read:
 	manage_buffer_after(&w_entry->recv, lrecv_buff);
 	manage_buffer_after(&w_entry->send, lsend_buff);
 	shortlock_t_lock(&w_entry->pts_lock);
-	{
-		struct epoll_event tmp_eevent = {0,{0}};
-		pthread_mutex_unlock(&w_entry->lock);
-		tmp_eevent.events = w_entry->poll_interrests;
-		shortlock_t_unlock(&w_entry->pts_lock);
-		tmp_eevent.data.ptr = w_entry;
-		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &tmp_eevent)) {
-			logg_errno(LOGF_DEBUG, "changing EPoll interrests");
-			return w_entry;
-		}
+	pthread_mutex_unlock(&w_entry->lock);
+	p_entry->events = w_entry->poll_interrests;
+	shortlock_t_unlock(&w_entry->pts_lock);
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
+		logg_errno(LOGF_DEBUG, "changing EPoll interrests");
+		return w_entry;
 	}
-
 	return NULL;
 }
 
-static int handler_active_timeout(void *arg)
-{
-	struct epoll_event p_entry = {0,{0}};
-	g2_connection_t *con = arg;
-	int ret_val = 0;
-
-	logg_develd_old("%p is inactive for %lus! last: %lu\n",
-	                con, time(NULL) - con->last_active, con->last_active);
-
-	p_entry.data.ptr = con;
-	if(local_time_now > (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
-	{
-		shortlock_t_lock(&con->pts_lock);
-		con->flags.dismissed = true;
-		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-		shortlock_t_unlock(&con->pts_lock);
-	}
-	else
-	{
-		g2_packet_t *pi = g2_packet_alloc();
-
-		ret_val = HANDLER_ACTIVE_TIMEOUT;
-		if(!pi)
-			return ret_val;
-		pi->type = PT_PI;
-		shortlock_t_lock(&con->pts_lock);
-		list_add_tail(&pi->list, &con->packets_to_send);
-		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-		shortlock_t_unlock(&con->pts_lock);
-	}
-	my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
-	return ret_val;
-}
-
-void g2_handler_con_mark_write(g2_packet_t *p, g2_connection_t *con)
-{
-	struct epoll_event p_entry = {0,{0}};
-
-	p_entry.data.ptr = con;
-
-	shortlock_t_lock(&con->pts_lock);
-
-	list_add_tail(&p->list, &con->packets_to_send);
-	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-
-	shortlock_t_unlock(&con->pts_lock);
-	my_epoll_ctl(h_data.epoll_fd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
-}
-
-
-static void clean_up_h(struct epoll_event *poll_me, struct norm_buff *lrecv_buff,
-                       struct norm_buff *lsend_buff, int epoll_fd, int who_to_say)
-{
-	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
-		diedie("initiating stop"); // hate doing this, but now it's to late
-	logg_pos(LOGF_NOTICE, "should go down\n");
-
-	free(poll_me);
-
-	recv_buff_local_ret(lrecv_buff);
-	recv_buff_local_ret(lsend_buff);
-
-	// If this happens, its maybe Dangerous, or trivial, so what to do?
-	if(0 > my_epoll_close(epoll_fd))
-		logg_errno(LOGF_ERR, "closing epoll-fd");
-
-	server.status.all_abord[THREAD_HANDLER] = false;
-}
-
 static char const rcsid_h[] GCC_ATTR_USED_VAR = "$Id: G2Handler.c,v 1.21 2005/07/29 09:24:04 redbully Exp redbully $";
-//EOF
+/* EOF */

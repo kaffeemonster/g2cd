@@ -48,7 +48,6 @@
 #include "lib/other.h"
 #include "G2MainServer.h"
 #include "gup.h"
-#include "G2Handler.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
 #include "G2ConRegistry.h"
@@ -69,7 +68,6 @@
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
 static int sock_com[THREAD_SUM_COM][2];
-static int accept_2_handler[2];
 static struct pollfd sock_poll[THREAD_SUM_COM + 1];
 static volatile sig_atomic_t server_running = true;
 
@@ -170,38 +168,22 @@ int main(int argc, char **args)
 	setup_resources();
 
 	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_HANDLER], &server.settings.t_def_attr, (void *(*)(void *))&G2Handler, (void *)&sock_com[THREAD_HANDLER][IN]))
-	{
-		logg_errno(LOGF_CRIT, "pthread_create G2Handler");
-		clean_up_m();
-		return EXIT_FAILURE;
-	}
-
 	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][IN])) {
 		logg_errno(LOGF_CRIT, "pthread_create gup");
-		/*
-		 * Critical Moment: we could not run further for normal
-		 * shutdown, but when clean_up'ed now->undefined behaivor
-		 */
+		clean_up_m();
 		return EXIT_FAILURE;
 	}
 
 
 	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
 		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
+		/*
+		 * Critical Moment: we could not run further for normal
+		 * shutdown, but when clean_up'ed now->undefined behaivor
+		 */
 		server_running = false;
 	}
 	/* threads startet */
-
-	/* send the pipe between Acceptor and Handler */
-	if(sizeof(accept_2_handler[IN]) != send(sock_com[THREAD_GUP][OUT], &accept_2_handler[IN], sizeof(accept_2_handler[IN]), 0)) {
-		logg_errno(LOGF_CRIT, "sending IPC Pipe");
-		server_running = false;
-	}
-	if(sizeof(accept_2_handler[OUT]) != send(sock_com[THREAD_HANDLER][OUT], &accept_2_handler[OUT], sizeof(accept_2_handler[OUT]), 0)) {
-		logg_errno(LOGF_CRIT, "sending IPC Pipe");
-		server_running = false;
-	}
 
 	/* set signalhandler */
 	{
@@ -332,7 +314,6 @@ int main(int argc, char **args)
 	}
 	
 	/* collect the threads */
-	pthread_join(main_threads[THREAD_HANDLER], NULL);
 	pthread_join(main_threads[THREAD_GUP], NULL);
 	/* Join THREAD_TIMER??? Hmmm, there was a reason... */
 
@@ -709,14 +690,6 @@ static inline void setup_resources(void)
 		}
 	}
 
-	/* open pipes for IPC */
-	if(0 > pipe(accept_2_handler))
-	{
-		logg_errno(LOGF_CRIT, "opening acceptor-handler pipe");
-		clean_up_m();
-		exit(EXIT_FAILURE);
-	}
-
 	/* adding socket-fd's to a poll-structure */
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
@@ -887,9 +860,6 @@ static inline void clean_up_m(void)
 		close(sock_com[i][1]);
 			/* output? */
 	}
-
-	close(accept_2_handler[0]);
-	close(accept_2_handler[1]);
 
 	free((void*)(intptr_t)server.settings.profile.packet_uprod);
 	free((void*)(intptr_t)server.settings.profile.xml);

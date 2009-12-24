@@ -26,14 +26,20 @@
 #ifndef G2HANDLER_H
 # define G2HANDLER_H
 
+# include "lib/other.h"
+# include "lib/my_epoll.h"
+# include "lib/sec_buffer.h"
+# include "gup.h"
+
+# define HANDLER_ACTIVE_TIMEOUT (91 * 10)
+
 # ifndef _G2HANDLER_C
 #  define _G2HAN_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 # else
 #  define _G2HAN_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _G2HANDLER_C */
 
-_G2HAN_EXTRN(void *G2Handler(void *));
-_G2HAN_EXTRN(void g2_handler_con_mark_write(g2_packet_t *, g2_connection_t *));
+_G2HAN_EXTRN(void handle_con(struct epoll_event *, struct norm_buff *[2], int));
 
 #endif /* G2HANDLER_H */
 /* EOF */

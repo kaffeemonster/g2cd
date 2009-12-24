@@ -51,6 +51,9 @@ union gup
 /*	struct g2_connection g2_gup; */ /* circle dependency */
 };
 
+/* forward declare */
+struct g2_packet;
+struct g2_connection;
 
 # ifndef GUP_C
 #  define GUP_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
@@ -60,5 +63,7 @@ union gup
 
 GUP_EXTRN(void *gup(void *));
 GUP_EXTRN(int accept_timeout(void *));
+GUP_EXTRN(int handler_active_timeout(void *arg));
+GUP_EXTRN(void g2_handler_con_mark_write(struct g2_packet *, struct g2_connection *));
 #endif /* GUP_H */
 /* EOF */

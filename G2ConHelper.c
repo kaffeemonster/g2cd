@@ -58,7 +58,7 @@
 
 g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 {
-	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
+	g2_connection_t *w_entry = p_entry->data.ptr;
 	const char *msg = NULL;
 
 	if(p_entry->events & (uint32_t)EPOLLERR)

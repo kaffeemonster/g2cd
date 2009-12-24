@@ -60,8 +60,6 @@
 #include "lib/atomic.h"
 #include "lib/itoa.h"
 
-#undef EVENT_SPACE
-#define EVENT_SPACE 8
 /* if there is no com for 15 seconds, something is wrong */
 #define ACCEPT_ACTIVE_TIMEOUT (15 * 10)
 /* if the header is not delivered in 50 seconds, go play somewhere else */
@@ -326,7 +324,7 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
 	return ret_val;
 }
 
-void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[2], int epoll_fd, int to_handler)
+void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[2], int epoll_fd)
 {
 	g2_connection_t *tmp_con = ev->data.ptr;
 	int lock_res;
@@ -349,22 +347,19 @@ void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[2], int epoll_
 	if(!tmp_con)
 		return;
 
-	tmp_con->poll_interrests &= ~((uint32_t)EPOLLONESHOT);
-	recycle_con(tmp_con, epoll_fd, true);
-	g2_con_helgrind_transfer(tmp_con);
-	if(sizeof(tmp_con) == write(to_handler, &tmp_con, sizeof(tmp_con)))
-		return;
-
-	logg_errno(LOGF_NOTICE, "sending connection to Handler");
-	/*
-	 * we have to do the recycle stuff here which was
-	 * not done because we said we want to keep it
-	 */
-	close(tmp_con->com_socket);
-	atomic_dec(&server.status.act_connection_sum);
-	g2_conreg_remove(tmp_con);
-	g2_con_clear(tmp_con);
-	g2_con_ret_free(tmp_con);
+	tmp_con->gup = GUP_G2CONNEC;
+	shortlock_t_lock(&tmp_con->pts_lock);
+	pthread_mutex_unlock(&tmp_con->lock);
+	ev->events = tmp_con->poll_interrests;
+	shortlock_t_unlock(&tmp_con->pts_lock);
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, tmp_con->com_socket, ev)) {
+		logg_errno(LOGF_DEBUG, "changing EPoll interrests");
+		/*
+		 * recycle this bugger.
+		 * This is prop. racy, but should not happen...
+		 */
+		recycle_con(tmp_con, epoll_fd, false);
+	}
 }
 
 static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
@@ -403,15 +398,16 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epol
 	manage_buffer_after(&w_entry->send, lsend_buff);
 	if(!ret_val)
 	{
+		shortlock_t_lock(&w_entry->pts_lock);
 		pthread_mutex_unlock(&w_entry->lock);
 		/*
 		 * First release lock, than change epoll foo
 		 * This is inherent racy, but prevents that another thread
 		 * gets the next event and runs against our lock (oneshot, trylock)
 		 * before we could get out of the locked region
-// TODO: use the pts lock?
 		 */
 		p_entry->events = w_entry->poll_interrests;
+		shortlock_t_unlock(&w_entry->pts_lock);
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 			logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");
 			w_entry->flags.dismissed = true;
