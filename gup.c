@@ -112,6 +112,10 @@ static void *gup_loop(void *param)
 			g2_con_clear(lcon);
 			lcon_refresh_needed = false;
 		}
+		if(!lbuff[0])
+			lbuff[0] = recv_buff_local_get();
+		if(!lbuff[1])
+			lbuff[1] = recv_buff_local_get();
 		if(!(--refill_count)) {
 			recv_buff_local_refill();
 			refill_count = EVENT_SPACE / 2;

@@ -334,6 +334,8 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 		g2_con_clear(w_entry);
 		g2_con_ret_free(w_entry);
 	}
+	else
+		pthread_mutex_unlock(&w_entry->lock);
 
 	logg_develd("%s\n", (keep_it) ? "connection removed" : "connection recyled");
 

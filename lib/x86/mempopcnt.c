@@ -27,7 +27,7 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-static size_t mempopcnt_SSE4(const void *s, size_t len);
+static size_t mempopcnt_SSE4A(const void *s, size_t len);
 # endif
 # if HAVE_BINUTILS >= 217
 static size_t mempopcnt_SSSE3(const void *s, size_t len);
@@ -71,7 +71,7 @@ static inline size_t popcountst_intSSE4(size_t n)
 	return tmp;
 }
 
-static size_t mempopcnt_SSE4(const void *s, size_t len)
+static size_t mempopcnt_SSE4A(const void *s, size_t len)
 {
 	const unsigned char *p;
 	size_t r;
@@ -864,8 +864,8 @@ static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINTUILS >= 218
-	{.func = (void (*)(void))mempopcnt_SSE4, .flags_needed = CFEATURE_POPCNT},
-	{.func = (void (*)(void))mempopcnt_SSE4, .flags_needed = CFEATURE_SSE4A},
+	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_POPCNT},
+	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_SSE4A},
 # endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))mempopcnt_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},

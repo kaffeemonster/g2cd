@@ -289,7 +289,7 @@ static inline bool handle_from_accept(int from_acceptor, int epoll_fd)
 		return false;
 	}
 
-	tmp_eevent.events = recvd_con->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP);
+	tmp_eevent.events = recvd_con->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLONESHOT);
 	tmp_eevent.data.ptr = recvd_con;
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, recvd_con->com_socket, &tmp_eevent)) {
 		logg_errno(LOGF_DEBUG, "adding new socket to EPoll");
@@ -315,8 +315,16 @@ clean_up:
 
 static inline g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
 {
-	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
+	g2_connection_t *w_entry = p_entry->data.ptr;
+	int lock_res;
 
+	if((lock_res = pthread_mutex_trylock(&w_entry->lock))) {
+		/* somethings wrong */
+		if(EBUSY == lock_res)
+			return NULL; /* if already locked, do nothing */
+// TODO: what to do on locking error?
+		return NULL;
+	}
 	/* get buffer */
 	if(!manage_buffer_before(&w_entry->recv, lrecv_buff)) {
 		w_entry->flags.dismissed = true;
@@ -498,23 +506,10 @@ retry_unpack:
 					parg.target_lock = &w_entry->pts_lock;
 					parg.target      = &w_entry->packets_to_send;
 					parg.opaque      = NULL;
-					if(g2_packet_decide_spec(&parg, g2_packet_dict))
-					{
+					if(g2_packet_decide_spec(&parg, g2_packet_dict)) {
 						shortlock_t_lock(&w_entry->pts_lock);
-						if(!(w_entry->poll_interrests & (uint32_t)EPOLLOUT))
-						{
-							struct epoll_event tmp_eevent = {0,{0}};
-							w_entry->poll_interrests |= (uint32_t)EPOLLOUT;
-							tmp_eevent.events = w_entry->poll_interrests;
-							shortlock_t_unlock(&w_entry->pts_lock);
-							tmp_eevent.data.ptr = w_entry;
-							if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &tmp_eevent)) {
-								logg_errno(LOGF_DEBUG, "changing EPoll interrests");
-								return w_entry;
-							}
-						}
-						else
-							shortlock_t_unlock(&w_entry->pts_lock);
+						w_entry->poll_interrests |= (uint32_t)EPOLLOUT;
+						shortlock_t_unlock(&w_entry->pts_lock);
 					}
 
 					save_build_packet = false;
@@ -577,13 +572,24 @@ retry_unpack:
 			}
 			w_entry->build_packet = t;
 		}
-
 // TODO: try to write if not already written on this connec?
 	}
 
 nothing_to_read:
 	manage_buffer_after(&w_entry->recv, lrecv_buff);
 	manage_buffer_after(&w_entry->send, lsend_buff);
+	shortlock_t_lock(&w_entry->pts_lock);
+	{
+		struct epoll_event tmp_eevent = {0,{0}};
+		pthread_mutex_unlock(&w_entry->lock);
+		tmp_eevent.events = w_entry->poll_interrests;
+		shortlock_t_unlock(&w_entry->pts_lock);
+		tmp_eevent.data.ptr = w_entry;
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &tmp_eevent)) {
+			logg_errno(LOGF_DEBUG, "changing EPoll interrests");
+			return w_entry;
+		}
+	}
 
 	return NULL;
 }

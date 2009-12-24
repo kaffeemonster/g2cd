@@ -161,6 +161,7 @@ void handle_udp(struct epoll_event *ev,struct norm_buff *d_hold,  int epoll_fd)
 	buffer_flip(*d_hold);
 	/* if we reach here, we know that there is at least no error or the logic above failed... */
 	handle_udp_packet(d_hold, &from, &to, sg->fd);
+	buffer_clear(*d_hold);
 }
 
 bool init_udp(int epoll_fd)

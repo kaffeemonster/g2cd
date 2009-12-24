@@ -328,7 +328,16 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
 
 void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[2], int epoll_fd, int to_handler)
 {
-	g2_connection_t *tmp_con;
+	g2_connection_t *tmp_con = ev->data.ptr;
+	int lock_res;
+
+	if((lock_res = pthread_mutex_trylock(&tmp_con->lock))) {
+		/* somethings wrong */
+		if(EBUSY == lock_res)
+			return; /* if already locked, do nothing */
+// TODO: what to do on locking error?
+		return;
+	}
 
 	if(ev->events & ~((uint32_t)(EPOLLIN|EPOLLOUT|EPOLLONESHOT))) {
 		tmp_con = handle_socket_abnorm(ev);
@@ -394,6 +403,14 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epol
 	manage_buffer_after(&w_entry->send, lsend_buff);
 	if(!ret_val)
 	{
+		pthread_mutex_unlock(&w_entry->lock);
+		/*
+		 * First release lock, than change epoll foo
+		 * This is inherent racy, but prevents that another thread
+		 * gets the next event and runs against our lock (oneshot, trylock)
+		 * before we could get out of the locked region
+// TODO: use the pts lock?
+		 */
 		p_entry->events = w_entry->poll_interrests;
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 			logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");

@@ -211,8 +211,12 @@ struct norm_buff *recv_buff_local_get(void)
  */
 void recv_buff_local_ret(struct norm_buff *buf)
 {
-	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
+	struct local_buffer_org *org;
 
+	if(!buf)
+		return;
+
+	org = pthread_getspecific(key2lrecv);
 	if(!org)
 	{
 		org = recv_buff_init_lorg();
@@ -223,6 +227,7 @@ void recv_buff_local_ret(struct norm_buff *buf)
 	}
 
 	if(likely(org->pos > 0)) {
+		buffer_clear(*buf);
 		org->buffs[--org->pos] = buf;
 		logg_develd_old("freeing recv_buff local pos: %d\n", org->pos);
 	}
@@ -275,6 +280,7 @@ void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 	if(!ret)
 		return;
 
+	buffer_clear(*ret);
 	do
 	{
 		size_t i = 0;

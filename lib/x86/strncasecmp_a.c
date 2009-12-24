@@ -101,7 +101,7 @@ LOOP_AGAIN:
 		"add	%3, %0\n\t"
 		"add	%3, %1\n"
 		"cmp	%3, %2\n\t"
-		"jbe	3f\n\t"
+		"jb	3f\n\t"
 		"2:\n\t"
 		"sub	%3, %2\n\t"
 		/* s1 */
@@ -155,7 +155,6 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-BYTE_WISE:
 	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
@@ -194,14 +193,14 @@ LOOP_AGAIN:
 	j = ALIGN_DIFF(s2, 4096);
 	j = j ? j : i;
 	i = i < j ? i : j;
-	if(unlikely(i < 16))
-		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
 
 	cycles = i;
 	asm (
 		"xor	%3, %3\n\t"
+		"cmp	$16, %2\n\t"
+		"jb	3f\n\t"
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"movdqa	%5, %%xmm3\n\t"
 		"movdqa	%6, %%xmm4\n\t"
@@ -279,7 +278,6 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-BYTE_WISE:
 	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;
@@ -315,17 +313,16 @@ LOOP_AGAIN:
 	i = ALIGN_DIFF(s1, 4096);
 	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
-	// check i & j against n?
 	j = j ? j : i;
 	i = i < j ? i : j;
-	if(unlikely(i < 8))
-		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 8);
 	i = i < j ? i : j;
 
 	cycles = i;
 	asm (
 		"xor	%3, %3\n\t"
+		"cmp	$8, %2\n\t"
+		"jb	3f\n\t"
 		"pxor	%%mm0, %%mm0\n\t"
 		"movq	%5, %%mm3\n\t"
 		"movq	%6, %%mm4\n\t"
@@ -403,7 +400,6 @@ LOOP_AGAIN:
 	i = i < j ? i : j;
 	i = i < n ? i : n;
 
-BYTE_WISE:
 	for(; i; i--)
 	{
 		c1 = (unsigned) *s1++;

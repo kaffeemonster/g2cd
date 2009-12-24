@@ -80,33 +80,33 @@ const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 	&enc_as02,
 };
 	/* headerfields */
-static const action_string h_as00 = {&accept_what,    str_size(ACCEPT_KEY),      ACCEPT_KEY};
-static const action_string h_as01 = {&uagent_what,    str_size(UAGENT_KEY),      UAGENT_KEY};
-static const action_string h_as02 = {&a_encoding_what,str_size(ACCEPT_ENC_KEY),  ACCEPT_ENC_KEY};
-static const action_string h_as03 = {&remote_ip_what, str_size(REMOTE_ADR_KEY),  REMOTE_ADR_KEY};
-static const action_string h_as04 = {&listen_what,    str_size(LISTEN_ADR_KEY),  LISTEN_ADR_KEY};
-static const action_string h_as05 = {&content_what,   str_size(CONTENT_KEY),     CONTENT_KEY};
-static const action_string h_as06 = {&c_encoding_what,str_size(CONTENT_ENC_KEY), CONTENT_ENC_KEY};
-static const action_string h_as07 = {&ulpeer_what,    str_size(UPEER_KEY),       UPEER_KEY};
-static const action_string h_as08 = {&ulpeer_what,    str_size(HUB_KEY),         HUB_KEY};
-static const action_string h_as09 = {&empty_action_c, str_size(X_TRY_UPEER_KEY), X_TRY_UPEER_KEY}; /* maybe parse */
-static const action_string h_as10 = {try_hub_what,    str_size(X_TRY_HUB_KEY),   X_TRY_HUB_KEY};
-static const action_string h_as11 = {&empty_action_c, str_size(UPEER_NEEDED_KEY),UPEER_NEEDED_KEY};
-static const action_string h_as12 = {&empty_action_c, str_size(HUB_NEEDED_KEY),  HUB_NEEDED_KEY};
-static const action_string h_as13 = {&empty_action_c, str_size(X_VERSION),        X_VERSION};
-static const action_string h_as14 = {&empty_action_c, str_size(GGEP_KEY),        GGEP_KEY};
-static const action_string h_as15 = {&empty_action_c, str_size(PONG_C_KEY),      PONG_C_KEY};
-static const action_string h_as16 = {&empty_action_c, str_size(UPTIME_KEY),      UPTIME_KEY};
-static const action_string h_as17 = {&empty_action_c, str_size(VEND_MSG_KEY),    VEND_MSG_KEY};
-static const action_string h_as18 = {&empty_action_c, str_size(X_LOC_PREF),      X_LOC_PREF};
-static const action_string h_as19 = {&empty_action_c, str_size(X_MAX_TTL_KEY),   X_MAX_TTL_KEY};
-static const action_string h_as20 = {&empty_action_c, str_size(X_GUESS_KEY),     X_GUESS_KEY};
-static const action_string h_as21 = {&empty_action_c, str_size(X_REQUERIES_KEY), X_REQUERIES_KEY};
-static const action_string h_as22 = {&empty_action_c, str_size(X_Q_ROUT_KEY),    X_Q_ROUT_KEY};
-static const action_string h_as23 = {&empty_action_c, str_size(X_UQ_ROUT_KEY),   X_UQ_ROUT_KEY};
-static const action_string h_as24 = {&empty_action_c, str_size(X_DYN_Q_KEY),     X_DYN_Q_KEY};
-static const action_string h_as25 = {&empty_action_c, str_size(X_EXT_PROBES_KEY),X_EXT_PROBES_KEY};
-static const action_string h_as26 = {&empty_action_c, str_size(X_DEGREE),        X_DEGREE};
+static const action_string h_as00 = {accept_what,    str_size(ACCEPT_KEY),       ACCEPT_KEY};
+static const action_string h_as01 = {uagent_what,    str_size(UAGENT_KEY),       UAGENT_KEY};
+static const action_string h_as02 = {a_encoding_what,str_size(ACCEPT_ENC_KEY),   ACCEPT_ENC_KEY};
+static const action_string h_as03 = {remote_ip_what, str_size(REMOTE_ADR_KEY),   REMOTE_ADR_KEY};
+static const action_string h_as04 = {listen_what,    str_size(LISTEN_ADR_KEY),   LISTEN_ADR_KEY};
+static const action_string h_as05 = {content_what,   str_size(CONTENT_KEY),      CONTENT_KEY};
+static const action_string h_as06 = {c_encoding_what,str_size(CONTENT_ENC_KEY),  CONTENT_ENC_KEY};
+static const action_string h_as07 = {ulpeer_what,    str_size(UPEER_KEY),        UPEER_KEY};
+static const action_string h_as08 = {ulpeer_what,    str_size(HUB_KEY),          HUB_KEY};
+static const action_string h_as09 = {empty_action_c, str_size(X_TRY_UPEER_KEY),  X_TRY_UPEER_KEY}; /* maybe parse */
+static const action_string h_as10 = {try_hub_what,   str_size(X_TRY_HUB_KEY),    X_TRY_HUB_KEY};
+static const action_string h_as11 = {empty_action_c, str_size(UPEER_NEEDED_KEY), UPEER_NEEDED_KEY};
+static const action_string h_as12 = {empty_action_c, str_size(HUB_NEEDED_KEY),   HUB_NEEDED_KEY};
+static const action_string h_as13 = {empty_action_c, str_size(X_VERSION),        X_VERSION};
+static const action_string h_as14 = {empty_action_c, str_size(GGEP_KEY),         GGEP_KEY};
+static const action_string h_as15 = {empty_action_c, str_size(PONG_C_KEY),       PONG_C_KEY};
+static const action_string h_as16 = {empty_action_c, str_size(UPTIME_KEY),       UPTIME_KEY};
+static const action_string h_as17 = {empty_action_c, str_size(VEND_MSG_KEY),     VEND_MSG_KEY};
+static const action_string h_as18 = {empty_action_c, str_size(X_LOC_PREF),       X_LOC_PREF};
+static const action_string h_as19 = {empty_action_c, str_size(X_MAX_TTL_KEY),    X_MAX_TTL_KEY};
+static const action_string h_as20 = {empty_action_c, str_size(X_GUESS_KEY),      X_GUESS_KEY};
+static const action_string h_as21 = {empty_action_c, str_size(X_REQUERIES_KEY),  X_REQUERIES_KEY};
+static const action_string h_as22 = {empty_action_c, str_size(X_Q_ROUT_KEY),     X_Q_ROUT_KEY};
+static const action_string h_as23 = {empty_action_c, str_size(X_UQ_ROUT_KEY),    X_UQ_ROUT_KEY};
+static const action_string h_as24 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
+static const action_string h_as25 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
+static const action_string h_as26 = {empty_action_c, str_size(X_DEGREE),         X_DEGREE};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
@@ -277,6 +277,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	else {
 		INIT_HLIST_NODE(&work_entry->registry);
 		shortlock_t_init(&work_entry->pts_lock);
+		pthread_mutex_init(&work_entry->lock, NULL);
 		work_entry->qht = NULL;
 	}
 
@@ -291,6 +292,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	INIT_LIST_HEAD(&work_entry->hub_list);
 	INIT_TIMEOUT(&work_entry->active_to);
 	INIT_TIMEOUT(&work_entry->u.accept.header_complete_to);
+	pthread_mutex_unlock(&work_entry->lock);
 }
 
 void g2_con_free(g2_connection_t *to_free)
@@ -346,6 +348,7 @@ void g2_con_free(g2_connection_t *to_free)
 	}
 
 	shortlock_t_destroy(&to_free->pts_lock);
+	pthread_mutex_destroy(&to_free->lock);
 
 	free(to_free);
 }

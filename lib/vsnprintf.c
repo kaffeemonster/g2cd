@@ -1762,8 +1762,8 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 			cur_fmt.fmt_start = fmt;
 			cur_fmt.precision = 0;
 			cur_fmt.width = 0;
-			cur_fmt.mod = MOD_NONE;
 			cur_fmt.u.xyz = 0;
+			cur_fmt.mod = MOD_NONE;
 			fmt = format_dispatch(buf, fmt+1, &cur_fmt);
 			buf = cur_fmt.wptr;
 		} else
