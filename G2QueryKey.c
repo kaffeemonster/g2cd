@@ -34,6 +34,8 @@
 #include "G2MainServer.h"
 #include "lib/log_facility.h"
 #include "lib/hthash.h"
+#include "lib/hlist.h"
+#include "lib/rbtree.h"
 #include "lib/combo_addr.h"
 #include "lib/ansi_prng.h"
 
@@ -151,6 +153,9 @@ struct g2_qk_salts
 static struct g2_qk_salts g2_qk_s;
 
 /* Protos */
+	/* You better not kill this proto, or it wount work ;) */
+static void qk_init(void) GCC_ATTR_CONSTRUCT;
+static void qk_deinit(void) GCC_ATTR_DESTRUCT;
 
 /* Funcs */
 static void check_salt_vals(unsigned j)
@@ -203,6 +208,7 @@ void g2_qk_tick(void)
 	srand(t);
 	check_salt_vals(n_salt);
 
+	barrier();
 	g2_qk_s.act_salt = n_salt;
 	g2_qk_s.last_update = local_time_now;
 }
@@ -247,13 +253,315 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 	return (h & TIME_SLOT_COUNT_MASK) == (key & TIME_SLOT_COUNT_MASK);
 }
 
-bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
+/*
+ * Query Key Cache
+ */
+#define QK_CACHE_SHIFT 9
+#define QK_CACHE_SIZE (1 << QK_CACHE_SHIFT)
+#define QK_CACHE_HTSIZE (QK_CACHE_SIZE/8)
+#define QK_CACHE_HTMASK (QK_CACHE_HTSIZE-1)
+
+struct qk_entry
 {
-	return false;
+	union combo_addr na;
+	uint32_t qk;
+	time_t when;
+};
+
+struct qk_cache_entry
+{
+	struct rb_node rb;
+	struct hlist_node node;
+	struct qk_entry e;
+	bool used;
+};
+
+static struct {
+	pthread_mutex_t lock;
+	int num;
+	uint32_t ht_seed;
+	struct qk_cache_entry *next_free;
+	struct rb_root tree;
+	struct hlist_head ht[QK_CACHE_HTSIZE];
+	struct qk_cache_entry entrys[QK_CACHE_SIZE];
+} cache;
+
+static void qk_init(void)
+{
+	if(pthread_mutex_init(&cache.lock, NULL))
+		diedie("initialising qk cache lock");
+	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
+}
+
+static void qk_deinit(void)
+{
+	pthread_mutex_destroy(&cache.lock);
+}
+
+static struct qk_cache_entry *qk_cache_entry_alloc(void)
+{
+	struct qk_cache_entry *e;
+	unsigned i;
+
+	if(QK_CACHE_SIZE <= cache.num)
+		return NULL;
+
+	if(cache.next_free)
+	{
+		e = cache.next_free;
+		cache.next_free = NULL;
+		if(likely(!e->used))
+			goto check_next_free;
+	}
+
+	for(i = 0, e = NULL; i < QK_CACHE_SIZE; i++)
+	{
+		if(!cache.entrys[i].used) {
+			e = &cache.entrys[i];
+			break;
+		}
+	}
+
+	if(e)
+	{
+check_next_free:
+		e->used = true;
+		cache.num++;
+		if(e < &cache.entrys[QK_CACHE_SIZE-1]) {
+			if(!e[1].used)
+				cache.next_free = &e[1];
+		}
+		RB_CLEAR_NODE(&e->rb);
+	}
+	return e;
+}
+
+static uint32_t cache_ht_hash(const union combo_addr *addr)
+{
+	return combo_addr_hash(addr, cache.ht_seed);
+}
+
+static void qk_cache_entry_free(struct qk_cache_entry *e)
+{
+	memset(e, 0, sizeof(*e));
+	if(!cache.next_free)
+		cache.next_free = e;
+	cache.num--;
+}
+
+static struct qk_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint32_t h)
+{
+	struct hlist_node *n;
+	struct qk_cache_entry *e;
+
+// TODO: check for mapped ip addr?
+// TODO: when IPv6 is common, change it
+// TODO: leave out port?
+	if(likely(addr->s_fam == AF_INET))
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & QK_CACHE_HTMASK], node)
+		{
+			if(e->e.na.s_fam != AF_INET)
+				continue;
+			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
+			   e->e.na.in.sin_port == addr->in.sin_port)
+				return e;
+		}
+	}
+	else
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & QK_CACHE_HTMASK], node)
+		{
+			if(e->e.na.s_fam != AF_INET6)
+				continue;
+			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
+			   e->e.na.in.sin_port == addr->in.sin_port)
+				return e;
+		}
+	}
+
+	return NULL;
+}
+
+static void cache_ht_add(struct qk_cache_entry *e, uint32_t h)
+{
+	hlist_add_head(&e->node, &cache.ht[h & QK_CACHE_HTMASK]);
+}
+
+static void cache_ht_del(struct qk_cache_entry *e)
+{
+	hlist_del(&e->node);
+}
+
+static int qk_entry_cmp(struct qk_cache_entry *a, struct qk_cache_entry *b)
+{
+	int ret = (long)a->e.when - (long)b->e.when;
+	if(ret)
+		return ret;
+	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+		return ret;
+	if(likely(AF_INET == a->e.na.s_fam))
+	{
+		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
+			return ret;
+		return (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port;
+	}
+	else
+	{
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
+			return ret;
+		return (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port;
+	}
+}
+
+static noinline bool qk_rb_cache_insert(struct qk_cache_entry *e)
+{
+	struct rb_node **p = &cache.tree.rb_node;
+	struct rb_node *parent = NULL;
+
+	while(*p)
+	{
+		struct qk_cache_entry *n = rb_entry(*p, struct qk_cache_entry, rb);
+		int result = qk_entry_cmp(e, n);
+
+		parent = *p;
+		if(result < 0)
+			p = &((*p)->rb_left);
+		else if(result > 0)
+			p = &((*p)->rb_right);
+		else
+			return false;
+	}
+	rb_link_node(&e->rb, parent, p);
+	rb_insert_color(&e->rb, &cache.tree);
+
+	return true;
+}
+
+static noinline bool qk_rb_cache_remove(struct qk_cache_entry *e)
+{
+	struct rb_node *n = &e->rb;
+
+	if(RB_EMPTY_NODE(n))
+		return false;
+
+	rb_erase(n, &cache.tree);
+	RB_CLEAR_NODE(n);
+	cache_ht_del(e);
+
+	return true;
+}
+
+static struct qk_cache_entry *qk_cache_last(void)
+{
+	struct rb_node *n = rb_last(&cache.tree);
+	if(!n)
+		return NULL;
+	return rb_entry(n, struct qk_cache_entry, rb);
 }
 
 void g2_qk_add(uint32_t qk, const union combo_addr *addr)
 {
+	struct qk_cache_entry *e;
+	uint32_t h;
+	time_t when;
+
+	if(unlikely(combo_addr_is_public(addr))) {
+		logg_develd("addr %pI is privat, not added\n", addr);
+		return;
+	}
+	h = cache_ht_hash(addr);
+	when = local_time_now;
+
+	/*
+	 * Prevent the compiler from moving the calcs into
+	 * the critical section
+	 */
+	barrier();
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return;
+	/* already in the cache? */
+	e = cache_ht_lookup(addr, h);
+	if(e)
+	{
+		/* entry newer? */
+		if(e->e.when >= when)
+			goto out_unlock;
+		if(!qk_rb_cache_remove(e)) {
+			logg_devel("remove failed\n");
+			goto life_tree_error; /* something went wrong... */
+		}
+	}
+	else
+	{
+		e = qk_cache_last();
+		if(likely(e) &&
+		   e->e.when < when &&
+		   QK_CACHE_SIZE <= cache.num)
+		{
+			logg_devel_old("found older entry\n");
+			if(!qk_rb_cache_remove(e))
+				goto out_unlock; /* the tree is amiss? */
+		}
+		else
+			e = qk_cache_entry_alloc();
+		if(!e)
+			goto out_unlock;
+
+		e->e.na = *addr;
+	}
+	e->e.qk = qk;
+	e->e.when = when;
+
+	if(!qk_rb_cache_insert(e)) {
+		logg_devel("insert failed\n");
+life_tree_error:
+		qk_cache_entry_free(e);
+	}
+	else
+		cache_ht_add(e, h);
+
+out_unlock:
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("ahhhh, QK cache lock stuck, bye!");
+}
+
+bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
+{
+	struct qk_cache_entry *e;
+	uint32_t h;
+	bool ret_val;
+
+	if(unlikely(combo_addr_is_public(addr)))
+		return false;
+	h = cache_ht_hash(addr);
+	ret_val = false;
+
+	/*
+	 * Prevent the compiler from moving the calcs into
+	 * the critical section
+	 */
+	barrier();
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return false;
+	/* already in the cache? */
+	e = cache_ht_lookup(addr, h);
+	if(e) {
+		if(qk)
+			*qk = e->e.qk;
+		ret_val = true;
+	}
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("ahhhh, QK cache lock stuck, bye!");
+	return ret_val;
 }
 
 /*@unused@*/

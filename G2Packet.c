@@ -92,8 +92,10 @@ static bool handle_LNI(struct ptype_action_args *);
 static bool handle_LNI_FW(struct ptype_action_args *);
 static bool handle_LNI_HS(struct ptype_action_args *);
 static bool handle_LNI_NA(struct ptype_action_args *);
+static bool handle_LNI_RTR(struct ptype_action_args *);
 static bool handle_LNI_GU(struct ptype_action_args *);
 static bool handle_LNI_QK(struct ptype_action_args *);
+static bool handle_LNI_HA(struct ptype_action_args *);
 static bool handle_LNI_V(struct ptype_action_args *);
 static bool handle_PI(struct ptype_action_args *);
 static bool handle_PI_UDP(struct ptype_action_args *);
@@ -161,8 +163,10 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 {
 	[PT_CRAWLA] = empty_action_p, /* we don't request crawls */
 	[PT_CRAWLR] = handle_CRAWLR,
+	[PT_KHL   ] = empty_action_p, /* we don't request khls by udp */
 	[PT_KHLA  ] = empty_action_p, /* we don't request khls by udp */
 	[PT_KHLR  ] = handle_KHLR,
+	[PT_DIS   ] = handle_KHLR,
 	[PT_PI    ] = handle_PI,
 	[PT_PO    ] = empty_action_p, /* yeah, so what */
 	[PT_JCT   ] = empty_action_p, /* no answer needed, it's ACKed */
@@ -185,14 +189,17 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
-	[PT_TO] = empty_action_p,
-	[PT_FW] = handle_LNI_FW,
-	[PT_GU] = handle_LNI_GU,
-	[PT_HS] = handle_LNI_HS,
-	[PT_LS] = empty_action_p,
-	[PT_NA] = handle_LNI_NA,
-	[PT_QK] = handle_LNI_QK,
-	[PT_V ] = handle_LNI_V,
+	[PT_TO ] = empty_action_p,
+	[PT_FW ] = handle_LNI_FW,
+	[PT_GU ] = handle_LNI_GU,
+	[PT_HS ] = handle_LNI_HS,
+	[PT_LS ] = empty_action_p,
+	[PT_RTR] = handle_LNI_RTR,
+	[PT_NA ] = handle_LNI_NA,
+	[PT_QK ] = handle_LNI_QK,
+	[PT_UP ] = empty_action_p,
+	[PT_HA ] = handle_LNI_HA,
+	[PT_V  ] = handle_LNI_V,
 };
 
 /* KHLR-childs */
@@ -1416,7 +1423,11 @@ static bool handle_KHL_CH_GU(struct ptype_action_args *parg)
 
 struct LNI_data
 {
+	bool had_LNI_QK;
+	bool had_LNI_FW;
 	bool had_LNI_HS;
+	bool had_LNI_HA;
+	bool had_LNI_RTR;
 	bool had_LNI_GU;
 };
 
@@ -1424,14 +1435,13 @@ static bool handle_LNI(struct ptype_action_args *parg)
 {
 	union combo_addr local_addr;
 	struct ptype_action_args cparg;
-	g2_packet_t *lni, *na, *gu, *v, *hs;
+	g2_packet_t *lni, *na, *gu, *v, *hs, *qk;
 	g2_connection_t *connec = parg->connec;
 	socklen_t sin_size = sizeof(local_addr);
 	bool ret_val = false, keep_decoding;
 	struct LNI_data rdata;
 
-	rdata.had_LNI_HS = false;
-	rdata.had_LNI_GU = false;
+	memset(&rdata, 0, sizeof(rdata));
 	cparg = *parg;
 	cparg.opaque = &rdata;
 	do
@@ -1463,6 +1473,15 @@ static bool handle_LNI(struct ptype_action_args *parg)
 			g2_qht_put(t);
 		}
 	}
+	/* demote other options */
+	if(!rdata.had_LNI_QK && connec->flags.query_key_cache)
+		connec->flags.query_key_cache = false;
+	if(!rdata.had_LNI_FW && connec->flags.firewalled)
+		connec->flags.firewalled = false;
+	if(!rdata.had_LNI_RTR && connec->flags.router)
+		connec->flags.router = false;
+	if(!rdata.had_LNI_HA && connec->flags.hub_able)
+		connec->flags.hub_able = false;
 
 // TODO: update less often?
 	/* conreg and guid update only in timeout intervals? */
@@ -1482,6 +1501,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	gu  = g2_packet_calloc();
 	v   = g2_packet_calloc();
 	hs  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
+	qk  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
 
 	if(!(lni && na))
 		goto out_fail;
@@ -1526,6 +1546,10 @@ static bool handle_LNI(struct ptype_action_args *parg)
 		else
 			g2_packet_free(hs);
 	}
+	if(qk) {
+		qk->type = PT_QK;
+		list_add_tail(&qk->list, &lni->children);
+	}
 	lni->big_endian = HOST_IS_BIGENDIAN;
 
 	g2_packet_add2target(lni, parg->target, parg->target_lock);
@@ -1538,14 +1562,7 @@ out_fail:
 	g2_packet_free(gu);
 	g2_packet_free(v);
 	g2_packet_free(hs);
-	return false;
-}
-
-static bool handle_LNI_FW(struct ptype_action_args *parg)
-{
-	logg_packet_old("/LNI/FW\n");
-	parg->connec->flags.firewalled = true;
-// TODO: reset this state if a LNI without FW comes in
+	g2_packet_free(qk);
 	return false;
 }
 
@@ -1597,10 +1614,35 @@ static bool handle_LNI_GU(struct ptype_action_args *parg)
 	return false;
 }
 
+static bool handle_LNI_FW(struct ptype_action_args *parg)
+{
+	logg_packet_old("/LNI/FW\n");
+	parg->connec->flags.firewalled = true;
+	((struct LNI_data *)(parg->opaque))->had_LNI_FW = true;
+	return false;
+}
+
 static bool handle_LNI_QK(struct ptype_action_args *parg)
 {
 	logg_packet_old("/LNI/QK\t\tlen: %zu\n", buffer_remaining(parg->source->data_trunk));
 	parg->connec->flags.query_key_cache = true;
+	((struct LNI_data *)(parg->opaque))->had_LNI_QK = true;
+	return false;
+}
+
+static bool handle_LNI_RTR(struct ptype_action_args *parg)
+{
+	logg_packet_old("/LNI/RTR\t\tlen: %zu\n", buffer_remaining(parg->source->data_trunk));
+	parg->connec->flags.router = true;
+	((struct LNI_data *)(parg->opaque))->had_LNI_RTR = true;
+	return false;
+}
+
+static bool handle_LNI_HA(struct ptype_action_args *parg)
+{
+	logg_packet_old("/LNI/HA\t\tlen: %zu\n", buffer_remaining(parg->source->data_trunk));
+	parg->connec->flags.hub_able = true;
+	((struct LNI_data *)(parg->opaque))->had_LNI_HA = true;
 	return false;
 }
 

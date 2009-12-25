@@ -55,7 +55,10 @@
 # define MOD4(a) a %= BASE
 #endif
 
-#ifdef __SSE5__
+#ifdef __XOP__
+		/*
+		 * Will XOP processors have SSSE3/AVX??
+		 */
 		if(k >= 16)
 		{
 			static const char vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
@@ -70,24 +73,24 @@
 				"lddqu	(%0), %%xmm0\n\t"
 				"prefetchnta	32(%0)\n\t"
 				"sub	$16, %3\n\t"
-				"pshld	$4, %%xmm3, %%xmm1\n\t"
-				"paddd	%%xmm1, %%xmm2\n\t" /* pmacudd */ /* mul = 16 */
 				"add	$16, %0\n\t"
-				"phaddubd	%%xmm0, %%xmm1\n\t"
-				"pmaddubsw %%xmm4, %%xmm0\n\t"
-				"paddd	%%xmm1, %%xmm3\n\t" /* pmadcubd */ /* mul = 1 */
 				"cmp	$15, %3\n\t"
-				"phadduwd	%%xmm0, %%xmm1\n\t"
-				"paddd	%%xmm1, %%xmm2\n\t" /* pmadcubd */ /* mul = 16,15,14... */
+				"vpslld	$4, %%xmm3, %%xmm1\n\t"
+				"vphaddubd	%%xmm0, %%xmm5\n\t" /* A */
+				"vpmaddubsw %%xmm4, %%xmm0, %%xmm0\n\t"/* AVX! */ /* 1 */
+				"vpaddd	%%xmm1, %%xmm2, %%xmm2\n\t" /* vpmacudd w. mul = 16 */
+				"vphadduwd	%%xmm0, %%xmm0\n\t" /* 2 */
+				"vpaddd	%%xmm5, %%xmm3, %%xmm3\n\t" /* B: A+B = hadd+acc or vpmadcubd w. mul = 1 */
+				"vpaddd	%%xmm0, %%xmm2, %%xmm2\n\t" /* 3: 1+2+3 = vpmadcubd w. mul = 16,15,14... */
 				"jg	1b\n\t"
 				/* do the modulo SIMD, stay longer in loop  */
 				/* (u64) t = x * 0x80078071U
-				 * t = t >> 32 >> 0xf;
+				 * t = t >> 32 >> 0xf; // pmulhud + psrld $15
 				 * (i32)t *= 0xfff1;
-				 * x -= t;
+				 * x -= t; // vpmsubudd
 				 */
-				"phaddudq	%%xmm2, %%xmm0\n\t"
-				"phaddudq	%%xmm3, %%xmm1\n\t"
+				"vphaddudq	%%xmm2, %%xmm0\n\t"
+				"vphaddudq	%%xmm3, %%xmm1\n\t"
 				"pshufd	$0xE6, %%xmm0, %%xmm2\n\t"
 				"pshufd	$0xE6, %%xmm1, %%xmm3\n\t"
 				"paddd	%%xmm0, %%xmm2\n\t"
@@ -104,7 +107,7 @@
 			  /*    */ "2" (s2),
 			  /*    */ "3" (k)
 #ifdef __SSE__
-			: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5",
+			: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5"
 #endif
 			);
 		}

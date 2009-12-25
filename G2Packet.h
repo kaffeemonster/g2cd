@@ -80,6 +80,7 @@
 	ENUM_CMD( UPROD  , 1 ), \
 	ENUM_CMD( KHLR   , 1 ), /* UDP */ \
 	ENUM_CMD( KHLA   , 1 ), /* UDP */ \
+	ENUM_CMD( DIS    , 1 ), /* UDP */ \
 	ENUM_CMD( JCT    , 1 ), /* UDP connect test */ /* root packets */ \
 	ENUM_CMD( G2CDc  , 1 ), \
 	ENUM_CMD( DN     , 1 ), \
@@ -98,6 +99,9 @@
 	ENUM_CMD( CV     , 1 ), /* version */ \
 	ENUM_CMD( V      , 1 ), /* commom child packets */ \
 	ENUM_CMD( FW     , 1 ), /* LNI? */ \
+	ENUM_CMD( RTR    , 0 ), /* LNI */ \
+	ENUM_CMD( UP     , 0 ), /* LNI */ \
+	ENUM_CMD( HA     , 0 ), /* LNI */ \
 	ENUM_CMD( BUP    , 1 ), /* QH2 */ \
 	ENUM_CMD( BH     , 1 ), /* QH2 */ \
 	ENUM_CMD( BUSY   , 1 ), /* QH2 */ \

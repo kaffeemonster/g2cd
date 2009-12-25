@@ -102,6 +102,8 @@ typedef struct g2_connection
 		bool          has_written;
 		bool          firewalled;
 		bool          query_key_cache;
+		bool          router;
+		bool          hub_able;
 		bool          t1;
 		bool          last_data_active;
 	} flags;
