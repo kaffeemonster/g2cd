@@ -80,7 +80,7 @@
 	ENUM_CMD( UPROD  , 1 ), \
 	ENUM_CMD( KHLR   , 1 ), /* UDP */ \
 	ENUM_CMD( KHLA   , 1 ), /* UDP */ \
-	ENUM_CMD( DIS    , 1 ), /* UDP */ \
+	ENUM_CMD( DIS    , 1 ), /* UDP, KHL extention */ \
 	ENUM_CMD( JCT    , 1 ), /* UDP connect test */ /* root packets */ \
 	ENUM_CMD( G2CDc  , 1 ), \
 	ENUM_CMD( DN     , 1 ), \
@@ -93,7 +93,6 @@
 	ENUM_CMD( URN    , 1 ), \
 	ENUM_CMD( NH     , 1 ), /* KHL(A) */ \
 	ENUM_CMD( CH     , 1 ), /* KHL(A) */ \
-	ENUM_CMD( DIS    , 1 ), /* KHL extention */ \
 	ENUM_CMD( UKHLID , 1 ), /* KHLA/KHLR? */ \
 	ENUM_CMD( YOURIP , 1 ), /* KHLA */ \
 	ENUM_CMD( CV     , 1 ), /* version */ \
