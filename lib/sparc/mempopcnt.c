@@ -144,6 +144,7 @@ static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
 # endif
 # include "../generic/mempopcnt.c"
 static char const rcsid_mps[] GCC_ATTR_USED_VAR = "$Id: $";
+# endif
 #else
 # include "../generic/mempopcnt.c"
 #endif

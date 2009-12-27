@@ -160,6 +160,7 @@ ARCH = athlon64-sse3
 #ARCH = G4
 #ARCH = G3
 #ARCH = ultrasparc
+#ARCH = ultrasparc3
 #ARCH = niagara
 #ARCH = cortex-a8
 #ARCH = ev67

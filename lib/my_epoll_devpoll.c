@@ -174,8 +174,8 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	if((EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op) && event->events & EPOLLET) {
 		/* we cannot emulate EPOLLET */
 		logg_develd("edge triggered request: efd: %i fd: %i e: 0x%x p: %p\n",
-		            epfd, fd, events, event->data.ptr);
-		errnp = EINVAL;
+		            epfd, fd, event->events, event->data.ptr);
+		errno = EINVAL;
 		return -1;
 	}
 
@@ -217,7 +217,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 		while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 		if(sizeof(tmp_poll) == w_val)
-			fds->data[fd].ptr = (void *)((uintptr_t)event->data.ptr & ~1 | !!(event->events & EPOLLONESHOT));
+			fds->data[fd].ptr = (void *)(((uintptr_t)event->data.ptr & ~1) | (!!(event->events & EPOLLONESHOT)));
 		else {
 			logg_errno(LOGF_ERR, "adding new fd to /dev/poll");
 			ret_val = -1;
@@ -249,7 +249,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 			tmp_poll.events = event->events & ~(EPOLLONESHOT | EPOLLET);
 			while(sizeof(tmp_poll) != (w_val = pwrite(epfd, &tmp_poll, sizeof(tmp_poll), 0)) && EINTR == errno);
 			if(sizeof(tmp_poll) == w_val)
-				fds->data[fd].ptr = (void *)((uintptr_t)event->data.ptr & ~1 | !!(event->events & EPOLLONESHOT));
+				fds->data[fd].ptr = (void *)(((uintptr_t)event->data.ptr & ~1) | (!!(event->events & EPOLLONESHOT)));
 			else {
 				logg_errno(LOGF_ERR, "readding modified fd to /dev/poll");
 				ret_val = -1;

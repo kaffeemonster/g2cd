@@ -61,6 +61,7 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 }
 
 #  if defined(__sparcv9) || defined(__sparc_v9__)
+static always_inline void *atomic_cmppx_64(void *, void *, atomicptr_t *);
 static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	void *res;
@@ -100,6 +101,7 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 }
 
 #  if defined(__sparcv9) || defined(__sparc_v9__)
+static always_inline int atomic_cmpx_64(int, int, atomic_t *);
 static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int res;

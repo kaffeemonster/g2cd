@@ -55,6 +55,7 @@ LIBHEADS = \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
 	$(MPL)/swab.h \
+	$(MPL)/unaligned.h \
 	$(MPL)/combo_addr.h \
 	$(MPL)/recv_buff.h \
 	$(MPL)/udpfromto.h \

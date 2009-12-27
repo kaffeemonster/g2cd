@@ -56,7 +56,7 @@ static GCC_ATTR_CONST inline unsigned edge##x(const void *p1, const void *p2) { 
 # define EDGE_FUNC(x) \
 static GCC_ATTR_CONST inline unsigned edge##x(const void *p1, const void *p2) { \
 	unsigned t; \
-	asm ("edgencc"mkstr(x)"	%1, %2, %0" : "=r" (t) : "r" (p1), "r" (p2)); \
+	asm ("edge"mkstr(x)"n	%1, %2, %0" : "=r" (t) : "r" (p1), "r" (p2)); \
 	return t; }
 
 static inline void write_bmask1(unsigned a)

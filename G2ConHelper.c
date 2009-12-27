@@ -314,8 +314,10 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 	tmp_eevent.events = 0;
 	tmp_eevent.data.u64 = 0;
 	/* remove from EPoll */
-	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent))
-		logg_errno(LOGF_ERR, "removing bad socket from EPoll");
+	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent)) {
+		if(ENOENT != errno)
+			logg_errno(LOGF_ERR, "removing bad socket from EPoll");
+	}
 
 	if(!keep_it)
 	{

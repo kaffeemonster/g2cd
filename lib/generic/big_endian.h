@@ -1,7 +1,7 @@
 #ifndef _LIB_GENERIC_BIG_ENDIAN_H
 # define _LIB_GENERIC_BIG_ENDIAN_H
 
-# include "../swap.h"
+# include "../swab.h"
 
 # define HOST_IS_BIGENDIAN 1
 # if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
@@ -35,7 +35,7 @@ static inline __le64 cpu_to_le64p(const uint64_t *p)
 }
 static inline uint64_t le64_to_cpup(const __le64 *p)
 {
-	return __swab64p((uint64_t *)p);
+	return __swab64p((const uint64_t *)p);
 }
 static inline __le32 cpu_to_le32p(const uint32_t *p)
 {
@@ -43,7 +43,7 @@ static inline __le32 cpu_to_le32p(const uint32_t *p)
 }
 static inline uint32_t le32_to_cpup(const __le32 *p)
 {
-	return __swab32p((uint32_t *)p);
+	return __swab32p((const uint32_t *)p);
 }
 static inline __le16 cpu_to_le16p(const uint16_t *p)
 {
@@ -51,7 +51,7 @@ static inline __le16 cpu_to_le16p(const uint16_t *p)
 }
 static inline uint16_t le16_to_cpup(const __le16 *p)
 {
-	return __swab16p((uint16_t *)p);
+	return __swab16p((const uint16_t *)p);
 }
 static inline __be64 cpu_to_be64p(const uint64_t *p)
 {
@@ -59,23 +59,23 @@ static inline __be64 cpu_to_be64p(const uint64_t *p)
 }
 static inline uint64_t be64_to_cpup(const __be64 *p)
 {
-	return ( uint64_t)*p;
+	return (uint64_t)*p;
 }
 static inline __be32 cpu_to_be32p(const uint32_t *p)
 {
-	return ( __be32)*p;
+	return (__be32)*p;
 }
 static inline uint32_t be32_to_cpup(const __be32 *p)
 {
-	return ( uint32_t)*p;
+	return (uint32_t)*p;
 }
 static inline __be16 cpu_to_be16p(const uint16_t *p)
 {
-	return ( __be16)*p;
+	return (__be16)*p;
 }
 static inline uint16_t be16_to_cpup(const __be16 *p)
 {
-	return ( uint16_t)*p;
+	return (uint16_t)*p;
 }
 
 #endif /* _LIB_GENERIC_BIG_ENDIAN_H */

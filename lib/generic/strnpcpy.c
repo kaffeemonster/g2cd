@@ -78,6 +78,11 @@ DO_LARGE:
 				r = has_nul_byte(c);
 				if(r)
 					return cpy_rest0((char *)dst_b, (const char *)src_b, nul_byte_index(r));
+				/*
+				 * Unaligned writes are "more bad" then unaligned reads, but
+				 * the dance with the page boundery sucks, as long as these
+				 * strings are not super long...
+				 */
 				put_unaligned(c, dst_b);
 			}
 
@@ -109,13 +114,16 @@ DO_LARGE:
 			size_t t, te, u;
 			unsigned align, shift1, shift2;
 
-			i = maxlen / SOST;
-			align   = (unsigned)ALIGN_DOWN_DIFF(dst, SOST);
-			shift1  = BITS_PER_CHAR * align;
-			shift2  = BITS_PER_CHAR * (SOST - align);
-			dst_b   = (size_t *)ALIGN_DOWN(dst, SOST);
-			r = 0;
-			te = *dst_b;
+			i      = 0;
+			align  = SOST - (unsigned)ALIGN_DOWN_DIFF(dst, SOST);
+			shift1 = BITS_PER_CHAR * align;
+			shift2 = BITS_PER_CHAR * (SOST - align);
+			dst_b  = (size_t *)ALIGN_DOWN(dst, SOST);
+			te     = *dst_b;
+			if(HOST_IS_BIGENDIAN)
+				te >>= shift1;
+			else
+				te <<= shift1;
 			do
 			{
 				t = te;
@@ -129,12 +137,13 @@ DO_LARGE:
 					r = nul_byte_index(r) + 1;
 					break;
 				}
-				if(!i--)
+				if(i + SOST > maxlen)
 					break;
+				i += SOST;
 				*dst_b++ = t;
 			} while(1);
-			if(!r) /* did we hit maxlen? */
-				u = SOST - (maxlen % SOST);
+			if(!r)
+				u = maxlen - i;
 			else {
 				u = r;
 				r = 1;
@@ -142,19 +151,21 @@ DO_LARGE:
 			if(u >= align)
 			{
 				*dst_b++ = t;
-				t = te;
-				te = 0;
 				u -= align;
 				if(!u)
 					return (char *)dst_b - r;
+				t = te;
 				if(HOST_IS_BIGENDIAN)
-					t = t << shift1 | te >> shift2;
+					t = t << shift1;
 				else
-					t = t >> shift1 | te << shift2;
+					t = t >> shift1;
+				u = u;
 			}
-			te = *dst_b;
+			else
+				u = u + (SOST - align);
 			align = SOST - u;
-			u  = align * BITS_PER_CHAR;
+			te = *dst_b;
+			u  = (SOST - u) * BITS_PER_CHAR;
 			if(HOST_IS_BIGENDIAN)
 				u = MK_C(0xFFFFFFFFUL) << u;
 			else
@@ -175,11 +186,10 @@ DO_LARGE:
 					return cpy_rest0((char *)dst_b, (const char *)src_b, nul_byte_index(r));
 				*dst_b = c;
 			}
+			maxlen = i * SOST + (maxlen % SOST);
+			dst = (char *)dst_b;
+			src = (const char *)src_b;
 		}
-
-		maxlen = i * SOST + (maxlen % SOST);
-		dst = (char *)dst_b;
-		src = (const char *)src_b;
 	}
 
 OUT:

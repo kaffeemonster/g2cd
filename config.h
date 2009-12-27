@@ -56,10 +56,10 @@
 /* need epoll compat? */
 //#define NEED_EPOLL_COMPAT
 /* if we need epoll compat-layer, wich? Only use _ONE_! */
-//#define HAVE_POLL	/* BROKEN ? */
+//#define HAVE_POLL	/* EXPERIMENTAL */
 //#define HAVE_KEPOLL	/* Linux with old userland and 2.6 Kernel */
 //#define HAVE_DEVPOLL	/* Solaris, EXPERIMENTAL */
-//#define HAVE_EPORT	/* Solaris, BROKEN */
+//#define HAVE_EPORT	/* Solaris, EXPERIMENTAL */
 //#define HAVE_KQUEUE	/* BSD, EXPERIMENTAL */
 
 /* do we have sighandler_t */

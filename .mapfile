@@ -4,9 +4,7 @@
 		main;
 		g2_set_thread_name;
 	# Threads
-		G2Accept;
-		G2Handler;
-		G2UDP;
+		gup;
 		timeout_timer_task;
 	# vars
 		KNOWN_ENCODINGS;
@@ -22,6 +20,13 @@
 		g2_con_alloc;
 		g2_con_free;
 		recycle_con;
+	# G2Acceptor
+		accept_timeout;
+		handle_accept_abnorm;
+		handle_accept_in;
+		handle_con_a;
+		init_accept;
+		clean_up_accept;
 	# G2ConHelper
 		do_read;
 		do_write;
@@ -48,6 +53,8 @@
 		g2_guid_init;
 		g2_guid_lookup;
 	# G2Handler
+		handle_con;
+		handler_active_timeout;
 		g2_handler_con_mark_write;
 	# G2KHL
 		g2_khl_add;
@@ -114,7 +121,10 @@
 		g2_qk_lookup;
 		g2_qk_tick;
 	# G2UDP
+		handle_udp;
 		g2_udp_send;
+		init_udp;
+		clean_up_udp;
 	# timeout
 		timeout_add;
 		timeout_advance;

@@ -2,7 +2,7 @@
  * my_bitopsm.h
  * bitbanging helber defines
  *
- * Copyright (c) 2006 Jan Seiffert
+ * Copyright (c) 2006-2009 Jan Seiffert
  *
  * This file is part of g2cd.
  *
