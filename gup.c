@@ -81,6 +81,8 @@ static void *gup_loop(void *param)
 	bool lcon_refresh_needed = false;
 	/* make our hzp ready */
 	hzp_alloc();
+	g2_packet_local_alloc_init();
+	recv_buff_local_refill();
 
 	/* fill receive buffer */
 	lbuff[0] = recv_buff_local_get();

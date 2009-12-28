@@ -51,6 +51,7 @@
 #include "G2UDP.h"
 #include "G2Connection.h"
 #include "G2ConRegistry.h"
+#include "G2Packet.h"
 #include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "G2KHL.h"
@@ -464,6 +465,7 @@ static inline void handle_config(void)
 	/* set to true on startup, switch when enough hubs */
 	server.status.our_server_upeer_needed = false;
 	atomic_set(&server.status.act_connection_sum, 0);
+	atomic_set(&server.status.act_hub_sum, 0);
 
 // TODO: read from config files
 	/* var settings */
@@ -485,6 +487,7 @@ static inline void handle_config(void)
 	server.settings.default_in_encoding = DEFAULT_ENC_IN;
 	server.settings.default_out_encoding = DEFAULT_ENC_OUT;
 	server.settings.max_connection_sum = DEFAULT_CON_MAX;
+	server.settings.max_hub_sum = DEFAULT_HUB_MAX;
 	server.settings.default_max_g2_packet_length = DEFAULT_PCK_LEN_MAX;
 	server.settings.profile.want_2_send = DEFAULT_SEND_PROFILE;
 	server.settings.khl.gwc_boot_url = DEFAULT_GWC_BOOT;
@@ -758,6 +761,7 @@ static void read_uprofile(void)
 		goto read_uprofile_end;
 	}
 
+	g2_packet_local_alloc_init_min();
 	uprod = g2_packet_calloc();
 	xml   = g2_packet_calloc();
 	f_mem = malloc(f_bytes);

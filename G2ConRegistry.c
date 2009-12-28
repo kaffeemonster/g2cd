@@ -143,7 +143,7 @@
  * So lets attack this from a more simple vector.
  * We can put the QHTs aside for a moment. What ever we choose, we can
  * still build one master QHT which at least should give us this
- * "one-look-no-not for-us" thing. Divide and conquer aproaches are an
+ * "one-look no-not-for-us" thing. Divide and conquer aproaches are an
  * additional optimazition.
  * So we can choose a simple hashtable which brings us 2) and 4) (with
  * solvable locking), can provide 3) (also solvable locking), and 1) on
@@ -418,6 +418,7 @@ bool g2_conreg_remove(g2_connection_t *connec)
 		if(likely(!list_empty(&connec->hub_list)))
 			list_del(&connec->hub_list);
 		pthread_rwlock_unlock(&neighbour_hubs_lock);
+		atomic_dec(&server.status.act_hub_sum);
 		INIT_LIST_HEAD(&connec->hub_list);
 	}
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
@@ -431,14 +432,19 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	return true;
 }
 
-void g2_conreg_promote_hub(g2_connection_t *connec)
+bool g2_conreg_promote_hub(g2_connection_t *connec)
 {
 	if(unlikely(!list_empty(&connec->hub_list)))
-		return;
+		return false;
 
+	if(atomic_inc_return(&server.status.act_hub_sum) >= server.settings.max_hub_sum) {
+		atomic_dec(&server.status.act_hub_sum);
+		return false;
+	}
 	pthread_rwlock_wrlock(&neighbour_hubs_lock);
 	list_add_tail(&connec->hub_list, &neighbour_hubs);
 	pthread_rwlock_unlock(&neighbour_hubs_lock);
+	return true;
 }
 
 void g2_conreg_demote_hub(g2_connection_t *connec)
@@ -450,6 +456,7 @@ void g2_conreg_demote_hub(g2_connection_t *connec)
 	if(likely(!list_empty(&connec->hub_list)))
 		list_del_init(&connec->hub_list);
 	pthread_rwlock_unlock(&neighbour_hubs_lock);
+	atomic_dec(&server.status.act_hub_sum);
 }
 
 bool g2_conreg_is_neighbour_hub(const union combo_addr *addr)

@@ -221,7 +221,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	work_entry->com_socket = tmp_fd;
 
 	/* increase and check if our total server connection limit is reached */
-	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum) {
+	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum + 5) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == close(work_entry->com_socket) && EINTR == errno);
@@ -751,6 +751,16 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
 	LISTEN_ADR_KEY ": "
 
+#define HED_2_PART_1_FULLH				\
+	GNUTELLA_STRING " " STATUS_400 "to many hubs\r\n"	\
+	UAGENT_KEY ": " OUR_UA "\r\n"		\
+	LISTEN_ADR_KEY ": "
+
+#define HED_2_PART_1_FULLC				\
+	GNUTELLA_STRING " " STATUS_400 "to many connections\r\n"	\
+	UAGENT_KEY ": " OUR_UA "\r\n"		\
+	LISTEN_ADR_KEY ": "
+
 #define HED_2_PART_3				\
 	"\r\n" CONTENT_KEY ": " ACCEPT_G2 "\r\n"	\
 	ACCEPT_KEY ": " ACCEPT_G2 "\r\n"
@@ -760,9 +770,21 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* copy start of header */
 // TODO: finer granularity of stepping for smaller sendbuffer?
 			/* could we place it all in our sendbuffer? */
-			if(likely(str_size(HED_2_PART_1) < buffer_remaining(*to_con->send))) {
-				strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
-				to_con->send->pos += str_size(HED_2_PART_1);
+			if(likely(str_size(HED_2_PART_1_FULLC) < buffer_remaining(*to_con->send))) {
+				if(to_con->flags.upeer && atomic_read(&server.status.act_hub_sum) >= server.settings.max_hub_sum) {
+					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLH);
+					to_con->send->pos += str_size(HED_2_PART_1_FULLH);
+					to_con->flags.dismissed = true;
+				}
+				else if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
+					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLC);
+					to_con->send->pos += str_size(HED_2_PART_1_FULLC);
+					to_con->flags.dismissed = true;
+				}
+				else {
+					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
+					to_con->send->pos += str_size(HED_2_PART_1);
+				}
 			} else {
 				/* if not there must be something very wrong -> go home */
 				to_con->flags.dismissed = true;

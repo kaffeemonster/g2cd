@@ -62,7 +62,7 @@ static always_inline enum loglevel get_act_loglevel(void);
 # define FC_CAP_START  16
 # define FC_CAP_INC    32 /* not used ATM */
 # define FC_TRESHOLD   4
-# define FB_CAP_START  (THREAD_SUM * EVENT_SPACE * 2)
+# define FB_CAP_START  (THREAD_SUM * 8 * EVENT_SPACE * 2)
 # define FB_TRESHOLD   EVENT_SPACE
 
 # define PD_START_CAPACITY      128
@@ -88,6 +88,7 @@ _G2MAIN_EXTRNVAR(struct
 		struct
 		{
 			volatile int max_connection_sum;
+			volatile int max_hub_sum;
 			pthread_attr_t t_def_attr;
 			const char *data_root_dir;
 			const char *entropy_source;
@@ -139,6 +140,7 @@ _G2MAIN_EXTRNVAR(struct
 			bool all_abord[THREAD_SUM];
 			bool our_server_upeer;
 			bool our_server_upeer_needed;
+			atomic_t act_hub_sum;
 		} status;
 } server);
 

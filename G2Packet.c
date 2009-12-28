@@ -1589,7 +1589,8 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 
 	if(!connec->flags.upeer) {
 		connec->flags.upeer = true;
-		g2_conreg_promote_hub(connec);
+		if(!g2_conreg_promote_hub(connec))
+			connec->flags.dismissed = true;
 		/* connection is now a hub, remove from QHTs */
 		g2_conreg_mark_dirty(connec);
 	}
@@ -3704,6 +3705,153 @@ out_unlock:
  * helper-functions
  *
  ********************************************************************/
+struct lpacket_buffer
+{
+	unsigned num;
+	struct list_head packets;
+};
+
+/* Vars */
+	/* buffer buffer */
+static atomicptra_t free_packets[FB_CAP_START];
+#ifdef HAVE___THREAD
+static __thread struct lpacket_buffer lpack_cache;
+#else
+static pthread_key_t key2lpack;
+#endif
+
+/* Protos */
+	/* You better not kill this proto, or it wount work ;) */
+static void g2_packet_cinit(void) GCC_ATTR_CONSTRUCT;
+static void g2_packet_cdeinit(void) GCC_ATTR_DESTRUCT;
+
+static noinline g2_packet_t *g2_packet_alloc_system(void)
+{
+	g2_packet_t *t = malloc(sizeof(g2_packet_t));
+	if(t)
+		t->is_freeable = true;
+	return t;
+}
+
+static noinline g2_packet_t *g2_packet_alloc_boosted(void)
+{
+	int failcount = 0;
+	g2_packet_t *ret_val = NULL;
+
+	do
+	{
+		size_t i;
+		for(i = 0; i < anum(free_packets); i++)
+		{
+			if(atomic_pread(&free_packets[i])) {
+				if((ret_val = atomic_pxa(ret_val, &free_packets[i]))) {
+					ret_val->is_freeable = true;
+					return ret_val;
+				}
+			}
+		}
+	} while(++failcount < 2);
+	return g2_packet_alloc_system();
+}
+
+static noinline void g2_packet_free_boosted(g2_packet_t *to_free)
+{
+	if(!to_free)
+		return;
+
+	if(likely(to_free->is_freeable))
+	{
+		int failcount = 0;
+		do
+		{
+			size_t i = 0;
+			for(i = 0; i < anum(free_packets); i++)
+			{
+				if(!atomic_pread(&free_packets[i])) {
+					if(!(to_free = atomic_pxa(to_free, &free_packets[i])))
+						return;
+				}
+			}
+		} while(++failcount < 2);
+		free(to_free);
+	}
+}
+
+#ifndef HAVE___THREAD
+static void g2_packet_free_lorg(void *to_f)
+{
+	struct lpacket_buffer *lp = to_f;
+	g2_packet_t *pos, *n;
+
+	if(!lp)
+		return;
+
+	lp->num = 0;
+	list_for_each_entry_safe(pos, n, &lp->packets, list)
+		free(pos);
+}
+#endif
+
+static void g2_packet_cinit(void)
+{
+	size_t i;
+
+#ifndef HAVE___THREAD
+	if(pthread_key_create(&key2lpack, g2_packet_free_lorg))
+		diedie("couldn't create TLS key for recv_buff\n");
+#endif
+
+	for(i = 0; i < anum(free_packets); i++)
+	{
+		g2_packet_t *tmp = g2_packet_alloc_system();
+		if(tmp)
+		{
+			g2_packet_init(tmp);
+			INIT_PBUF(&tmp->data_trunk);
+			tmp->is_freeable = true;
+			if((tmp = atomic_pxa(tmp, &free_packets[i]))) {
+				logg_pos(LOGF_CRIT, "another thread working while init???");
+				free(tmp);
+			}
+		}
+		else
+		{
+			logg_errno(LOGF_CRIT, "g2_packet memory");
+			if(FB_TRESHOLD < i)
+				break;
+
+			for(; i > 0; --i) {
+				tmp = NULL;
+				free(atomic_pxa(tmp, &free_packets[i]));
+			}
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+static void g2_packet_cdeinit(void)
+{
+	int failcount = 0;
+#ifndef HAVE___THREAD
+	pthread_key_delete(key2lpack);
+#endif
+
+#ifndef DEBUG_DEVEL_OLD
+	do
+	{
+		size_t i = 0;
+		do
+		{
+			if(atomic_pread(&free_packets[i])) {
+				g2_packet_t *ret = NULL;
+				if((ret = atomic_pxa(ret, &free_packets[i])))
+					free(ret);
+			}
+		} while(++i < anum(free_packets));
+	} while(++failcount < 3);
+#endif
+}
+
 g2_packet_t *g2_packet_init(g2_packet_t *p)
 {
 	if(!p)
@@ -3718,15 +3866,103 @@ g2_packet_t *g2_packet_init(g2_packet_t *p)
 	return p;
 }
 
+#ifndef HAVE___THREAD
+static noinline struct lpacket_buffer *g2_packet_csetup(void)
+{
+	struct lpacket_buffer *ret_val;
+
+	ret_val = pthread_getspecific(key2lpack);
+	if(likely(ret_val))
+		return ret_val;
+
+	ret_val = malloc(sizeof(*ret_val));
+	if(!ret_val)
+		return ret_val;
+
+	ret_val->num = 0;
+	INIT_LIST_HEAD(&ret_val->packets);
+	pthread_setspecific(key2lpack, ret_val);
+	return ret_val;
+}
+#else
+static struct lpacket_buffer *g2_packet_csetup(void)
+{
+	return &lpack_cache;
+}
+#endif
+
 g2_packet_t *g2_packet_alloc(void)
 {
-	g2_packet_t *t = malloc(sizeof(g2_packet_t));
-	if(t)
-		t->is_freeable = true;
+	struct lpacket_buffer *lpb;
+	struct list_head *pos, *n;
+	g2_packet_t *t;
+
+	lpb = g2_packet_csetup();
+	if(!lpb)
+		return NULL;
+
+	if(!lpb->num)
+		return g2_packet_alloc_boosted();
+
+	list_for_each_safe(pos, n, &lpb->packets) {
+		list_del(pos);
+		break;
+	}
+	if(!pos)
+		return g2_packet_alloc_boosted();
+	t = list_entry(pos, g2_packet_t, list);
+	lpb->num--;
+	t->is_freeable = true;
 	return t;
 }
 
-// TODO: write a TLS boosted allocator
+void g2_packet_local_alloc_init_min(void)
+{
+	struct lpacket_buffer *lpb;
+
+	lpb = g2_packet_csetup();
+	if(!lpb)
+		return;
+
+	lpb->num = 0;
+	INIT_LIST_HEAD(&lpb->packets);
+}
+
+void g2_packet_local_alloc_init(void)
+{
+	struct lpacket_buffer *lpb;
+	size_t i;
+
+	g2_packet_local_alloc_init_min();
+
+	lpb = g2_packet_csetup();
+	if(!lpb)
+		return;
+
+	for(i = 0; i < FB_TRESHOLD / 2; i++)
+	{
+		g2_packet_t *t = g2_packet_alloc_system();
+		if(!t)
+			break;
+		g2_packet_init(t);
+		INIT_PBUF(&t->data_trunk);
+		t->is_freeable = true;
+		list_add(&t->list, &lpb->packets);
+		lpb->num++;
+	}
+	for(i = 0; i < FB_TRESHOLD / 2; i++)
+	{
+		g2_packet_t *t = g2_packet_alloc_boosted();
+		if(!t)
+			break;
+		g2_packet_init(t);
+		INIT_PBUF(&t->data_trunk);
+		t->is_freeable = true;
+		list_add(&t->list, &lpb->packets);
+		lpb->num++;
+	}
+}
+
 g2_packet_t *g2_packet_calloc(void)
 {
 	g2_packet_t *t = g2_packet_init(g2_packet_alloc());
@@ -3742,7 +3978,7 @@ g2_packet_t *g2_packet_clone(g2_packet_t *p)
 	g2_packet_t *t;
 	if(!p)
 		return p;
-	t = malloc(sizeof(*t));
+	t = g2_packet_alloc();
 	if(!t)
 		return t;
 	*t = *p;
@@ -3775,7 +4011,31 @@ void g2_packet_free(g2_packet_t *to_free)
 	}
 
 	if(likely(to_free->is_freeable))
-		free(to_free);
+	{
+		struct lpacket_buffer *lpb = g2_packet_csetup();
+		if(lpb)
+		{
+			/* add to front */
+			list_add(&to_free->list, &lpb->packets);
+			lpb->num++;
+			to_free = NULL;
+			if(lpb->num > FB_TRESHOLD * 2)
+			{
+				/* when free list is full remove from back */
+				list_for_each_prev_safe(e, n, &lpb->packets) {
+					list_del(e);
+					break;
+				}
+				if(e) {
+					to_free = list_entry(e, g2_packet_t, list);
+					lpb->num--;
+				}
+			}
+			if(!to_free)
+				return;
+		}
+		g2_packet_free_boosted(to_free);
+	}
 }
 
 void g2_packet_clean(g2_packet_t *to_clean)

@@ -392,7 +392,7 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 	do
 	{
 		size_t i = 0;
-		for(i = 0; i < 20; i++)
+		for(i = 0; i < anum(free_cons); i++)
 		{
 			if(!atomic_pread(&free_cons[i])) {
 				if(!(to_return = atomic_pxa(to_return, &free_cons[i])))

@@ -43,6 +43,7 @@
 #include "timeout.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
+#include "G2Packet.h"
 
 /* from deka to nano d    u    n */
 #define DSEC2NSEC (100*1000*1000)
@@ -365,6 +366,7 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 
 	/* make our hzp ready */
 	hzp_alloc();
+	g2_packet_local_alloc_init();
 
 	server.status.all_abord[THREAD_TIMER] = true;
 
