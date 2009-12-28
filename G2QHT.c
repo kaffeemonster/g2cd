@@ -703,6 +703,7 @@ bool g2_qht_search_add_hash_urn(const tchar_t *str, size_t len)
 #undef EM
 #undef EB32
 #undef EB16
+
 	unsigned char hash_val[32];
 	unsigned i;
 
@@ -975,10 +976,10 @@ static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *wor
 		/* picture */
 		{'j', 'p', 'g', '\0'}, {'g', 'i', 'f', '\0'}, {'p', 'n', 'g', '\0'}, {'b', 'm', 'p', '\0'},
 		/* video */
-		{'a', 'v', 'i', '\0'}, {'m', 'p', 'g', '\0'}, {'a', 'v', 'i', '\0'}, {'m', 'k', 'v', '\0'},
-		{'w', 'm', 'v', '\0'}, {'m', 'o', 'v', '\0'}, {'o', 'g', 'm', '\0'}, {'m', 'p', 'a', '\0'},
-		{'m', 'p', 'v', '\0'}, {'m', '2', 'v', '\0'}, {'m', 'p', '2', '\0'}, {'m', 'p', '4', '\0'},
-		{'d', 'v', 'd', '\0'}, {'m', 'p', 'e', 'g', '\0'}, {'d', 'i', 'v', 'x', '\0'}, {'x', 'v', 'i', 'd', '\0'},
+		{'a', 'v', 'i', '\0'}, {'m', 'p', 'g', '\0'}, {'m', 'k', 'v', '\0'}, {'w', 'm', 'v', '\0'},
+		{'m', 'o', 'v', '\0'}, {'o', 'g', 'm', '\0'}, {'m', 'p', 'a', '\0'}, {'m', 'p', 'v', '\0'},
+		{'m', '2', 'v', '\0'}, {'m', 'p', '2', '\0'}, {'m', 'p', '4', '\0'}, {'d', 'v', 'd', '\0'},
+		{'m', 'p', 'e', 'g', '\0'}, {'d', 'i', 'v', 'x', '\0'}, {'x', 'v', 'i', 'd', '\0'},
 		/* archive */
 		{'e', 'x', 'e', '\0'}, {'z', 'i', 'p', '\0'}, {'r', 'a', 'r', '\0'}, {'i', 's', 'o', '\0'},
 		{'b', 'i', 'n', '\0'}, {'c', 'u', 'e', '\0'}, {'i', 'm', 'g', '\0'}, {'l', 'z', 'h', '\0'},
@@ -1046,6 +1047,95 @@ static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *wor
 		num_valid += num_common > 2;
 
 	return !!num_valid;
+}
+
+static tchar_t *URL_decode(tchar_t *url)
+{
+	tchar_t *input, *output, c;
+	for(input = url, output = url, c = *url; c; c = *++input)
+	{
+		if('%' == c)
+		{
+			unsigned char x;
+			if(!(input[1] && input[2]))
+				break;
+			if(!from_base16(&x, &input[1], 1))
+				break;
+			*output++ = x;
+			input += 2;
+		}
+		else if('+' == c) /* shorthand for space */
+			*output++ = ' ';
+		else
+			*output++ = c;
+	}
+//TODO: after url decode we have to redecode UTF-8
+	*output = '\0';
+	return url;
+}
+
+static tchar_t *URL_filter(tchar_t *s)
+{
+	/* basically trimleftright */
+	tchar_t *s_orig, c;
+// TODO: cheapo trim, other whitespace?
+	while(' ' == *s)
+		s++;
+	s_orig = s;
+	for(c = *s; c; c = *++s) {
+		if(c < 32)
+			*s = '_';
+	}
+	s--;
+	while(s >= s_orig && ' ' == *s)
+		*s-- = '\0';
+	return s;
+}
+
+static tchar_t *parse_magnet(tchar_t *urn, size_t *n_len)
+{
+	tchar_t *wptr, *i_ptr, *ret_val = NULL;
+	bool is_end;
+
+	wptr = i_ptr = urn;
+	do
+	{
+		tchar_t *skey, *svalue;
+		size_t val_len;
+
+		i_ptr = tstrchrnul(i_ptr, '&');
+		is_end = *i_ptr == '\0';
+		*i_ptr++ = '\0';
+
+		skey = wptr;
+		svalue = tstrchrnul(wptr, '=');
+		if(0 == *svalue)
+			goto next_pair;
+		*svalue++ = '\0';
+		skey   = URL_decode(skey);
+		svalue = URL_decode(svalue);
+		URL_filter(skey);
+		val_len = URL_filter(svalue) - svalue;
+
+		if(!(*skey && *svalue))
+			goto next_pair;
+
+		if(('x' == skey[0] && 't' == skey[1]) ||
+		   ('x' == skey[0] && 's' == skey[1]) ||
+		   ('a' == skey[0] && 's' == skey[1]))
+			g2_qht_search_add_hash_urn(svalue, val_len);
+		else if('d' == skey[0] && 'n' == skey[1])
+			ret_val = svalue, *n_len = val_len;
+		else if('k' == skey[0] && 't' == skey[1]) {
+			ret_val = svalue, *n_len = val_len;
+// TODO: forget all hashes already collected from this query??
+		}
+		/* we don't care for size */
+next_pair:
+		wptr = i_ptr;
+	} while(!is_end);
+
+	return ret_val;
 }
 
 bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t dn_len, void *data, bool had_urn, bool hubs)
@@ -1166,8 +1256,9 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 			str_buf[metadata_len] = '\0';
 // TODO: grok metadata
 			/*
-			for_each_xml(str_buf) {
+			for_each_xml_attribute(str_buf) {
 				tbuf = get_value_as_tchar(xml)
+				tstrptolower(tbuf);
 				fill_word_list(&word_list, tbuf, zmem);
 			}
 			*/
@@ -1202,12 +1293,16 @@ check_dn:
 			if(0 == tstrncmp(str_buf, URN_MAGNET, tstr_size(URN_MAGNET)))
 			{
 				/* magnet url */
-				tchar_t *t_ptr = str_buf;
+				size_t n_len = 0;
 				str_buf += tstr_size(URN_MAGNET);
 				dn_tlen -= tstr_size(URN_MAGNET);
-				wptr = tstrchrnul(str_buf, '&');
-// TODO: parse magnet urls
-				had_urn = true;
+				had_urn  = true;
+				wptr = parse_magnet(str_buf, &n_len);
+				if(wptr) {
+					str_buf  = wptr;
+					dn_tlen  = n_len;
+				} else
+					goto work_list;
 			}
 
 			while(0 == tstrncmp(str_buf, URN_URN, tstr_size(URN_URN)))

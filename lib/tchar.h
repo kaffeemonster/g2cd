@@ -82,6 +82,21 @@ static inline tchar_t *tstr_trimright(tchar_t *s)
 	return s;
 }
 
+static inline tchar_t *tstr_trimleftright(tchar_t *s)
+{
+	tchar_t *s_orig;
+// TODO: cheapo trim, other whitespace?
+	while(' ' == *s)
+		s++;
+	s_orig = s;
+	while(*s)
+		s++;
+	s--;
+	while(s >= s_orig && ' ' == *s)
+		*s-- = '\0';
+	return s_orig;
+}
+
 #define tstr_size(x) ((sizeof(x)/2)-1)
 
 static inline tchar_t *mempctcpy(tchar_t *dst, const char *src, size_t s)

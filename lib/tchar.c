@@ -107,12 +107,6 @@ tchar_t *tstrptolower(tchar_t *s)
 
 	for(; *w; w++)
 	{
-// TODO: this is obsolete with Shareaza 2.5.0.0
-		/*
-		 * commit says:
-		 * Greek Capital Sigma and Small Final Sigma always
-		 * converted to Small Sigma
-		 */
 		if(unlikely(0x03a3 == *w) && w != s)
 		{
 			/*
