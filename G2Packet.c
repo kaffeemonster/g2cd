@@ -3963,7 +3963,47 @@ void g2_packet_local_alloc_init(void)
 	}
 }
 
-g2_packet_t *g2_packet_calloc(void)
+void g2_packet_local_refill(void)
+{
+	struct lpacket_buffer *lpb;
+	size_t i;
+
+	lpb = g2_packet_csetup();
+	if(!lpb)
+		return;
+
+	if(lpb->num >= FB_TRESHOLD * 2)
+	{
+		struct list_head *e, *n;
+		i = lpb->num - FB_TRESHOLD;
+		/* when free list is full remove from back */
+		list_for_each_prev_safe(e, n, &lpb->packets)
+		{
+			g2_packet_t *t = list_entry(e, g2_packet_t, list);
+			list_del(e);
+			lpb->num--;
+			g2_packet_free_boosted(t);
+			if(!--i)
+				break;
+		}
+	}
+	else if(lpb->num < FB_TRESHOLD)
+	{
+		for(i = FB_TRESHOLD - lpb->num; i; i--)
+		{
+			g2_packet_t *t = g2_packet_alloc_boosted();
+			if(!t)
+				break;
+			g2_packet_init(t);
+			INIT_PBUF(&t->data_trunk);
+			t->is_freeable = true;
+			list_add(&t->list, &lpb->packets);
+			lpb->num++;
+		}
+	}
+}
+
+noinline g2_packet_t *g2_packet_calloc(void)
 {
 	g2_packet_t *t = g2_packet_init(g2_packet_alloc());
 	if(t) {
@@ -4018,23 +4058,9 @@ void g2_packet_free(g2_packet_t *to_free)
 			/* add to front */
 			list_add(&to_free->list, &lpb->packets);
 			lpb->num++;
-			to_free = NULL;
-			if(lpb->num > FB_TRESHOLD * 2)
-			{
-				/* when free list is full remove from back */
-				list_for_each_prev_safe(e, n, &lpb->packets) {
-					list_del(e);
-					break;
-				}
-				if(e) {
-					to_free = list_entry(e, g2_packet_t, list);
-					lpb->num--;
-				}
-			}
-			if(!to_free)
-				return;
 		}
-		g2_packet_free_boosted(to_free);
+		else
+			g2_packet_free_boosted(to_free);
 	}
 }
 

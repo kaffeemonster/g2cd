@@ -119,6 +119,7 @@ static void *gup_loop(void *param)
 			lbuff[1] = recv_buff_local_get();
 		if(!(--refill_count)) {
 			recv_buff_local_refill();
+			g2_packet_local_refill();
 			refill_count = EVENT_SPACE / 2;
 		}
 		/*
@@ -386,7 +387,7 @@ int handler_active_timeout(void *arg)
 	}
 	else
 	{
-		g2_packet_t *pi = g2_packet_alloc();
+		g2_packet_t *pi = g2_packet_calloc();
 
 		ret_val = HANDLER_ACTIVE_TIMEOUT;
 		if(!pi)

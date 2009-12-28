@@ -224,6 +224,7 @@ _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(g2_packet_t *g2_packet_clone(g2_packet_t *) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(void g2_packet_local_alloc_init(void));
 _G2PACK_EXTRN(void g2_packet_local_alloc_init_min(void));
+_G2PACK_EXTRN(void g2_packet_local_refill(void));
 _G2PACK_EXTRN(void g2_packet_free(g2_packet_t *));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 _G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));

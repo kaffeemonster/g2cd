@@ -277,10 +277,11 @@ void timeout_timer_task_abort(void)
 	pthread_cond_broadcast(&wakeup.cond);
 }
 
-static void kick_timeouts(void)
+static int kick_timeouts(void)
 {
 	struct timespec now;
 	struct timeout *t;
+	int ret_val = 1;
 
 	/*
 	 * we hold the tree lock
@@ -319,6 +320,7 @@ static void kick_timeouts(void)
 		else
 			logg_devel("empty timeout??\n");
 
+		ret_val = 0;
 		if(ret)
 		{
 			/*
@@ -358,10 +360,12 @@ static void kick_timeouts(void)
 			t->rearm_in_progress = false;
 		}
 	}
+	return ret_val;
 }
 
 void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 {
+	unsigned refill_count = EVENT_SPACE / 2;
 	logg(LOGF_DEBUG, "timeout_timer:\trunning\n");
 
 	/* make our hzp ready */
@@ -377,6 +381,11 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 	{
 		struct timeout *t;
 		int ret_val;
+
+		if(!(--refill_count)) {
+			g2_packet_local_refill();
+			refill_count = EVENT_SPACE / 2;
+		}
 
 		t = timeout_nearest();
 		if(t)
@@ -396,7 +405,7 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 		}
 
 		if(0 == ret_val || ETIMEDOUT == ret_val)
-			kick_timeouts();
+			refill_count += kick_timeouts();
 		else {
 			errno = ret_val;
 			logg_errnod(LOGF_ERR, "pthread_cond_timedwait failed with \"%i\" ", ret_val);
