@@ -63,6 +63,7 @@
 #include "lib/atomic.h"
 #include "lib/backtrace.h"
 #include "lib/ansi_prng.h"
+#include "lib/config_parser.h"
 #include "version.h"
 #include "builtin_defaults.h"
 
@@ -457,6 +458,13 @@ static inline void fork_to_background(void)
 	}
 }
 
+static const struct config_item conf_opts[] =
+{
+	CONF_ITEM("max_connection_sum", &server.settings.max_connection_sum, config_parser_handle_int),
+	CONF_ITEM("max_hub_sum",        &server.settings.max_hub_sum,        config_parser_handle_int),
+	CONF_ITEM("nice_adjust",        &server.settings.nice_adjust,        config_parser_handle_int),
+};
+
 static inline void handle_config(void)
 {
 	FILE *config = NULL;
@@ -471,10 +479,13 @@ static inline void handle_config(void)
 	atomic_set(&server.status.act_connection_sum, 0);
 	atomic_set(&server.status.act_hub_sum, 0);
 
-// TODO: read from config files
-	/* var settings */
+	/*
+	 * var settings
+	 * first round: apply defaults
+	 */
 	server.settings.data_root_dir = DEFAULT_DATA_ROOT_DIR;
 	server.settings.entropy_source = DEFAULT_ENTROPY_SOURCE;
+	server.settings.config_file = DEFAULT_CONFIG_FILE;
 	server.settings.nice_adjust = DEFAULT_NICE_ADJUST;
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
@@ -500,6 +511,19 @@ static inline void handle_config(void)
 	server.settings.guid.dump_fname = DEFAULT_GUID_DUMP;
 	server.settings.qht.compression = DEFAULT_QHT_COMPRESSION;
 	server.settings.qht.compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL;
+
+	/*
+	 * second round: read config file
+	 */
+	if(!config_parser_read(server.settings.config_file, conf_opts, anum(conf_opts)))
+	{
+		if(ENOENT == errno)
+			logg(LOGF_NOTICE, "Config file \"%s\" not found, will continue with defaults\n", server.settings.config_file);
+		else {
+			logg_errnod(LOGF_ERR, "Error parsing config file \"%s\"", server.settings.config_file);
+			goto err;
+		}
+	}
 
 	/* set the GUID */
 	if(!(config = fopen(guid_file_name, "r")))

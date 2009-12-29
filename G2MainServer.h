@@ -92,6 +92,7 @@ _G2MAIN_EXTRNVAR(struct
 			pthread_attr_t t_def_attr;
 			const char *data_root_dir;
 			const char *entropy_source;
+			const char *config_file;
 			int nice_adjust;
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;

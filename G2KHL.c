@@ -1076,7 +1076,7 @@ void g2_khl_end(void)
 	if(gwc_db)
 		dbm_close(gwc_db);
 
-	if(!cache.khl_dump)
+	if(cache.khl_dump <= 0)
 	{
 		const char *data_root_dir;
 		char *name, *wptr;

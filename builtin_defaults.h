@@ -41,6 +41,7 @@
 // #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
 #define DEFAULT_DATA_ROOT_DIR	"./"
 #define DEFAULT_ENTROPY_SOURCE "/dev/urandom"
+#define DEFAULT_CONFIG_FILE "g2cd.conf"
 #define DEFAULT_GWC_BOOT	"http://cache.trillinux.org/g2/bazooka.php"
 #define DEFAULT_GWC_DB	"gwc_cache"
 #define DEFAULT_KHL_DUMP	"khl.dump"

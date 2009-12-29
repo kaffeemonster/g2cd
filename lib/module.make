@@ -57,6 +57,7 @@ LIBHEADS = \
 	$(MPL)/swab.h \
 	$(MPL)/unaligned.h \
 	$(MPL)/combo_addr.h \
+	$(MPL)/config_parser.h \
 	$(MPL)/recv_buff.h \
 	$(MPL)/udpfromto.h \
 	$(MPL)/hzp.h \
@@ -259,6 +260,7 @@ LIBSRCS = \
 	$(MPL)/backtrace.c \
 	$(MPL)/bitfield_rle.c \
 	$(MPL)/cpy_rest.c \
+	$(MPL)/config_parser.c \
 	$(MPL)/flsst.c \
 	$(MPL)/hzp.c \
 	$(MPL)/inet_ntop.c \
@@ -295,6 +297,7 @@ BITOPOBJS = \
 	$(MPL)/adler32.o \
 	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
+	$(MPL)/config_parser.o \
 	$(MPL)/flsst.o \
 	$(MPL)/introsort.o \
 	$(MPL)/memxorcpy.o \
