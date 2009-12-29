@@ -28,7 +28,6 @@
 #endif
 /* System */
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
@@ -136,6 +135,7 @@ static struct {
 } act_gwc;
 static struct {
 	pthread_mutex_t lock;
+	int khl_dump;
 	int num;
 	uint32_t ht_seed;
 	struct khl_cache_entry *next_free;
@@ -166,7 +166,7 @@ static const char *gwc_res_http_names[] =
  */
 bool g2_khl_init(void)
 {
-	FILE *khl_dump;
+	struct khl_entry *e;
 	uint32_t *signature;
 	const char *data_root_dir;
 	const char *gwc_cache_fname;
@@ -264,14 +264,14 @@ init_next:
 	*buff++ = '/';
 	strcpy(buff, server.settings.khl.dump_fname);
 
-	khl_dump = fopen(name, "rb");
-	if(!khl_dump) {
-		logg_errno(LOGF_INFO, "couldn't open khl dump");
+	cache.khl_dump = open(name, O_CREAT|O_RDWR, 0664);
+	if(-1 == cache.khl_dump) {
+		logg_errnod(LOGF_INFO, "couldn't open khl dump \"%s\"", name);
 		return true;
 	}
 
 	buff = alloca(500);
-	if(str_size(KHL_DUMP_IDENT) != fread(buff, 1, str_size(KHL_DUMP_IDENT), khl_dump)) {
+	if(str_size(KHL_DUMP_IDENT) != read(cache.khl_dump, buff, str_size(KHL_DUMP_IDENT))) {
 		logg_posd(LOGF_INFO, "couldn't read ident from khl dump \"%s\"\n", name);
 		goto out;
 	}
@@ -281,8 +281,8 @@ init_next:
 		goto out;
 	}
 
-	signature = (uint32_t *) buff;
-	if(3 != fread(signature, sizeof(uint32_t), 3, khl_dump)) {
+	signature = (uint32_t *)buff;
+	if(sizeof(uint32_t) * 3 != read(cache.khl_dump, signature, sizeof(uint32_t) * 3)) {
 		logg_posd(LOGF_INFO, "couldn't read signature from khl dump \"%s\"\n", name);
 		goto out;
 	}
@@ -303,14 +303,13 @@ init_next:
 	/* we don't care if we read 0 or 1 or KHL_CACHE_SIZE elements */
 	do
 	{
-		struct khl_entry *e = (void *) buff;
-		name_len = fread(e, sizeof(*e), 1, khl_dump);
-		if(name_len)
+		e = (void *) buff;
+		name_len = read(cache.khl_dump, e, sizeof(*e));
+		if(sizeof(*e) == name_len)
 			g2_khl_add(&e->na, e->when, false);
-	} while(name_len);
+	} while(sizeof(*e) == name_len);
 
 out:
-	fclose(khl_dump);
 	return true;
 }
 
@@ -1072,54 +1071,70 @@ bool g2_khl_tick(int *fd)
 
 void g2_khl_end(void)
 {
-	FILE *khl_dump;
 	uint32_t signature[3];
-	const char *data_root_dir;
-	char *name, *wptr;
-	size_t name_len, i;
 
 	if(gwc_db)
 		dbm_close(gwc_db);
 
-	/* try to write a khl dump */
-	if(!server.settings.khl.dump_fname)
-		return;
+	if(!cache.khl_dump)
+	{
+		const char *data_root_dir;
+		char *name, *wptr;
+		size_t name_len;
+		/* try to write a khl dump */
+		if(!server.settings.khl.dump_fname)
+			return;
 
-	if(server.settings.data_root_dir)
-		data_root_dir = server.settings.data_root_dir;
+		if(server.settings.data_root_dir)
+			data_root_dir = server.settings.data_root_dir;
+		else
+			data_root_dir = "./";
+
+		name_len  = strlen(data_root_dir);
+		name_len += strlen(server.settings.khl.dump_fname);
+		name = alloca(name_len + 1);
+
+		wptr = strpcpy(name, data_root_dir);
+		strcpy(wptr, server.settings.khl.dump_fname);
+
+		cache.khl_dump = open(name, O_CREAT|O_RDWR, 0664);
+		if(-1 == cache.khl_dump) {
+			logg_errnod(LOGF_INFO, "couldn't open khl dump \"%s\"", name);
+			return;
+		}
+	}
 	else
-		data_root_dir = "./";
-
-	name_len  = strlen(data_root_dir);
-	name_len += strlen(server.settings.khl.dump_fname);
-	name = alloca(name_len + 1);
-
-	wptr = strpcpy(name, data_root_dir);
-	strcpy(wptr, server.settings.khl.dump_fname);
-
-	khl_dump = fopen(name, "wb");
-	if(!khl_dump) {
-		logg_errno(LOGF_INFO, "couldn't open khl dump");
-		return;
+	{
+		if((off_t)-1 == lseek(cache.khl_dump, 0, SEEK_SET)) {
+			logg_errno(LOGF_INFO, "couldn't seek khl dump");
+			goto out;
+		}
+		if(0 > ftruncate(cache.khl_dump, 0)) {
+			logg_errno(LOGF_INFO, "couldn't truncate khl dump");
+			goto out;
+		}
 	}
 
-	fputs(KHL_DUMP_IDENT, khl_dump);
+	if(str_size(KHL_DUMP_IDENT) != write(cache.khl_dump, KHL_DUMP_IDENT, str_size(KHL_DUMP_IDENT)))
+		goto out;
 
 	signature[0] = KHL_DUMP_ENDIAN_MARKER;
 	signature[1] = sizeof(struct khl_entry);
 	signature[2] = KHL_DUMP_VERSION;
 
-	if(3 == fwrite(signature, sizeof(signature[0]), 3, khl_dump))
+	if(3 * sizeof(signature[0]) == write(cache.khl_dump, signature, sizeof(signature[0]) * 3))
 	{
+		size_t i;
 		for(i = 0; i < KHL_CACHE_SIZE; i++) {
 			if(cache.entrys[i].used) {
-				if(1 != fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, khl_dump))
+				if(sizeof(cache.entrys[0].e) != write(cache.khl_dump, &cache.entrys[i].e, sizeof(cache.entrys[0].e)))
 					break;
 			}
 		}
 	}
-	fclose(khl_dump);
 
+out:
+	close(cache.khl_dump);
 	if(act_gwc.data.url)
 		free((void *)(intptr_t)act_gwc.data.url);
 }

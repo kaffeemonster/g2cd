@@ -342,6 +342,10 @@ int main(int argc, char **args)
 	 * to save over a short restart.
 	 */
 	g2_guid_end();
+	/*
+	 * and the question is if we want to save the query key cache,
+	 * but we don't need them, since we do not query.
+	 */
 	g2_conreg_cleanup();
 
 	clean_up_m();

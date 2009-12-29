@@ -28,7 +28,6 @@
 #endif
 /* System */
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #ifdef HAVE_ALLOCA_H
@@ -36,6 +35,10 @@
 #endif
 #include <errno.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 /* Own */
 #define _G2GUIDCACHE_C
 #include "lib/other.h"
@@ -77,6 +80,7 @@ struct guid_cache_entry
 
 static struct {
 	pthread_mutex_t lock;
+	int guid_dump;
 	int num;
 	uint32_t ht_seed;
 	struct guid_cache_entry *next_free;
@@ -91,7 +95,7 @@ static struct {
  */
 bool g2_guid_init(void)
 {
-	FILE *guid_dump;
+	struct guid_entry *e;
 	uint32_t *signature;
 	const char *data_root_dir;
 	char *name, *buff;
@@ -120,15 +124,15 @@ bool g2_guid_init(void)
 	*buff++ = '/';
 	strcpy(buff, server.settings.guid.dump_fname);
 
-	guid_dump = fopen(name, "rb");
-	if(!guid_dump) {
-		logg_errno(LOGF_INFO, "couldn't open guid dump");
+	cache.guid_dump = open(name, O_CREAT|O_RDWR, 0664);
+	if(-1 == cache.guid_dump) {
+		logg_errnod(LOGF_INFO, "couldn't open guid dump \"%s\"", name);
 		return true;
 	}
 
 	buff = alloca(500);
-	if(str_size(GUID_DUMP_IDENT) != fread(buff, 1, str_size(GUID_DUMP_IDENT), guid_dump)) {
-		logg_posd(LOGF_INFO, "couldn't read ident from guid dump \"%s\"\n", name);
+	if(str_size(GUID_DUMP_IDENT) != read(cache.guid_dump, buff, str_size(GUID_DUMP_IDENT))) {
+		logg_errnod(LOGF_INFO, "couldn't read ident from guid dump \"%s\"", name);
 		goto out;
 	}
 
@@ -138,7 +142,7 @@ bool g2_guid_init(void)
 	}
 
 	signature = (uint32_t *) buff;
-	if(3 != fread(signature, sizeof(uint32_t), 3, guid_dump)) {
+	if(3 * sizeof(uint32_t) != read(cache.guid_dump, signature, sizeof(uint32_t) * 3)) {
 		logg_posd(LOGF_INFO, "couldn't read signature from guid dump \"%s\"\n", name);
 		goto out;
 	}
@@ -159,63 +163,78 @@ bool g2_guid_init(void)
 	/* we don't care if we read 0 or 1 or GUID_CACHE_SIZE elements */
 	do
 	{
-		struct guid_entry *e = (void *) buff;
-		name_len = fread(e, sizeof(*e), 1, guid_dump);
-		if(name_len)
+		e = (void *)buff;
+		name_len = read(cache.guid_dump, e, sizeof(*e));
+		if(sizeof(*e) == name_len)
 			g2_guid_add(e->guid, &e->na, e->when, e->type);
-	} while(name_len);
+	} while(sizeof(*e) == name_len);
 
 out:
-	fclose(guid_dump);
 	return true;
 }
 
 void g2_guid_end(void)
 {
-	FILE *guid_dump;
 	uint32_t signature[3];
-	const char *data_root_dir;
-	char *name, *wptr;
-	size_t name_len, i;
 
-	/* try to write a guid dump */
-	if(!server.settings.guid.dump_fname)
-		return;
+	if(cache.guid_dump <= 0)
+	{
+		const char *data_root_dir;
+		char *name, *wptr;
+		size_t name_len;
+		/* try to write a guid dump */
+		if(!server.settings.guid.dump_fname)
+			return;
 
-	if(server.settings.data_root_dir)
-		data_root_dir = server.settings.data_root_dir;
+		if(server.settings.data_root_dir)
+			data_root_dir = server.settings.data_root_dir;
+		else
+			data_root_dir = "./";
+
+		name_len  = strlen(data_root_dir);
+		name_len += strlen(server.settings.guid.dump_fname);
+		name = alloca(name_len + 1);
+
+		wptr = strpcpy(name, data_root_dir);
+		strcpy(wptr, server.settings.guid.dump_fname);
+
+		cache.guid_dump = open(name, O_CREAT|O_RDWR, 0664);
+		if(-1 == cache.guid_dump) {
+			logg_errnod(LOGF_INFO, "couldn't open guid dump \"%s\"", name);
+			return;
+		}
+	}
 	else
-		data_root_dir = "./";
-
-	name_len  = strlen(data_root_dir);
-	name_len += strlen(server.settings.guid.dump_fname);
-	name = alloca(name_len + 1);
-
-	wptr = strpcpy(name, data_root_dir);
-	strcpy(wptr, server.settings.guid.dump_fname);
-
-	guid_dump = fopen(name, "wb");
-	if(!guid_dump) {
-		logg_errno(LOGF_INFO, "couldn't open guid dump");
-		return;
+	{
+		if((off_t)-1 == lseek(cache.guid_dump, 0, SEEK_SET)) {
+			logg_errno(LOGF_INFO, "couldn't seek guid dump");
+			goto out;
+		}
+		if(0 > ftruncate(cache.guid_dump, 0)) {
+			logg_errno(LOGF_INFO, "couldn't truncate guid dump");
+			goto out;
+		}
 	}
 
-	fputs(GUID_DUMP_IDENT, guid_dump);
+	if(str_size(GUID_DUMP_IDENT) != write(cache.guid_dump, GUID_DUMP_IDENT, str_size(GUID_DUMP_IDENT)))
+		goto out;
 
 	signature[0] = GUID_DUMP_ENDIAN_MARKER;
 	signature[1] = sizeof(struct guid_entry);
 	signature[2] = GUID_DUMP_VERSION;
 
-	if(3 == fwrite(signature, sizeof(signature[0]), 3, guid_dump))
+	if(3 * sizeof(signature[0]) == write(cache.guid_dump, signature, sizeof(signature[0]) * 3))
 	{
+		size_t i;
 		for(i = 0; i < GUID_CACHE_SIZE; i++) {
 			if(cache.entrys[i].used) {
-				if(1 != fwrite(&cache.entrys[i].e, sizeof(cache.entrys[0].e), 1, guid_dump))
+				if(sizeof(cache.entrys[0].e) != write(cache.guid_dump, &cache.entrys[i].e, sizeof(cache.entrys[0].e)))
 					break;
 			}
 		}
 	}
-	fclose(guid_dump);
+out:
+	close(cache.guid_dump);
 }
 
 
