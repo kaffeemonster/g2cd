@@ -141,7 +141,30 @@
 #define TIME_SLOT_SECS (60 * 60)
 #define TIME_SLOT_ELEM 64
 
+/*
+ * Query Key Cache
+ */
+#define QK_CACHE_SHIFT 9
+#define QK_CACHE_SIZE (1 << QK_CACHE_SHIFT)
+#define QK_CACHE_HTSIZE (QK_CACHE_SIZE/8)
+#define QK_CACHE_HTMASK (QK_CACHE_HTSIZE-1)
+
  /* Types */
+struct qk_entry
+{
+	union combo_addr na;
+	uint32_t qk;
+	time_t when;
+};
+
+struct qk_cache_entry
+{
+	struct rb_node rb;
+	struct hlist_node node;
+	struct qk_entry e;
+	bool used;
+};
+
 struct g2_qk_salts
 {
 	uint32_t salts[TIME_SLOT_COUNT][TIME_SLOT_ELEM + 1][2];
@@ -151,6 +174,15 @@ struct g2_qk_salts
 
 /* Vars */
 static struct g2_qk_salts g2_qk_s;
+static struct {
+	pthread_mutex_t lock;
+	int num;
+	uint32_t ht_seed;
+	struct qk_cache_entry *next_free;
+	struct rb_root tree;
+	struct hlist_head ht[QK_CACHE_HTSIZE];
+	struct qk_cache_entry entrys[QK_CACHE_SIZE];
+} cache;
 
 /* Protos */
 	/* You better not kill this proto, or it wount work ;) */
@@ -158,25 +190,57 @@ static void qk_init(void) GCC_ATTR_CONSTRUCT;
 static void qk_deinit(void) GCC_ATTR_DESTRUCT;
 
 /* Funcs */
-static void check_salt_vals(unsigned j)
+static noinline void check_salt_vals(unsigned j)
 {
+	unsigned char r[16], *slt;
+	unsigned r_i = sizeof(r);
 	unsigned i;
 
+	slt = (unsigned char *)g2_qk_s.salts[j];
+	i   = sizeof(g2_qk_s.salts[0]);
 	/* make sure no unpleasant values are in the array */
-	for(i = 0; i < anum(g2_qk_s.salts[0]); i++)
+	for(; i--; slt++)
 	{
-// TODO: check every byte
-		while(0 == g2_qk_s.salts[j][i][0] || 1 == g2_qk_s.salts[j][i][0])
-			g2_qk_s.salts[j][i][0] = rand();
-		while(0 == g2_qk_s.salts[j][i][1] || 1 == g2_qk_s.salts[j][i][1])
-			g2_qk_s.salts[j][i][1] = rand();
+		/*
+		 * For a nice play on this we could check we have enough
+		 * ham weight (popcount) on the full scale 32 bit word.
+		 * Mainly we want to exclude 0 because it has no entropy
+		 * at the mixing level.
+		 * On the fullscale 32 Bit salt 0 would be deadly, 1 is
+		 * also not welcome.
+		 * With looking for 0 at a byte level we are way ahead,
+		 * preventing a lot of "odd" values, on the other side
+		 * we are excluding a lot of values...
+		 * Pseudo crypto, whatever you do, you are fucking it
+		 * up.
+		 * At least this is a feedback into our PRNG. For every
+		 * "burst" of 16 zeros in a salt slot it generates (which
+		 * you do not see afterwards, thanks to this ;) its
+		 * internal state advances a tick, making it even harder
+		 * to guess its internal state, because it relys on
+		 * previous internal state.
+		 */
+		while(unlikely(0 == *slt))
+		{
+			if(r_i >= sizeof(r)) {
+				random_bytes_get(r, sizeof(r));
+				r_i %=  sizeof(r);
+			}
+			*slt = r[r_i++];
+		}
 	}
 }
 
 void g2_qk_init(void)
 {
+	unsigned i;
+
 	random_bytes_get(g2_qk_s.salts, sizeof(g2_qk_s.salts));
-	check_salt_vals(0);
+	for(i = 0; i < anum(g2_qk_s.salts); i++)
+		check_salt_vals(i);
+	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
+	random_bytes_get(&i, sizeof(g2_qk_s.act_salt));
+	g2_qk_s.act_salt = i % TIME_SLOT_COUNT;
 	g2_qk_s.last_update = time(NULL);
 }
 
@@ -200,13 +264,13 @@ void g2_qk_tick(void)
 	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));
+	check_salt_vals(n_salt);
 	/*
 	 * reseed the libc random number generator every tick,
 	 * for the greater good of the whole server
 	 */
 	random_bytes_get(&t, sizeof(t));
 	srand(t);
-	check_salt_vals(n_salt);
 
 	barrier();
 	g2_qk_s.act_salt = n_salt;
@@ -241,6 +305,7 @@ uint32_t g2_qk_generate(const union combo_addr *source)
 	unsigned act_salt = g2_qk_s.act_salt;
 	uint32_t h;
 
+	barrier();
 	h = addr_hash_generate(source, act_salt);
 	return (h & TIME_SLOT_COUNT_MASK) | act_salt;
 }
@@ -253,44 +318,12 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 	return (h & TIME_SLOT_COUNT_MASK) == (key & TIME_SLOT_COUNT_MASK);
 }
 
-/*
- * Query Key Cache
- */
-#define QK_CACHE_SHIFT 9
-#define QK_CACHE_SIZE (1 << QK_CACHE_SHIFT)
-#define QK_CACHE_HTSIZE (QK_CACHE_SIZE/8)
-#define QK_CACHE_HTMASK (QK_CACHE_HTSIZE-1)
-
-struct qk_entry
-{
-	union combo_addr na;
-	uint32_t qk;
-	time_t when;
-};
-
-struct qk_cache_entry
-{
-	struct rb_node rb;
-	struct hlist_node node;
-	struct qk_entry e;
-	bool used;
-};
-
-static struct {
-	pthread_mutex_t lock;
-	int num;
-	uint32_t ht_seed;
-	struct qk_cache_entry *next_free;
-	struct rb_root tree;
-	struct hlist_head ht[QK_CACHE_HTSIZE];
-	struct qk_cache_entry entrys[QK_CACHE_SIZE];
-} cache;
+/********************* Query Key Cache funcs ********************/
 
 static void qk_init(void)
 {
 	if(pthread_mutex_init(&cache.lock, NULL))
 		diedie("initialising qk cache lock");
-	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 }
 
 static void qk_deinit(void)

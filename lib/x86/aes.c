@@ -191,7 +191,7 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 #  endif
 			"movdqa	"str_it(IPTLO)"(%4), %%xmm2\n\t"	/* iptlo */
 			"pshufb	%%xmm0, %%xmm2\n\t"
-			"movaps	"str_it(IPTHI)"(%4), %%xmm0\n\t"	/* ipthi */
+			"movdqa	"str_it(IPTHI)"(%4), %%xmm0\n\t"	/* ipthi */
 			"pshufb	%%xmm1, %%xmm0\n\t"
 			"pxor	%%xmm2, %%xmm0\n\t"
 			"movdqa	%%xmm0, %%xmm7\n\t"

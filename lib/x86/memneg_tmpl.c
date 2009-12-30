@@ -30,11 +30,12 @@
  * used in 32Bit & 64Bit
  */
 
+#if (defined(HAVE_MMX) || defined (HAVE_SSE) || defined (HAVE_AVX)) && !defined(ALL_ONES_ALREADY_DEFINED)
+static const uint32_t all_ones[8] GCC_ATTR_ALIGNED(32) = {~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U};
+# define ALL_ONES_ALREADY_DEFINED
+#endif
 static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 {
-#if defined(HAVE_MMX) || defined (HAVE_SSE) || defined (HAVE_AVX)
-	static const uint32_t all_ones[8] GCC_ATTR_ALIGNED(32) = {~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U};
-#endif
 	char *dst_char = dst;
 
 	/* we will access the arrays, fetch them */
@@ -340,9 +341,6 @@ no_alignment_possible:
 
 static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len)
 {
-#if defined(HAVE_MMX) || defined (HAVE_SSE) || defined (HAVE_AVX)
-	static const uint32_t all_ones[8] GCC_ATTR_ALIGNED(32) = {~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U};
-#endif
 	char *dst_char = dst;
 	const char *src_char = src;
 

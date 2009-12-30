@@ -31,7 +31,7 @@
  * Appendix A.2.4 Using AES
  * http://csrc.nist.gov/groups/STM/cavp/documents/rng/931rngext.pdf
  *
- * Recrypt somthing with it self with AES in CTR mode to
+ * Recrypt something with it self with AES in CTR mode to
  * get pseudo random bytes.
  */
 
@@ -41,6 +41,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/mman.h>
 #include "my_bitopsm.h"
 #include "other.h"
 #include "aes.h"
@@ -192,7 +193,31 @@ void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	struct timeval now;
 	uint32_t t;
 
+	/*
+	 * <paranoid mode>
+	 * This lib func may do who knows what to our mem
+	 * (it is "free" to do so, maybe it also needs to
+	 * frobnicate with the mapping to get coherent mem
+	 * for atomic ops or something like that), in contrast
+	 * to the rest of funcs (which are simple or our own).
+	 * So to not loose our mlock, do this first.
+	 * </paranoid mode>
+	 */
 	pthread_mutex_init(&ctx.lock, NULL);
+#ifdef _POSIX_MEMLOCK_RANGE
+	/* Now try to lock our ctx into mem for fun and profit */
+	{
+		void *addr;
+		size_t len = sysconf(_SC_PAGESIZE);
+
+		len  = (size_t)-1 == len ? 4096 : len;
+		addr = (void *)ALIGN_DOWN(&ctx, len);
+		len *= (size_t)ALIGN_DIFF(&ctx, len) < sizeof(ctx) ? 2 : 1;
+		if(-1 == mlock(addr, len)) {
+			/* we are only a prng, if it fails, the world will continue to turn... */ ;
+		}
+	}
+#endif
 	ctx.bytes_used = RAND_BLOCK_BYTE;
 
 	aes_encrypt_key128(&ctx.actx, data);
