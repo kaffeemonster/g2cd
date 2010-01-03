@@ -2,7 +2,7 @@
  * G2GUIDCache.c
  * known GUID cache for routing
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -75,16 +75,13 @@ struct guid_cache_entry
 	struct rb_node rb; /* keep first */
 	struct hlist_node node;
 	struct guid_entry e;
-	bool used; /* fill possible hole */
 };
 
 static struct {
 	pthread_mutex_t lock;
 	int guid_dump;
-	int num;
 	uint32_t ht_seed;
-	struct guid_cache_entry *next_free;
-	struct guid_cache_entry *last_search;
+	struct hlist_head free_list;
 	struct rb_root tree;
 	struct hlist_head ht[GUID_CACHE_HTSIZE];
 	struct guid_cache_entry entrys[GUID_CACHE_SIZE];
@@ -99,12 +96,15 @@ bool g2_guid_init(void)
 	uint32_t *signature;
 	const char *data_root_dir;
 	char *name, *buff;
-	size_t name_len = 0;
+	size_t name_len = 0, i;
 
 	if(pthread_mutex_init(&cache.lock, NULL)) {
 		logg_errno(LOGF_ERR, "initialising GUID cache lock");
 		return false;
 	}
+	/* shuffle all entrys in the free list */
+	for(i = 0; i < GUID_CACHE_SIZE; i++)
+		hlist_add_head(&cache.entrys[i].node, &cache.free_list);
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 
 	/* try to read a guid dump */
@@ -225,12 +225,13 @@ void g2_guid_end(void)
 
 	if(3 * sizeof(signature[0]) == write(cache.guid_dump, signature, sizeof(signature[0]) * 3))
 	{
-		size_t i;
-		for(i = 0; i < GUID_CACHE_SIZE; i++) {
-			if(cache.entrys[i].used) {
-				if(sizeof(cache.entrys[0].e) != write(cache.guid_dump, &cache.entrys[i].e, sizeof(cache.entrys[0].e)))
-					break;
-			}
+		struct rb_node *n;
+		struct guid_cache_entry *g;
+
+		for(n = rb_first(&cache.tree); n; n = rb_next(n)) {
+			g = rb_entry(n, struct guid_cache_entry, rb);
+			if(sizeof(g->e) != write(cache.guid_dump, &g->e, sizeof(g->e)))
+				break;
 		}
 	}
 out:
@@ -241,47 +242,23 @@ out:
 static struct guid_cache_entry *guid_cache_entry_alloc(void)
 {
 	struct guid_cache_entry *e;
-	unsigned i;
+	struct hlist_node *n;
 
-	if(GUID_CACHE_SIZE <= cache.num)
+	if(hlist_empty(&cache.free_list))
 		return NULL;
 
-	if(cache.next_free)
-	{
-		e = cache.next_free;
-		cache.next_free = NULL;
-		if(likely(!e->used))
-			goto check_next_free;
-	}
-
-	for(i = 0, e = NULL; i < GUID_CACHE_SIZE; i++)
-	{
-		if(!cache.entrys[i].used) {
-			e = &cache.entrys[i];
-			break;
-		}
-	}
-
-	if(e)
-	{
-check_next_free:
-		e->used = true;
-		cache.num++;
-		if(e < &cache.entrys[GUID_CACHE_SIZE-1]) {
-			if(!e[1].used)
-				cache.next_free = &e[1];
-		}
-		RB_CLEAR_NODE(&e->rb);
-	}
+	n = cache.free_list.first;
+	e = hlist_entry(n, struct guid_cache_entry, node);
+	hlist_del(&e->node);
+	INIT_HLIST_NODE(&e->node);
+	RB_CLEAR_NODE(&e->rb);
 	return e;
 }
 
 static void guid_cache_entry_free(struct guid_cache_entry *e)
 {
 	memset(e, 0, sizeof(*e));
-	if(!cache.next_free)
-		cache.next_free = e;
-	cache.num--;
+	hlist_add_head(&e->node, &cache.free_list);
 }
 
 static uint32_t cache_ht_hash(const union guid_fast *g, enum guid_type gt)
@@ -495,7 +472,7 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 		if(likely(e) &&
 		   e->e.when < when &&
 		   e->e.type > gt &&
-		   GUID_CACHE_SIZE <= cache.num)
+		   hlist_empty(&cache.free_list))
 		{
 			logg_devel_old("found older entry\n");
 			if(!guid_rb_cache_remove(e))

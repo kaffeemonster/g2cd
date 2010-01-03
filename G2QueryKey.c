@@ -2,7 +2,7 @@
  * G2QueryKey.c
  * Query Key syndication
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -162,7 +162,6 @@ struct qk_cache_entry
 	struct rb_node rb;
 	struct hlist_node node;
 	struct qk_entry e;
-	bool used;
 };
 
 struct g2_qk_salts
@@ -176,9 +175,8 @@ struct g2_qk_salts
 static struct g2_qk_salts g2_qk_s;
 static struct {
 	pthread_mutex_t lock;
-	int num;
 	uint32_t ht_seed;
-	struct qk_cache_entry *next_free;
+	struct hlist_head free_list;
 	struct rb_root tree;
 	struct hlist_head ht[QK_CACHE_HTSIZE];
 	struct qk_cache_entry entrys[QK_CACHE_SIZE];
@@ -322,8 +320,14 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 
 static void qk_init(void)
 {
+	size_t i;
+
 	if(pthread_mutex_init(&cache.lock, NULL))
 		diedie("initialising qk cache lock");
+
+	/* shuffle all entrys in the free list */
+	for(i = 0; i < QK_CACHE_SIZE; i++)
+		hlist_add_head(&cache.entrys[i].node, &cache.free_list);
 }
 
 static void qk_deinit(void)
@@ -334,38 +338,16 @@ static void qk_deinit(void)
 static struct qk_cache_entry *qk_cache_entry_alloc(void)
 {
 	struct qk_cache_entry *e;
-	unsigned i;
+	struct hlist_node *n;
 
-	if(QK_CACHE_SIZE <= cache.num)
+	if(hlist_empty(&cache.free_list))
 		return NULL;
 
-	if(cache.next_free)
-	{
-		e = cache.next_free;
-		cache.next_free = NULL;
-		if(likely(!e->used))
-			goto check_next_free;
-	}
-
-	for(i = 0, e = NULL; i < QK_CACHE_SIZE; i++)
-	{
-		if(!cache.entrys[i].used) {
-			e = &cache.entrys[i];
-			break;
-		}
-	}
-
-	if(e)
-	{
-check_next_free:
-		e->used = true;
-		cache.num++;
-		if(e < &cache.entrys[QK_CACHE_SIZE-1]) {
-			if(!e[1].used)
-				cache.next_free = &e[1];
-		}
-		RB_CLEAR_NODE(&e->rb);
-	}
+	n = cache.free_list.first;
+	e = hlist_entry(n, struct qk_cache_entry, node);
+	hlist_del(&e->node);
+	INIT_HLIST_NODE(&e->node);
+	RB_CLEAR_NODE(&e->rb);
 	return e;
 }
 
@@ -377,9 +359,7 @@ static uint32_t cache_ht_hash(const union combo_addr *addr)
 static void qk_cache_entry_free(struct qk_cache_entry *e)
 {
 	memset(e, 0, sizeof(*e));
-	if(!cache.next_free)
-		cache.next_free = e;
-	cache.num--;
+	hlist_add_head(&e->node, &cache.free_list);
 }
 
 static struct qk_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint32_t h)
@@ -537,7 +517,7 @@ void g2_qk_add(uint32_t qk, const union combo_addr *addr)
 		e = qk_cache_last();
 		if(likely(e) &&
 		   e->e.when < when &&
-		   QK_CACHE_SIZE <= cache.num)
+		   hlist_empty(&cache.free_list))
 		{
 			logg_devel_old("found older entry\n");
 			if(!qk_rb_cache_remove(e))

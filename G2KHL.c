@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -117,7 +117,6 @@ struct khl_cache_entry
 	struct rb_node rb;
 	struct hlist_node node;
 	struct khl_entry e;
-	bool used;
 	bool cluster;
 };
 
@@ -138,8 +137,7 @@ static struct {
 	int khl_dump;
 	int num;
 	uint32_t ht_seed;
-	struct khl_cache_entry *next_free;
-	struct khl_cache_entry *last_search;
+	struct hlist_head free_list;
 	struct rb_root tree;
 	struct hlist_head ht[KHL_CACHE_HTSIZE];
 	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
@@ -171,7 +169,7 @@ bool g2_khl_init(void)
 	const char *data_root_dir;
 	const char *gwc_cache_fname;
 	char *name, *buff;
-	size_t name_len = 0;
+	size_t name_len = 0, i;
 	datum key, value;
 
 	/* open the gwc cache db */
@@ -235,6 +233,9 @@ init_next:
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
 	}
+	/* shuffle all entrys in the free list */
+	for(i = 0; i < KHL_CACHE_SIZE; i++)
+		hlist_add_head(&cache.entrys[i].node, &cache.free_list);
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 
 	/*
@@ -1124,12 +1125,13 @@ void g2_khl_end(void)
 
 	if(3 * sizeof(signature[0]) == write(cache.khl_dump, signature, sizeof(signature[0]) * 3))
 	{
-		size_t i;
-		for(i = 0; i < KHL_CACHE_SIZE; i++) {
-			if(cache.entrys[i].used) {
-				if(sizeof(cache.entrys[0].e) != write(cache.khl_dump, &cache.entrys[i].e, sizeof(cache.entrys[0].e)))
-					break;
-			}
+		struct rb_node *n;
+		struct khl_cache_entry *k;
+
+		for(n = rb_first(&cache.tree); n; n = rb_next(n)) {
+			k = rb_entry(n, struct khl_cache_entry, rb);
+			if(sizeof(k->e) != write(cache.khl_dump, &k->e, sizeof(k->e)))
+				break;
 		}
 	}
 
@@ -1143,46 +1145,24 @@ out:
 static struct khl_cache_entry *khl_cache_entry_alloc(void)
 {
 	struct khl_cache_entry *e;
-	unsigned i;
+	struct hlist_node *n;
 
-	if(KHL_CACHE_SIZE <= cache.num)
+	if(hlist_empty(&cache.free_list))
 		return NULL;
 
-	if(cache.next_free)
-	{
-		e = cache.next_free;
-		cache.next_free = NULL;
-		if(likely(!e->used))
-			goto check_next_free;
-	}
-
-	for(i = 0, e = NULL; i < KHL_CACHE_SIZE; i++)
-	{
-		if(!cache.entrys[i].used) {
-			e = &cache.entrys[i];
-			break;
-		}
-	}
-
-	if(e)
-	{
-check_next_free:
-		e->used = true;
-		cache.num++;
-		if(e < &cache.entrys[KHL_CACHE_SIZE-1]) {
-			if(!e[1].used)
-				cache.next_free = &e[1];
-		}
-		RB_CLEAR_NODE(&e->rb);
-	}
+	n = cache.free_list.first;
+	e = hlist_entry(n, struct khl_cache_entry, node);
+	hlist_del(&e->node);
+	INIT_HLIST_NODE(&e->node);
+	RB_CLEAR_NODE(&e->rb);
+	cache.num++;
 	return e;
 }
 
 static void khl_cache_entry_free(struct khl_cache_entry *e)
 {
 	memset(e, 0, sizeof(*e));
-	if(!cache.next_free)
-		cache.next_free = e;
+	hlist_add_head(&e->node, &cache.free_list);
 	cache.num--;
 }
 
@@ -1349,7 +1329,7 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 		e = khl_cache_last();
 		if(likely(e) &&
 		   e->e.when < when &&
-		   KHL_CACHE_SIZE <= cache.num)
+		   hlist_empty(&cache.free_list))
 		{
 			logg_devel_old("found older entry\n");
 			if(!khl_rb_cache_remove(e))
@@ -1381,36 +1361,26 @@ out_unlock:
 size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 {
 	struct khl_cache_entry *e;
-	size_t res;
+	struct rb_node *n;
+	size_t res, wrap_arounds;
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return 0;
 
-	e = cache.last_search;
-	if(unlikely(!e))
-		e = &cache.entrys[0];
-
-	for(res = 0; res < len; res++)
+	for(res = 0, n = rb_first(&cache.tree), wrap_arounds = 0;
+	    res < len; n = rb_next(n))
 	{
-		struct khl_cache_entry *w = NULL;
-		unsigned i = 0;
-
-// TODO: use lin search to randomize or return newest
-		/* now with rb_first, rb_next etc, we can search newest */
-		for(; i < KHL_CACHE_SIZE; i++)
-		{
-			if(likely(e->used && e->e.na.s_fam == s_fam && !e->cluster))
-				w = e;
-			if(++e >= &cache.entrys[KHL_CACHE_SIZE])
-				e = &cache.entrys[0];
-			if(w)
+		if(!n) {
+			if(unlikely(wrap_arounds++))
+				break;
+			n = rb_first(&cache.tree);
+			if(unlikely(!n))
 				break;
 		}
-		if(unlikely(!w))
-			break;
-		memcpy(&p[res], &w->e, sizeof(p[0]));
+		e = rb_entry(n, struct khl_cache_entry, rb);
+		if(likely(e->e.na.s_fam == s_fam && !e->cluster))
+			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
-	cache.last_search = e;
 
 	if(unlikely(pthread_mutex_unlock(&cache.lock)))
 		diedie("gnarf, KHL cache lock stuck, bye!");

@@ -28,7 +28,7 @@
  * inet_ntop - turn an internet address into a string
  * af: address family
  * src: the address
- * dst: to buffet to print to
+ * dst: the buffer to print to
  * cnt: size of dst
  *
  * return value: a pointer to dst or NULL on error
