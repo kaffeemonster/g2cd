@@ -3,7 +3,7 @@
  * header-file with the defaults for most server-settings, they
  * apply if no override of some kind is given
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -38,6 +38,7 @@
 #define DEFAULT_BE_DAEMON		false
 #define DEFAULT_USER		"nobody"
 #define DEFAULT_NICE_ADJUST	3
+#define DEFAULT_NUM_THREADS	0 /* autodetect */
 // #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
 #define DEFAULT_DATA_ROOT_DIR	"./"
 #define DEFAULT_ENTROPY_SOURCE "/dev/urandom"

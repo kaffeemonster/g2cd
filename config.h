@@ -2,7 +2,7 @@
  * config.h
  * the configurable compatibility-options
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -100,6 +100,9 @@
 //#define HAVE_IP_RECVDSTADDR
 //#define HAVE_IP_SENDSRCADDR
 //#define HAVE_SYS_UIO_H
+/* other BSD stuff */
+//#define HAVE_SYS_SYSCTL_H
+//#define HAVE_SYSCTLBYNAME
 
 /*
  * are we on an multi-processor-mashine

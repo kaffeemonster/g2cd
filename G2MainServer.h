@@ -94,6 +94,7 @@ _G2MAIN_EXTRNVAR(struct
 			const char *entropy_source;
 			const char *config_file;
 			int nice_adjust;
+			unsigned num_threads;
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;
 			uint8_t our_guid[16];

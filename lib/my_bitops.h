@@ -3,7 +3,7 @@
  * header-file for some global usefull bitbanging
  * functions
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -101,6 +101,8 @@ struct test_cpu_feature
 	int (*callback)(void);
 	long flags_needed;
 };
+
+LIB_MY_BITOPS_EXTRN(unsigned get_cpus_online(void));
 
 LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
 LIB_MY_BITOPS_EXTRN(int test_cpu_feature_avx_callback(void));

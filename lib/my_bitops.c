@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -45,7 +45,7 @@
  * would fail even if the instructions are not used, on Linux the user
  * of such archs hopefully compile more stuff themself (tell me a big
  * alpha or sparc distro...) with the aprop. -march=<your cpu>.
- * Ah, yes i forgot, -march an such archs sometomes does not set enough
+ * Ah, yes i forgot, -march an such archs sometimes does not set enough
  * preprocessor magic...
  */
 #  include "generic/my_bitops.c"
@@ -53,4 +53,93 @@
 #else
 # include "generic/my_bitops.c"
 #endif
+
+/*
+ * General code to get the number of "engines".
+ *
+ * This is all a major PITA, esp. since multithreading
+ * is still seen as "extra" and the info "how many cpus
+ * do i have" is not standard, at least not long enough
+ * to be really sunken in.
+ * We could touch the cpus themself, but then we would prop.
+ * get to the next point of pain: Say the OS to shedule
+ * us once on every CPU...
+ * One "winner" is the sysconf thingy, but still.
+ *
+ * All in all this is a bunch of C&P code from various
+ * places, little details of: "this plattform has this
+ * extra notch", and folklore.
+ *
+ * We take all of it, also the win32 version, to have
+ * it documented
+ */
+#ifdef _WIN32
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#elif defined(hpux) || defined(__hpux) || defined(_hpux)
+# include <sys/pstat.h>
+#else
+# include <unistd.h>
+#endif
+
+#ifndef _SC_NPROCESSORS_ONLN
+# ifdef _SC_NPROC_ONLN
+#   define _SC_NPROCESSORS_ONLN _SC_NPROC_ONLN
+# elif defined _SC_NPROCESSORS_CONF
+#   define _SC_NPROCESSORS_ONLN _SC_NPROCESSORS_CONF
+# elif defined _SC_CRAY_NCPU
+#   define _SC_NPROCESSORS_ONLN _SC_CRAY_NCPU
+# elif defined HAVE_SYS_SYSCTL_H
+#  include <sys/types.h>
+#  include <sys/param.h>
+#  include <sys/sysctl.h>
+# endif
+#endif
+
+unsigned get_cpus_online(void)
+{
+#ifdef _WIN32
+	SYSTEM_INFO info;
+
+	GetSystemInfo(&info);
+	if((int)info.dwNumberOfProcessors > 0)
+		return (unsigned)info.dwNumberOfProcessors;
+#elif defined(hpux) || defined(__hpux) || defined(_hpux)
+	struct pst_dynamic psd;
+
+	if(pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0) == 1)
+		return (unsigned)psd.psd_proc_cnt;
+#endif
+#ifdef _SC_NPROCESSORS_ONLN
+	{
+		long ncpus;
+		if((ncpus = (long)sysconf(_SC_NPROCESSORS_ONLN)) > 0)
+			return (unsigned)ncpus;
+	}
+#elif defined HAVE_SYS_SYSCTL_H
+	{
+		int ncpus;
+		size_t len = sizeof(ncpus);
+# ifdef HAVE_SYSCTLBYNAME
+		/* try the online-cpu-thingy first (only osx?) */
+		if(!sysctlbyname("hw.activecpu", &ncpus, &len , NULL, 0))
+			return (unsigned)ncpu;
+		if(!sysctlbyname("hw.ncpu", &ncpus, &len , NULL, 0))
+			return (unsigned)ncpu;
+# else
+		int mib[2] = {CTL_HW, HW_NCPU};
+		if(!sysctl(mib, 2, &ncpus, &len, NULL, 0))
+			return (unsigned)ncpus
+# endif
+	}
+#endif
+	/*
+	 * if old solaris does not provide NPROCESSORS,
+	 * one maybe bang on processor_info() and friends
+	 * from <sys/processor.h>, see above
+	 */
+// TODO: warn user?
+	/* we have at least one cpu, we are running on it... */
+	return 1;
+}
 

@@ -2,7 +2,7 @@
  * gup.c
  * grand unified poller
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -55,6 +55,7 @@
 #include "lib/recv_buff.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
+#include "lib/my_bitops.h"
 
 /* data-structures */
 static struct worker_sync {
@@ -268,8 +269,7 @@ void *gup(void *param)
 {
 	static pthread_t *helper;
 	static struct simple_gup from_main;
-// TODO: get number of helper threads
-	size_t num_helper = 1, i;
+	size_t num_helper, i;
 
 	from_main.gup = GUP_ABORT;
 	from_main.fd = *((int *)param);
@@ -289,10 +289,16 @@ void *gup(void *param)
 		goto out_epoll;
 	}
 
-	helper = malloc(num_helper * sizeof(*helper));
-	if(!helper) {
-		logg_errno(LOGF_CRIT, "No mem for gup helper threads, will run with one");
-		num_helper = 0;
+	num_helper  = server.settings.num_threads;
+	num_helper  = num_helper ? num_helper : get_cpus_online();
+	num_helper -= 1;
+	if(num_helper)
+	{
+		helper = malloc(num_helper * sizeof(*helper));
+		if(!helper) {
+			logg_errno(LOGF_CRIT, "No mem for gup helper threads, will run with one");
+			num_helper = 0;
+		}
 	}
 	/* Setup locks */
 	if(pthread_mutex_init(&worker.lock, NULL))

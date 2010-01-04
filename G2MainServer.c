@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -463,6 +463,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("max_connection_sum", &server.settings.max_connection_sum, config_parser_handle_int),
 	CONF_ITEM("max_hub_sum",        &server.settings.max_hub_sum,        config_parser_handle_int),
 	CONF_ITEM("nice_adjust",        &server.settings.nice_adjust,        config_parser_handle_int),
+	CONF_ITEM("num_threads",        &server.settings.num_threads,        config_parser_handle_int),
 };
 
 static inline void handle_config(void)
@@ -487,6 +488,7 @@ static inline void handle_config(void)
 	server.settings.entropy_source = DEFAULT_ENTROPY_SOURCE;
 	server.settings.config_file = DEFAULT_CONFIG_FILE;
 	server.settings.nice_adjust = DEFAULT_NICE_ADJUST;
+	server.settings.num_threads = DEFAULT_NUM_THREADS;
 	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
