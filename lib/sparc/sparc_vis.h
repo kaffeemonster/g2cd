@@ -134,7 +134,21 @@ static GCC_ATTR_CONST inline unsigned long long fone(void)
 static GCC_ATTR_CONST inline unsigned long long fpmerge(unsigned a, unsigned b)
 {
 	unsigned long long t;
-	asm ("fpmerge	%1, %2, %0" : "=e" (t) : "e" (a), "e" (b));
+	asm ("fpmerge	%1, %2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fpmerge_lo(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fpmerge	%L1, %L2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fpmerge_hi(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fpmerge	%H1, %H2, %0" : "=e" (t) : "f" (a), "f" (b));
 	return t;
 }
 
@@ -162,7 +176,7 @@ static inline unsigned long long fpack32(unsigned long long a, unsigned long lon
 static GCC_ATTR_CONST inline unsigned long long fexpand(unsigned a)
 {
 	unsigned long long t;
-	asm ("fexpand	%1, %0" : "=e" (t) : "e" (a));
+	asm ("fexpand	%1, %0" : "=e" (t) : "f" (a));
 	return t;
 }
 
@@ -170,6 +184,69 @@ static GCC_ATTR_CONST inline unsigned fhigh(unsigned long long a)
 {
 	unsigned t;
 	asm ("fmovs	%H1, %0" : "=e" (t) : "e" (a));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmul8x16(unsigned a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmul8x16	%1, %2, %0" : "=e" (t) : "f" (a), "e" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmul8x16_lo(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmul8x16	%L1, %2, %0" : "=e" (t) : "f" (a), "e" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmul8x16_hi(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmul8x16	%H1, %2, %0" : "=e" (t) : "f" (a), "e" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8ulx16(unsigned a, unsigned b)
+{
+	unsigned long long t;
+	asm ("fmuld8ulx16	%1, %2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8ulx16_lo(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmuld8ulx16	%L1, %L2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8ulx16_hi(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmuld8ulx16	%H1, %H2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8sux16(unsigned a, unsigned b)
+{
+	unsigned long long t;
+	asm ("fmuld8sux16	%1, %2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8sux16_lo(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmuld8sux16	%L1, %L2, %0" : "=e" (t) : "f" (a), "f" (b));
+	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fmuld8sux16_hi(unsigned long long a, unsigned long long b)
+{
+	unsigned long long t;
+	asm ("fmuld8sux16	%H1, %H2, %0" : "=e" (t) : "f" (a), "f" (b));
 	return t;
 }
 

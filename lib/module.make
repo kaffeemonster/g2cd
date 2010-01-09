@@ -219,6 +219,7 @@ TSTRNCMPSRC = \
 ADLER32SRC = \
 	$(MPL)/generic/adler32.c \
 	$(MPL)/arm/adler32.c \
+	$(MPL)/sparc/adler32.c \
 	$(MPL)/x86/adler32.c \
 	$(MPL)/ppc/adler32.c
 MY_BITOPSSRC = \
