@@ -293,7 +293,7 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 #  endif
 			"movdqa	"str_it(OPTLO)"(%4), %%xmm2\n\t"	/* optlo */
 			"pshufb	%%xmm0, %%xmm2\n\t"
-			"movaps	"str_it(OPTHI)"(%4), %%xmm0\n\t"	/* opthi */
+			"movdqa	"str_it(OPTHI)"(%4), %%xmm0\n\t"	/* opthi */
 			"pshufb	%%xmm1, %%xmm0\n\t"
 			"pxor	%%xmm2, %%xmm0\n\t"
 			"movdqa	%%xmm0, (%2)\n\t"	/* save last key */

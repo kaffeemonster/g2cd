@@ -124,6 +124,7 @@ ATOMSRC = \
 # arch src files
 AESSRC = \
 	$(MPL)/generic/aes.c \
+	$(MPL)/arm/aes.c \
 	$(MPL)/x86/aes.c
 FLSSTSRC = \
 	$(MPL)/generic/flsst.c \

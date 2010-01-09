@@ -43,7 +43,12 @@
  * alike, until someone directly maps networkhw buffers to userspace...
  * so a simple lightwight sync should suffice
  */
-#  define SYNC	"\n\tlwsync"
+#  ifndef __NO_LWSYNC__
+#   define SYNC	"\n\tlwsync"
+#  else
+/* ppc really sucks, return -E2MANYIMPL: e500 cores do not have lwsync */
+#   define SYNC	"\n\tsync"
+#  endif
 # else
 #  define EIEIO
 #  define SYNC
