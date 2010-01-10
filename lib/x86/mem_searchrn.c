@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, x86 implementation
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -426,7 +426,7 @@ void *mem_searchrn_x86(void *s, size_t len)
 	rr <<= f * BITS_PER_CHAR;
 	if(unlikely(rr))
 	{
-		last_rr = rr >> (SOST - 1) * BITS_PER_CHAR;
+		last_rr = rr >> SOSTM1 * BITS_PER_CHAR;
 		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
 		rn  = has_nul_byte(rn);
 		rr &= rn >> BITS_PER_CHAR;
@@ -453,7 +453,7 @@ void *mem_searchrn_x86(void *s, size_t len)
 			last_rr &= rn;
 			if(last_rr)
 				return p - 1;
-			last_rr = rr >> (SOST - 1) * BITS_PER_CHAR;
+			last_rr = rr >> SOSTM1 * BITS_PER_CHAR;
 			rr &= rn >> BITS_PER_CHAR;
 			if(rr)
 				return p + nul_byte_index(rr);

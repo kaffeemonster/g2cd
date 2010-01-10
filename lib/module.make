@@ -183,6 +183,7 @@ MEMPOPCNTSRC = \
 	$(MPL)/x86/mempopcnt.c
 MEM_SEARCHRNSRC = \
 	$(MPL)/generic/mem_searchrn.c \
+	$(MPL)/alpha/mem_searchrn.c \
 	$(MPL)/x86/mem_searchrn.c \
 	$(MPL)/ppc/mem_searchrn.c
 STRNLENSRC = \

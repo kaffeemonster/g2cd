@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -44,6 +44,8 @@
 #  include "x86/mem_searchrn.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/mem_searchrn.c"
+# elif defined(__alpha__)
+#  include "alpha/mem_searchrn.c"
 # else
 #  include "generic/mem_searchrn.c"
 # endif

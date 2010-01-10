@@ -1,8 +1,8 @@
 /*
  * mem_searchrn.c
- * search mem for a \r\n, generic implementation
+ * search mem for a \r\n, alpha implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,10 +23,12 @@
  * $Id: $
  */
 
+#include "alpha.h"
+
 void *mem_searchrn(void *s, size_t len)
 {
 	char *p;
-	size_t rr, rn, last_rr = 0;
+	unsigned long rr, rn, last_rr = 0;
 	ssize_t f, k;
 	prefetch(s);
 
@@ -46,93 +48,93 @@ void *mem_searchrn(void *s, size_t len)
 	 * result (and not pass a page boundery, but we cannot because
 	 * we are aligned).
 	 */
-	f = ALIGN_DOWN_DIFF(s, SOST);
-	k = SOST - f - (ssize_t) len;
+	f = ALIGN_DOWN_DIFF(s, SOUL);
+	k = SOUL - f - (ssize_t) len;
 	k = k > 0 ? k : 0;
 
-	p  = (char *)ALIGN_DOWN(s, SOST);
+	p  = (char *)ALIGN_DOWN(s, SOUL);
 	rn = (*(size_t *)p);
-	rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
-	rr = has_nul_byte(rr);
+	rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
+	rr = cmpbge(rr, 0x0101010101010101UL);;
 	if(!HOST_IS_BIGENDIAN) {
-		rr <<= k * BITS_PER_CHAR;
-		rr >>= k * BITS_PER_CHAR;
-		rr >>= f * BITS_PER_CHAR;
-		rr <<= f * BITS_PER_CHAR;
+		rr <<= k + SOULM1 * BITS_PER_CHAR;
+		rr >>= k + SOULM1 * BITS_PER_CHAR;
+		rr >>= f;
+		rr <<= f;
 	} else {
-		rr >>= k * BITS_PER_CHAR;
-		rr <<= k * BITS_PER_CHAR;
-		rr <<= f * BITS_PER_CHAR;
-		rr >>= f * BITS_PER_CHAR;
+		rr >>= k;
+		rr <<= k;
+		rr <<= f + SOULM1 * BITS_PER_CHAR;
+		rr >>= f + SOULM1 * BITS_PER_CHAR;
 	}
 	if(unlikely(rr))
 	{
 		if(!HOST_IS_BIGENDIAN)
-			last_rr = rr >> SOSTM1 * BITS_PER_CHAR;
+			last_rr = rr >> SOULM1;
 		else
-			last_rr = rr << SOSTM1 * BITS_PER_CHAR;
-		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-		rn  = has_nul_byte(rn);
+			last_rr = rr << SOULM1;
+		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
+		rn  = cmpbge(rn, 0x0101010101010101UL);;
 		if(!HOST_IS_BIGENDIAN)
-			rr &= rn >> BITS_PER_CHAR;
+			rr &= rn >> 1;
 		else
-			rr &= rn << BITS_PER_CHAR;
+			rr &= rn << 1;
 		if(rr)
-			return p + nul_byte_index(rr);
+			return p + alpha_nul_byte_index_e(rr);
 	}
 	if(unlikely(k))
 		return NULL;
 
-	len -= SOST - f;
+	len -= SOUL - f;
 	do
 	{
-		p += SOST;
+		p += SOUL;
 		rn = *(size_t *)p;
-		rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
-		rr = has_nul_byte(rr);
-		if(unlikely(len <= SOST))
+		rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
+		rr = cmpbge(rr, 0x0101010101010101UL);;
+		if(unlikely(len <= SOUL))
 			break;
-		len -= SOST;
+		len -= SOUL;
 		if(rr || last_rr)
 		{
-			rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-			rn = has_nul_byte(rn);
+			rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
+			rn = cmpbge(rn, 0x0101010101010101UL);;
 			last_rr &= rn;
 			if(last_rr)
 				return p - 1;
 			if(!HOST_IS_BIGENDIAN) {
-				last_rr = rr >> SOSTM1 * BITS_PER_CHAR;
-				rr &= rn >> BITS_PER_CHAR;
+				last_rr = rr >> SOULM1;
+				rr &= rn >> 1;
 			} else {
-				last_rr = rr << SOSTM1 * BITS_PER_CHAR;
-				rr &= rn << BITS_PER_CHAR;
+				last_rr = rr << SOULM1;
+				rr &= rn << 1;
 			}
 			if(rr)
-				return p + nul_byte_index(rr);
+				return p + alpha_nul_byte_index_e(rr);
 		}
 	} while(1);
-	k = SOST - (ssize_t) len;
+	k = SOUL - (ssize_t) len;
 	k = k > 0 ? k : 0;
 	if(!HOST_IS_BIGENDIAN) {
-		rr <<= k * BITS_PER_CHAR;
-		rr >>= k * BITS_PER_CHAR;
+		rr <<= k + SOULM1 * BITS_PER_CHAR;
+		rr >>= k + SOULM1 * BITS_PER_CHAR;
 	} else {
-		rr >>= k * BITS_PER_CHAR;
-		rr <<= k * BITS_PER_CHAR;
+		rr >>= k;
+		rr <<= k;
 	}
 	if(rr || last_rr)
 	{
-		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-		rn = has_nul_byte(rn);
+		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
+		rn = cmpbge(rn, 0x0101010101010101UL);;
 		last_rr &= rn;
 		if(last_rr)
 			return p - 1;
 		if(!HOST_IS_BIGENDIAN)
-			rr &= rn >> BITS_PER_CHAR;
+			rr &= rn >> 1;
 		else
-			rr &= rn << BITS_PER_CHAR;
+			rr &= rn << 1;
 		if(rr)
-			return p + nul_byte_index(rr);
+			return p + alpha_nul_byte_index_e(rr);
 	}
 
 	return NULL;
