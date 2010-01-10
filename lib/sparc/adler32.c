@@ -15,25 +15,38 @@
  */
 
 /*
- * This code is mainly an educational thing and to beat the dust out
- * of the VIS unit on those SUN server, where no code will ever use it
- * (any graphic processing stuff on your server? Maybe "Blinken Lights").
- * On a normal Ultrasparc it is slightly slower. On an Ulrasparc3 it is
- * 50% faster.
- * The VIS unit is nice, but misses some instructions...
- * And it could be wider...
+ * I should have messured against the full adler32 code...
+ *
+ * This code is only for educational and documentry purpose.
+ * It is always slower than the generic code, CPU 1 : FGU 0.
+ *
+ * UltraSPARC:
+ * VIS:   10000 * 262144 bytes  t: 122300 ms
+ * CPU:   10000 * 262144 bytes  t: 85500 ms
+ * UltraSPARC III:
+ * VIS2:  10000 * 262144 bytes  t: 41600 ms
+ * CPU:   10000 * 262144 bytes  t: 35800 ms
+ *
+ * If you like, with this code, you can beat the dust out of the VIS
+ * unit on your SUN server, where no code will ever use it (any
+ * graphic processing stuff on your server? Maybe "Blinken Lights").
+ *
+ * And when unrolling makes your code slower (wtf?) even if you not
+ * bust your register set...
+ * The VIS unit is nice, but misses some instructions, needs shorter
+ * pipelines... And it could be wider...
  */
 
-#if defined(HAVE_VIS) && (defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__))
+#if 0 && defined(HAVE_VIS) && (defined(HAVE_REAL_V9) || defined(__sparcv9) || defined(__sparc_v9__))
 # include "sparc_vis.h"
 
-#define BASE 65521UL    /* largest prime smaller than 65536 */
+# define BASE 65521UL    /* largest prime smaller than 65536 */
 /* NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1 */
-#define NMAX 5552
+# define NMAX 5552
 
 /* use NO_DIVIDE if your processor does not do division in hardware */
-#ifdef NO_DIVIDE
-# define MOD(a) \
+# ifdef NO_DIVIDE
+#  define MOD(a) \
 	do { \
 		if (a >= (BASE << 16)) a -= (BASE << 16); \
 		if (a >= (BASE << 15)) a -= (BASE << 15); \
@@ -53,7 +66,7 @@
 		if (a >= (BASE << 1)) a -= (BASE << 1); \
 		if (a >= BASE) a -= BASE; \
 	} while (0)
-# define MOD4(a) \
+#  define MOD4(a) \
 	do { \
 		if (a >= (BASE << 4)) a -= (BASE << 4); \
 		if (a >= (BASE << 3)) a -= (BASE << 3); \
@@ -61,10 +74,10 @@
 		if (a >= (BASE << 1)) a -= (BASE << 1); \
 		if (a >= BASE) a -= BASE; \
 	} while (0)
-#else
-# define MOD(a) a %= BASE
-# define MOD4(a) a %= BASE
-#endif
+# else
+#  define MOD(a) a %= BASE
+#  define MOD4(a) a %= BASE
+# endif
 
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -72,7 +85,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	unsigned long long scale_order_hi = 0x0800070006000500ULL;
 	unsigned long long v1_16 = 0x0001000100010001ULL;
 	unsigned long long    v0 = 0;
-	unsigned long long vs1, vs2;
+	unsigned long long vs1, vs2, vs1s;
 	unsigned long long in8;
 	uint32_t s1, s2;
 	unsigned k;
@@ -103,7 +116,10 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			/* insert scalar start somewhere */
 			vs1 = s1;
 			vs2 = s2;
-
+# ifdef HAVE_VIS2
+			/* set swizzle mask */
+			write_bmask1(0x88018845);
+# endif
 			/* get input data */
 			o_buf = buf;
 			buf = alignaddr(buf, 0);
@@ -125,6 +141,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				vs2h = fmul8x16_hi(in8, scale_order_hi);
 				vs2t = fpadd16(vs2l, vs2h);
 				/* add horizontal */
+# ifdef HAVE_VIS2
+				vs2l = fpand(vs2t, 0x0000FFFF0000FFFFULL);
+				vs2h = bshuffle(vs2t, v0);
+				vs2t = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2t, vs2);
+# else
 				vs2l = fmuld8ulx16_lo(vs2t, v1_16);
 				vs2h = fmuld8sux16_lo(vs2t, v1_16);
 				vs2l = fpadd32(vs2l, vs2h);
@@ -133,42 +155,79 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				vs2h = fmuld8sux16_hi(vs2t, v1_16);
 				vs2l = fpadd32(vs2l, vs2h);
 				vs2  = fpadd32(vs2l, vs2);
+# endif
 			}
 
 			buf += SOVV;
 			k -= n;
 
+			vs1s = 0;
 			if(likely(k >= SOVV)) do
 			{
-				unsigned long long t, vs2l, vs2h, vs2t;
+				unsigned long long vs2l_sum, vs2h_sum;
+				unsigned long long vs2l, vs2h, vs2t;
+				unsigned j;
 
-				/* add vs1 for this round (8 times) */
-				t   = fpadd32(vs1, vs1); /* *2 */
-				t   = fpadd32(t, t); /* *4 */
-				t   = fpadd32(t, t); /* *8 */
-				vs2 = fpadd32(vs2, t);
+# ifdef HAVE_VIS2
+				j = k / SOVV > 32 ? 32 : k / SOVV;
+# else
+				j = k / SOVV > 16 ? 16 : k / SOVV;
+# endif
+				k -= j * SOVV;
+				vs2l_sum = vs2h_sum = 0;
+				do
+				{
+					/* add vs1 for this round */
+					vs1s = fpadd32(vs1, vs1s);
+					/* get input data */
+					in8 = *(const unsigned long long *)buf;
+					/* add 8 byte horizontal and add to old dword */
+					vs1 = pdist(in8, v0, vs1);
+					/* apply order, widen to 16 bit */
+					vs2l = fmul8x16_lo(in8, scale_order_lo);
+					vs2h = fmul8x16_hi(in8, scale_order_hi);
+					vs2l_sum = fpadd16(vs2l, vs2l_sum);
+					vs2h_sum = fpadd16(vs2h, vs2h_sum);
+					buf += SOVV;
+				} while(--j);
 
-				/* get input data */
-				in8 = *(const unsigned long long *)buf;
-
-				/* add 8 byte horizontal and add to old dword */
-				vs1 = pdist(in8, v0, vs1);
-
-				/* apply order, widen to 16 bit */
-				vs2l = fmul8x16_lo(in8, scale_order_lo);
-				vs2h = fmul8x16_hi(in8, scale_order_hi);
-				vs2t = fpadd16(vs2l, vs2h);
+# ifdef HAVE_VIS2
+				vs2l = fpand(vs2l_sum, 0x0000FFFF0000FFFFULL);
+				vs2h = fpand(vs2h_sum, 0x0000FFFF0000FFFFULL);
+				vs2t = fpadd32(vs2l, vs2h);
+				vs2l = bshuffle(vs2l_sum, v0);
+				vs2h = bshuffle(vs2h_sum, v0);
+				vs2  = fpadd32(vs2t, vs2);
+				vs2t = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2t, vs2);
+# else
+				vs2t = vs2l_sum;
 				/* add horizontal */
 				vs2l = fmuld8ulx16_lo(vs2t, v1_16);
 				vs2h = fmuld8sux16_lo(vs2t, v1_16);
-				vs2  = fpadd32(fpadd32(vs2l, vs2h), vs2);
+				vs2l = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2l, vs2);
 				vs2l = fmuld8ulx16_hi(vs2t, v1_16);
 				vs2h = fmuld8sux16_hi(vs2t, v1_16);
-				vs2  = fpadd32(fpadd32(vs2l, vs2h), vs2);
+				vs2l = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2l, vs2);
 
-				buf += SOVV;
-				k -= SOVV;
+				vs2t = vs2h_sum;
+				/* add horizontal */
+				vs2l = fmuld8ulx16_lo(vs2t, v1_16);
+				vs2h = fmuld8sux16_lo(vs2t, v1_16);
+				vs2l = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2l, vs2);
+				vs2l = fmuld8ulx16_hi(vs2t, v1_16);
+				vs2h = fmuld8sux16_hi(vs2t, v1_16);
+				vs2l = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2l, vs2);
+# endif
 			} while (k >= SOVV);
+			vs1s = fpadd32(vs1s, vs1s); /* *2 */
+			vs1s = fpadd32(vs1s, vs1s); /* *4 */
+			vs1s = fpadd32(vs1s, vs1s); /* *8 */
+			vs2  = fpadd32(vs2, vs1s);
 
 			if(likely(k))
 			{
@@ -204,6 +263,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				vs2h = fmul8x16_hi(in8, scale_order_hi);
 				vs2t = fpadd16(vs2l, vs2h);
 				/* add horizontal */
+# ifdef HAVE_VIS2
+				vs2l = fpand(vs2t, 0x0000FFFF0000FFFFULL);
+				vs2h = bshuffle(vs2t, v0);
+				vs2t = fpadd32(vs2l, vs2h);
+				vs2  = fpadd32(vs2t, vs2);
+# else
 				vs2l = fmuld8ulx16_lo(vs2t, v1_16);
 				vs2h = fmuld8sux16_lo(vs2t, v1_16);
 				vs2l = fpadd32(vs2l, vs2h);
@@ -212,6 +277,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				vs2h = fmuld8sux16_hi(vs2t, v1_16);
 				vs2l = fpadd32(vs2l, vs2h);
 				vs2  = fpadd32(vs2l, vs2);
+# endif
 
 				buf += k;
 				k -= k;
