@@ -1,8 +1,8 @@
 /*
- * strchrnul.c
- * strchrnul for non-GNU-platforms, ppc implementation
+ * tstrchrnul.c
+ * tstrchrnul, ppc implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -28,52 +28,50 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-char *strchrnul(const char *s, int c)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
-	vector unsigned char v0;
-	vector unsigned char v_c;
-	vector unsigned char v_perm;
-	vector unsigned char x;
-	vector bool char m1, m2;
+	vector unsigned short v0;
+	vector unsigned short v_c;
+	vector unsigned short v_perm;
+	vector unsigned short x;
+	vector bool short m1, m2;
 	uint32_t r;
 	char *p;
 
 	prefetch(s);
 
-	/* transfer lower nibble */
-	v_c = vec_lvsl(c & 0x0F, (unsigned char *)NULL);
-	/* transfer upper nibble */
-	x   = vec_lvsl((c >> 4) & 0x0F, (unsigned char *)NULL);
-	x   = vec_sl(x, vec_splat_u8(4));
-	/* glue together */
-	v_c = vec_or(v_c, x);
+	v0 = vec_splat_u16(0);
+
+	v_c = v0;
+	v_c = vec_lde(0, &c);
+	v_perm = vec_lvsl(0, &c);
+	v_c = vec_perm(v_c, v0, v_perm);
 	v_c = vec_splat(v_c, 0);
 
-	v0 = vec_splat_u8(0);
-
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	x = vec_ldl(0, (const vector unsigned char *)p);
+	x = vec_ldl(0, (const vector unsigned short *)p);
 	m1 = vec_cmpeq(x, v0);
 	m2 = vec_cmpeq(x, v_c);
 	m1 = vec_or(m1, m2);
-	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
+	v_perm = vec_lvsl(0, (unsigned short *)(uintptr_t)s);
 	m1 = vec_perm(m1, v0, v_perm);
-	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
+	v_perm = vec_lvsr(0, (unsigned short *)(uintptr_t)s);
 	m1 = vec_perm(v0, m1, v_perm);
 
-	while(vec_all_eq(m1, v0)) {
+	while(vec_all_eq(m1, v0))
+	{
 		p += SOVUC;
-		x = vec_ldl(0, (const vector unsigned char *)p);
+		x = vec_ldl(0, (const vector unsigned short *)p);
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
-	r = vec_pmovmskb(m1);
-	return (char *)(uintptr_t)p + __builtin_clz(r) - 16;
+	r = vec_pmovmskb((vector bool char)m1);
+	return ((tchar_t *)(uintptr_t)p) + (__builtin_clz(r) - 16) / 2;
 }
 
-static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../generic/strchrnul.c"
+# include "../generic/tstrchrnul.c"
 #endif
 /* EOF */

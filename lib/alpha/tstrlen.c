@@ -1,8 +1,8 @@
 /*
- * strlen.c
- * strlen, alpha implementation
+ * tstrlen.c
+ * tstrlen, alpha implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,7 +25,7 @@
 
 #include "alpha.h"
 
-size_t strlen(const char *s)
+size_t tstrlen(const tchar_t *s)
 {
 	const char *p;
 	unsigned long r;
@@ -44,21 +44,23 @@ size_t strlen(const char *s)
 	p = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+	r = r & ((r & 0xAA) >> 1);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
 	else
 		r <<= shift + SOULM1 * BITS_PER_CHAR;
 	if(r)
-		return alpha_nul_byte_index_b(r);
+		return alpha_nul_byte_index_b(r) / 2;
 
 	do
 	{
-		p += SOST;
+		p += SOUL;
 		r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+		r = r & ((r & 0xAA) >> 1);
 	} while(!r);
-	r = alpha_nul_byte_index_e(r);
-	return p - s + r;
+	r = alpha_nul_byte_index_e(r) / 2;
+	return ((const tchar_t *)p) - s + r;
 }
 
-static char const rcsid_sla[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tsl[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

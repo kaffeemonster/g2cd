@@ -2,7 +2,7 @@
  * tstrlen.c
  * strlen for tchar
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -43,6 +43,8 @@
 #  include "x86/tstrlen.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/tstrlen.c"
+# elif defined(__alpha__)
+#  include "alpha/tstrlen.c"
 # else
 #  include "generic/tstrlen.c"
 # endif

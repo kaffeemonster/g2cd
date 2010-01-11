@@ -65,3 +65,4 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 }
 
 static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

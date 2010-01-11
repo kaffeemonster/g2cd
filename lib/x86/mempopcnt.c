@@ -63,7 +63,7 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 };
 
 #ifdef HAVE_BINUTILS
-# if HAVE_BINTUILS >= 218
+# if HAVE_BINUTILS >= 218
 static inline size_t popcountst_intSSE4(size_t n)
 {
 	size_t tmp;
@@ -863,7 +863,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
-# if HAVE_BINTUILS >= 218
+# if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_POPCNT},
 	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_SSE4A},
 # endif

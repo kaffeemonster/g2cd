@@ -378,7 +378,7 @@ CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DASSERT_BUFFERS
 CFLAGS += -DQHT_DUMP
 #CFLAGS += -DHELGRIND_ME
-CFLAGS += -DHAVE_BINUTILS=217
+CFLAGS += -DHAVE_BINUTILS=218
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
 CFLAGS += -D_GNU_SOURCE

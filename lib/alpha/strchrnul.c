@@ -71,3 +71,4 @@ char *strchrnul(const char *s, int c)
 }
 
 static char const rcsid_scna[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

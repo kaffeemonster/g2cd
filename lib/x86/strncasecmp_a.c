@@ -82,8 +82,6 @@ LOOP_AGAIN:
 	j = ALIGN_DIFF(s2, 4096);
 	j = j ? j : i;
 	i = i < j ? i : j;
-	if(unlikely(i < 16))
-		goto BYTE_WISE;
 	j = ROUND_ALIGN(n, 16);
 	i = i < j ? i : j;
 

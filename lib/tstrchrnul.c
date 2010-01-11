@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -40,7 +40,16 @@
 #include "tchar.h"
 
 #ifdef I_LIKE_ASM
-# include "generic/tstrchrnul.c"
+# if defined(__i386__) || defined(__x86_64__)
+	/* works for both */
+#  include "x86/tstrchrnul.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/tstrchrnul.c"
+# elif defined(__alpha__)
+#  include "alpha/tstrchrnul.c"
+# else
+#  include "generic/tstrchrnul.c"
+# endif
 #else
 # include "generic/tstrchrnul.c"
 #endif

@@ -89,7 +89,7 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 #include "memand_tmpl.c"
 #undef HAVE_3DNOW
 
-#ifdef HAVE_BINTUILS
+#ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
 #  define HAVE_AVX
 #  undef ARCH_NAME_SUFFIX

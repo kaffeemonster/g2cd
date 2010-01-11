@@ -211,10 +211,14 @@ STRNPCPYSRC = \
 	$(MPL)/ppc/strnpcpy.c
 TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
+	$(MPL)/alpha/tstrlen.c \
 	$(MPL)/x86/tstrlen.c \
 	$(MPL)/ppc/tstrlen.c
 TSTRCHRNULSRC = \
-	$(MPL)/generic/tstrchrnul.c
+	$(MPL)/generic/tstrchrnul.c \
+	$(MPL)/alpha/tstrchrnul.c \
+	$(MPL)/x86/tstrchrnul.c \
+	$(MPL)/ppc/tstrchrnul.c
 TSTRNCMPSRC = \
 	$(MPL)/generic/tstrncmp.c
 ADLER32SRC = \

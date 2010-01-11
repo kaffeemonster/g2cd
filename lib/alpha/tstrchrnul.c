@@ -1,8 +1,8 @@
 /*
- * strlen.c
- * strlen, alpha implementation
+ * tstrchrnul.c
+ * tstrchrnul, alpha implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,10 +25,10 @@
 
 #include "alpha.h"
 
-size_t strlen(const char *s)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
-	unsigned long r;
+	unsigned long r, mask, x;
 	unsigned shift;
 	prefetch(s);
 
@@ -41,24 +41,35 @@ size_t strlen(const char *s)
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
-	p = (const char *)ALIGN_DOWN(s, SOUL);
-	shift = ALIGN_DOWN_DIFF(s, SOUL);
-	r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+	mask = (((size_t)c) & 0xFFFF) * 0x0001000100010001UL;
+	p  = (const char *)ALIGN_DOWN(s, SOUL);
+	shift = ALIGN_DOWN_DIFF(s, SOUL) * BITS_PER_CHAR;
+	x  = *(const size_t *)p;
+	r  = cmpbge(x, 0x0101010101010101UL);
+	r  = r & ((r & 0xAA) >> 1);
+	x ^= mask;
+	x  = cmpbge(x, 0x0101010101010101UL);
+	r |= x & ((x & 0xAA) >> 1);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
 	else
 		r <<= shift + SOULM1 * BITS_PER_CHAR;
 	if(r)
-		return alpha_nul_byte_index_b(r);
+		return ((tchar_t *)(uintptr_t)s) + alpha_nul_byte_index_b(r) / 2;
 
 	do
 	{
-		p += SOST;
-		r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+		p += SOUL;
+		x  = *(const size_t *)p;
+		r  = cmpbge(x, 0x0101010101010101UL);
+		r  = r & ((r & 0xAA) >> 1);
+		x ^= mask;
+		x  = cmpbge(x, 0x0101010101010101UL);
+		r |= x & ((x & 0xAA) >> 1);
 	} while(!r);
-	r = alpha_nul_byte_index_e(r);
-	return p - s + r;
+	r = alpha_nul_byte_index_e(r) / 2;
+	return ((tchar_t *)(uintptr_t)p) + r;
 }
 
-static char const rcsid_sla[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */
