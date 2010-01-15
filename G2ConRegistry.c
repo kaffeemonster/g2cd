@@ -2,7 +2,7 @@
  * G2ConRegistry.c
  * Central G2Connection registry
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *

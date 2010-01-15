@@ -2,7 +2,7 @@
  * hzp.c
  * hzp internal voodoo
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *

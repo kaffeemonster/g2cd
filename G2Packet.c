@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004 - 2009 Jan Seiffert
+ * Copyright (c) 2004 - 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1785,8 +1785,6 @@ static intptr_t PI_callback(g2_connection_t *con, void *carg)
 	pi->type = PT_PI;
 	pi->big_endian = HOST_IS_BIGENDIAN;
 
-//	g2_packet_print_one(pi);
-//	goto out_special;
 	g2_handler_con_mark_write(pi, con);
 	return 0;
 
@@ -1795,9 +1793,6 @@ out_fail:
 	g2_packet_free(udp);
 	g2_packet_free(relay);
 	return 0;
-//out_special:
-//	g2_packet_free(pi);
-//	return 0;
 }
 
 static bool handle_PI(struct ptype_action_args *parg)
@@ -2149,7 +2144,6 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
 			g2_udp_send(&rdata->udp_na, &answer);
-//			g2_packet_free(qa);
 			return false;
 		}
 		else
@@ -2163,7 +2157,6 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
 			g2_udp_send(&rdata->udp_na, &answer);
-//			g2_packet_free(qa);
 			return false;
 		}
 		else
@@ -2309,7 +2302,7 @@ static bool handle_Q2_UDP(struct ptype_action_args *parg)
 	if( 6 != remaining && /* IPv4 */
 	   10 != remaining && /* IPv4 + key */
 	   18 != remaining && /* IPv6 */
-		22 != remaining    /* IPv6 + key */) {
+	   22 != remaining    /* IPv6 + key */) {
 	   logg_packet("/Q2/UDP -> funny length! len: %zu\n", remaining);
 		return false;
 	}
@@ -4252,14 +4245,7 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 				logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 #if 0
 		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]) &&
-			PT_CH != packs->type) {
-			if(parg->connec)
-				logg_packet("C: %p#I\t*/%s\tC: %s\n", &parg->connec->remote_host, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
-			else if(parg->src_addr)
-				logg_packet("S: %p#I\t*/%s\tC: %s\n", parg->src_addr, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
-			else
-				logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
-		}
+			PT_CH != packs->type)
 #endif
 		}
 		return work_type[packs->type](parg);

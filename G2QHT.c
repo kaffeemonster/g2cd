@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *

@@ -2,7 +2,7 @@
  * G2ConHelper.c
  * G2-specific network-helper functions
  *
- * Copyright (c) 2004-2009, Jan Seiffert
+ * Copyright (c) 2004-2010, Jan Seiffert
  *
  * This file is part of g2cd.
  *

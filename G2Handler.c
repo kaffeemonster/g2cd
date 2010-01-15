@@ -1,8 +1,8 @@
 /*
  * G2Handler.c
- * thread to handle G2-Protocol
+ * code to handle G2-Protocol
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
