@@ -160,7 +160,7 @@ typedef struct g2_connection
 	struct qhtable   *qht;
 	struct qhtable   *sent_qht;
 // TODO: WTF these arrays where supossed to? zlib buffer?
-	char             tmp1[32000], tmp2[32000];
+//	char             tmp1[32000], tmp2[32000];
 	
 	/* Packets */
 	g2_packet_t      *build_packet;

@@ -23,6 +23,7 @@
  * $Id:$
  */
 
+#define WANT_QHT_ZPAD
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -72,15 +73,6 @@ struct zpad_heap
 	char data[DYN_ARRAY_LEN];
 };
 
-/* unfortunatly, the deflater is memory greedy... */
-struct zpad
-{
-	z_stream z;
-	struct zpad_heap *pad_free;                   /* pointer in the pad to free space */
-	unsigned char pad[1<<19] GCC_ATTR_ALIGNED(8); /* other allok space, 512k */
-	unsigned char window[1<<16];                  /* 16 Bit window size, should result in 64k */
-};
-
 struct scratch
 {
 	size_t length;
@@ -112,7 +104,6 @@ static void qht_deinit(void) GCC_ATTR_DESTRUCT;
 static void *qht_zpad_alloc(void *, unsigned int, unsigned int) GCC_ATTR_MALLOC;
 static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
-static inline struct zpad *qht_get_zpad(void);
 static void g2_qht_free_hzp(void *);
 #ifdef QHT_DUMP
 static void qht_dump_init(void);
@@ -282,7 +273,7 @@ static inline void qht_zpad_merge(struct zpad_heap *zheap)
 	}
 }
 
-static inline struct zpad *qht_get_zpad(void)
+struct zpad *qht_get_zpad(void)
 {
 	struct zpad *z_pad = pthread_getspecific(key2qht_zpad);
 
@@ -1254,6 +1245,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 				goto check_dn;
 			memcpy(str_buf, metadata, metadata_len);
 			str_buf[metadata_len] = '\0';
+			logg_develd("had xml: \"%s\"\n", str_buf);
 // TODO: grok metadata
 			/*
 			for_each_xml_attribute(str_buf) {

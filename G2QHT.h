@@ -2,7 +2,7 @@
  * G2QHT.h
  * Header for the G2 QHT
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,6 +34,20 @@
 # include "lib/hzp.h"
 # include "lib/atomic.h"
 # include "lib/tchar.h"
+
+# ifdef WANT_QHT_ZPAD
+#  include <zlib.h>
+struct zpad_heap;
+struct zpad
+{
+	z_stream z;
+	struct zpad_heap *pad_free;                   /* pointer in the pad to free space */
+	unsigned char pad[1<<19] GCC_ATTR_ALIGNED(8); /* other allok space, 512k */
+	unsigned char window[1<<16];                  /* 16 Bit window size, should result in 64k */
+};
+# else
+struct zpad;
+#endif
 
 enum g2_qht_comp
 {
@@ -90,6 +104,8 @@ struct qht_search_walk
 #  define _G2QHT_EXTRN(x) x GCC_ATTR_VIS("hidden")
 #  define _G2QHT_EXTRNVAR(x)
 # endif /* _G2QHT_C */
+
+_G2QHT_EXTRN(struct zpad *qht_get_zpad(void));
 
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
 _G2QHT_EXTRN(void g2_qht_put(struct qhtable *));

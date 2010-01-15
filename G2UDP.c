@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,6 +23,7 @@
  * $Id: G2UDP.c,v 1.16 2005/11/05 10:03:50 redbully Exp redbully $
  */
 
+#define WANT_QHT_ZPAD
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -51,6 +52,7 @@
 #include "gup.h"
 #include "G2MainServer.h"
 #include "G2PacketSerializer.h"
+#include "G2QHT.h"
 #include "lib/atomic.h"
 #include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
@@ -82,6 +84,7 @@ static struct simple_gup udp_sos[2];
 
 #ifndef HAVE___THREAD
 static pthread_key_t key2udp_lsb;
+static pthread_key_t key2udp_lub;
 /* protos */
 	/* you better not kill this prot, our it won't work ;) */
 static void udp_init(void) GCC_ATTR_CONSTRUCT;
@@ -91,6 +94,8 @@ static void udp_init(void)
 {
 	if(pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free))
 		diedie("couln't create TLS key for local UDP send buffer");
+	if(pthread_key_create(&key2udp_lub, (void(*)(void *))recv_buff_free))
+		diedie("couln't create TLS key for local UDP uncompress buffer");
 }
 
 static void udp_deinit(void)
@@ -102,9 +107,15 @@ static void udp_deinit(void)
 		pthread_setspecific(key2udp_lsb, NULL);
 	}
 	pthread_key_delete(key2udp_lsb);
+	if((tmp_buf = pthread_getspecific(key2udp_lub))) {
+		recv_buff_free(tmp_buf);
+		pthread_setspecific(key2udp_lub, NULL);
+	}
+	pthread_key_delete(key2udp_lub);
 }
 #else
 static __thread struct norm_buff *udp_lsbuffer;
+static __thread struct norm_buff *udp_lubuffer;
 #endif
 
 static struct norm_buff *udp_get_lsbuf(void)
@@ -112,13 +123,13 @@ static struct norm_buff *udp_get_lsbuf(void)
 	struct norm_buff *ret_buf;
 #ifndef HAVE___THREAD
 	ret_buf = pthread_getspecific(key2udp_lsb);
-	if(likely(ret_buf))
-		return ret_buf;
 #else
 	ret_buf = udp_lsbuffer;
-	if(likely(ret_buf))
-		return ret_buf;
 #endif
+	if(likely(ret_buf)) {
+		buffer_clear(*ret_buf);
+		return ret_buf;
+	}
 
 	ret_buf = recv_buff_alloc();
 
@@ -131,6 +142,35 @@ static struct norm_buff *udp_get_lsbuf(void)
 	pthread_setspecific(key2udp_lsb, ret_buf);
 #else
 	udp_lsbuffer = ret_buf;
+#endif
+
+	return ret_buf;
+}
+
+static struct norm_buff *udp_get_lubuf(void)
+{
+	struct norm_buff *ret_buf;
+#ifndef HAVE___THREAD
+	ret_buf = pthread_getspecific(key2udp_lub);
+#else
+	ret_buf = udp_lubuffer;
+#endif
+	if(likely(ret_buf)) {
+		buffer_clear(*ret_buf);
+		return ret_buf;
+	}
+
+	ret_buf = recv_buff_alloc();
+
+	if(!ret_buf) {
+		logg_devel("no local udp uncompress buffer\n");
+		return NULL;
+	}
+
+#ifndef HAVE___THREAD
+	pthread_setspecific(key2udp_lub, ret_buf);
+#else
+	udp_lubuffer = ret_buf;
 #endif
 
 	return ret_buf;
@@ -425,9 +465,71 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		goto out;
 	}
 
-	if(tmp_packet.flags.deflate) {
+	if(tmp_packet.flags.deflate)
+	{
+		struct norm_buff *d_hold_n;
+		struct zpad *zp;
+		int z_status;
+
+		if(buffer_remaining(*d_hold)) /* is there really any data */
+			goto out;
+
 		logg_devel("compressed packet recevied\n");
-		goto out;
+		d_hold_n = udp_get_lubuf();
+		if(!d_hold_n)
+			goto out;
+
+		/*
+		 * because we do not want to receive QHTs by UDP, we can
+		 * share the zlib TLS alloc stuff with the QHT handling.
+		 * And even if, it's no problem, inflating should be finished
+		 * (at least ATM) afterwards and QHT can reuse the pad.
+		 */
+		zp = qht_get_zpad();
+		if(!zp)
+			goto out;
+
+		zp->z.next_in = (Bytef *)buffer_start(*d_hold);
+		zp->z.avail_in = buffer_remaining(*d_hold);
+		zp->z.next_out = (Bytef *)buffer_start(*d_hold_n);
+		zp->z.avail_out = buffer_remaining(*d_hold_n);
+
+		if(inflateInit(&zp->z) != Z_OK) {
+			logg_devel("infalteInit failed\n");
+			goto out;
+		}
+		z_status = inflate(&zp->z, Z_SYNC_FLUSH);
+		inflateEnd(&zp->z);
+		switch(z_status)
+		{
+		case Z_OK:
+		case Z_STREAM_END:
+			d_hold->pos += buffer_remaining(*d_hold) - zp->z.avail_in;
+			d_hold_n->pos += buffer_remaining(*d_hold_n) - zp->z.avail_out;
+			break;
+		case Z_NEED_DICT:
+			logg_devel("Z_NEED_DICT\n");
+			goto out;
+		case Z_DATA_ERROR:
+			logg_devel("Z_DATA_ERROR\n");
+			goto out;
+		case Z_STREAM_ERROR:
+			logg_devel("Z_STREAM_ERROR\n");
+			goto out;
+		case Z_MEM_ERROR:
+			logg_devel("Z_MEM_ERROR\n");
+			goto out;
+		case Z_BUF_ERROR:
+			logg_devel("Z_BUF_ERROR\n");
+			goto out;
+		default:
+			logg_devel("inflate was not Z_OK\n");
+			goto out;
+		}
+		buffer_flip(*d_hold_n);
+		if(buffer_remaining(*d_hold))
+			logg_develd("not all data consumed! %zu", buffer_remaining(*d_hold));
+		d_hold = d_hold_n;
 	}
 
 	/*
@@ -445,8 +547,19 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		goto out_free;
 	}
 
+	if(tmp_packet.flags.ack_me)
+	{
+		struct norm_buff *t_hold = udp_get_lsbuf();
+		if(t_hold) {
+			gnd_buff_prep(t_hold, tmp_packet.sequence, tmp_packet.part, 0);
+			udp_sock_send(t_hold, from, answer_fd);
+			tmp_packet.flags.ack_me = false;
+		}
+	}
+
 	INIT_LIST_HEAD(&answer);
 	parg.connec      = NULL;
+	parg.father      = NULL;
 	parg.source      = &g_packet;
 	parg.src_addr    = from;
 	parg.dst_addr    = to;
@@ -503,7 +616,7 @@ void g2_udp_send(const union combo_addr *to, struct list_head *answer)
 		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
 		buffer_clear(*d_hold);
 		udp_writeout_packet(to, answer_fd, entry, d_hold);
-		list_del(e);
+		list_del_init(e);
 		g2_packet_free(entry);
 	}
 	return;
@@ -511,7 +624,7 @@ void g2_udp_send(const union combo_addr *to, struct list_head *answer)
 out_err:
 	list_for_each_safe(e, n, answer) {
 		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-		list_del(e);
+		list_del_init(e);
 		g2_packet_free(entry);
 	}
 }

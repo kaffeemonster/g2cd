@@ -142,8 +142,8 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 			struct list_head head;
 			struct list_head *e, *n;
 
-			INIT_LIST_HEAD(&head);
 more_packet_encode:
+			INIT_LIST_HEAD(&head);
 			list_splice_init(&w_entry->packets_to_send, &head);
 			shortlock_t_unlock(&w_entry->pts_lock);
 
@@ -264,7 +264,7 @@ retry_unpack:
 				g2_packet_init_on_stack(build_packet);
 			}
 			else
-				logg_develd("taking %p\n", build_packet);
+				logg_develd_old("taking %p\n", build_packet);
 
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
 
@@ -290,6 +290,7 @@ retry_unpack:
 					parg.connec      = w_entry;
 					parg.src_addr    = NULL;
 					parg.dst_addr    = NULL;
+					parg.father      = NULL;
 					parg.source      = build_packet;
 					parg.target_lock = &w_entry->pts_lock;
 					parg.target      = &w_entry->packets_to_send;
@@ -303,7 +304,7 @@ retry_unpack:
 					save_build_packet = false;
 					/* !!! packet is seen as finished here !!! */
 					if(build_packet->is_freeable)
-						logg_devel("freeing durable packet\n");
+						logg_devel_old("freeing durable packet\n");
 					else if(build_packet->data_trunk_is_freeable)
 						logg_devel("datatrunk freed\n");
 

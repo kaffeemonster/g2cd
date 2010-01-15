@@ -270,7 +270,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 
 		list_for_each_safe(e, n, &work_entry->packets_to_send) {
 			g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-			list_del(e);
+			list_del_init(e);
 			g2_packet_free(entry);
 		}
 	}
@@ -343,7 +343,7 @@ void g2_con_free(g2_connection_t *to_free)
 
 	list_for_each_safe(e, n, &to_free->packets_to_send) {
 		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
-		list_del(e);
+		list_del_init(e);
 		g2_packet_free(entry);
 	}
 
@@ -366,7 +366,7 @@ g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, 
 	int failcount = 0;
 	g2_connection_t *ret_val = NULL;
 
-	logg_develd("called from %s:%s()@%u\n", from_file, from_func, from_line);
+	logg_develd_old("called from %s:%s()@%u\n", from_file, from_func, from_line);
 
 	do
 	{
@@ -387,7 +387,7 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 {
 	int failcount = 0;
 
-	logg_develd("called from %s:%s()@%u\n", from_file, from_func, from_line);
+	logg_develd_old("called from %s:%s()@%u\n", from_file, from_func, from_line);
 
 	do
 	{
@@ -581,7 +581,7 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
 	/* string displacements are int... */
-	logg_develd(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(*to_con->recv));
+	logg_develd_old(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(*to_con->recv));
 	return false;
 }
 

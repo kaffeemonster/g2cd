@@ -74,7 +74,7 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 	if(!msg)
 		msg = "unknown problem";
 
-	logg_posd(LOGF_DEBUG, "%s Ip: %p#I\ttFDNum: %i\n",
+	logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
 	          msg, &w_entry->remote_host, w_entry->com_socket);
 /*
  * Under Linux get errno out off ERRQUEUE and print/log it
@@ -339,7 +339,7 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 	else
 		pthread_mutex_unlock(&w_entry->lock);
 
-	logg_develd("%s\n", (keep_it) ? "connection removed" : "connection recyled");
+	logg_develd_old("%s\n", (keep_it) ? "connection removed" : "connection recyled");
 
 	return true;
 }

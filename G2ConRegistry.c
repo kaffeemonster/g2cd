@@ -416,7 +416,7 @@ bool g2_conreg_remove(g2_connection_t *connec)
 	{
 		pthread_rwlock_wrlock(&neighbour_hubs_lock);
 		if(likely(!list_empty(&connec->hub_list)))
-			list_del(&connec->hub_list);
+			list_del_init(&connec->hub_list);
 		pthread_rwlock_unlock(&neighbour_hubs_lock);
 		atomic_dec(&server.status.act_hub_sum);
 		INIT_LIST_HEAD(&connec->hub_list);

@@ -146,6 +146,16 @@
 	ENUM_CMD( RELAY  , 1 ), /* PI PO */ \
 	ENUM_CMD( TO     , 1 ), \
 	ENUM_CMD( XML    , 1 ), /* UPROD */ \
+	ENUM_CMD( dna    , 0 ), /* GnucDNA */ \
+	ENUM_CMD( CR     , 0 ), /* GnucDNA */ \
+	ENUM_CMD( NAT    , 0 ), /* ?? */ \
+	ENUM_CMD( G1     , 0 ), /* ?? */ \
+	ENUM_CMD( IDENT  , 0 ), /* GnucDNA */ \
+	ENUM_CMD( NBW    , 0 ), /* GnucDNA */ \
+	ENUM_CMD( PM     , 0 ), /* GnucDNA */ \
+	ENUM_CMD( CM     , 0 ), /* GnucDNA */ \
+	ENUM_CMD( HURN   , 0 ), \
+	ENUM_CMD( HKEY   , 0 ), \
 	ENUM_CMD( MAXIMUM, 0 ) /* loop counter, hopefully none invents a Packet with this name... */
 
 #define ENUM_CMD(x, y) PT_##x
@@ -243,6 +253,7 @@ _G2PACK_EXTRNVAR(const uint8_t g2_ptype_names_length[PT_MAXIMUM])
 struct ptype_action_args
 {
 	g2_connection_t  *connec;
+	g2_packet_t      *father;
 	g2_packet_t      *source;
 	union combo_addr *src_addr;
 	union combo_addr *dst_addr;

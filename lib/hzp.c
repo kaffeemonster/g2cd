@@ -372,7 +372,7 @@ int hzp_scan(int threshold)
 			/* copy struct hzp_free entrys, may lay in freed mem */
 			void (*tmp_free_func)(void *) = mentry->free_func;
 			void *tmp_data = mentry->data;
-			logg_develd("freeing %p\t%p\n", (void *)mentry, tmp_data);
+			logg_develd_old("freeing %p\t%p\n", (void *)mentry, tmp_data);
 			tmp_free_func(tmp_data);
 			/* attention! *mentry is now freed and invalid */
 			freed++;

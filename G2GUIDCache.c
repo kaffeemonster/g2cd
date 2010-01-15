@@ -438,7 +438,7 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 		return ret_val;
 	}
 //TODO: check for own guid
-	logg_develd("adding: %p#G -> %p#I, %u\n", guid, addr, (unsigned)when);
+	logg_develd_old("adding: %p#G -> %p#I, %u\n", guid, addr, (unsigned)when);
 
 	h = cache_ht_hash(guid, gt);
 

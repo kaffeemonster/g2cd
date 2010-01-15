@@ -53,8 +53,8 @@
 #define DEFAULT_FILE_GUID		"guid.txt"
 #define DEFAULT_FILE_PROFILE	"profile.xml"
 
-#define DEFAULT_CON_MAX		300
-#define DEFAULT_HUB_MAX		6
+#define DEFAULT_CON_MAX		150
+#define DEFAULT_HUB_MAX		4
 #define DEFAULT_PCK_LEN_MAX		0x020000
 #define DEFAULT_SEND_PROFILE		true
 

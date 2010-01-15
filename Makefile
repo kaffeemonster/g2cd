@@ -101,7 +101,7 @@ RM = rm -f
 #	when it sees "illegal" feature combinations (stdbool only when C99,
 #	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
 #	Hello?
-HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
+HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
 
 #
 # the C-Standart the compiler should work with
@@ -654,7 +654,7 @@ final: .final
 
 withzlib: .withzlib
 .withzlib: $(OBJS) $(ZLIB) $(LIBCOMMON) .mapfile
-	@./ccdrv -s$(VERBOSE) "LD[$(MAIN)]" $(CC) -o $(MAIN) $(OBJS) $(LDFLAGS) $(ZLIB) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+	@./ccdrv -s$(VERBOSE) "LD[$(MAIN)]" $(CC) -o $(MAIN) $(OBJS) $(LDFLAGS) $(ZLIB) $(LIBCOMMON) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 	
 oncewithzlib686: finalwithzlib686
 finalwithzlib686: .finalwithzlib686
@@ -849,7 +849,7 @@ data.o: sbox.bin bin2o
 G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
-G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h gup.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
+G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h

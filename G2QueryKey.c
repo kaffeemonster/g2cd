@@ -485,7 +485,7 @@ void g2_qk_add(uint32_t qk, const union combo_addr *addr)
 	uint32_t h;
 	time_t when;
 
-	if(unlikely(combo_addr_is_public(addr))) {
+	if(unlikely(!combo_addr_is_public(addr))) {
 		logg_develd("addr %pI is privat, not added\n", addr);
 		return;
 	}
@@ -552,7 +552,7 @@ bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
 	uint32_t h;
 	bool ret_val;
 
-	if(unlikely(combo_addr_is_public(addr)))
+	if(unlikely(!combo_addr_is_public(addr)))
 		return false;
 	h = cache_ht_hash(addr);
 	ret_val = false;

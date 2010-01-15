@@ -59,8 +59,8 @@
 #define PI_TIMEOUT     (   30)
 #define LNI_TIMEOUT    ( 1*60)
 #define KHL_TIMEOUT    ( 2*60)
+#define CRAWLR_TIMEOUT ( 3*60)
 #define QHT_TIMEOUT    ( 5*60)
-#define CRAWLR_TIMEOUT (10*60)
 #define UPROC_TIMEOUT  (15*60)
 #define G2CDC_TIMEOUT  (30*60)
 
@@ -157,6 +157,7 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_QKA   ] = handle_QKA,
 	[PT_UPROC ] = handle_UPROC,
 	[PT_UPROD ] = handle_UPROD,
+	[PT_dna   ] = empty_action_p, /* don't know */
 };
 
 const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
@@ -176,6 +177,8 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
+	[PT_dna   ] = empty_action_p, /* don't know */
+	[PT_CR    ] = empty_action_p, /* we connect to no one */
 };
 
 /* PI-childs */
@@ -189,17 +192,21 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
-	[PT_TO ] = empty_action_p,
-	[PT_FW ] = handle_LNI_FW,
-	[PT_GU ] = handle_LNI_GU,
-	[PT_HS ] = handle_LNI_HS,
-	[PT_LS ] = empty_action_p,
-	[PT_RTR] = handle_LNI_RTR,
-	[PT_NA ] = handle_LNI_NA,
-	[PT_QK ] = handle_LNI_QK,
-	[PT_UP ] = empty_action_p,
-	[PT_HA ] = handle_LNI_HA,
-	[PT_V  ] = handle_LNI_V,
+	[PT_TO   ] = empty_action_p,
+	[PT_FW   ] = handle_LNI_FW,
+	[PT_GU   ] = handle_LNI_GU,
+	[PT_HS   ] = handle_LNI_HS,
+	[PT_LS   ] = empty_action_p,
+	[PT_RTR  ] = handle_LNI_RTR,
+	[PT_NA   ] = handle_LNI_NA,
+	[PT_QK   ] = handle_LNI_QK,
+	[PT_UP   ] = empty_action_p,
+	[PT_HA   ] = handle_LNI_HA,
+	[PT_V    ] = handle_LNI_V,
+	[PT_IDENT] = empty_action_p,
+	[PT_NBW  ] = empty_action_p,
+	[PT_CM   ] = empty_action_p,
+	[PT_GPS  ] = empty_action_p,
 };
 
 /* KHLR-childs */
@@ -253,6 +260,8 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_MD ] = handle_Q2_MD,
 	[PT_SZR] = empty_action_p,
 	[PT_I  ] = empty_action_p,
+	[PT_dna] = empty_action_p, /* don't know */
+	[PT_NAT] = unimpl_action_p, /* ??? */
 };
 
 /* QH2-childs */
@@ -282,7 +291,7 @@ static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
 	[PT_TO   ] = empty_action_p,
 	[PT_GU   ] = handle_QH2_GU,
 	[PT_NA   ] = handle_QH2_NA,
-	[PT_NH   ] = unimpl_action_p,
+	[PT_NH   ] = empty_action_p,
 	[PT_V    ] = empty_action_p, /* not interresting */
 	[PT_FW   ] = empty_action_p,
 	[PT_BH   ] = empty_action_p,
@@ -325,6 +334,7 @@ static const g2_ptype_action_func QKR_packet_dict[PT_MAXIMUM] =
 	[PT_QNA] = handle_QKR_QNA,
 	[PT_SNA] = handle_QKR_SNA,
 	[PT_REF] = handle_QKR_REF,
+	[PT_dna] = empty_action_p, /* don't know */
 };
 
 /* QKA-childs */
@@ -428,6 +438,27 @@ static const char packet_uproc[] = { 0x20, 'U', 'P', 'R', 'O', 'C' };
  * Packet handler helper
  *
  */
+static GCC_ATTRIB_UNUSED void g2_packet_print_one(g2_packet_t *x)
+{
+	char pr_buf[2048];
+	char *pr_ptr = pr_buf;
+
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf), "-Type: \"%s\"\tlength: %u\n", g2_ptype_names[x->type], x->length);
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-ll: %hhu\ttl: %hhu\n", x->length_length, x->type_length);
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-big-e: %s\tid-c: %s\n",
+		x->big_endian ? "true" : "false", x->is_compound ? "true" : "false");
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-pde: %i\tpen: %i\n",
+		x->packet_decode, x->packet_encode);
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-if: %s\tdtif: %s\tisl: %s\n",
+		x->is_freeable ? "true" : "false", x->data_trunk_is_freeable ? "true" : "false",
+		x->is_literal ? "true" : "false");
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-dtp: %p\tdtpos: %zu\tdtl: %zu\tdtc: %zu\n",
+		buffer_start(x->data_trunk), x->data_trunk.pos, x->data_trunk.limit, x->data_trunk.capacity);
+	pr_ptr += my_snprintf(pr_ptr, sizeof(pr_buf) - (pr_ptr - pr_buf), "-ln: %p\tlp: %p\tcn: %p\tcp: %p\n",
+		x->list.next, x->list.prev, x->children.next, x->children.prev);
+	logg_develd("%s", pr_buf);
+}
+
 static noinline bool skip_child(g2_packet_t *s, const char *name)
 {
 	bool ret_val = false;
@@ -505,24 +536,38 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 {
 	size_t rem = buffer_remaining(source->data_trunk);
 
-	if(4 != rem && INET6_ADDRLEN != rem) {
-		logg_packet(STDLF, name, "SNA not an IPv4 or IPv6 address");
+	/* sna should not have a port, but reallity... */
+	if(4 != rem &&
+		INET6_ADDRLEN != rem &&
+		4+2 != rem &&
+		INET6_ADDRLEN+2 != rem) {
+		logg_packet(STDLF" %zu", name, "SNA not an IPv4 or IPv6 address", rem);
 		return false;
 	}
 
 	memset(target, 0, sizeof(*target));
 	/* We Assume network byte order for the IP */
-	if(4 == rem) {
+	if(4 == rem || 6 == rem) {
 		target->s_fam = AF_INET;
 		target->in.sin_addr.s_addr = get_unaligned((uint32_t *) buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
+		if(6 == rem) {
+			get_unaligned_endian(target->in.sin_port, (uint16_t *)buffer_start(source->data_trunk),
+			                     source->big_endian);
+			source->data_trunk.pos += sizeof(uint16_t);
+		}
 	} else {
 		target->s_fam = AF_INET6;
 		memcpy(&target->in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
 		source->data_trunk.pos += INET6_ADDRLEN;
+		if(INET6_ADDRLEN+2 == rem) {
+			get_unaligned_endian(target->in6.sin6_port, (uint16_t *)buffer_start(source->data_trunk),
+			                     source->big_endian);
+			source->data_trunk.pos += sizeof(uint16_t);
+		}
 	}
 
-	logg_packet("%s:\t%p#I\n", name, target);
+	logg_packet_old("%s:\t%p#I\n", name, target);
 	return true;
 }
 
@@ -665,8 +710,15 @@ static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 {
 	size_t len;
+	uint16_t port = 0, *p_ptr;
 
 	len = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	if(AF_INET == source->s_fam)
+		port = source->in.sin_port;
+	else
+		port = source->in6.sin6_port;
+	if(port)
+		len += sizeof(port);
 
 	if(!g2_packet_steal_data_space(target, len))
 		return false;
@@ -675,10 +727,14 @@ static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 	if(AF_INET == source->s_fam) {
 		put_unaligned(source->in.sin_addr.s_addr,
 		              (uint32_t *)buffer_start(target->data_trunk));
+		p_ptr = (uint16_t *)(buffer_start(target->data_trunk) + sizeof(uint32_t));
 	} else {
 		memcpy(buffer_start(target->data_trunk),
 		       &source->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
+		p_ptr = (uint16_t *)(buffer_start(target->data_trunk) + INET6_ADDRLEN);
 	}
+	if(port)
+		put_unaligned(port, p_ptr);
 
 	target->big_endian = HOST_IS_BIGENDIAN;
 	return true;
@@ -920,7 +976,7 @@ static intptr_t forward_lit_callback_found(g2_connection_t *con, void *carg)
 static bool empty_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 {
 	/* packet is not useful for us */
-	logg_packet("*/%s\tC: %s -> ignored\n", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
+	logg_packet_old("*/%s\tC: %s -> ignored\n", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
 	return false;
 }
 
@@ -954,6 +1010,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 		bool keep_decoding;
 
 		cparg = *parg;
+		cparg.father = parg->source;
 		cparg.opaque = &rdata;
 		do
 		{
@@ -1139,6 +1196,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	bool ret_val = false, keep_decoding;
 
 	cparg = *parg;
+	cparg.father = parg->source;
 	do
 	{
 		g2_packet_t child_p;
@@ -1226,7 +1284,7 @@ static bool handle_KHL_TS(struct ptype_action_args *parg)
 	local_time = local_time_now;
 
 	if(read_ts_from_packet(parg->source, &foreign_time, "/KHL/TS")) {
-		logg_packet("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
+		logg_packet_old("/KHL/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
 		parg->connec->time_diff = (long)local_time - (long)foreign_time;
 	}
 
@@ -1257,6 +1315,7 @@ static bool handle_KHL_NH(struct ptype_action_args *parg)
 		bool keep_decoding;
 
 		cparg = *parg;
+		cparg.father = source;
 		cparg.opaque = &rdata;
 		do
 		{
@@ -1330,6 +1389,7 @@ static bool handle_KHL_CH(struct ptype_action_args *parg)
 		bool keep_decoding;
 
 		cparg = *parg;
+		cparg.father = source;
 		cparg.opaque = &rdata;
 		do
 		{
@@ -1443,6 +1503,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 
 	memset(&rdata, 0, sizeof(rdata));
 	cparg = *parg;
+	cparg.father = parg->source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -1685,10 +1746,12 @@ struct PI_data
 
 static intptr_t PI_callback(g2_connection_t *con, void *carg)
 {
-	struct ptype_action_args *parg = carg;
-	struct PI_data *rdata = parg->opaque;;
+	struct ptype_action_args *parg;
+	struct PI_data *rdata;
 	g2_packet_t *pi, *udp, *relay;
 
+	parg = carg;
+	rdata = parg->opaque;
 	/*
 	 * The connection is locked against removal inside this callback
 	 * (but because of this we do not want to lock to long, we have
@@ -1722,6 +1785,8 @@ static intptr_t PI_callback(g2_connection_t *con, void *carg)
 	pi->type = PT_PI;
 	pi->big_endian = HOST_IS_BIGENDIAN;
 
+//	g2_packet_print_one(pi);
+//	goto out_special;
 	g2_handler_con_mark_write(pi, con);
 	return 0;
 
@@ -1730,6 +1795,9 @@ out_fail:
 	g2_packet_free(udp);
 	g2_packet_free(relay);
 	return 0;
+//out_special:
+//	g2_packet_free(pi);
+//	return 0;
 }
 
 static bool handle_PI(struct ptype_action_args *parg)
@@ -1748,6 +1816,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 		bool keep_decoding;
 
 		cparg = *parg;
+		cparg.father = source;
 		cparg.opaque = &rdata;
 		do
 		{
@@ -1803,8 +1872,10 @@ static bool handle_PI(struct ptype_action_args *parg)
 
 			g2_udp_send(&rdata.addr, &answer);
 		}
-		else
+		else {
+			parg->opaque = &rdata;
 			ret_val |= !!g2_conreg_all_hub(&connec->remote_host, PI_callback, parg);
+		}
 	}
 	else
 	{
@@ -1831,7 +1902,7 @@ static bool handle_PI_UDP(struct ptype_action_args *parg)
 {
 	struct PI_data *rdata = parg->opaque;
 
-	logg_packet(STDSF, "/PI/UDP");
+	logg_packet_old(STDSF, "/PI/UDP");
 	if(unlikely(!skip_unexpected_child(parg->source, "/PI/UDP")))
 		return false;
 
@@ -1844,7 +1915,7 @@ static bool handle_PI_RELAY(struct ptype_action_args *parg)
 {
 	struct PI_data *rdata = parg->opaque;
 
-	logg_packet(STDSF, "/PI/RELAY");
+	logg_packet_old(STDSF, "/PI/RELAY");
 	rdata->relay = true;
 	return false;
 }
@@ -2073,7 +2144,14 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 	if(parg->connec)
 	{
 		if(rdata->udp_na_valid)
-			goto do_it_by_udp;
+		{
+			struct list_head answer;
+			INIT_LIST_HEAD(&answer);
+			list_add_tail(&qa->list, &answer);
+			g2_udp_send(&rdata->udp_na, &answer);
+//			g2_packet_free(qa);
+			return false;
+		}
 		else
 			g2_packet_add2target(qa, parg->target, parg->target_lock);
 	}
@@ -2082,11 +2160,10 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 		if(!combo_addr_eq(&rdata->udp_na, parg->src_addr))
 		{
 			struct list_head answer;
-do_it_by_udp:
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
 			g2_udp_send(&rdata->udp_na, &answer);
-			g2_packet_free(qa);
+//			g2_packet_free(qa);
 			return false;
 		}
 		else
@@ -2116,6 +2193,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 
 	memset(&rdata.metadata, 0, sizeof(struct Q2_data) - offsetof(struct Q2_data, metadata));
 	cparg = *parg;
+	cparg.father = parg->source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -2228,11 +2306,11 @@ static bool handle_Q2_UDP(struct ptype_action_args *parg)
 
 	remaining = buffer_remaining(source->data_trunk);
 
-	if( 6 != remaining || /* IPv4 */
-	   10 != remaining || /* IPv4 + key */
-	   18 != remaining || /* IPv6 */
-	   22 != remaining    /* IPv6 + key */) {
-		logg_packet(STDLF, "/Q2/UDP", "funny length");
+	if( 6 != remaining && /* IPv4 */
+	   10 != remaining && /* IPv4 + key */
+	   18 != remaining && /* IPv6 */
+		22 != remaining    /* IPv6 + key */) {
+	   logg_packet("/Q2/UDP -> funny length! len: %zu\n", remaining);
 		return false;
 	}
 
@@ -2425,6 +2503,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 	old_pos = source->data_trunk.pos;
 	rdata.td_valid = false;
 	cparg = *parg;
+	cparg.father = source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -2473,7 +2552,7 @@ static bool handle_QA_TS(struct ptype_action_args *parg)
 	local_time = local_time_now;
 
 	if(read_ts_from_packet(parg->source, &foreign_time, "/QA/TS")) {
-		logg_packet("/QA/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
+		logg_packet_old("/QA/TS -> %lu\t%lu\n", (unsigned long)foreign_time, (unsigned long)local_time);
 		rdata->td = (long)local_time - (long)foreign_time;
 		rdata->td_valid = true;
 	}
@@ -2617,6 +2696,7 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	rdata.guid = NULL;
 	rdata.na_valid = false;
 	cparg = *parg;
+	cparg.father = source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -2750,7 +2830,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		goto qht_patch_end;
 	}
 	if(unlikely(connec->flags.dismissed)) {
-		logg_packet(STDLF, "/QHT-patch", "connection dissmissed");
+		logg_packet("%p#I /QHT-patch -> connection dissmissed\n", &connec->remote_host);
 		goto qht_patch_end;
 	}
 
@@ -2768,7 +2848,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	ret_val = g2_qht_add_frag(connec->qht, frag, (uint8_t *)buffer_start(source->data_trunk));
 
 	if(likely(0 == ret_val)) { /* patch io, but need more */
-		logg_packet(STDLF, "/QHT-patch", "patch recieved");
+		logg_packet_old(STDLF, "/QHT-patch", "patch recieved");
 		return false;
 	} else if(0 > ret_val) { /* patch nio */
 		connec->flags.dismissed = true;
@@ -2780,7 +2860,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	/* we patched a connection, not some free standing QHT */
 	if(!connec->flags.upeer)
 		g2_conreg_mark_dirty(connec);
-	logg_packet(STDLF, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
+	logg_packet("%s"STDLF, connec->uagent, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_free(connec->qht->fragments);
 	connec->qht->fragments = NULL;
@@ -2810,7 +2890,7 @@ static inline bool handle_QHT_reset(g2_connection_t *connec, g2_packet_t *source
 	else if(!connec->flags.upeer)
 		g2_conreg_mark_dirty(connec);
 
-	logg_packet(STDSF, "/QHT-reset");
+	logg_packet_old(STDSF, "/QHT-reset");
 	return false;
 }
 
@@ -2956,6 +3036,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 	if(parg->source->is_compound)
 	{
 		struct ptype_action_args cparg = *parg;
+		cparg.father = parg->source;
 		cparg.opaque = &rdata;
 		do
 		{
@@ -2979,7 +3060,7 @@ static bool handle_QKR(struct ptype_action_args *parg)
 	if(parg->source->packet_decode != DECODE_FINISHED)
 		return ret_val; /* in that case we can not continue */
 
-	logg_packet("QKR from %pI\tC: %s -> \n",
+	logg_packet_old("QKR from %pI\tC: %s\n",
 		parg->connec ? &parg->connec->remote_host : parg->src_addr,
 		parg->source->is_compound ? "true" : "false");
 
@@ -3189,6 +3270,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 
 	memset(&rdata.cached, 0, sizeof(struct QKA_data) - offsetof(struct QKA_data, cached));
 	cparg = *parg;
+	cparg.father = parg->source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -3215,7 +3297,7 @@ static bool handle_QKA(struct ptype_action_args *parg)
 	if(!rdata.query_key_valid)
 		return ret_val;
 
-	logg_packet("QKA from %pI for %pI\tkey: %#x\n",
+	logg_packet_old("QKA from %pI for %pI\tkey: %#x\n",
 		parg->connec ? &parg->connec->remote_host : parg->src_addr,
 		rdata.queried_na_valid ? &rdata.queried_na :
 			parg->connec ? &parg->connec->remote_host : parg->src_addr,
@@ -3310,6 +3392,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 	old_pos = source->data_trunk.pos;
 	rdata.na_valid = false;
 	cparg = *parg;
+	cparg.father = source;
 	cparg.opaque = &rdata;
 	do
 	{
@@ -3618,6 +3701,7 @@ out_unlock:
 static bool handle_CRAWLR_REXT(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
+	logg_packet(STDSF, "/CRAWLR/REXT");
 	rdata->ext = true;
 	return false;
 }
@@ -3625,6 +3709,7 @@ static bool handle_CRAWLR_REXT(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RGPS(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
+	logg_packet(STDSF, "/CRAWLR/RGPS");
 	rdata->gps = true;
 	return false;
 }
@@ -3632,6 +3717,7 @@ static bool handle_CRAWLR_RGPS(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RNAME(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
+	logg_packet(STDSF, "/CRAWLR/RNAME");
 	rdata->name = true;
 	return false;
 }
@@ -3639,6 +3725,7 @@ static bool handle_CRAWLR_RNAME(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RLEAF(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
+	logg_packet(STDSF, "/CRAWLR/RLEAF");
 	rdata->leaf = true;
 	return false;
 }
@@ -3905,7 +3992,7 @@ g2_packet_t *g2_packet_alloc(void)
 		return g2_packet_alloc_boosted();
 
 	list_for_each_safe(pos, n, &lpb->packets) {
-		list_del(pos);
+		list_del_init(pos);
 		break;
 	}
 	if(!pos)
@@ -3980,7 +4067,7 @@ void g2_packet_local_refill(void)
 		list_for_each_prev_safe(e, n, &lpb->packets)
 		{
 			g2_packet_t *t = list_entry(e, g2_packet_t, list);
-			list_del(e);
+			list_del_init(e);
 			lpb->num--;
 			g2_packet_free_boosted(t);
 			if(!--i)
@@ -4052,6 +4139,7 @@ void g2_packet_free(g2_packet_t *to_free)
 
 	if(likely(to_free->is_freeable))
 	{
+		INIT_LIST_HEAD(&to_free->list);
 		struct lpacket_buffer *lpb = g2_packet_csetup();
 		if(lpb)
 		{
@@ -4155,14 +4243,29 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 	if(work_type[packs->type])
 	{
 		prefetch(*work_type[packs->type]);
+		if(PT_CRAWLR == packs->type) {
+			if(parg->connec)
+				logg_packet("C: %p#I\t*/%s\tC: %s\n", &parg->connec->remote_host, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+			else if(parg->src_addr)
+				logg_packet("S: %p#I\t*/%s\tC: %s\n", parg->src_addr, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+			else
+				logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+#if 0
 		if(likely(empty_action_p != work_type[packs->type] && unimpl_action_p != work_type[packs->type]) &&
 			PT_CH != packs->type) {
-			logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+			if(parg->connec)
+				logg_packet("C: %p#I\t*/%s\tC: %s\n", &parg->connec->remote_host, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+			else if(parg->src_addr)
+				logg_packet("S: %p#I\t*/%s\tC: %s\n", parg->src_addr, g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+			else
+				logg_packet("*/%s\tC: %s\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+		}
+#endif
 		}
 		return work_type[packs->type](parg);
 	}
 
-	logg_packet("*/%s\tC: %s -> No action\n", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+	logg_packet("%s/%s\tC: %s -> No action\n", parg->father ? "" : g2_ptype_names[parg->father->type], g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 	return false;
 }
 

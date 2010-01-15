@@ -1166,10 +1166,15 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
  * Implementaion of g2_packet_serialize_prep{min}
  *
  */
-static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_header)
+static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, bool write_header)
 {
 	size_t size = 0, child_size = 0, i, j;
 	uint8_t control = 0;
+
+	if(recurs > 20) {
+		logg_develd("ALARM: %p \n", p);
+		return -1;
+	}
 
 	if(!p->is_literal)
 	{
@@ -1178,9 +1183,14 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
 			struct list_head *e;
 			list_for_each(e, &p->children) {
 				g2_packet_t *child = list_entry(e, g2_packet_t, list);
-				ssize_t ret = g2_packet_serialize_prep_internal(child, write_header);
-				if(-1 == ret)
+				ssize_t ret = g2_packet_serialize_prep_internal(child, recurs + 1, write_header);
+				if(-1 == ret) {
+					if(recurs  == 0) {
+						logg_develd("Packet \"%s\" is brocken\n",
+							g2_ptype_names[p->type]);
+					}
 					return ret;
+				}
 				child_size += (size_t)ret;
 			}
 			p->is_compound = true;
@@ -1305,7 +1315,7 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, bool write_head
  */
 ssize_t g2_packet_serialize_prep_min(g2_packet_t *p)
 {
-	return g2_packet_serialize_prep_internal(p, false);
+	return g2_packet_serialize_prep_internal(p, 0, false);
 }
 
 /*
@@ -1325,7 +1335,7 @@ ssize_t g2_packet_serialize_prep_min(g2_packet_t *p)
  */
 ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 {
-	return g2_packet_serialize_prep_internal(p, true);
+	return g2_packet_serialize_prep_internal(p, 0, true);
 }
 
 static char const rcsid_ps[] GCC_ATTR_USED_VAR = "$Idi$";
