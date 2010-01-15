@@ -154,6 +154,7 @@
 	ENUM_CMD( NBW    , 0 ), /* GnucDNA */ \
 	ENUM_CMD( PM     , 0 ), /* GnucDNA */ \
 	ENUM_CMD( CM     , 0 ), /* GnucDNA */ \
+	ENUM_CMD( TFW    , 0 ), /* ?? */ \
 	ENUM_CMD( HURN   , 0 ), \
 	ENUM_CMD( HKEY   , 0 ), \
 	ENUM_CMD( MAXIMUM, 0 ) /* loop counter, hopefully none invents a Packet with this name... */

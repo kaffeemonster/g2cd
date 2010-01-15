@@ -177,7 +177,7 @@ typedef struct
 } action_string;
 
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
-# define KNOWN_HEADER_FIELDS_SUM  27
+# define KNOWN_HEADER_FIELDS_SUM  28
 
 /* Stringconstants */
 /* var */
@@ -212,6 +212,8 @@ typedef struct
 # define HUB_NEEDED_KEY    "X-Hub-Needed"
 # define X_TRY_UPEER_KEY   "X-Try-Ultrapeers"
 # define X_TRY_HUB_KEY     "X-Try-Hubs"
+/* Leacher broken stuff */
+# define X_AUTH_CH_KEY     "X-Auth-Challange"
 /* G1 Stuff we want to silently ignore */
 # define X_VERSION         "X-Version"
 # define X_MAX_TTL_KEY     "X-Max-TTL"

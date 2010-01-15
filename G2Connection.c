@@ -107,12 +107,14 @@ static const action_string h_as23 = {empty_action_c, str_size(X_UQ_ROUT_KEY),   
 static const action_string h_as24 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
 static const action_string h_as25 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
 static const action_string h_as26 = {empty_action_c, str_size(X_DEGREE),         X_DEGREE};
+static const action_string h_as27 = {empty_action_c, str_size(X_AUTH_CH_KEY),    X_AUTH_CH_KEY};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
 	&h_as00, &h_as01, &h_as02, &h_as03, &h_as04, &h_as05, &h_as06, &h_as07, &h_as08,
 	&h_as09, &h_as10, &h_as11, &h_as12, &h_as13, &h_as14, &h_as15, &h_as16, &h_as17,
 	&h_as18, &h_as19, &h_as20, &h_as21, &h_as22, &h_as23, &h_as24, &h_as25, &h_as26,
+	&h_as27,
 };
 
 /*

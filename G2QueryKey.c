@@ -144,7 +144,7 @@
 /*
  * Query Key Cache
  */
-#define QK_CACHE_SHIFT 9
+#define QK_CACHE_SHIFT 10
 #define QK_CACHE_SIZE (1 << QK_CACHE_SHIFT)
 #define QK_CACHE_HTSIZE (QK_CACHE_SIZE/8)
 #define QK_CACHE_HTMASK (QK_CACHE_HTSIZE-1)

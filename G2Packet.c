@@ -2853,7 +2853,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	/* we patched a connection, not some free standing QHT */
 	if(!connec->flags.upeer)
 		g2_conreg_mark_dirty(connec);
-	logg_packet("%s"STDLF, connec->uagent, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
+	logg_packet("%s "STDLF, connec->uagent, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_free(connec->qht->fragments);
 	connec->qht->fragments = NULL;
