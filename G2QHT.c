@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <zlib.h>
+#include <libxml/xmlreader.h>
 /* other */
 #include "lib/other.h"
 /* Own includes */
@@ -1240,20 +1241,50 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 */
 		if(metadata && metadata_len)
 		{
-			char *str_buf = (char *)qht_get_scratch2(metadata_len + 10);
-			if(!str_buf)
+			xmlTextReader *reader = xmlReaderForMemory(metadata, metadata_len, "", "utf-8",
+			                            /*XML_PARSE_NOERROR|XML_PARSE_NOWARNING|*/ XML_PARSE_NONET);
+			int ret;
+
+			logg_develd("xml: \"%.*s\"\n", (int)metadata_len, metadata);
+
+			if(!reader)
 				goto check_dn;
-			memcpy(str_buf, metadata, metadata_len);
-			str_buf[metadata_len] = '\0';
-			logg_develd("had xml: \"%s\"\n", str_buf);
-// TODO: grok metadata
-			/*
-			for_each_xml_attribute(str_buf) {
-				tbuf = get_value_as_tchar(xml)
-				tstrptolower(tbuf);
-				fill_word_list(&word_list, tbuf, zmem);
+
+			for(ret = xmlTextReaderRead(reader); 1 == ret; ret = xmlTextReaderRead(reader))
+			{
+				if(xmlTextReaderDepth(reader) > 40)
+					break;
+				while(xmlTextReaderMoveToNextAttribute(reader) > 0)
+				{
+					const xmlChar *attr_val = xmlTextReaderConstValue(reader);
+					tchar_t *attr_tval;
+					size_t attr_len, attr_tlen;
+
+					if(!attr_val)
+						continue;
+					attr_len = strlen((const char *)attr_val);
+					attr_tval = qht_zpad_alloc(zmem, attr_len + 10, sizeof(tchar_t));
+					if(!attr_tval)
+						continue;
+					attr_tlen = utf8totcs(attr_tval, attr_len + 9 , (const char *)attr_val, &attr_len);
+					if(!attr_tlen || attr_len) { /* no output or input not consumed? */
+						qht_zpad_free(zmem, attr_tval);
+						continue;
+					}
+
+					attr_tval[attr_tlen] = '\0';
+					attr_tlen = tstrptolower(attr_tval) - attr_tval;
+					if(attr_tlen) {
+						tchar_t *wptr = make_keywords(attr_tval);
+						qht_zpad_free(zmem, attr_tval);
+						if(wptr)
+							fill_word_list(&word_list, wptr, zmem);
+					}
+					else
+						qht_zpad_free(zmem, attr_tval);
+				}
 			}
-			*/
+			xmlFreeTextReader(reader);
 		}
 check_dn:
 		if(dn && dn_len)

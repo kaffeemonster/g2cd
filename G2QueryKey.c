@@ -173,7 +173,8 @@ struct g2_qk_salts
 
 /* Vars */
 static struct g2_qk_salts g2_qk_s;
-static struct {
+static struct
+{
 	pthread_mutex_t lock;
 	uint32_t ht_seed;
 	struct hlist_head free_list;

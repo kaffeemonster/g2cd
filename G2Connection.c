@@ -363,12 +363,18 @@ void GCC_ATTR_FASTCALL g2_con_helgrind_transfer(g2_connection_t *connec)
 }
 #endif
 
+#ifdef DEBUG_CON_ALLOC
 g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, const unsigned int from_line)
+#else
+g2_connection_t *g2_con_get_free(void)
+#endif
 {
 	int failcount = 0;
 	g2_connection_t *ret_val = NULL;
 
+#ifdef DEBUG_CON_ALLOC
 	logg_develd_old("called from %s:%s()@%u\n", from_file, from_func, from_line);
+#endif
 
 	do
 	{
@@ -385,11 +391,17 @@ g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, 
 	return g2_con_alloc(1);
 }
 
+#ifdef DEBUG_CON_ALLOC
 void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const char *from_func, const unsigned int from_line)
+#else
+void g2_con_ret_free(g2_connection_t *to_return)
+#endif
 {
 	int failcount = 0;
 
+#ifdef DEBUG_CON_ALLOC
 	logg_develd_old("called from %s:%s()@%u\n", from_file, from_func, from_line);
+#endif
 
 	do
 	{
@@ -418,7 +430,7 @@ static bool content_what(g2_connection_t *to_con, size_t distance)
 	{
 		if(!strncasecmp_a(buffer_start(*to_con->recv), ACCEPT_G2, str_size(ACCEPT_G2)))
 		{
-		//found!!
+			/* found!! */
 			logg_develd_old("found for Content:\t\"%.*s\"\n", str_size(ACCEPT_G2), buffer_start(*to_con->recv));
 			to_con->u.accept.flags.content_g2 = true;
 			return false;
@@ -520,7 +532,7 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	buffer[len] = '\0';
 
 	ret_val = combo_addr_read(buffer, &to_con->sent_addr);
-	
+
 	if(0 < ret_val) {
 		logg_develd_old("found for Remote-IP:\t%pI\n", &to_con->sent_addr);
 		to_con->u.accept.flags.addr_ok = true;
@@ -582,8 +594,31 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 
 static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
-	/* string displacements are int... */
-	logg_develd_old(LISTEN_ADR_KEY " needs to be handeld: %.*s\n", (int)distance, buffer_start(*to_con->recv));
+	char buffer[INET6_ADDRSTRLEN+1];
+	union combo_addr l_addr;
+	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
+	int ret_val = 0;
+
+	strncpy(buffer, buffer_start(*to_con->recv), len);
+	buffer[len] = '\0';
+
+	ret_val = combo_addr_read(buffer, &l_addr);
+
+	if(0 < ret_val) {
+		logg_develd_old("found for Listen-IP:\t%pI\n", &l_addr);
+		return false;
+	}
+	else
+	{
+		if(0 == ret_val)
+			logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+			          "got illegal listen-ip", &to_con->remote_host,
+			           to_con->com_socket);
+		else
+			logg_errno(LOGF_DEBUG, "reading listen-ip");
+
+		return true;
+	}
 	return false;
 }
 
@@ -660,4 +695,4 @@ static bool empty_action_c(g2_connection_t *to_con GCC_ATTR_UNUSED_PARAM, size_t
 }
 
 static char const rcsid_c[] GCC_ATTR_USED_VAR = "$Id: G2Connection.c,v 1.14 2004/12/18 18:06:13 redbully Exp redbully $";
-//EOF
+/* EOF */

@@ -43,6 +43,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <unistd.h>
+#include <libxml/xmlreader.h>
 /* Own Includes */
 #define _G2MAINSERVER_C
 #include "lib/other.h"
@@ -633,6 +634,13 @@ static inline void setup_resources(void)
 	size_t i;
 	struct rlimit our_limit;
 
+#ifdef LIBXML_READER_ENABLED
+	/* check for ABI and init libxml */
+	LIBXML_TEST_VERSION
+#else
+# error libxml without reader support
+#endif
+
 	/* check and raise our open-file limit */
 /*
  * WARNING:
@@ -897,6 +905,8 @@ static inline void clean_up_m(void)
 
 	free((void*)(intptr_t)server.settings.profile.packet_uprod);
 	free((void*)(intptr_t)server.settings.profile.xml);
+
+	xmlCleanupParser();
 
 	fclose(stdin);
 	fclose(stdout); // get a sync if we output to a file

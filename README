@@ -1,6 +1,6 @@
 	G2CD - Gnutella 2 Server Daemon
 
-	Copyright (c) 2004-2007 Jan Seiffert  ->  kaffeemonster@googlemail.com
+	Copyright (c) 2004-2010 Jan Seiffert  ->  kaffeemonster@googlemail.com
 	
 	This file is part of g2cd.
 
@@ -68,6 +68,7 @@
 		       it also provided on an old solaris as system lib, with AT&T
 		       copyright in the header, last change 1996, probably to
 		       add 'extern "C"', so i would call it mature technology ;) ]
+	* libxml2 >= 2.5 with reader and thread support, library ans header-files
 
 	recommended:
 	* An Editor
@@ -157,7 +158,7 @@
 	- autoconf?
 	- lots of other things
 	- test the BSD-kqueue wrapper (some BSD'ler around?)
-	- finish Solaris-/dev/poll wrapper to my_epoll.[c|h]
+	- test Solaris-/dev/poll & event port wrapper
 	- portability issues of the build (make, compiler, shell)
 	- lots of other stuff
 
@@ -180,14 +181,14 @@
 	your own project...
 	So, lets get started:
 	 First of all some words about my develop-environment. No fancy IDE, just
-	(G)Vim, a shell and a Browser to view man-pages/search the web.
+	(G)Vim, some shells and a Browser to view man-pages/search the web.
 	 I really *please* you to use *real* tabs. No soft-tabs, no other fancy
 	technique (they all fail), only real plain tabs. With this everyone could
 	adjust his favorite indentation-width, thats my believe. I use 3 as
 	indentation-width.
 	 And with this you got my position in the great flame-wars, you will find
 	me on the pro-Vi and pro-Tab side. I'm aware of the discussion about
-	"tabs-have-to-be-8", but the world is not Black-White :).
+	"tabs-have-to-be-8", but the world is not Black-and-White :).
 	 Which editor you use, I don't really care, you could use a chalkboard,
 	as long as the results are digitally processable and it is capable of
 	producing real tabs.
@@ -228,7 +229,7 @@
 	      error handling (like logg("foo"); return false;)
 	b) I like lower-case letters (do you want to do keyboard-gymnastics with
 	   shift?) filenames are a exception (you write them only sometimes, with
-	   tab complietion), constants are all-upper-case.
+	   tab completion), constants are all-upper-case.
 	c) I like under-scores, especially because i like to build namespaces
 	   (hint: this means avoid CaMeLCaSe and how to name functions)
 	d) I like something *between* u**x-shortness (su, ls, cd) and talking
@@ -330,7 +331,7 @@
 	* Never read a multi-byte value at once from a byte-organized buffer. Read
 	  it byte-by-byte, don't assume any alignment. I think the only platform
 	  which "only" penalties unaligned reads by performance is x86, other
-	  platforms give you a SIGBUS (or emulate the read with a system trap 
+	  platforms give you a SIGBUS (or emulate the read with a system trap
 	  -> extra slow and not portable [Linux® on $PROCESSOR may do it, FreeBSD®
 	  on $PROCESSOR maybe not]), core dump, game over.
 	  I made {get|put}_unaligned macros similar to those from the Linux® kernel,

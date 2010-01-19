@@ -299,6 +299,7 @@ LDLIBS_BASE += -ldl #-lm
 #LDLIBS_BASE += -lrt
 #	a lib providing dbm_*, berkleydb will fit, prop. also anything else
 LDLIBS_BASE += -ldb
+LDLIBS_BASE += -lxml2
 #	on old solaris it's in the dbm lib, part of system
 #LDLIBS_BASE += -ldbm
 LDLIBS_Z = -lz $(LDLIBS_BASE)
@@ -357,6 +358,7 @@ LDFLAGS += -L./lib/
 #
 # get our modulepath in the ring, if not used does not harm
 CFLAGS += -Izlib
+CFLAGS += `xml2-config --cflags`
 
 #
 # Macros & Misc
@@ -372,6 +374,7 @@ CFLAGS += -pthread
 #CFLAGS += -DFASTDBL2INT
 CFLAGS += -DDEBUG_DEVEL
 #CFLAGS += -DDEBUG_DEVEL_OLD
+#CFLAGS += -DDEBUG_CON_ALLOC
 #CFLAGS += -DDEBUG_HZP_LANDMINE
 CFLAGS += -DHAVE_CONFIG_H
 CFLAGS += -DHAVE_DLOPEN
@@ -796,7 +799,7 @@ G2PacketTyperGenerator: G2PacketTyperGenerator.c ccdrv Makefile G2Packet.h lib/l
 
 .INTERMEDIATE: sbox.bin
 sbox.bin: $(TARED_FILES)
-	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -9 > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
+	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -c9 - > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
 
 calltree: calltree.c Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@ $(LDFLAGS)
@@ -849,7 +852,7 @@ data.o: sbox.bin bin2o
 G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
-G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
+G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h

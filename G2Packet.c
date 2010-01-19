@@ -178,7 +178,6 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_QKA   ] = handle_QKA,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
 	[PT_dna   ] = empty_action_p, /* don't know */
-	[PT_CR    ] = empty_action_p, /* we connect to no one */
 };
 
 /* PI-childs */
@@ -187,6 +186,7 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 	[PT_TO    ] = empty_action_p,
 	[PT_UDP   ] = handle_PI_UDP,
 	[PT_RELAY ] = handle_PI_RELAY,
+	[PT_CR    ] = empty_action_p, /* we connect to no one */
 };
 
 /* LNI-childs */
@@ -4251,7 +4251,7 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 		return work_type[packs->type](parg);
 	}
 
-	logg_packet("%s/%s\tC: %s -> No action\n", parg->father ? "" : g2_ptype_names[parg->father->type], g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
+	logg_packet("%s/%s\tC: %s -> No action\n", parg->father ? g2_ptype_names[parg->father->type] : "", g2_ptype_names[packs->type], packs->is_compound ? "true" : "false");
 	return false;
 }
 
