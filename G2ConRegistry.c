@@ -332,6 +332,7 @@ static noinline void free_bucket(struct g2_ht_bucket *b, unsigned level)
 				atomic_set(&t->refcnt, 1);
 				g2_qht_put(t);
 			}
+			pthread_rwlock_destroy(&b->d.c[i]->lock);
 		}
 	}
 
@@ -575,10 +576,42 @@ bool g2_conreg_have_ip(const union combo_addr *addr)
 	return false;
 }
 
+static void do_cleanup_level(struct g2_ht_bucket *b, unsigned level)
+{
+	unsigned i;
+
+	for(i = 0; i < LEVEL_SIZE; i++)
+	{
+		struct qhtable *t;
+
+		if(level < (LEVEL_COUNT-1))
+		{
+			if(!b->d.b[i]->qht)
+				continue;
+			t = b->d.b[i]->qht;
+			b->d.b[i]->qht = NULL;
+			atomic_set(&t->refcnt, 1);
+			g2_qht_put(t);
+		}
+		else
+		{
+			if(!b->d.c[i]->qht)
+				continue;
+			t = b->d.c[i]->qht;
+			b->d.c[i]->qht = NULL;
+			atomic_set(&t->refcnt, 1);
+			g2_qht_put(t);
+// TODO: cleanup all connections in flight
+		}
+
+		if(level < (LEVEL_COUNT-1))
+			do_cleanup_level(b->d.b[i], level + 1);
+	}
+}
 
 void g2_conreg_cleanup(void)
 {
-// TODO: cleanup all connections in flight
+	do_cleanup_level(&ht_root, 0);
 }
 
 /*

@@ -2,7 +2,7 @@
  * recv_buff.c
  * recvieve buffer allocator
  *
- * Copyright (c) 2007-2009 Jan Seiffert
+ * Copyright (c) 2007-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -90,23 +90,15 @@ static void recv_buff_init(void)
 
 static void recv_buff_deinit(void)
 {
-	int failcount = 0;
+	size_t i = 0;
+
 	pthread_key_delete(key2lrecv);
 
-#ifndef DEBUG_DEVEL_OLD
 	do
 	{
-		size_t i = 0;
-		do
-		{
-			if(atomic_pread(&free_buffs[i])) {
-				struct norm_buff *ret = NULL;
-				if((ret = atomic_pxa(ret, &free_buffs[i])))
-					recv_buff_free_system(ret);
-			}
-		} while(++i < anum(free_buffs));
-	} while(++failcount < 3);
-#endif
+		struct norm_buff *ret = NULL;
+		recv_buff_free_system(atomic_pxa(ret, &free_buffs[i]));
+	} while(++i < anum(free_buffs));
 }
 
 static void recv_buff_free_lorg(void *vorg)
@@ -178,6 +170,21 @@ void recv_buff_local_refill(void)
 		}
 	}
 	org->pos = i;
+}
+
+void recv_buff_local_free(void)
+{
+	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
+	unsigned i;
+
+	if(!org)
+		return;
+
+	for(i = org->pos; i < anum(org->buffs);) {
+		struct norm_buff *tmp = org->buffs[i];
+		org->buffs[i++] = NULL;
+		recv_buff_free_system(tmp);
+	}
 }
 
 /*

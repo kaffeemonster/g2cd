@@ -189,9 +189,12 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 		union combo_addr our_local_addr;
 		socklen_t sin_size = sizeof(our_local_addr);
 
-		getsockname(work_entry->com_socket, casa(&our_local_addr), &sin_size);
-		logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
-		     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
+		if(!getsockname(work_entry->com_socket, casa(&our_local_addr), &sin_size))
+			logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
+			     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
+		else
+			logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: us (getsockname fail)\tFDNum: %i -> %s\n",
+			     &work_entry->remote_host, work_entry->com_socket, msg);
 	}
 }
 

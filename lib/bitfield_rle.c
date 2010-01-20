@@ -407,14 +407,14 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		{
 			data++;
 			s_len--;
-			cnt = c;
+			cnt = c & 0x7F;
 			goto write_out_ff;
 		}
 
 		if(unlikely(!(c & 0x40)))
 		{
 			/* plain data */
-			cnt = c & ~0x80;
+			cnt = c & 0x3F;
 			cnt = cnt <= s_len ? cnt : s_len;
 			cnt = cnt <= t_len ? cnt : t_len;
 			r_wptr = mempcpy(r_wptr, data + 1, cnt);
@@ -428,7 +428,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		if(unlikely(!(c & 0x20)))
 		{
 			/* two bit */
-			*r_wptr++ = ~index_twos[c & ~0xC0];
+			*r_wptr++ = ~index_twos[c & 0x1F];
 			t_len--;
 			data++;
 			s_len--;
@@ -438,14 +438,14 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		if(unlikely(!(c & 0x10)))
 		{
 		/* one bit */
-			*r_wptr++ =  ~(1 << (c & ~0xE0));
+			*r_wptr++ =  ~(1 << (c & 0x0F));
 			t_len--;
 			data++;
 			s_len--;
 			continue;
 		}
 
-		cnt = c & ~0xF0;
+		cnt = c & 0x0F;
 		s_len--;
 		data++;
 		if(cnt > s_len)
@@ -467,7 +467,6 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 				cnt |= ((size_t)(data[0])) << (2 * BITS_PER_CHAR);
 			else
 				cnt = (cnt << BITS_PER_CHAR) | data[0];
-			break;
 			data  += sizeof(uint16_t) + sizeof(uint8_t);
 			s_len -= sizeof(uint16_t) + sizeof(uint8_t);
 			break;

@@ -1245,8 +1245,6 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 			                            /*XML_PARSE_NOERROR|XML_PARSE_NOWARNING|*/ XML_PARSE_NONET);
 			int ret;
 
-			logg_develd("xml: \"%.*s\"\n", (int)metadata_len, metadata);
-
 			if(!reader)
 				goto check_dn;
 
@@ -1785,7 +1783,7 @@ void g2_qht_aggregate(struct qhtable *to, struct qhtable *from)
 			return;
 		res = bitfield_decode(from_ptr, qht_size, from->data, from->data_length);
 		if(res < 0)
-			logg_develd("failed to de-rle QHT: %zi\n", res);
+			logg_develd("failed to de-rle QHT %p: %zi\n", to, res);
 			/* means we have not enough space, but we can use the bytes... */
 	}
 	else
@@ -2042,6 +2040,9 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 		tmp_table->data = NULL;
 		tmp_table->data_length = 0;
 	}
+// TODO: new data is not initialised
+	/* try with this early reset_needed. membar? */
+	tmp_table->flags.reset_needed = true;
 	if(!try_compress)
 	{
 		if(tmp_table->data_length < w_size)

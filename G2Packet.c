@@ -158,6 +158,7 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_UPROC ] = handle_UPROC,
 	[PT_UPROD ] = handle_UPROD,
 	[PT_dna   ] = empty_action_p, /* don't know */
+	[PT_QH1   ] = empty_action_p, /* ?? */
 };
 
 const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
@@ -187,6 +188,8 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 	[PT_UDP   ] = handle_PI_UDP,
 	[PT_RELAY ] = handle_PI_RELAY,
 	[PT_CR    ] = empty_action_p, /* we connect to no one */
+	[PT_TFW   ] = empty_action_p, /* firewalled?? */
+	[PT_IDENT ] = empty_action_p, /* no, i don't give my ident */
 };
 
 /* LNI-childs */
@@ -849,6 +852,7 @@ static void g2_packet_send_qka(union combo_addr *req_addr, union combo_addr *sen
 	   !combo_addr_eq_ip(req_addr, send_addr))
 	{
 		g2_packet_init_on_stack(&sna);
+		sna.type = PT_SNA;
 		link_sna_to_packet(&sna, send_addr);
 		list_add_tail(&sna.list, &qka.children);
 	}
@@ -1644,9 +1648,13 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 			get_unaligned_endian(max_leaf, (uint16_t *) (buffer_start(source->data_trunk)+2), source->big_endian);
 
 		connec->u.handler.leaf_count = akt_leaf;
-		logg_packet("/LNI/HS:\told: %s leaf: %u max: %u\n",
+		logg_packet_old("/LNI/HS:\told: %s leaf: %u max: %u\n",
 				connec->flags.upeer ? G2_TRUE : G2_FALSE, akt_leaf, max_leaf);
 	}
+
+	/* when we get a HS with 0 leafs, ignore it */
+	if(!akt_leaf)
+		return false;
 
 	if(!connec->flags.upeer) {
 		connec->flags.upeer = true;
@@ -1861,10 +1869,13 @@ static bool handle_PI(struct ptype_action_args *parg)
 			g2_packet_init_on_stack(&relay);
 
 			po.type = PT_PO;
+			po.big_endian = HOST_IS_BIGENDIAN;
 			relay.type = PT_RELAY;
+			relay.big_endian = HOST_IS_BIGENDIAN;
 			list_add_tail(&relay.list, &po.children);
 			list_add_tail(&po.list, &answer);
 
+// TODO: VALGRIND - uninitilaized? WTF? What?
 			g2_udp_send(&rdata.addr, &answer);
 		}
 		else {
@@ -1880,6 +1891,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 			return ret_val;
 		}
 		po->type = PT_PO;
+		po->big_endian = HOST_IS_BIGENDIAN;
 
 		g2_packet_add2target(po, parg->target, parg->target_lock);
 		if(connec)
@@ -2853,7 +2865,8 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 	/* we patched a connection, not some free standing QHT */
 	if(!connec->flags.upeer)
 		g2_conreg_mark_dirty(connec);
-	logg_packet("%s "STDLF, connec->uagent, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
+	if(!patch_txt)
+		logg_packet("%s "STDLF, connec->uagent, "/QHT-patch", patch_txt ? patch_txt : "some error while appling");
 qht_patch_end:
 	g2_qht_frag_free(connec->qht->fragments);
 	connec->qht->fragments = NULL;
@@ -3115,7 +3128,8 @@ out_fail:
 			g2_packet_init_on_stack(&qkr);
 			g2_packet_init_on_stack(&sna);
 
-			link_sna_to_packet(&sna, &rdata.sending_na);
+			sna.type = PT_SNA;
+			link_sna_to_packet(&sna, rdata.sending_na_valid ? &rdata.sending_na : &parg->connec->remote_host);
 			list_add_tail(&sna.list, &qkr.children);
 
 			qkr.type = PT_QKR;
@@ -3433,7 +3447,7 @@ static bool handle_HAW(struct ptype_action_args *parg)
 
 	g2_guid_add(guid, &rdata.na, local_time_now, GT_HAW);
 
-	logg_packet("/HAW\tttl: %u hops: %u guid: %p#G\n", *ttl, *hops, guid);
+	logg_packet_old("/HAW\tttl: %u hops: %u guid: %p#G\n", *ttl, *hops, guid);
 	if(*ttl > 0 && *hops < 255)
 	{
 		*ttl  -= 1;
@@ -3911,7 +3925,7 @@ static void g2_packet_cinit(void)
 
 static void g2_packet_cdeinit(void)
 {
-	int failcount = 0;
+	size_t i = 0;
 #ifndef HAVE___THREAD
 	pthread_key_delete(key2lpack);
 #endif
@@ -3919,16 +3933,9 @@ static void g2_packet_cdeinit(void)
 #ifndef DEBUG_DEVEL_OLD
 	do
 	{
-		size_t i = 0;
-		do
-		{
-			if(atomic_pread(&free_packets[i])) {
-				g2_packet_t *ret = NULL;
-				if((ret = atomic_pxa(ret, &free_packets[i])))
-					free(ret);
-			}
-		} while(++i < anum(free_packets));
-	} while(++failcount < 3);
+		g2_packet_t *ret = NULL;
+		free(atomic_pxa(ret, &free_packets[i]));
+	} while(++i < anum(free_packets));
 #endif
 }
 
@@ -4142,6 +4149,34 @@ void g2_packet_free(g2_packet_t *to_free)
 		}
 		else
 			g2_packet_free_boosted(to_free);
+	}
+}
+
+void g2_packet_free_glob(g2_packet_t *to_free)
+{
+	struct list_head *e, *n;
+
+	if(!to_free)
+		return;
+
+	list_for_each_safe(e, n, &to_free->children) {
+		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+		list_del(e);
+		g2_packet_free_glob(entry);
+	}
+
+	if(unlikely(to_free->data_trunk_is_freeable && to_free->data_trunk.data))
+	{
+		struct packet_data_store *pds =
+			container_of(to_free->data_trunk.data,
+			             struct packet_data_store, data);
+		if(atomic_dec_test(&pds->refcnt))
+			free(pds);
+	}
+
+	if(likely(to_free->is_freeable)) {
+		INIT_LIST_HEAD(&to_free->list);
+		g2_packet_free_boosted(to_free);
 	}
 }
 

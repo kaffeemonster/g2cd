@@ -152,7 +152,13 @@ static void g2_con_init(void)
 
 static void g2_con_deinit(void)
 {
-// TODO: free connections up again, remainder, want to see them in valgrind
+	size_t i;
+	/* memory for free_cons */
+	for(i = 0; i < anum(free_cons); i++)
+	{
+		g2_connection_t *tmp = NULL;
+		g2_con_free(atomic_pxa(tmp, &free_cons[i]));
+	}
 }
 
 g2_connection_t *g2_con_alloc(size_t num)

@@ -150,6 +150,7 @@
 	ENUM_CMD( CR     , 0 ), /* GnucDNA */ \
 	ENUM_CMD( NAT    , 0 ), /* ?? */ \
 	ENUM_CMD( G1     , 0 ), /* ?? */ \
+	ENUM_CMD( QH1    , 0 ), /* ?? */ \
 	ENUM_CMD( IDENT  , 0 ), /* GnucDNA */ \
 	ENUM_CMD( NBW    , 0 ), /* GnucDNA */ \
 	ENUM_CMD( PM     , 0 ), /* GnucDNA */ \
@@ -237,6 +238,7 @@ _G2PACK_EXTRN(void g2_packet_local_alloc_init(void));
 _G2PACK_EXTRN(void g2_packet_local_alloc_init_min(void));
 _G2PACK_EXTRN(void g2_packet_local_refill(void));
 _G2PACK_EXTRN(void g2_packet_free(g2_packet_t *));
+_G2PACK_EXTRN(void g2_packet_free_glob(g2_packet_t *));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
 _G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));
 _G2PACK_EXTRNVAR(const char g2_ptype_names[PT_MAXIMUM][8])
