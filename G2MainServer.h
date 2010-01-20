@@ -142,6 +142,7 @@ _G2MAIN_EXTRNVAR(struct
 			bool all_abord[THREAD_SUM];
 			bool our_server_upeer;
 			bool our_server_upeer_needed;
+			time_t start_time;
 			atomic_t act_hub_sum;
 		} status;
 } server);

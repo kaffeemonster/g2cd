@@ -519,7 +519,7 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 	g_packet = st_pack;
 	if(e->e.deflate)
 	{
-		logg_devel("compressed packet recevied\n");
+		logg_devel_old("compressed packet recevied\n");
 		d_hold_u = udp_get_lubuf();
 		if(!d_hold_u)
 			goto out_free;
@@ -921,7 +921,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 		return true;
 	}
 
-	if(buffer_remaining(*d_hold)) /* is there really any data */
+	if(!buffer_remaining(*d_hold)) /* is there really any data */
 		goto out;
 
 	if(tmp_packet.count > UDP_MAX_PARTS) {
@@ -948,10 +948,11 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 	g2_packet_init_on_stack(&g_packet_store);
 	if(tmp_packet.count > 1)
 	{
-		logg_devel("multipart UDP packet, needs reassamble\n");
+		logg_devel_old("multipart UDP packet, needs reassamble\n");
 		g_packet = g2_udp_reas_add(&tmp_packet, d_hold_sp, from, &g_packet_store);
 		if(!g_packet)
 			goto out;
+		logg_develd("We got a /%s\tC: %s -> No action\n", g2_ptype_names[g_packet->type], g_packet->is_compound ? "true" : "false");
 	}
 	else
 	{

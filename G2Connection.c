@@ -614,6 +614,7 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 		logg_develd_old("found for Listen-IP:\t%pI\n", &l_addr);
 		return false;
 	}
+#if 0
 	else
 	{
 		if(0 == ret_val)
@@ -625,6 +626,7 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 
 		return true;
 	}
+#endif
 	return false;
 }
 

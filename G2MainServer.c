@@ -220,6 +220,7 @@ int main(int argc, char **args)
 	/* make our hzp ready */
 	hzp_alloc();
 
+	server.status.start_time = time(NULL);
 	/* main server wait loop */
 	while(server_running)
 	{

@@ -222,6 +222,7 @@ static const g2_ptype_action_func KHLR_packet_dict[PT_MAXIMUM] =
 	[PT_TO    ] = empty_action_p,
 	[PT_UKHLID] = handle_KHLR_UKHLID,
 	[PT_QK    ] = handle_KHLR_QK,
+	[PT_G2NS  ] = empty_action_p, /* ?? */
 };
 
 /* KHL-childs */
@@ -255,16 +256,18 @@ static const g2_ptype_action_func KHL_CH_packet_dict[PT_MAXIMUM] =
 /* Q2-childs */
 static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 {
-	[PT_TO ] = empty_action_p,
-	[PT_UDP] = handle_Q2_UDP,
-	[PT_QKY] = handle_Q2_QKY,
-	[PT_URN] = handle_Q2_URN,
-	[PT_DN ] = handle_Q2_DN,
-	[PT_MD ] = handle_Q2_MD,
-	[PT_SZR] = empty_action_p,
-	[PT_I  ] = empty_action_p,
-	[PT_dna] = empty_action_p, /* don't know */
-	[PT_NAT] = unimpl_action_p, /* ??? */
+	[PT_TO  ] = empty_action_p,
+	[PT_UDP ] = handle_Q2_UDP,
+	[PT_QKY ] = handle_Q2_QKY,
+	[PT_URN ] = handle_Q2_URN,
+	[PT_DN  ] = handle_Q2_DN,
+	[PT_MD  ] = handle_Q2_MD,
+	[PT_SZR ] = empty_action_p,
+	[PT_I   ] = empty_action_p,
+	[PT_dna ] = empty_action_p, /* don't know */
+	[PT_NAT ] = unimpl_action_p, /* ??? */
+	[PT_HKEY] = empty_action_p, /* ?? */
+	[PT_HURN] = empty_action_p, /* ?? */
 };
 
 /* QH2-childs */
@@ -3595,6 +3598,7 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
 	static time_t last_send;
 	struct CRAWLR_data rdata;
+	g2_packet_t *source;
 	g2_packet_t *crawla, *self, *na, *hs, *hub;
 	bool ret_val = false;
 
@@ -3609,6 +3613,33 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 		diedie("s_lock stuck, bye!");
 
 	memset(&rdata, 0, sizeof(rdata));
+	source = parg->source;
+	if(source->is_compound)
+	{
+		struct ptype_action_args cparg;
+		bool keep_decoding;
+
+		cparg = *parg;
+		cparg.father = source;
+		cparg.opaque = &rdata;
+		do
+		{
+			g2_packet_t child_p;
+			cparg.source = &child_p;
+			child_p.more_bytes_needed = false;
+			child_p.packet_decode = CHECK_CONTROLL_BYTE;
+			keep_decoding = g2_packet_decode_from_packet(source, &child_p, 0);
+			if(!keep_decoding) {
+				logg_packet(STDLF, "CRAWLR", "broken child");
+				break;
+			}
+			if(likely(child_p.packet_decode == DECODE_FINISHED))
+				ret_val |= g2_packet_decide_spec_int(&cparg, CRAWLR_packet_dict);
+		} while(keep_decoding && source->packet_decode != DECODE_FINISHED);
+
+		if(source->packet_decode != DECODE_FINISHED)
+			return false;
+	}
 
 	crawla = g2_packet_calloc();
 	self   = g2_packet_calloc();
@@ -3708,7 +3739,6 @@ out_unlock:
 static bool handle_CRAWLR_REXT(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
-	logg_packet(STDSF, "/CRAWLR/REXT");
 	rdata->ext = true;
 	return false;
 }
@@ -3716,7 +3746,6 @@ static bool handle_CRAWLR_REXT(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RGPS(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
-	logg_packet(STDSF, "/CRAWLR/RGPS");
 	rdata->gps = true;
 	return false;
 }
@@ -3724,7 +3753,6 @@ static bool handle_CRAWLR_RGPS(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RNAME(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
-	logg_packet(STDSF, "/CRAWLR/RNAME");
 	rdata->name = true;
 	return false;
 }
@@ -3732,7 +3760,6 @@ static bool handle_CRAWLR_RNAME(struct ptype_action_args *parg)
 static bool handle_CRAWLR_RLEAF(struct ptype_action_args *parg)
 {
 	struct CRAWLR_data *rdata = parg->opaque;
-	logg_packet(STDSF, "/CRAWLR/RLEAF");
 	rdata->leaf = true;
 	return false;
 }
