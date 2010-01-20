@@ -53,6 +53,7 @@
 #include "G2MainServer.h"
 #include "G2PacketSerializer.h"
 #include "G2QHT.h"
+#include "lib/my_bitopsm.h"
 #include "lib/atomic.h"
 #include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
@@ -60,23 +61,69 @@
 #include "lib/recv_buff.h"
 #include "lib/udpfromto.h"
 #include "lib/hzp.h"
+#include "lib/rbtree.h"
+#include "lib/hlist.h"
+#include "lib/combo_addr.h"
+#include "lib/ansi_prng.h"
 
 #define UDP_MTU        500
 #define UDP_RELIABLE_LENGTH 8
+#define UDP_MAX_PARTS (sizeof(uint32_t) * BITS_PER_CHAR)
 
 #define FLAG_DEFLATE   (1 << 0)
 #define FLAG_ACK       (1 << 1)
 #define FLAG_CRITICAL  ((~(FLAG_DEFLATE|FLAG_ACK)) & 0x0F)
 
+/*
+ * UDP reassambly Cache
+ */
+#define UDP_CACHE_SHIFT 8
+#define UDP_CACHE_SIZE (1 << UDP_CACHE_SHIFT)
+#define UDP_CACHE_HTSIZE (UDP_CACHE_SIZE/8)
+#define UDP_CACHE_HTMASK (UDP_CACHE_HTSIZE-1)
+#define UDP_REAS_TIMEOUT 30
+
+/* Types */
+struct udp_reas_entry
+{
+	uint32_t parts_recv;
+	uint32_t parts_consumed;
+
+	uint16_t part_count;
+	uint16_t sequence;
+	time_t   when;
+	bool     deflate;
+	union combo_addr na;
+
+	struct norm_buff *parts_buf[UDP_MAX_PARTS];
+	g2_packet_t *result_packet;
+};
+
+struct udp_reas_cache_entry
+{
+	struct rb_node rb;
+	struct hlist_node node;
+	struct udp_reas_entry e;
+};
+
 /* internal prototypes */
-static inline ssize_t udp_sock_send(struct norm_buff *, const union combo_addr *, int);
+static ssize_t udp_sock_send(struct norm_buff *, const union combo_addr *, int);
 static inline bool handle_udp_sock(struct epoll_event *, struct norm_buff *, union combo_addr *, union combo_addr *, int);
-static noinline bool handle_udp_packet(struct norm_buff *, union combo_addr *, union combo_addr *, int);
+static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, int);
 static inline bool init_con_u(int *, union combo_addr *);
 
 #define G2UDP_FD_SUM 3
 
-/* data-structures */
+/* Vars */
+static struct
+{
+	pthread_mutex_t lock;
+	uint32_t ht_seed;
+	struct hlist_head free_list;
+	struct rb_root tree;
+	struct hlist_head ht[UDP_CACHE_HTSIZE];
+	struct udp_reas_cache_entry entrys[UDP_CACHE_SIZE];
+} cache;
 static int out_file;
 static int udp_outfd_ipv4;
 static int udp_outfd_ipv6;
@@ -85,6 +132,10 @@ static struct simple_gup udp_sos[2];
 #ifndef HAVE___THREAD
 static pthread_key_t key2udp_lsb;
 static pthread_key_t key2udp_lub;
+#else
+static __thread struct norm_buff *udp_lsbuffer;
+static __thread struct norm_buff *udp_lubuffer;
+#endif
 /* protos */
 	/* you better not kill this prot, our it won't work ;) */
 static void udp_init(void) GCC_ATTR_CONSTRUCT;
@@ -92,14 +143,23 @@ static void udp_deinit(void) GCC_ATTR_DESTRUCT;
 
 static void udp_init(void)
 {
+	size_t i;
+#ifndef HAVE___THREAD
 	if(pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free))
 		diedie("couln't create TLS key for local UDP send buffer");
 	if(pthread_key_create(&key2udp_lub, (void(*)(void *))recv_buff_free))
 		diedie("couln't create TLS key for local UDP uncompress buffer");
+#endif
+	if(pthread_mutex_init(&cache.lock, NULL))
+		diedie("initialising udp cache lock");
+	/* shuffle all entrys in the free list */
+	for(i = 0; i < UDP_CACHE_SIZE; i++)
+		hlist_add_head(&cache.entrys[i].node, &cache.free_list);
 }
 
 static void udp_deinit(void)
 {
+#ifndef HAVE___THREAD
 	struct norm_buff *tmp_buf;
 
 	if((tmp_buf = pthread_getspecific(key2udp_lsb))) {
@@ -112,11 +172,9 @@ static void udp_deinit(void)
 		pthread_setspecific(key2udp_lub, NULL);
 	}
 	pthread_key_delete(key2udp_lub);
-}
-#else
-static __thread struct norm_buff *udp_lsbuffer;
-static __thread struct norm_buff *udp_lubuffer;
 #endif
+	pthread_mutex_destroy(&cache.lock);
+}
 
 static struct norm_buff *udp_get_lsbuf(void)
 {
@@ -176,10 +234,414 @@ static struct norm_buff *udp_get_lubuf(void)
 	return ret_buf;
 }
 
-void handle_udp(struct epoll_event *ev,struct norm_buff *d_hold,  int epoll_fd)
+/****************** UDP reassambly Cache funcs ******************/
+
+static struct udp_reas_cache_entry *udp_reas_cache_entry_alloc(void)
+{
+	struct udp_reas_cache_entry *e;
+	struct hlist_node *n;
+
+	if(hlist_empty(&cache.free_list))
+		return NULL;
+
+	n = cache.free_list.first;
+	e = hlist_entry(n, struct udp_reas_cache_entry, node);
+	hlist_del(&e->node);
+	INIT_HLIST_NODE(&e->node);
+	RB_CLEAR_NODE(&e->rb);
+	return e;
+}
+
+static void udp_reas_cache_entry_free(struct udp_reas_cache_entry *e)
+{
+	struct udp_reas_entry *u = &e->e;
+	size_t i;
+
+	for(i = 0; i < UDP_MAX_PARTS; i++) {
+		if(u->parts_buf)
+			recv_buff_local_ret(u->parts_buf[i]);
+	}
+	g2_packet_free(e->e.result_packet);
+	memset(e, 0, sizeof(*e));
+	hlist_add_head(&e->node, &cache.free_list);
+}
+
+static void udp_reas_cache_entry_free_glob(struct udp_reas_cache_entry *e)
+{
+	struct udp_reas_entry *u = &e->e;
+	size_t i;
+
+	for(i = 0; i < UDP_MAX_PARTS; i++) {
+		if(u->parts_buf)
+			recv_buff_free(u->parts_buf[i]);
+	}
+	g2_packet_free_glob(e->e.result_packet);
+	memset(e, 0, sizeof(*e));
+	hlist_add_head(&e->node, &cache.free_list);
+}
+
+static uint32_t cache_ht_hash(const union combo_addr *addr, uint16_t seq)
+{
+	uint32_t h;
+
+// TODO: when IPv6 is common, change it
+	if(likely(addr->s_fam == AF_INET))
+		h = hthash_3words(addr->in.sin_addr.s_addr, addr->in.sin_port, seq, cache.ht_seed);
+	else
+		h = hthash_6words(addr->in6.sin6_addr.s6_addr32[0],
+		                  addr->in6.sin6_addr.s6_addr32[1],
+		                  addr->in6.sin6_addr.s6_addr32[2],
+		                  addr->in6.sin6_addr.s6_addr32[3],
+		                  addr->in6.sin6_port, seq, cache.ht_seed);
+	return h;
+}
+
+static struct udp_reas_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint16_t seq, uint32_t h)
+{
+	struct hlist_node *n;
+	struct udp_reas_cache_entry *e;
+
+// TODO: check for mapped ip addr?
+// TODO: when IPv6 is common, change it
+// TODO: leave out port?
+	if(likely(addr->s_fam == AF_INET))
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & UDP_CACHE_HTMASK], node)
+		{
+			if(e->e.na.s_fam != AF_INET)
+				continue;
+			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
+			   e->e.na.in.sin_port == addr->in.sin_port &&
+			   e->e.sequence == seq)
+				return e;
+		}
+	}
+	else
+	{
+		hlist_for_each_entry(e, n, &cache.ht[h & UDP_CACHE_HTMASK], node)
+		{
+			if(e->e.na.s_fam != AF_INET6)
+				continue;
+			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
+			   e->e.na.in.sin_port == addr->in.sin_port &&
+			   e->e.sequence == seq)
+				return e;
+		}
+	}
+
+	return NULL;
+}
+
+static void cache_ht_add(struct udp_reas_cache_entry *e, uint32_t h)
+{
+	hlist_add_head(&e->node, &cache.ht[h & UDP_CACHE_HTMASK]);
+}
+
+static void cache_ht_del(struct udp_reas_cache_entry *e)
+{
+	hlist_del(&e->node);
+}
+
+static int udp_reas_entry_cmp(struct udp_reas_cache_entry *a, struct udp_reas_cache_entry *b)
+{
+	int ret = (long)a->e.when - (long)b->e.when;
+	if(ret)
+		return ret;
+	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+		return ret;
+	if(likely(AF_INET == a->e.na.s_fam))
+	{
+		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
+			return ret;
+		if((ret = (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port))
+			return ret;
+	}
+	else
+	{
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
+			return ret;
+		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
+			return ret;
+		if((ret = (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port))
+			return ret;
+	}
+	return (int)a->e.sequence - (int)b->e.sequence;
+}
+
+static noinline bool udp_reas_rb_cache_insert(struct udp_reas_cache_entry *e)
+{
+	struct rb_node **p = &cache.tree.rb_node;
+	struct rb_node *parent = NULL;
+
+	while(*p)
+	{
+		struct udp_reas_cache_entry *n = rb_entry(*p, struct udp_reas_cache_entry, rb);
+		int result = udp_reas_entry_cmp(e, n);
+
+		parent = *p;
+		if(result < 0)
+			p = &((*p)->rb_left);
+		else if(result > 0)
+			p = &((*p)->rb_right);
+		else
+			return false;
+	}
+	rb_link_node(&e->rb, parent, p);
+	rb_insert_color(&e->rb, &cache.tree);
+
+	return true;
+}
+
+static noinline bool udp_reas_rb_cache_remove(struct udp_reas_cache_entry *e)
+{
+	struct rb_node *n = &e->rb;
+
+	if(RB_EMPTY_NODE(n))
+		return false;
+
+	rb_erase(n, &cache.tree);
+	RB_CLEAR_NODE(n);
+	cache_ht_del(e);
+
+	return true;
+}
+
+static struct udp_reas_cache_entry *udp_reas_cache_last(void)
+{
+	struct rb_node *n = rb_last(&cache.tree);
+	if(!n)
+		return NULL;
+	return rb_entry(n, struct udp_reas_cache_entry, rb);
+}
+
+void g2_udp_reas_timeout(void)
+{
+	struct udp_reas_cache_entry *e;
+	time_t to_time;
+
+	to_time = local_time_now - UDP_REAS_TIMEOUT;
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return;
+
+	for(e = udp_reas_cache_last(); e; e = udp_reas_cache_last())
+	{
+		if(e->e.when < to_time) {
+			udp_reas_rb_cache_remove(e);
+			udp_reas_cache_entry_free_glob(e);
+		} else
+			break;
+	}
+
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("udp reassambly lock stuck, sh**!");
+}
+
+static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff **d_hold, const union combo_addr *addr, g2_packet_t *st_pack)
+{
+	struct udp_reas_cache_entry *e;
+	g2_packet_t *ret_val = NULL, *g_packet;
+	struct norm_buff *d_hold_u = NULL;
+	struct zpad *zp = NULL;
+	uint32_t h;
+	uint16_t seq;
+	int i;
+	time_t when;
+
+	seq = p->sequence;
+	h = cache_ht_hash(addr, seq);
+	when = local_time_now;
+	/*
+	 * Prevent the compiler from moving the calcs into
+	 * the critical section
+	 */
+	barrier();
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return NULL;
+	/* already in the cache? */
+	e = cache_ht_lookup(addr, seq, h);
+	if(e)
+	{
+		if(!udp_reas_rb_cache_remove(e)) {
+			logg_devel("remove failed\n");
+			goto life_tree_error; /* something went wrong... */
+		}
+		/* sanity checks */
+//TODO: add blacklist entry if failed?
+		if(e->e.deflate != p->flags.deflate) {
+			logg_devel("udp packet changed compression?\n");
+			goto out_free; /* free and out here */
+		}
+		if(e->e.part_count != p->count) {
+			logg_devel("udp packet changed part count?\n");
+			goto out_free; /* free and out here */
+		}
+	}
+	else
+	{
+		if(likely(!hlist_empty(&cache.free_list)))
+			e = udp_reas_cache_entry_alloc();
+		else
+		{
+			e = udp_reas_cache_last();
+			if(likely(e) &&
+			   e->e.when < when)
+			{
+//TODO: add blacklist entry for salvaged reas
+				logg_devel_old("found older entry\n");
+				if(!udp_reas_rb_cache_remove(e))
+					goto out_unlock; /* the tree is amiss? */
+			}
+			else
+				goto out_unlock;
+		}
+		if(!e)
+			goto out_unlock;
+
+		e->e.na = *addr;
+		e->e.deflate = p->flags.deflate;
+		e->e.sequence = p->sequence;
+		e->e.part_count = p->count;
+	}
+	e->e.when = when;
+
+	e->e.parts_recv |= 1 << (p->part - 1);
+	e->e.parts_buf[p->part - 1] = *d_hold;
+	*d_hold = NULL;
+	if(((1 << e->e.part_count) - 1) ^ e->e.parts_recv)
+		goto out_insert;
+
+	/* all parts received */
+	g_packet = st_pack;
+	if(e->e.deflate)
+	{
+		logg_devel("compressed packet recevied\n");
+		d_hold_u = udp_get_lubuf();
+		if(!d_hold_u)
+			goto out_free;
+
+		/*
+		 * because we do not want to receive QHTs by UDP, we can
+		 * share the zlib TLS alloc stuff with the QHT handling.
+		 * And even if, it's no problem, inflating should be finished
+		 * (at least ATM) afterwards and QHT can reuse the pad.
+		 */
+		zp = qht_get_zpad();
+		if(!zp)
+			goto out_free;
+
+		zp->z.next_in  = NULL;
+		zp->z.avail_in = 0;
+		if(inflateInit(&zp->z) != Z_OK) {
+			logg_devel("infalteInit failed\n");
+			goto out_zfree;
+		}
+	}
+
+	for(i = 0; i < e->e.part_count; i++)
+	{
+		struct norm_buff *src_r, *src;
+
+		src_r = e->e.parts_buf[i];
+		do
+		{
+			if(e->e.deflate)
+			{
+				int z_status;
+
+				src = d_hold_u;
+				buffer_clear(*src);
+				zp->z.next_in   = (Bytef *)buffer_start(*src_r);
+				zp->z.avail_in  = buffer_remaining(*src_r);
+				zp->z.next_out  = (Bytef *)buffer_start(*src);
+				zp->z.avail_out = buffer_remaining(*src);
+
+				z_status = inflate(&zp->z, Z_SYNC_FLUSH);
+				switch(z_status)
+				{
+				case Z_OK:
+				case Z_STREAM_END:
+					src_r->pos += buffer_remaining(*src_r) - zp->z.avail_in;
+					src->pos += buffer_remaining(*src) - zp->z.avail_out;
+					break;
+				case Z_NEED_DICT:
+					logg_devel("Z_NEED_DICT\n");
+					goto out_zfree;
+				case Z_DATA_ERROR:
+					logg_devel("Z_DATA_ERROR\n");
+					goto out_zfree;
+				case Z_STREAM_ERROR:
+					logg_devel("Z_STREAM_ERROR\n");
+					goto out_zfree;
+				case Z_MEM_ERROR:
+					logg_devel("Z_MEM_ERROR\n");
+					goto out_zfree;
+				case Z_BUF_ERROR:
+					logg_devel("Z_BUF_ERROR\n");
+					goto out_zfree;
+				default:
+					logg_devel("inflate was not Z_OK\n");
+					goto out_zfree;
+				}
+				buffer_flip(*src);
+			}
+			else
+				src = src_r;
+			/*
+			 * Look at the packet received
+			 */
+			if(!g2_packet_extract_from_stream(src, g_packet, server.settings.default_max_g2_packet_length, true)) {
+				logg_devel("packet extract failed\n");
+				goto out_zfree;
+			}
+
+			if(DECODE_FINISHED == g_packet->packet_decode ||
+			   PACKET_EXTRACTION_COMPLETE == g_packet->packet_decode) {
+				ret_val = g_packet;
+				goto out_zfree;
+			}
+			if(buffer_remaining(*src)) {
+				logg_devel("couldn't remove all data from buffer\n");
+				goto out_zfree;
+			}
+		} while(buffer_remaining(*src_r));
+		recv_buff_local_ret(e->e.parts_buf[i]);
+		e->e.parts_buf[i] = NULL;
+	}
+	logg_devel("incomplete packet in reas\n");
+	goto out_zfree;
+
+out_insert:
+	if(!udp_reas_rb_cache_insert(e))
+	{
+		logg_devel("insert failed\n");
+out_zfree:
+		if(e->e.deflate && zp)
+			inflateEnd(&zp->z);
+out_free:
+life_tree_error:
+		udp_reas_cache_entry_free(e);
+	}
+	else
+		cache_ht_add(e, h);
+
+out_unlock:
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("ahhhh, udp reassembly cache lock stuck, bye!");
+	return ret_val;
+}
+
+/************************* UDP work funcs ***********************/
+
+void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll_fd)
 {
 	/* other variables */
 	struct simple_gup *sg = ev->data.ptr;
+	struct norm_buff *d_hold = *d_hold_sp;
 	union combo_addr from, to;
 
 	buffer_clear(*d_hold);
@@ -200,8 +662,9 @@ void handle_udp(struct epoll_event *ev,struct norm_buff *d_hold,  int epoll_fd)
 
 	buffer_flip(*d_hold);
 	/* if we reach here, we know that there is at least no error or the logic above failed... */
-	handle_udp_packet(d_hold, &from, &to, sg->fd);
-	buffer_clear(*d_hold);
+	handle_udp_packet(d_hold_sp, &from, &to, sg->fd);
+	if(*d_hold_sp)
+		buffer_clear(**d_hold_sp);
 }
 
 bool init_udp(int epoll_fd)
@@ -209,6 +672,9 @@ bool init_udp(int epoll_fd)
 	char tmp_nam[sizeof("./G2UDPincomming.bin") + 12];
 	bool ipv4_ready;
 	bool ipv6_ready;
+
+	/* set the cache seed */
+	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 
 	udp_outfd_ipv4 = udp_sos[0].fd = -1;
 	udp_outfd_ipv6 = udp_sos[1].fd = -1;
@@ -313,7 +779,7 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		logg_devel("serialize prepare failed\n");
 		return;
 	}
-	num_udp_packets = (result+(UDP_MTU-UDP_RELIABLE_LENGTH-1))/(UDP_MTU-UDP_RELIABLE_LENGTH);
+	num_udp_packets = DIV_ROUNDUP(result, (UDP_MTU - UDP_RELIABLE_LENGTH));
 	sequence_number = ((unsigned)atomic_inc_return(&internal_sequence)) & 0x0000FFFF;
 	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets);
 
@@ -331,12 +797,13 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		logg_devel("encode not finished!\n");
 }
 
-static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to, int answer_fd)
+static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *from, union combo_addr *to, int answer_fd)
 {
 	gnd_packet_t tmp_packet;
-	g2_packet_t g_packet;
+	g2_packet_t g_packet_store, *g_packet;
 	struct ptype_action_args parg;
 	struct list_head answer;
+	struct norm_buff *d_hold = *d_hold_sp;
 	size_t res_byte;
 	uint8_t tmp_byte;
 
@@ -376,7 +843,7 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	 * numbers must only be different or same
 	 */
 	tmp_packet.sequence = get_unaligned((uint16_t *)buffer_start(*d_hold));
-	d_hold->pos += 2;
+	d_hold->pos += sizeof(uint16_t);
 
 	/* part */
 	tmp_packet.part = *buffer_start(*d_hold);
@@ -450,101 +917,21 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 
 	if(!tmp_packet.count) {
 // TODO: Do an appropriate action on a recived ACK
-		logg_devel("ACK recived!\n");
+		logg_devel_old("ACK recived!\n");
 		return true;
 	}
 
-// TODO: Handle multipart UDP packets
-	if(tmp_packet.count > 1) {
-		logg_devel("multipart UDP packet, needs reassamble\n");
+	if(buffer_remaining(*d_hold)) /* is there really any data */
+		goto out;
+
+	if(tmp_packet.count > UDP_MAX_PARTS) {
+		logg_devel("to many parts to reassamble packet\n");
 		goto out;
 	}
 
-	if(tmp_packet.count != tmp_packet.part) {
-		logg_devel("broken UDP packet count = 1 part != 1\n");
+	if(tmp_packet.count < tmp_packet.part) {
+		logg_devel("broken UDP packet part nr. > part count \n");
 		goto out;
-	}
-
-	if(tmp_packet.flags.deflate)
-	{
-		struct norm_buff *d_hold_n;
-		struct zpad *zp;
-		int z_status;
-
-		if(buffer_remaining(*d_hold)) /* is there really any data */
-			goto out;
-
-		logg_devel("compressed packet recevied\n");
-		d_hold_n = udp_get_lubuf();
-		if(!d_hold_n)
-			goto out;
-
-		/*
-		 * because we do not want to receive QHTs by UDP, we can
-		 * share the zlib TLS alloc stuff with the QHT handling.
-		 * And even if, it's no problem, inflating should be finished
-		 * (at least ATM) afterwards and QHT can reuse the pad.
-		 */
-		zp = qht_get_zpad();
-		if(!zp)
-			goto out;
-
-		zp->z.next_in = (Bytef *)buffer_start(*d_hold);
-		zp->z.avail_in = buffer_remaining(*d_hold);
-		zp->z.next_out = (Bytef *)buffer_start(*d_hold_n);
-		zp->z.avail_out = buffer_remaining(*d_hold_n);
-
-		if(inflateInit(&zp->z) != Z_OK) {
-			logg_devel("infalteInit failed\n");
-			goto out;
-		}
-		z_status = inflate(&zp->z, Z_SYNC_FLUSH);
-		inflateEnd(&zp->z);
-		switch(z_status)
-		{
-		case Z_OK:
-		case Z_STREAM_END:
-			d_hold->pos += buffer_remaining(*d_hold) - zp->z.avail_in;
-			d_hold_n->pos += buffer_remaining(*d_hold_n) - zp->z.avail_out;
-			break;
-		case Z_NEED_DICT:
-			logg_devel("Z_NEED_DICT\n");
-			goto out;
-		case Z_DATA_ERROR:
-			logg_devel("Z_DATA_ERROR\n");
-			goto out;
-		case Z_STREAM_ERROR:
-			logg_devel("Z_STREAM_ERROR\n");
-			goto out;
-		case Z_MEM_ERROR:
-			logg_devel("Z_MEM_ERROR\n");
-			goto out;
-		case Z_BUF_ERROR:
-			logg_devel("Z_BUF_ERROR\n");
-			goto out;
-		default:
-			logg_devel("inflate was not Z_OK\n");
-			goto out;
-		}
-		buffer_flip(*d_hold_n);
-		if(buffer_remaining(*d_hold))
-			logg_develd("not all data consumed! %zu", buffer_remaining(*d_hold));
-		d_hold = d_hold_n;
-	}
-
-	/*
-	 * Look at the packet received
-	 */
-	g2_packet_init_on_stack(&g_packet);
-	if(!g2_packet_extract_from_stream(d_hold, &g_packet, buffer_remaining(*d_hold))) {
-		logg_devel("packet extract failed\n");
-		goto out;
-	}
-
-	if(!(DECODE_FINISHED == g_packet.packet_decode ||
-	     PACKET_EXTRACTION_COMPLETE == g_packet.packet_decode)) {
-		logg_devel("packet extract stuck in wrong state\n");
-		goto out_free;
 	}
 
 	if(tmp_packet.flags.ack_me)
@@ -557,10 +944,100 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 		}
 	}
 
+// TODO: Handle multipart UDP packets
+	g2_packet_init_on_stack(&g_packet_store);
+	if(tmp_packet.count > 1)
+	{
+		logg_devel("multipart UDP packet, needs reassamble\n");
+		g_packet = g2_udp_reas_add(&tmp_packet, d_hold_sp, from, &g_packet_store);
+		if(!g_packet)
+			goto out;
+	}
+	else
+	{
+		if(tmp_packet.flags.deflate)
+		{
+			struct norm_buff *d_hold_n;
+			struct zpad *zp;
+			int z_status;
+
+			d_hold_n = udp_get_lubuf();
+			if(!d_hold_n)
+				goto out;
+
+			/*
+			 * because we do not want to receive QHTs by UDP, we can
+			 * share the zlib TLS alloc stuff with the QHT handling.
+			 * And even if, it's no problem, inflating should be finished
+			 * (at least ATM) afterwards and QHT can reuse the pad.
+			 */
+			zp = qht_get_zpad();
+			if(!zp)
+				goto out;
+
+			zp->z.next_in = (Bytef *)buffer_start(*d_hold);
+			zp->z.avail_in = buffer_remaining(*d_hold);
+			zp->z.next_out = (Bytef *)buffer_start(*d_hold_n);
+			zp->z.avail_out = buffer_remaining(*d_hold_n);
+
+			if(inflateInit(&zp->z) != Z_OK) {
+				logg_devel("infalteInit failed\n");
+				goto out;
+			}
+			z_status = inflate(&zp->z, Z_SYNC_FLUSH);
+			inflateEnd(&zp->z);
+			switch(z_status)
+			{
+			case Z_OK:
+			case Z_STREAM_END:
+				d_hold->pos += buffer_remaining(*d_hold) - zp->z.avail_in;
+				d_hold_n->pos += buffer_remaining(*d_hold_n) - zp->z.avail_out;
+				break;
+			case Z_NEED_DICT:
+				logg_devel("Z_NEED_DICT\n");
+				goto out;
+			case Z_DATA_ERROR:
+				logg_devel("Z_DATA_ERROR\n");
+				goto out;
+			case Z_STREAM_ERROR:
+				logg_devel("Z_STREAM_ERROR\n");
+				goto out;
+			case Z_MEM_ERROR:
+				logg_devel("Z_MEM_ERROR\n");
+				goto out;
+			case Z_BUF_ERROR:
+				logg_devel("Z_BUF_ERROR\n");
+				goto out;
+			default:
+				logg_devel("inflate was not Z_OK\n");
+				goto out;
+			}
+			buffer_flip(*d_hold_n);
+			if(buffer_remaining(*d_hold))
+				logg_develd("not all data consumed! %zu", buffer_remaining(*d_hold));
+			d_hold = d_hold_n;
+		}
+
+		/*
+		 * Look at the packet received
+		 */
+		g_packet = &g_packet_store;
+		if(!g2_packet_extract_from_stream(d_hold, g_packet, buffer_remaining(*d_hold), false)) {
+			logg_devel("packet extract failed\n");
+			goto out;
+		}
+
+		if(!(DECODE_FINISHED == g_packet->packet_decode ||
+		     PACKET_EXTRACTION_COMPLETE == g_packet->packet_decode)) {
+			logg_devel("packet extract stuck in wrong state\n");
+			goto out_free;
+		}
+	}
+
 	INIT_LIST_HEAD(&answer);
 	parg.connec      = NULL;
 	parg.father      = NULL;
-	parg.source      = &g_packet;
+	parg.source      = g_packet;
 	parg.src_addr    = from;
 	parg.dst_addr    = to;
 	parg.target_lock = NULL;
@@ -585,11 +1062,15 @@ static bool handle_udp_packet(struct norm_buff *d_hold, union combo_addr *from, 
 	}
 
 out_free:
-	g2_packet_free(&g_packet);
+	g2_packet_free(g_packet);
 out:
-	if(tmp_packet.flags.ack_me) {
-		gnd_buff_prep(d_hold, tmp_packet.sequence, tmp_packet.part, 0);
-		udp_sock_send(d_hold, from, answer_fd);
+	if(tmp_packet.flags.ack_me)
+	{
+		struct norm_buff *t_hold = udp_get_lsbuf();
+		if(t_hold) {
+			gnd_buff_prep(t_hold, tmp_packet.sequence, tmp_packet.part, 0);
+			udp_sock_send(t_hold, from, answer_fd);
+		}
 	}
 
 	return true;
@@ -629,7 +1110,7 @@ out_err:
 	}
 }
 
-static inline ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_addr *to, int fd)
+static ssize_t udp_sock_send(struct norm_buff *d_hold, const union combo_addr *to, int fd)
 {
 	ssize_t result;
 

@@ -268,7 +268,7 @@ retry_unpack:
 
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
 
-			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length))
+			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length, false))
 			{
 				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
 				          "failed to decode packet-stream", &w_entry->remote_host,

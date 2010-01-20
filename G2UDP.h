@@ -2,7 +2,7 @@
  * G2UDP.h
  * header-file for G2UDP.c
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,8 +53,9 @@ typedef struct
 
 _G2UDP_EXTRN(bool init_udp(int));
 _G2UDP_EXTRN(void clean_up_udp(void));
-_G2UDP_EXTRN(void handle_udp(struct epoll_event *, struct norm_buff *, int));
+_G2UDP_EXTRN(void handle_udp(struct epoll_event *, struct norm_buff **, int));
 _G2UDP_EXTRN(void g2_udp_send(const union combo_addr *, struct list_head *));
+_G2UDP_EXTRN(void g2_udp_reas_timeout(void));
 
 #endif /* G2UDP_H */
 /* EOF */

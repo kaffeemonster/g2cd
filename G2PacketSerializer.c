@@ -530,7 +530,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
  *  false - unrecoverable error (or illegal data), just dump the source of this
  *    byte waste.
  */
-bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target, size_t max_len)
+bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target, size_t max_len, bool evict_data)
 {
 	int func_ret_val;
 	bool ret_val = true;
@@ -575,14 +575,15 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				target->data_trunk.pos = target->data_trunk.limit = 0;
 				target->more_bytes_needed = true;
 				target->packet_decode = DECODE_FINISHED;
+				break;
 			}
-			break;
 		case START_EXTRACT_PACKET_FROM_STREAM:
 		/* look what has to be done to extract the data */
-			/* do we have a trunk? */
-			if(!target->data_trunk_is_freeable  ||
-			   0 == target->data_trunk.capacity ||
-			   !target->data_trunk.data)
+			/* use clever tricks and do we have a trunk? */
+			if(!evict_data &&
+			   (!target->data_trunk_is_freeable  ||
+			    0 == target->data_trunk.capacity ||
+			    !target->data_trunk.data))
 			{
 				/* we do not seem to have a trunk, try to attach the read buffer */
 	/*
@@ -598,8 +599,8 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				/* all data delivered? */
 				if(likely(target->length <= buffer_remaining(*source)))
 				{
-					logg_develd_old("%p would be complete: %lu long %lu remaining\n", (void *)target,
-						(unsigned long) target->length, (unsigned long)buffer_remaining(*source));
+					logg_develd_old("%p would be complete: %zu long %zu remaining\n",
+					                (void *)target, target->length, buffer_remaining(*source));
 					target->data_trunk_is_freeable = false;
 					target->data_trunk.data = buffer_start(*source);
 					target->data_trunk.capacity = target->length;
@@ -616,9 +617,8 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 					target->more_bytes_needed = true;
 					break;
 				}
-				else
-					target->packet_decode++;
 			}
+			target->packet_decode++;
 		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
 			/* is our trunk big enough? */
 			if(target->length > target->data_trunk.capacity)
@@ -678,7 +678,8 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				}
 
 				target->data_trunk.data = tmp_ptr;
-				logg_develd("%p -> packet space %p reallocated: %lu bytes\n", (void *) target, (void *) target->data_trunk.data, (unsigned long) target->length);
+				logg_develd("%p -> packet space %p reallocated: %zu bytes\n",
+				            (void *)target, (void *) target->data_trunk.data, target->length);
 			}
 			target->data_trunk.pos = 0;
 			target->data_trunk.limit = target->length;

@@ -225,15 +225,16 @@ static void *gup_loop(void *param)
 			break;
 		case GUP_UDP:
 			{
-				struct norm_buff *t_buff;
-				t_buff = lbuff[0] ? lbuff[0] : (lbuff[1] ? lbuff[1] : NULL);
-				if(!t_buff)
+				struct norm_buff **t_buff, *tt_buff = NULL;
+				t_buff = lbuff[0] ? &lbuff[0] : (lbuff[1] ? &lbuff[1] : &tt_buff);
+				if(!*t_buff)
 				{
-					if(!(lbuff[0] = t_buff = recv_buff_local_get())) {
+					if(!(lbuff[0] = recv_buff_local_get())) {
 						logg_errno(LOGF_ERR, "no recv buff!!");
 						kg = false;
 						break;
 					}
+					t_buff = &lbuff[0];
 				}
 				handle_udp(&ev, t_buff, worker.epollfd);
 			}
@@ -256,6 +257,7 @@ out:
 	g2_con_free(lcon);
 	recv_buff_local_ret(lbuff[0]);
 	recv_buff_local_ret(lbuff[1]);
+	recv_buff_local_free();
 
 	/* clean up our hzp */
 	hzp_free();

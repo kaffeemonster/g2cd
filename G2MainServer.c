@@ -267,6 +267,8 @@ int main(int argc, char **args)
 				g2_qht_global_update();
 				/* Check if the query key salt needs service */
 				g2_qk_tick();
+				/* clean up udp reassambly cache */
+				g2_udp_reas_timeout();
 			}
 			break;
 		/* Something bad happened */
@@ -320,6 +322,7 @@ int main(int argc, char **args)
 	pthread_join(main_threads[THREAD_GUP], NULL);
 	/* Join THREAD_TIMER??? Hmmm, there was a reason... */
 
+	hzp_scan(0);
 	/*
 	 * cleanup khl system
 	 * This is fairly important.
@@ -349,6 +352,8 @@ int main(int argc, char **args)
 	 * but we don't need them, since we do not query.
 	 */
 	g2_conreg_cleanup();
+	hzp_scan(0);
+	hzp_scan(0);
 
 	clean_up_m();
 	fsync(STDOUT_FILENO);
