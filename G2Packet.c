@@ -54,6 +54,7 @@
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/my_bitops.h"
+#include "lib/guid.h"
 
 /* minutes to seconds */
 #define PI_TIMEOUT     (   30)
@@ -159,6 +160,7 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_UPROD ] = handle_UPROD,
 	[PT_dna   ] = empty_action_p, /* don't know */
 	[PT_QH1   ] = empty_action_p, /* ?? */
+	[PT_CLOSE ] = empty_action_p, /* do we want to also close or what? */
 };
 
 const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
@@ -178,6 +180,7 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
+	[PT_QH1   ] = empty_action_p, /* ?? */
 	[PT_dna   ] = empty_action_p, /* don't know */
 };
 
@@ -195,21 +198,25 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 /* LNI-childs */
 static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 {
-	[PT_TO   ] = empty_action_p,
-	[PT_FW   ] = handle_LNI_FW,
-	[PT_GU   ] = handle_LNI_GU,
-	[PT_HS   ] = handle_LNI_HS,
-	[PT_LS   ] = empty_action_p,
-	[PT_RTR  ] = handle_LNI_RTR,
-	[PT_NA   ] = handle_LNI_NA,
-	[PT_QK   ] = handle_LNI_QK,
-	[PT_UP   ] = empty_action_p,
-	[PT_HA   ] = handle_LNI_HA,
-	[PT_V    ] = handle_LNI_V,
-	[PT_IDENT] = empty_action_p,
-	[PT_NBW  ] = empty_action_p,
-	[PT_CM   ] = empty_action_p,
-	[PT_GPS  ] = empty_action_p,
+	[PT_TO    ] = empty_action_p,
+	[PT_FW    ] = handle_LNI_FW,
+	[PT_GU    ] = handle_LNI_GU,
+	[PT_HS    ] = handle_LNI_HS,
+	[PT_LS    ] = empty_action_p,
+	[PT_RTR   ] = handle_LNI_RTR,
+	[PT_NA    ] = handle_LNI_NA,
+	[PT_QK    ] = handle_LNI_QK,
+	[PT_UP    ] = empty_action_p,
+	[PT_HA    ] = handle_LNI_HA,
+	[PT_V     ] = handle_LNI_V,
+	[PT_IDENT ] = empty_action_p,
+	[PT_NBW   ] = empty_action_p,
+	[PT_CM    ] = empty_action_p,
+	[PT_GPS   ] = empty_action_p,
+	[PT_NFW   ] = empty_action_p, /* ?? */
+	[PT_TCPNFW] = empty_action_p, /* ?? */
+	[PT_UDPNFW] = empty_action_p, /* ?? */
+	[PT_UDPFW ] = empty_action_p, /* ?? */
 };
 
 /* KHLR-childs */
@@ -265,9 +272,11 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_SZR ] = empty_action_p,
 	[PT_I   ] = empty_action_p,
 	[PT_dna ] = empty_action_p, /* don't know */
-	[PT_NAT ] = unimpl_action_p, /* ??? */
+	[PT_NAT ] = empty_action_p, /* ??? needs to be handled */
 	[PT_HKEY] = empty_action_p, /* ?? */
 	[PT_HURN] = empty_action_p, /* ?? */
+	[PT_G1  ] = empty_action_p, /* ?? */
+	[PT_NOG1] = empty_action_p, /* ?? */
 };
 
 /* QH2-childs */
@@ -310,6 +319,7 @@ static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
 	[PT_MD   ] = empty_action_p,
 	[PT_UPRO ] = empty_action_p,
 	[PT_SS   ] = empty_action_p,
+	[PT_G1PP ] = empty_action_p, /* ?? */
 };
 
 /* QA-childs */
@@ -553,22 +563,31 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 
 	memset(target, 0, sizeof(*target));
 	/* We Assume network byte order for the IP */
-	if(4 == rem || 6 == rem) {
+	if(4 == rem || 6 == rem)
+	{
 		target->s_fam = AF_INET;
 		target->in.sin_addr.s_addr = get_unaligned((uint32_t *) buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
-		if(6 == rem) {
-			get_unaligned_endian(target->in.sin_port, (uint16_t *)buffer_start(source->data_trunk),
-			                     source->big_endian);
+		if(6 == rem)
+		{
+			uint16_t tmp_port = get_unaligned((uint16_t *)buffer_start(source->data_trunk));
+			if(!source->big_endian)
+				tmp_port = (tmp_port >> 8) | (tmp_port << 8);
+			target->in.sin_port = tmp_port;
 			source->data_trunk.pos += sizeof(uint16_t);
 		}
-	} else {
+	}
+	else
+	{
 		target->s_fam = AF_INET6;
 		memcpy(&target->in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
 		source->data_trunk.pos += INET6_ADDRLEN;
-		if(INET6_ADDRLEN+2 == rem) {
-			get_unaligned_endian(target->in6.sin6_port, (uint16_t *)buffer_start(source->data_trunk),
-			                     source->big_endian);
+		if(INET6_ADDRLEN+2 == rem)
+		{
+			uint16_t tmp_port = get_unaligned((uint16_t *)buffer_start(source->data_trunk));
+			if(!source->big_endian)
+				tmp_port = (tmp_port >> 8) | (tmp_port << 8);
+			target->in6.sin6_port = tmp_port;
 			source->data_trunk.pos += sizeof(uint16_t);
 		}
 	}
@@ -739,8 +758,10 @@ static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 		       &source->in6.sin6_addr.s6_addr, INET6_ADDRLEN);
 		p_ptr = (uint16_t *)(buffer_start(target->data_trunk) + INET6_ADDRLEN);
 	}
-	if(port)
+	if(port) {
+		port = ntohs(port);
 		put_unaligned(port, p_ptr);
+	}
 
 	target->big_endian = HOST_IS_BIGENDIAN;
 	return true;
@@ -891,7 +912,7 @@ static intptr_t forward_lit_callback_ignore(g2_connection_t *con, void *carg)
 	struct ptype_action_args *parg = carg;
 	g2_packet_t *t, *source = parg->source;
 
-	logg_packet("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
+	logg_packet_old("/%s -> wants routing to %p#I\n", g2_ptype_names[parg->source->type], &con->remote_host);
 	/*
 	 * The connection is locked against removal inside this callback
 	 * (but because of this we do not want to lock to long, we have
@@ -983,14 +1004,14 @@ static intptr_t forward_lit_callback_found(g2_connection_t *con, void *carg)
 static bool empty_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 {
 	/* packet is not useful for us */
-	logg_packet_old("*/%s\tC: %s -> ignored\n", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
+	logg_packet_old("%s/%s\tC: %s -> ignored\n", parg->father ? g2_ptype_names[parg->father->type] : "", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
 	return false;
 }
 
 static bool unimpl_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 {
 	/* packet should be handled,  */
-	logg_packet("*/%s\tC: %s -> unimplemented\n", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
+	logg_packet("%s/%s\tC: %s -> unimplemented\n", parg->father ? g2_ptype_names[parg->father->type] : "", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
 	return false;
 }
 
@@ -1194,6 +1215,75 @@ static bool handle_KHLR_QK(struct ptype_action_args *parg)
 	return false;
 }
 
+static intptr_t callback_KHL_NH(g2_connection_t *con, void *data)
+{
+	g2_packet_t *khl = data;
+	g2_packet_t *nh, *gu = NULL, *v = NULL, *hs;
+
+	nh = g2_packet_calloc();
+	hs = g2_packet_calloc();
+	if(!(nh && hs))
+		return 0;
+
+	if(!write_na_to_packet(nh, &con->sent_addr))
+		goto out_fail;
+	if(g2_packet_steal_data_space(hs, 2))
+	{
+		uint16_t cons  = con->u.handler.leaf_count;
+		put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
+		hs->type       = PT_HS;
+		hs->big_endian = HOST_IS_BIGENDIAN;
+	}
+	else {
+		g2_packet_free(hs);
+		hs = NULL;
+	}
+
+	if(con->vendor_code[0] && (v = g2_packet_calloc()))
+	{
+		size_t v_len = strlen(con->vendor_code);
+		if(g2_packet_steal_data_space(v, v_len))
+		{
+			memcpy(buffer_start(v->data_trunk), con->vendor_code, v_len);
+			v->type       = PT_V;
+			v->big_endian = HOST_IS_BIGENDIAN;
+		}
+		else {
+			g2_packet_free(v);
+			v = NULL;
+		}
+	}
+	if(memcmp(con->guid, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16) != 0 &&
+	   (gu = g2_packet_calloc()))
+	{
+		if(g2_packet_steal_data_space(gu, GUID_SIZE))
+		{
+			memcpy(buffer_start(gu->data_trunk), con->guid, GUID_SIZE);
+			gu->type       = PT_GU;
+			gu->big_endian = HOST_IS_BIGENDIAN;
+		}
+		else {
+			g2_packet_free(gu);
+			gu = NULL;
+		}
+	}
+
+	if(hs)
+		list_add_tail(&hs->list, &nh->children);
+	if(v)
+		list_add_tail(&v->list, &nh->children);
+	if(gu)
+		list_add_tail(&gu->list, &nh->children);
+	list_add_tail(&nh->list, &khl->children);
+	return 0;
+out_fail:
+	g2_packet_free(nh);
+	g2_packet_free(hs);
+	g2_packet_free(gu);
+	g2_packet_free(v);
+	return 0;
+}
+
 static bool handle_KHL(struct ptype_action_args *parg)
 {
 	struct khl_entry khle[16];
@@ -1271,7 +1361,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 	}
 	khl->big_endian = HOST_IS_BIGENDIAN;
 
-// TODO: fill in our neighbouring hubs
+	g2_conreg_all_hub(NULL, callback_KHL_NH, khl);
 
 	g2_packet_add2target(khl, parg->target, parg->target_lock);
 	parg->connec->u.handler.send_stamps.KHL = local_time_now;
@@ -2063,7 +2153,7 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 	ts = g2_packet_calloc();
 
 	if(!(qa && d && ts))
-		return false;
+		goto out_fail_free_all;
 
 	if(parg->connec)
 	{
@@ -2456,7 +2546,7 @@ static bool handle_Q2_DN(struct ptype_action_args *parg)
 
 	rdata->dn_len = buffer_remaining(source->data_trunk);
 	rdata->dn     = buffer_start(source->data_trunk);
-	logg_develd("/Q2/DN - %zu \"%.*s\"\n", rdata->dn_len, (int)rdata->dn_len, rdata->dn);
+	logg_develd_old("/Q2/DN - %zu \"%.*s\"\n", rdata->dn_len, (int)rdata->dn_len, rdata->dn);
 	return false;
 }
 
@@ -2504,7 +2594,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 		return ret_val;
 	}
 
-	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
+	guid = (uint8_t *)buffer_start(source->data_trunk) + (buffer_remaining(source->data_trunk) - 16);
 	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return ret_val;
 
@@ -2838,7 +2928,7 @@ static inline bool handle_QHT_patch(g2_connection_t *connec, g2_packet_t *source
 		goto qht_patch_end;
 	}
 	if(unlikely(connec->flags.dismissed)) {
-		logg_packet("%p#I /QHT-patch -> connection dissmissed\n", &connec->remote_host);
+		logg_packet_old("%p#I /QHT-patch -> connection dissmissed\n", &connec->remote_host);
 		goto qht_patch_end;
 	}
 
@@ -3476,6 +3566,78 @@ static bool handle_HAW_NA(struct ptype_action_args *parg)
 	return false;
 }
 
+intptr_t send_HAW_callback(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
+{
+	union combo_addr local_addr;
+	uint8_t *ptr;
+	g2_packet_t *haw, *na, *hs, *v;
+	socklen_t sin_size = sizeof(local_addr);
+
+	if(unlikely(getsockname(con->com_socket, casa(&local_addr), &sin_size))) {
+		logg_errno(LOGF_DEBUG, "getting local addr of socket");
+		local_addr = AF_INET == con->remote_host.s_fam ?
+		             server.settings.bind.ip4 : server.settings.bind.ip6;
+		if(!combo_addr_is_public(&local_addr))
+			return 0;
+	}
+
+	haw = g2_packet_calloc();
+	na  = g2_packet_calloc();
+	hs  = g2_packet_calloc();
+	v   = g2_packet_calloc();
+	if(!(haw && na))
+		goto out_free;
+
+	if(!g2_packet_steal_data_space(haw, GUID_SIZE + 2))
+		goto out_free;
+
+	na->type = PT_NA;
+	if(!write_na_to_packet(na, &local_addr))
+		goto out_free;
+	list_add_tail(&na->list, &haw->children);
+
+	haw->type       = PT_NH;
+	haw->big_endian = HOST_IS_BIGENDIAN;
+	ptr = (uint8_t *)buffer_start(haw->data_trunk);
+	*ptr++ = 100; /* TTL */
+	*ptr++ = 0; /* Hops */
+	guid_generate(ptr);
+	g2_guid_add(ptr, &local_addr, local_time_now, GT_HAW);
+
+	if(hs)
+	{
+		if(g2_packet_steal_data_space(hs, 2))
+		{
+			uint16_t cons  = (uint16_t)atomic_read(&server.status.act_connection_sum);
+			put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
+			hs->type       = PT_HS;
+			hs->big_endian = HOST_IS_BIGENDIAN;
+			list_add_tail(&hs->list, &haw->children);
+		}
+		else
+			g2_packet_free(hs);
+	}
+
+	if(v)
+	{
+		v->type                = PT_V;
+		v->data_trunk.data     = (void *)(intptr_t)OWN_VENDOR_CODE;
+		v->data_trunk.capacity = str_size(OWN_VENDOR_CODE);
+		v->big_endian         = HOST_IS_BIGENDIAN;
+		buffer_clear(v->data_trunk);
+		list_add_tail(&v->list, &haw->children);
+	}
+	g2_handler_con_mark_write(haw, con);
+
+	return 0;
+out_free:
+	g2_packet_free(haw);
+	g2_packet_free(na);
+	g2_packet_free(hs);
+	g2_packet_free(v);
+	return 0;
+}
+
 static bool handle_UPROC(struct ptype_action_args *parg)
 {
 	/*
@@ -3487,7 +3649,7 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 	if(likely(server.settings.profile.want_2_send &&
 	   server.settings.profile.xml &&
 	   server.settings.profile.xml_length &&
-	   server.settings.profile.xml_length < server.settings.default_max_g2_packet_length - 10))
+	   server.settings.profile.xml_length < server.settings.max_g2_packet_length - 10))
 	{
 		g2_packet_t *uprod;
 		g2_packet_t *xml;
@@ -3653,11 +3815,11 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	if(!write_na_to_packet(na, parg->dst_addr))
 		goto out_free;
 
-	hs->type = PT_HS;
 	if(g2_packet_steal_data_space(hs, 2))
 	{
-		uint16_t cons     = (uint16_t)atomic_read(&server.status.act_connection_sum);
+		uint16_t cons  = (uint16_t)atomic_read(&server.status.act_connection_sum);
 		put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
+		hs->type       = PT_HS;
 		hs->big_endian = HOST_IS_BIGENDIAN;
 		list_add_tail(&hs->list, &self->children);
 	}
@@ -3672,10 +3834,33 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	if(rdata.gps)
 	{
 		/* add gps data to self */
+		/*
+		 * two times 16 bit: longitude, latitude
+		 * normalized:
+		 * 180.0*$lat/65535.0-90.0 and 360.0*$lon/65535.0-180.0
+		 *
+		 * lat = (unsigned)((real_lat + 90.0) * 65535.0 / 180.0)
+		 * long = (unsigned)((real_long + 180.0) * 65535.0 / 360.0)
+		 * ???
+		 * #define WORDLIM(x)  (WORD)( (x) < 0 ? 0 : ( (x) > 65535 ? 65535 : (x) ) )
+		 * WORD nLat = WORDLIM( ( nLatitude + 90.0f )   * 65535.0f / 180.0f );
+		 * WORD nLon = WORDLIM( ( nLongitude + 180.0f ) * 65535.0f / 360.0f );
+		 * #undef WORDLIM
+		 * return (DWORD)nLon + ( (DWORD)nLat << 16 );
+		 */
 	}
-	if(rdata.name)
+	if(rdata.name && server.settings.nick.name)
 	{
-		/* add nick to self */
+		g2_packet_t *name = g2_packet_calloc();
+		if(name)
+		{
+			name->type                = PT_NAME;
+			name->big_endian          = HOST_IS_BIGENDIAN;
+			name->data_trunk.data     = (void *)(intptr_t)server.settings.nick.name;
+			name->data_trunk.capacity = server.settings.nick.len;
+			buffer_clear(name->data_trunk);
+			list_add_tail(&name->list, &self->children);
+		}
 	}
 	if(rdata.ext)
 	{
@@ -3685,6 +3870,7 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 		if(v)
 		{
 			v->type                = PT_V;
+			v->big_endian          = HOST_IS_BIGENDIAN;
 			v->data_trunk.data     = (void *)(intptr_t)OWN_VENDOR_CODE;
 			v->data_trunk.capacity = str_size(OWN_VENDOR_CODE);
 			buffer_clear(v->data_trunk);
@@ -3694,8 +3880,9 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 		if(cv)
 		{
 			cv->type                = PT_CV;
-			cv->data_trunk.data     = (void *)(intptr_t)OUR_VERSION;
-			cv->data_trunk.capacity = str_size(OUR_VERSION);
+			cv->big_endian          = HOST_IS_BIGENDIAN;
+			cv->data_trunk.data     = (void *)(intptr_t)OUR_UA;
+			cv->data_trunk.capacity = str_size(OUR_UA);
 			buffer_clear(cv->data_trunk);
 			list_add_tail(&cv->list, &self->children);
 		}
@@ -3826,6 +4013,15 @@ out_unlock:
  * helper-functions
  *
  ********************************************************************/
+static noinline g2_packet_t *g2_packet_alloc_system(void)
+{
+	g2_packet_t *t = malloc(sizeof(g2_packet_t));
+	if(t)
+		t->is_freeable = true;
+	return t;
+}
+
+#ifndef VALGRIND_ME
 struct lpacket_buffer
 {
 	unsigned num;
@@ -3845,14 +4041,6 @@ static pthread_key_t key2lpack;
 	/* You better not kill this proto, or it wount work ;) */
 static void g2_packet_cinit(void) GCC_ATTR_CONSTRUCT;
 static void g2_packet_cdeinit(void) GCC_ATTR_DESTRUCT;
-
-static noinline g2_packet_t *g2_packet_alloc_system(void)
-{
-	g2_packet_t *t = malloc(sizeof(g2_packet_t));
-	if(t)
-		t->is_freeable = true;
-	return t;
-}
 
 static noinline g2_packet_t *g2_packet_alloc_boosted(void)
 {
@@ -3966,20 +4154,6 @@ static void g2_packet_cdeinit(void)
 #endif
 }
 
-g2_packet_t *g2_packet_init(g2_packet_t *p)
-{
-	if(!p)
-		return p;
-
-	memset(p, 0, offsetof(g2_packet_t, data_trunk));
-	/* ATM they are similar to zero */
-/*	p->packet_decode = CHECK_CONTROLL_BYTE;
-	p->packet_encode = DECIDE_ENCODE; */
-	INIT_LIST_HEAD(&p->list);
-	INIT_LIST_HEAD(&p->children);
-	return p;
-}
-
 #ifndef HAVE___THREAD
 static noinline struct lpacket_buffer *g2_packet_csetup(void)
 {
@@ -4004,9 +4178,35 @@ static struct lpacket_buffer *g2_packet_csetup(void)
 	return &lpack_cache;
 }
 #endif
+#else
+static noinline g2_packet_t *g2_packet_alloc_boosted(void)
+{
+	return g2_packet_alloc_system();
+}
+static noinline void g2_packet_free_boosted(g2_packet_t *to_free)
+{
+	free(to_free);
+}
+#endif
+
+g2_packet_t *g2_packet_init(g2_packet_t *p)
+{
+	if(!p)
+		return p;
+
+	memset(p, 0, offsetof(g2_packet_t, data_trunk));
+	/* ATM they are similar to zero */
+/*	p->packet_decode = CHECK_CONTROLL_BYTE;
+	p->packet_encode = DECIDE_ENCODE; */
+	INIT_LIST_HEAD(&p->list);
+	INIT_LIST_HEAD(&p->children);
+	return p;
+}
+
 
 g2_packet_t *g2_packet_alloc(void)
 {
+#ifndef VALGRIND_ME
 	struct lpacket_buffer *lpb;
 	struct list_head *pos, *n;
 	g2_packet_t *t;
@@ -4022,16 +4222,20 @@ g2_packet_t *g2_packet_alloc(void)
 		list_del_init(pos);
 		break;
 	}
-	if(!pos)
-		return g2_packet_alloc_boosted();
-	t = list_entry(pos, g2_packet_t, list);
-	lpb->num--;
-	t->is_freeable = true;
-	return t;
+	if(pos)
+	{
+		t = list_entry(pos, g2_packet_t, list);
+		lpb->num--;
+		t->is_freeable = true;
+		return t;
+	}
+#endif
+	return g2_packet_alloc_boosted();
 }
 
 void g2_packet_local_alloc_init_min(void)
 {
+#ifndef VALGRIND_ME
 	struct lpacket_buffer *lpb;
 
 	lpb = g2_packet_csetup();
@@ -4040,10 +4244,12 @@ void g2_packet_local_alloc_init_min(void)
 
 	lpb->num = 0;
 	INIT_LIST_HEAD(&lpb->packets);
+#endif
 }
 
 void g2_packet_local_alloc_init(void)
 {
+#ifndef VALGRIND_ME
 	struct lpacket_buffer *lpb;
 	size_t i;
 
@@ -4075,10 +4281,12 @@ void g2_packet_local_alloc_init(void)
 		list_add(&t->list, &lpb->packets);
 		lpb->num++;
 	}
+#endif
 }
 
 void g2_packet_local_refill(void)
 {
+#ifndef VALGRIND_ME
 	struct lpacket_buffer *lpb;
 	size_t i;
 
@@ -4115,6 +4323,7 @@ void g2_packet_local_refill(void)
 			lpb->num++;
 		}
 	}
+#endif
 }
 
 noinline g2_packet_t *g2_packet_calloc(void)
@@ -4142,7 +4351,7 @@ g2_packet_t *g2_packet_clone(g2_packet_t *p)
 	return t;
 }
 
-void g2_packet_free(g2_packet_t *to_free)
+void noinline g2_packet_free(g2_packet_t *to_free)
 {
 	struct list_head *e, *n;
 
@@ -4166,6 +4375,7 @@ void g2_packet_free(g2_packet_t *to_free)
 
 	if(likely(to_free->is_freeable))
 	{
+#ifndef VALGRIND_ME
 		INIT_LIST_HEAD(&to_free->list);
 		struct lpacket_buffer *lpb = g2_packet_csetup();
 		if(lpb)
@@ -4175,11 +4385,12 @@ void g2_packet_free(g2_packet_t *to_free)
 			lpb->num++;
 		}
 		else
+#endif
 			g2_packet_free_boosted(to_free);
 	}
 }
 
-void g2_packet_free_glob(g2_packet_t *to_free)
+void noinline g2_packet_free_glob(g2_packet_t *to_free)
 {
 	struct list_head *e, *n;
 
@@ -4202,7 +4413,9 @@ void g2_packet_free_glob(g2_packet_t *to_free)
 	}
 
 	if(likely(to_free->is_freeable)) {
+#ifndef VALGRIND_ME
 		INIT_LIST_HEAD(&to_free->list);
+#endif
 		g2_packet_free_boosted(to_free);
 	}
 }
@@ -4225,7 +4438,7 @@ void g2_packet_clean(g2_packet_t *to_clean)
 	to_clean->is_freeable = tmp_free;
 }
 
-static bool g2_packet_steal_data_space(g2_packet_t *p, size_t bytes)
+static noinline bool g2_packet_steal_data_space(g2_packet_t *p, size_t bytes)
 {
 	struct packet_data_store *pds;
 
@@ -4251,7 +4464,7 @@ must_malloc:
 	return true;
 }
 
-static bool g2_packet_steal_data_space_lit(g2_packet_t *p, size_t bytes)
+static noinline bool g2_packet_steal_data_space_lit(g2_packet_t *p, size_t bytes)
 {
 	struct packet_data_store *pds;
 	size_t have_bytes;
@@ -4286,6 +4499,16 @@ must_malloc:
 	return true;
 }
 
+
+static unsigned packet_type_stats[PT_MAXIMUM];
+static void g2_packet_stat_print(void) GCC_ATTR_DESTRUCT;
+static void g2_packet_stat_print(void)
+{
+	unsigned i;
+	for(i = 0; i < PT_MAXIMUM; i++)
+		logg(LOGF_DEVEL, "%s\tcount: %u\n", g2_ptype_names[i], packet_type_stats[i]);
+}
+
 static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)
 {
 	g2_packet_t *packs = parg->source;
@@ -4294,6 +4517,8 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 		logg_develd("packet with broken type: %u\n", (unsigned)packs->type);
 		return false;
 	}
+
+	packet_type_stats[packs->type]++;
 
 	if(work_type[packs->type])
 	{
@@ -4321,8 +4546,29 @@ static bool magic_route(struct ptype_action_args *parg, uint8_t *guid)
 {
 	union combo_addr na;
 
-	if(!g2_guid_lookup(guid, GT_LEAF, &na))
-		return false;
+	if(parg->connec)
+	{
+		if(parg->connec->flags.upeer) {
+			if(!g2_guid_lookup(guid, GT_LEAF, &na))
+				return false;
+		}
+		else
+		{
+			if(!g2_guid_lookup(guid, GT_LEAF, &na)) {
+				if(!g2_guid_lookup(guid, GT_NEIGHBOUR, &na)) {
+// TODO: udp forwards to "anything"
+					return false;
+				}
+			}
+		}
+	}
+	else
+	{
+		if(!g2_guid_lookup(guid, GT_LEAF, &na)) {
+			if(!g2_guid_lookup(guid, GT_NEIGHBOUR, &na))
+				return false;
+		}
+	}
 
 	return !!g2_conreg_for_addr(&na, forward_lit_callback_ignore, parg);
 }

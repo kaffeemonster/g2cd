@@ -487,6 +487,8 @@ out:
 			exit(EXIT_FAILURE);
 		if(sigaction(SIGTRAP, &sas, NULL))
 			exit(EXIT_FAILURE);
+		if(sigaction(SIGABRT, &sas, NULL))
+			exit(EXIT_FAILURE);
 	}
 }
 
@@ -507,5 +509,7 @@ void backtrace_init(void)
 		logg_pos(LOGF_NOTICE, "Unable to register SIGFPE-handler\n");
 	if(sigaction(SIGTRAP, &sas, NULL))
 		logg_pos(LOGF_NOTICE, "Unable to register SIGTRAP-handler\n");
+	if(sigaction(SIGABRT, &sas, NULL))
+		logg_pos(LOGF_NOTICE, "Unable to register SIGABRT-handler\n");
 }
 #endif

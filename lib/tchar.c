@@ -2,7 +2,7 @@
  * tchar.c
  * util funcs for tchars
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -29,6 +29,7 @@
 static int utf8totc(tchar_t **r, size_t *rl, const char *src, size_t sl)
 {
 	const unsigned char *s_c = (const unsigned char *)src;
+	tchar_t *target = *r;
 	uint32_t result;
 	int len;
 
@@ -73,12 +74,13 @@ out:
 		if(*rl < 2)
 			return -1;
 		result -= 0x10000;
-		*(*r++) = (result >> 10) | 0xD800;
+		*target++ = (result >> 10) | 0xD800;
 		(*rl)--;
 		result = (result & 0x3FF) | 0xDC00;
 	}
-	*(*r++) = result;
+	*target++ = result;
 	(*rl)--;
+	*r = target;
 
 	return len;
 }

@@ -60,12 +60,8 @@
 /* data-structures */
 static struct worker_sync {
 	int epollfd;
-	char padding[128]; /* move at least a cacheline between data */
-	pthread_mutex_t lock;
-	pthread_cond_t cond;
-	int num_poll;
-	int index;
-	struct epoll_event eevents[EVENT_SPACE];
+	int from_main;
+	char padding[128 - 2 * sizeof(int)]; /* move at least a cacheline between data */
 	volatile bool wait;
 	volatile bool keep_going;
 } worker;
@@ -77,6 +73,8 @@ static void *gup_loop(void *param)
 {
 	struct norm_buff *lbuff[2];
 	g2_connection_t *lcon = NULL;
+	int num_poll = 0;
+	int index_poll = 0;
 
 	unsigned refill_count = EVENT_SPACE / 2;
 	bool lcon_refresh_needed = false;
@@ -106,9 +104,11 @@ static void *gup_loop(void *param)
 
 	while(worker.keep_going)
 	{
+// TODO: maybe take 4, or more?
+		struct epoll_event eevents[3];
 		union gup *guppie;
-		struct epoll_event ev;
-		bool repoll, kg;
+		struct epoll_event *ev = &eevents[0];
+		bool repoll = true, kg;
 
 		if(lcon_refresh_needed) {
 			g2_con_clear(lcon);
@@ -123,52 +123,95 @@ static void *gup_loop(void *param)
 			g2_packet_local_refill();
 			refill_count = EVENT_SPACE / 2;
 		}
-		/*
-		 * let only one thread at a time poll
-		 *
-		 * We could keep them out with a simple lock, but to avoid
-		 * a "thundering herd" Problem, when the reciever leaves the
-		 * section, we put them on a conditional (in the hope,
-		 * cond_signal to wake one is implemented sensible...)
-		 */
-		pthread_mutex_lock(&worker.lock);
-		while(worker.wait)
-			pthread_cond_wait(&worker.cond, &worker.lock);
-		worker.wait = worker.keep_going ? true : false;
-		pthread_mutex_unlock(&worker.lock);
-		if(!worker.keep_going) {
-			pthread_cond_broadcast(&worker.cond);
-			break;
-		}
 
-//TODO: rethink event distribution
+		if(!worker.keep_going)
+			break;
+
 		/*
-		 * ATM we let on thread poll and then hand out the event one
-		 * by one to the worker threads.
+		 * Originaly we let one worker thread poll, retrieving a big
+		 * batch of events and then hand out the events one by one
+		 * to all the worker threads.
+		 *
 		 * This gives low response times and "even" distribution.
-		 * But is prop. only scallable with low event rates.
+		 * But is prop. only scalable with low event rates.
+		 *
 		 * At high event rates it is better to hand out batches,
 		 * or in other words: A thread polls and wanders off
 		 * with _all_ results, the next threads polls for the
 		 * next batch of results etc..
 		 * This is much better if we are under heavy fire.
 		 * Ideally we want both, but switching this at runtime...
+		 *
+		 * And i removed it, because:
+		 * This included a lock and a condidional (that was a
+		 * little bit superflous, but to help with thundering
+		 * herds).
+		 * Unfortunatly, when not running with one worker or/and
+		 * at high event rates this gave quite a lock firework.
+		 * (Which is not bad perse, somewhere there has to be a
+		 * lock, at least in the kernel to make the syscall
+		 * concurrent save).
+		 * But to make matters worse reality is a bitch:
+		 * When a lock can not be taken in userspace the
+		 * libpthread has to fall back to some kernel support
+		 * to get the sleeping, and conditionals are an extra
+		 * complicated beast.
+		 *
+		 * Under (2.6) Linux this is where futexes come into
+		 * play. They are the "new" fast kernel support for such
+		 * things. But locking is hard and since this was new
+		 * from the ground up there where some bugs in obscure
+		 * corner cases (normally cases not used by libpthread,
+		 * stuff if you would use the syscall directly with
+		 * rigged parameters), fixed in later kernel versions.
+		 *
+		 * Still i managed to run into one on an old 2.6.9-vserver
+		 * when the 4 core machine got busy (no cputime usage,
+		 * but high lock rates).
+		 * Total userspace lockup, you can still ping the machine,
+		 * tcp connections still 3-way handshaked (so the kernel
+		 * is alive and kicking), but userspace is dead, ALL of
+		 * userspace, you can not even ssh into the machine.
+		 *
+		 * Thats why i hate those enterprise distros, outdated
+		 * bullshit, seldomly updated by its customers, and to
+		 * totally screw you:
+		 * Propritary extentions like virtualisation which can
+		 * not be updated.
+		 * That stuff "works", it not like its totally broken. Lot's
+		 * of machines fullfilling their dutys, mail, web, etc.
+		 *
+		 * But apparently i'm pushing the limits far beyond...
+		 *
+		 * So we let the threads directly run into the kernel, he
+		 * should manage the locking.
+		 * Our epoll emulations have to do the locking if they
+		 * need one.
+		 * We take 3 events (which may hurt the poll based
+		 * emulation badly), to not wander off for to long, but
+		 * still "suck up" the worst offending events, udp & accept
+		 * while still consuming at least one event from a tcp
+		 * connection.
+		 *
+		 * And it works beautifull, the kernel "round robins"
+		 * the threads as early as an event arrives giving nice
+		 * concurency.
+		 * Oneshot mode was the right decission.
 		 */
-
+//TODO: rethink event distribution
 		do
 		{
-			if(worker.index >= worker.num_poll) {
-				worker.num_poll = my_epoll_wait(worker.epollfd, worker.eevents, anum(worker.eevents), 10000);
-				if(0 < worker.num_poll)
-					time(&local_time_now);
-				worker.index = 0;
+			if(index_poll >= num_poll) {
+				num_poll = my_epoll_wait(worker.epollfd, eevents, anum(eevents), 10000);
+				if(0 < num_poll)
+					update_local_time();
+				index_poll = 0;
 			}
 			repoll = false;
-			switch(worker.num_poll)
+			switch(num_poll)
 			{
 			default:
-				ev = worker.eevents[worker.index++];
-				barrier();
+				ev = &eevents[index_poll++];
 				break;
 			/* Something bad happened */
 			case -1:
@@ -187,15 +230,11 @@ static void *gup_loop(void *param)
 			}
 		} while(repoll && worker.keep_going);
 
-		pthread_mutex_lock(&worker.lock);
-		worker.wait = false;
-		pthread_cond_signal(&worker.cond);
-		pthread_mutex_unlock(&worker.lock);
 		if(!worker.keep_going)
 			break;
 
 		/* use result */
-		guppie = ev.data.ptr;
+		guppie = ev->data.ptr;
 		if(unlikely(!guppie)) {
 			logg_devel("no guppie?");
 			continue;
@@ -204,13 +243,13 @@ static void *gup_loop(void *param)
 		switch(guppie->gup)
 		{
 		case GUP_G2CONNEC_HANDSHAKE:
-			handle_con_a(&ev, lbuff, worker.epollfd);
+			handle_con_a(ev, lbuff, worker.epollfd);
 			break;
 		case GUP_G2CONNEC:
-			handle_con(&ev, lbuff, worker.epollfd);
+			handle_con(ev, lbuff, worker.epollfd);
 			break;
 		case GUP_ACCEPT:
-			if(ev.events & (uint32_t)EPOLLIN)
+			if(ev->events & (uint32_t)EPOLLIN)
 			{
 				if(handle_accept_in(&guppie->s_gup, lcon, worker.epollfd)) {
 					lcon = g2_con_get_free();
@@ -220,8 +259,8 @@ static void *gup_loop(void *param)
 				} else
 					lcon_refresh_needed = true;
 			}
-			if(ev.events & ~((uint32_t)EPOLLIN|EPOLLONESHOT))
-				kg = handle_accept_abnorm(&guppie->s_gup, &ev, worker.epollfd);
+			if(ev->events & ~((uint32_t)EPOLLIN|EPOLLONESHOT))
+				kg = handle_accept_abnorm(&guppie->s_gup, ev, worker.epollfd);
 			break;
 		case GUP_UDP:
 			{
@@ -236,19 +275,19 @@ static void *gup_loop(void *param)
 					}
 					t_buff = &lbuff[0];
 				}
-				handle_udp(&ev, t_buff, worker.epollfd);
+				handle_udp(ev, t_buff, worker.epollfd);
 			}
 			break;
 		case GUP_ABORT:
-			kg = handle_abort(&guppie->s_gup, &ev);
+			kg = handle_abort(&guppie->s_gup, ev);
 			break;
 		}
 		if(!kg) {
-			pthread_mutex_lock(&worker.lock);
-			worker.wait = false;
+			ssize_t w_res;
+			do {
+				w_res = write(worker.from_main, "stop!", str_size("stop!"));
+			} while(str_size("stop!") != w_res && EINTR == errno);
 			worker.keep_going = false;
-			pthread_cond_broadcast(&worker.cond);
-			pthread_mutex_unlock(&worker.lock);
 			break;
 		}
 	}
@@ -269,12 +308,14 @@ out:
 
 void *gup(void *param)
 {
+	struct epoll_event eevents;
 	static pthread_t *helper;
 	static struct simple_gup from_main;
 	size_t num_helper, i;
 
 	from_main.gup = GUP_ABORT;
 	from_main.fd = *((int *)param);
+	worker.from_main = from_main.fd;
 	logg(LOGF_INFO, "gup:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", from_main.fd, *(((int *)param)-1));
 
 	worker.epollfd = my_epoll_create(PD_START_CAPACITY);
@@ -283,17 +324,30 @@ void *gup(void *param)
 		goto out;
 	}
 
-	worker.eevents[0].events   = (uint32_t)(EPOLLIN|EPOLLONESHOT);
-	worker.eevents[0].data.ptr = &from_main;
-	if(0 > my_epoll_ctl(worker.epollfd, EPOLL_CTL_ADD, from_main.fd, &worker.eevents[0]))
+	eevents.events   = (uint32_t)(EPOLLIN|EPOLLONESHOT);
+	eevents.data.u64 = 0;
+	eevents.data.ptr = &from_main;
+	if(0 > my_epoll_ctl(worker.epollfd, EPOLL_CTL_ADD, from_main.fd, &eevents))
 	{
 		logg_errno(LOGF_ERR, "adding main pipe to epoll");
 		goto out_epoll;
 	}
 
 	num_helper  = server.settings.num_threads;
-	num_helper  = num_helper ? num_helper : get_cpus_online();
-	num_helper -= 1;
+	if(!num_helper)
+	{
+		num_helper = get_cpus_online();
+		/*
+		 * if we only have a single CPU, 99.999% of the time locks
+		 * will be uncontended and programm flow is near linear.
+		 * Keep it that way by only using a single worker (this thread).
+		 *
+		 * When we have more CPUs, oversubcribe by one thread
+		 * (num_cpu + ourself) to have a thread ready running if a thread
+		 * blocks another on a lock.
+		 */
+		num_helper = 1 == num_helper ? 0 : num_helper;
+	}
 	if(num_helper)
 	{
 		helper = malloc(num_helper * sizeof(*helper));
@@ -302,12 +356,6 @@ void *gup(void *param)
 			num_helper = 0;
 		}
 	}
-	/* Setup locks */
-	if(pthread_mutex_init(&worker.lock, NULL))
-		goto out_lock;
-	if(pthread_cond_init(&worker.cond, NULL))
-		goto out_cond;
-
 	if(!init_accept(worker.epollfd))
 		goto out_no_accept;
 	if(!init_udp(worker.epollfd))
@@ -341,10 +389,6 @@ out_no_udp:
 	clean_up_accept();
 out_no_accept:
 	clean_up_gup(from_main.fd);
-	pthread_cond_destroy(&worker.cond);
-out_cond:
-	pthread_mutex_destroy(&worker.lock);
-out_lock:
 	free(helper);
 out_epoll:
 	my_epoll_close(worker.epollfd);
@@ -408,6 +452,20 @@ int handler_active_timeout(void *arg)
 	}
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 	return ret_val;
+}
+
+int handler_z_flush_timeout(void *arg)
+{
+	struct epoll_event p_entry = {0,{0}};
+	g2_connection_t *con = arg;
+
+	p_entry.data.ptr = con;
+	shortlock_t_lock(&con->pts_lock);
+	con->u.handler.z_flush = true;
+	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+	shortlock_t_unlock(&con->pts_lock);
+	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
+	return 0;
 }
 
 void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)

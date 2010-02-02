@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1467,22 +1467,58 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 
 	if(spec->u.flags.guid)
 	{
-		len = 32;
+		len = 8+4+4+4+12+4;
 		if(spec->u.flags.alternate)
-			len += 15;
+			len += 2;
 		if(len <= sav)
 		{
-			unsigned i;
+			uint64_t d4;
+			char *wptr;
 			unsigned char *g = ptr;
+			uint32_t d1;
+			unsigned i;
+			uint16_t d2, d3;
 
+			/*
+			 * guids come from windows systems, their format
+			 * has a plattform endian touch (first 3 fields),
+			 * but that plattform is "always" intel...
+			 */
+			d1 = get_unaligned_le32(g); g += 4;
+			d2 = get_unaligned_le16(g); g += 2;
+			d3 = get_unaligned_le16(g); g += 2;
+			d4 = get_unaligned_be64(g);
+
+			if(spec->u.flags.alternate)
+				*buf++ = '{';
+
+			wptr = buf = buf + 8+4+4+4+12+4;
+			for(i = 0; i < 12; i++, d4 >>= 4)
+				*--wptr = HEXUC_STRING[d4 & 0x0F];
+			*--wptr = '-';
+			for(i = 0; i < 4; i++, d4 >>= 4)
+				*--wptr = HEXUC_STRING[d4 & 0x0F];
+			*--wptr = '-';
+			for(i = 0; i < 4; i++, d3 >>= 4)
+				*--wptr = HEXUC_STRING[d3 & 0x0F];
+			*--wptr = '-';
+			for(i = 0; i < 4; i++, d2 >>= 4)
+				*--wptr = HEXUC_STRING[d2 & 0x0F];
+			*--wptr = '-';
+			for(i = 0; i < 8; i++, d1 >>= 4)
+				*--wptr = HEXUC_STRING[d1 & 0x0F];
+
+			if(spec->u.flags.alternate)
+				*buf++ = '}';
+#if 0
 			for(i = 0; i < 16; i++) {
 				*buf++ = HEXUC_STRING[(g[i] >> 4) & 0x0F];
 				*buf++ = HEXUC_STRING[ g[i]       & 0x0F];
 				if(spec->u.flags.alternate)
 					*buf++ = ':';
 			}
-			if(spec->u.flags.alternate)
-				buf--;
+			buf--;
+#endif
 		}
 		else
 			buf += len;

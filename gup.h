@@ -2,7 +2,7 @@
  * gup.h
  * grand unified poller, header file
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,6 +64,7 @@ struct g2_connection;
 GUP_EXTRN(void *gup(void *));
 GUP_EXTRN(int accept_timeout(void *));
 GUP_EXTRN(int handler_active_timeout(void *arg));
+GUP_EXTRN(int handler_z_flush_timeout(void *arg));
 GUP_EXTRN(void g2_handler_con_mark_write(struct g2_packet *, struct g2_connection *));
 #endif /* GUP_H */
 /* EOF */

@@ -1,8 +1,8 @@
 /*
- * memcpy.c
- * memcpy
+ * memmove.c
+ * memmove
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,7 +24,7 @@
  */
 
 /*
- * memcpy - memcpy
+ * memmove - memmove handling overlaping copys
  * dst: where to copy to
  * src: from where to copy
  * len: how much to copy
@@ -39,24 +39,16 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-/* memcpy as a macro... */
-#undef memcpy
-#ifndef MEMCPY_DEFINED
-void *memcpy(void *restrict dst, const void *restrict src, size_t len);
-#define MEMCPY_DEFINED
+/* memmove as a macro... */
+#undef memmove
+#ifndef MEMMOVE_DEFINED
+void *memmove(void *dst, const void *src, size_t len);
+#define MEMMOVE_DEFINED
 #endif
 
 #ifdef I_LIKE_ASM
-# if defined(__i386__) || defined(__x86_64__)
-	/* works for both */
-#  include "x86/memcpy.c"
-# elif defined(__sparc) || defined(__sparc__)
-	/* works for both */
-#  include "sparc/memcpy.c"
-# else
-#  include "generic/memcpy.c"
-# endif
+#  include "generic/memmove.c"
 #else
-# include "generic/memcpy.c"
+# include "generic/memmove.c"
 #endif
 /* EOF */

@@ -139,7 +139,7 @@ static tchar_t *tstrchrnul_SSE2(const tchar_t *s, tchar_t c)
 #ifdef __i386__
 		"movd	%k2, %%xmm2\n\t"
 #else
-		"movd	%k5, %%xmm2\n\t"
+		"movd	%k4, %%xmm2\n\t"
 #endif
 		"mov	%1, %2\n\t"
 		"and	$-16, %1\n\t"
@@ -174,11 +174,11 @@ static tchar_t *tstrchrnul_SSE2(const tchar_t *s, tchar_t c)
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t)
 #ifdef __i386__
-		: /* %4 */ "m" (s),
-		  /* %5 */ "2" (c)
+		: /* %3 */ "m" (s),
+		  /* %4 */ "2" (c)
 #else
-		: /* %4 */ "r" (s),
-		  /* %5 */ "r" (c)
+		: /* %3 */ "r" (s),
+		  /* %4 */ "r" (c)
 #endif
 #ifdef __SSE2__
 		: "xmm0", "xmm1", "xmm2", "xmm3"

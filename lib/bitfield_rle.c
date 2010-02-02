@@ -310,7 +310,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		}
 
 		/* check for single, dual or other bits */
-		if(s_len < 1 || 0xFF == data[1])
+		if(s_len < 2 || 0xFF == data[1])
 		{
 			cnt = popcnt_8(~z);
 			if(likely(1 == cnt || 2 == cnt))
@@ -438,7 +438,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		if(unlikely(!(c & 0x10)))
 		{
 		/* one bit */
-			*r_wptr++ =  ~(1 << (c & 0x0F));
+			*r_wptr++ = ~(1 << (c & 0x0F));
 			t_len--;
 			data++;
 			s_len--;
@@ -515,6 +515,121 @@ write_out_ff:
 	return c_len;
 }
 
+ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
+{
+	uint8_t *r_wptr = res;
+	ssize_t c_len;
+	size_t cnt = 0;
+
+	while(likely(t_len) && likely(s_len))
+	{
+		size_t t;
+		uint8_t c = *data;
+
+		if(unlikely(!(c & 0x80)))
+		{
+			data++;
+			s_len--;
+			cnt = c & 0x7F;
+			goto write_out_ff;
+		}
+
+		if(unlikely(!(c & 0x40)))
+		{
+			/* plain data */
+			cnt = c & 0x3F;
+			cnt = cnt <= s_len ? cnt : s_len;
+			cnt = cnt <= t_len ? cnt : t_len;
+			memand(r_wptr, data + 1, cnt);
+			r_wptr += cnt;
+			t_len -= cnt;
+			cnt++;
+			data += cnt;
+			s_len -= cnt;
+			continue;
+		}
+
+		if(unlikely(!(c & 0x20)))
+		{
+			/* two bit */
+			*r_wptr++ &= ~index_twos[c & 0x1F];
+			t_len--;
+			data++;
+			s_len--;
+			continue;
+		}
+
+		if(unlikely(!(c & 0x10)))
+		{
+		/* one bit */
+			*r_wptr++ &= ~(1 << (c & 0x0F));
+			t_len--;
+			data++;
+			s_len--;
+			continue;
+		}
+
+		cnt = c & 0x0F;
+		s_len--;
+		data++;
+		if(cnt > s_len)
+			break;
+		switch(cnt)
+		{
+		case 1:
+			cnt = *data++;
+			s_len--;
+			break;
+		case 2:
+			cnt = get_unaligned((const uint16_t *)data);
+			data  += sizeof(uint16_t);
+			s_len -= sizeof(uint16_t);
+			break;
+		case 3:
+			cnt = get_unaligned((const uint16_t *)(data + 1));
+			if(HOST_IS_BIGENDIAN)
+				cnt |= ((size_t)(data[0])) << (2 * BITS_PER_CHAR);
+			else
+				cnt = (cnt << BITS_PER_CHAR) | data[0];
+			data  += sizeof(uint16_t) + sizeof(uint8_t);
+			s_len -= sizeof(uint16_t) + sizeof(uint8_t);
+			break;
+		case 4:
+			cnt = get_unaligned((const uint32_t *)data);
+			data  += SO32;
+			s_len -= SO32;
+			break;
+		default:
+			t = cnt;
+			if(HOST_IS_BIGENDIAN) {
+				for(cnt = 0; likely(s_len) && likely(t); data++, s_len--, t--) {
+					cnt <<= BITS_PER_CHAR;
+					cnt |= *data;
+				}
+			} else {
+				unsigned i = 0;
+				for(cnt = 0; likely(s_len) && likely(t); data++, s_len--, t--, i++)
+					cnt |= ((size_t)*data) << (i * BITS_PER_CHAR);
+			}
+		}
+write_out_ff:
+		/* besides of moving the pointer, nothing to do in the 0xff case */
+		cnt = cnt <= t_len ? cnt : t_len;
+		r_wptr += cnt;
+		/*
+		 * our decode came to a intermidiated step, so next is a
+		 * break in the 0xff's, which means we will write -> prefetch
+		 */
+		prefetchw(r_wptr);
+		t_len -= cnt;
+	}
+
+	c_len = r_wptr - res;
+	if(s_len)
+		c_len = -c_len;
+	return c_len;
+}
+
 int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len)
 {
 	const uint8_t *dwptr = data;
@@ -527,20 +642,20 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 		 * when the act. bit index is below the bit pos, we have to
 		 * restart. Sort your numbers, kids.
 		 */
-		if(vals[i] < bpos) {
+		if(unlikely(vals[i] < bpos)) {
 			dwptr = data;
 			bpos = 0;
 			rem_len = s_len;
 		}
 
-		while(rem_len)
+		while(likely(rem_len))
 		{
 			size_t cnt, t;
 			uint32_t dist = vals[i] - bpos;
 			uint8_t c = *dwptr;
 
 			/* a simple ff run? */
-			if(unlikely(!(c & 0x80)))
+			if(likely(!(c & 0x80)))
 			{
 				cnt = c * BITS_PER_CHAR;
 				if(dist < cnt) /* match within run? */

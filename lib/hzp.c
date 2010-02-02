@@ -314,7 +314,7 @@ int hzp_scan(int threshold)
 {
 	atomicst_t mhead;
 	atomicst_t *whead = NULL, *thead = NULL;
-	struct hzp_fs *uhead = NULL;
+	struct hzp_fs uhead_st = { NULL, NULL }, *uhead;
 	int freed = 0;
 
 	if(threshold > atomic_read(&nr_free))
@@ -338,7 +338,7 @@ int hzp_scan(int threshold)
 //TODO: some mem barrier needed here
 			for(i = 0; i < HZP_MAX; i++) {
 				if(deatomic(entry->ptr[i]))
-					hzp_fs_push(uhead, alloca(sizeof(*uhead)), deatomic(entry->ptr[i]));
+					hzp_fs_push(&uhead_st, alloca(sizeof(uhead_st)), deatomic(entry->ptr[i]));
 			}
 			/* shut up, we want to travers the list... */
 			whead = deatomic(atomic_sread(whead));
@@ -355,6 +355,7 @@ int hzp_scan(int threshold)
 #endif
 		}
 	}
+	uhead = uhead_st.next;
 
 	/* check gathered list against our to-free list */
 	for(whead = deatomic(atomic_sread(&mhead)), thead = whead ? deatomic(atomic_sread(whead)) : NULL;

@@ -68,7 +68,6 @@
 		       it also provided on an old solaris as system lib, with AT&T
 		       copyright in the header, last change 1996, probably to
 		       add 'extern "C"', so i would call it mature technology ;) ]
-	* libxml2 >= 2.5 with reader and thread support, library ans header-files
 
 	recommended:
 	* An Editor
@@ -161,6 +160,9 @@
 	- test Solaris-/dev/poll & event port wrapper
 	- portability issues of the build (make, compiler, shell)
 	- lots of other stuff
+	- lot's of broken systems on the i-net (FW, blackholes),
+	  so sockets get stuck in the kernel, tuning
+	  (echo 6 > /proc/sys/net/ipv4/tcp_retries2)? or options?
 
 	What's needed?
 	 Programming wizards, the tooth fairy and santa claus would be nice ;)

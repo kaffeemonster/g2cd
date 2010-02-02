@@ -2,7 +2,7 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest, x86 implementation
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -76,20 +76,22 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 #include "memxorcpy_tmpl.c"
 #undef HAVE_3DNOW
 
-#define HAVE_SSE3
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3
-static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len);
-#include "memxorcpy_tmpl.c"
-
-#define HAVE_3DNOW
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3_3DNOW
-static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len);
-#include "memxorcpy_tmpl.c"
-#undef HAVE_3DNOW
-
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
+#  define HAVE_SSE3
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3
+static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len);
+#  include "memxorcpy_tmpl.c"
+
+#  define HAVE_3DNOW
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3_3DNOW
+static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1, const void *src2, size_t len);
+#  include "memxorcpy_tmpl.c"
+#  undef HAVE_3DNOW
+# endif
+
 # if HAVE_BINUTILS >= 219
 #  define HAVE_AVX
 #  undef ARCH_NAME_SUFFIX
@@ -108,9 +110,11 @@ static const struct test_cpu_feature t_feat[] =
 # if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))memxorcpy_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
 # endif
-#endif
+# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))memxorcpy_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memxorcpy_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+# endif
+#endif
 	{.func = (void (*)(void))memxorcpy_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memxorcpy_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 	{.func = (void (*)(void))memxorcpy_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},

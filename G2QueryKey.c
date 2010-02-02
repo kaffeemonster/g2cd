@@ -38,6 +38,7 @@
 #include "lib/rbtree.h"
 #include "lib/combo_addr.h"
 #include "lib/ansi_prng.h"
+#include "lib/guid.h"
 
 /*
  * The G2 protocol implements a "lightweight" walker-like search
@@ -144,7 +145,7 @@
 /*
  * Query Key Cache
  */
-#define QK_CACHE_SHIFT 10
+#define QK_CACHE_SHIFT 12
 #define QK_CACHE_SIZE (1 << QK_CACHE_SHIFT)
 #define QK_CACHE_HTSIZE (QK_CACHE_SIZE/8)
 #define QK_CACHE_HTMASK (QK_CACHE_HTSIZE-1)
@@ -241,6 +242,8 @@ void g2_qk_init(void)
 	random_bytes_get(&i, sizeof(g2_qk_s.act_salt));
 	g2_qk_s.act_salt = i % TIME_SLOT_COUNT;
 	g2_qk_s.last_update = time(NULL);
+	/* also init the guid generator */
+	guid_init();
 }
 
 void g2_qk_tick(void)
@@ -274,6 +277,11 @@ void g2_qk_tick(void)
 	barrier();
 	g2_qk_s.act_salt = n_salt;
 	g2_qk_s.last_update = local_time_now;
+	/*
+	 * when we generate a new set of salts,
+	 * time to re-key the guid generator
+	 */
+	guid_tick();
 }
 
 static uint32_t addr_hash_generate(const union combo_addr *source, unsigned salt2use)
@@ -487,7 +495,7 @@ void g2_qk_add(uint32_t qk, const union combo_addr *addr)
 	time_t when;
 
 	if(unlikely(!combo_addr_is_public(addr))) {
-		logg_develd("addr %pI is privat, not added\n", addr);
+		logg_develd_old("addr %pI is privat, not added\n", addr);
 		return;
 	}
 	h = cache_ht_hash(addr);

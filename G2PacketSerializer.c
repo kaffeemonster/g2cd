@@ -580,10 +580,9 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 		case START_EXTRACT_PACKET_FROM_STREAM:
 		/* look what has to be done to extract the data */
 			/* use clever tricks and do we have a trunk? */
-			if(!evict_data &&
-			   (!target->data_trunk_is_freeable  ||
-			    0 == target->data_trunk.capacity ||
-			    !target->data_trunk.data))
+			if(!target->data_trunk_is_freeable  ||
+			   0 == target->data_trunk.capacity ||
+			   !target->data_trunk.data)
 			{
 				/* we do not seem to have a trunk, try to attach the read buffer */
 	/*
@@ -611,14 +610,13 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 					break;
 				}
 				/* could this packet stuffed in this buffer at all? */
-				else if(target->length <= source->capacity)
-				{
+				else if(!evict_data && target->length <= source->capacity) {
 					/* ok, recv more bytes */
 					target->more_bytes_needed = true;
 					break;
 				}
 			}
-			target->packet_decode++;
+			target->packet_decode = START_EXTRACT_PACKET_FROM_STREAM_TRUNK;
 		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
 			/* is our trunk big enough? */
 			if(target->length > target->data_trunk.capacity)
@@ -678,17 +676,18 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				}
 
 				target->data_trunk.data = tmp_ptr;
-				logg_develd("%p -> packet space %p reallocated: %zu bytes\n",
-				            (void *)target, (void *) target->data_trunk.data, target->length);
+				logg_develd_old("%p -> packet space %p reallocated: %zu bytes\n",
+				            (void *)target, (void *)target->data_trunk.data, target->length);
 			}
 			target->data_trunk.pos = 0;
 			target->data_trunk.limit = target->length;
-			target->packet_decode++;
+			target->packet_decode = EXTRACT_PACKET_FROM_STREAM;
 		case EXTRACT_PACKET_FROM_STREAM:
 		/* grep payload */
 			if(buffer_remaining(*source) < buffer_remaining(target->data_trunk))
 			{
 				size_t buff_remain_source = buffer_remaining(*source);
+				logg_develd_old("copying %zu of %u\n", buff_remain_source, target->length);
 				memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_source);
 				target->data_trunk.pos += buff_remain_source;
 				source->pos += buff_remain_source;
@@ -698,11 +697,12 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			else
 			{
 				size_t buff_remain_target = buffer_remaining(target->data_trunk);
+				logg_develd_old("copying %zu of %u -> done\n", buff_remain_target, target->length);
 				memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_target);
 				target->data_trunk.pos += buff_remain_target;
 				source->pos += buff_remain_target;
-				target->packet_decode++;
 			}
+			target->packet_decode = PACKET_EXTRACTION_COMPLETE;
 		case PACKET_EXTRACTION_COMPLETE:
 		/* everythings fine for now, next would be the childpackets, if some */
 			buffer_flip(target->data_trunk);

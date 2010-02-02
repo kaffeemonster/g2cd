@@ -2,7 +2,7 @@
  * G2MainServer.h
  * header-file for G2MainServer.c and global informations
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -58,15 +58,12 @@ static always_inline enum loglevel get_act_loglevel(void);
 
 # define EVENT_SPACE   16
 
-# define FC_CAP_END    2048 /* not used ATM */
 # define FC_CAP_START  16
-# define FC_CAP_INC    32 /* not used ATM */
 # define FC_TRESHOLD   4
 # define FB_CAP_START  (THREAD_SUM * 8 * EVENT_SPACE * 2)
 # define FB_TRESHOLD   EVENT_SPACE
 
 # define PD_START_CAPACITY      128
-# define PD_CAPACITY_INCREMENT  32
 
 struct poll_info
 {
@@ -97,8 +94,15 @@ _G2MAIN_EXTRNVAR(struct
 			unsigned num_threads;
 			enum g2_connection_encodings default_in_encoding;
 			enum g2_connection_encodings default_out_encoding;
+			enum g2_connection_encodings hub_in_encoding;
+			enum g2_connection_encodings hub_out_encoding;
 			uint8_t our_guid[16];
-			size_t default_max_g2_packet_length;
+			unsigned max_g2_packet_length;
+			struct
+			{
+				const char *name;
+				size_t len;
+			} nick;
 			struct
 			{
 				enum loglevel act_loglevel;
@@ -141,7 +145,6 @@ _G2MAIN_EXTRNVAR(struct
 			atomic_t act_connection_sum;
 			bool all_abord[THREAD_SUM];
 			bool our_server_upeer;
-			bool our_server_upeer_needed;
 			time_t start_time;
 			atomic_t act_hub_sum;
 		} status;
@@ -156,6 +159,21 @@ _G2MAIN_EXTRNVAR(__thread time_t local_time_now);
  */
 _G2MAIN_EXTRNVAR(time_t local_time_now);
 #endif
+_G2MAIN_EXTRNVAR(volatile time_t master_time_now);
+
+static always_inline void update_local_time(void)
+{
+	local_time_now = master_time_now;
+// TODO: membar?
+	barrier();
+}
+
+static always_inline void set_master_time(time_t now)
+{
+	master_time_now = now;
+// TODO: membar?
+	barrier();
+}
 
 static always_inline enum loglevel get_act_loglevel(void)
 {

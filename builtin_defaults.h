@@ -27,44 +27,46 @@
 #ifndef _BUILTIN_DEFAULTS_H
 #define _BUILTIN_DEFAULTS_H
 
-#define DEFAULT_LOGLEVEL_START		LOGF_NOTICE
-#define DEFAULT_LOGLEVEL		LOGF_DEVEL
-#define DEFAULT_LOG_ADD_TIME		false
+#define DEFAULT_LOGLEVEL_START	LOGF_NOTICE
+#define DEFAULT_LOGLEVEL	LOGF_DEVEL
+#define DEFAULT_LOG_ADD_TIME	false
 #define DEFAULT_LOG_TIME_FORMAT	"%b %d %H:%M:%S "
 
 #define DEFAULT_PORT		5000
 #define DEFAULT_ADDR		INADDR_ANY
 
-#define DEFAULT_BE_DAEMON		false
+#define DEFAULT_BE_DAEMON	false
 #define DEFAULT_USER		"nobody"
 #define DEFAULT_NICE_ADJUST	3
 #define DEFAULT_NUM_THREADS	0 /* autodetect */
 // #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
 #define DEFAULT_DATA_ROOT_DIR	"./"
-#define DEFAULT_ENTROPY_SOURCE "/dev/urandom"
-#define DEFAULT_CONFIG_FILE "g2cd.conf"
+#define DEFAULT_ENTROPY_SOURCE	"/dev/urandom"
+#define DEFAULT_CONFIG_FILE	"g2cd.conf"
+#define DEFAULT_NICK_NAME	NULL
 #define DEFAULT_GWC_BOOT	"http://cache.trillinux.org/g2/bazooka.php"
-#define DEFAULT_GWC_DB	"gwc_cache"
+#define DEFAULT_GWC_DB		"gwc_cache"
 #define DEFAULT_KHL_DUMP	"khl.dump"
 #define DEFAULT_GUID_DUMP	"guid.dump"
 #define DEFAULT_QHT_COMPRESSION COMP_DEFLATE
 #define DEFAULT_QHT_COMPRESS_INTERNAL true
 
-#define DEFAULT_FILE_GUID		"guid.txt"
+#define DEFAULT_FILE_GUID	"guid.txt"
 #define DEFAULT_FILE_PROFILE	"profile.xml"
 
 #define DEFAULT_CON_MAX		150
 #define DEFAULT_HUB_MAX		4
-#define DEFAULT_PCK_LEN_MAX		0x020000
-#define DEFAULT_SEND_PROFILE		true
+#define DEFAULT_PCK_LEN_MAX	0x020000
+#define DEFAULT_SEND_PROFILE	true
 
-#define DEFAULT_SERVER_UPEER		true
-// #define DEFAULT_ENC_IN		ENC_DEFLATE
+#define DEFAULT_SERVER_UPEER	true
 #define DEFAULT_ENC_IN		ENC_NONE
 #define DEFAULT_ENC_OUT		ENC_NONE
+#define DEFAULT_HUB_ENC_IN	ENC_DEFLATE
+#define DEFAULT_HUB_ENC_OUT	ENC_DEFLATE
 
-// real constants, should not be run-time configurable
-#define NORM_BUFF_CAPACITY 4096
+/* real constants, should not be run-time configurable */
+#define NORM_BUFF_CAPACITY	(4096 - (3 * sizeof(size_t)))
 #define NORM_HZP_THRESHOLD	5
 
-#endif // _BUILTIN_DEFAULTS_H
+#endif /* _BUILTIN_DEFAULTS_H */

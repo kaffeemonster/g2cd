@@ -2,7 +2,7 @@
  * config_parser.h
  * header-file for the config file parser
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -75,4 +75,5 @@ struct config_item
 # define LIB_CONFIG_PARSER_EXTRN(x) x GCC_ATTR_VIS("hidden")
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_read(const char *filename, const struct config_item cf[], size_t num_cf));
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_int(struct list_head *, void *));
+LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_string(struct list_head *, void *));
 #endif /* LIB_CONFIG_PARSER_H */

@@ -50,9 +50,11 @@
 #define PACKET_SPACE_START_CAP 128
 
 /* Protos */
+#ifndef VALGRIND_ME_CON
 	/* You better not kill this proto, our it wount work ;) */
 static void g2_con_init(void) GCC_ATTR_CONSTRUCT;
 static void g2_con_deinit(void) GCC_ATTR_DESTRUCT;
+#endif
 	/* internal action-prototypes */
 static bool empty_action_c(g2_connection_t *, size_t);
 static bool accept_what(g2_connection_t *, size_t);
@@ -64,10 +66,13 @@ static bool ulpeer_what(g2_connection_t *, size_t);
 static bool content_what(g2_connection_t *, size_t);
 static bool listen_what(g2_connection_t *, size_t);
 static bool try_hub_what(g2_connection_t *, size_t);
+static bool crawler_what(g2_connection_t *, size_t);
 
 /* Vars */
+#ifndef VALGRIND_ME_CON
 	/* con buffer */
 static atomicptra_t free_cons[FC_CAP_START];
+#endif
 	/* encoding */
 static const action_string enc_as00 = {NULL, str_size(ENC_NONE_S),    ENC_NONE_S};
 static const action_string enc_as01 = {NULL, str_size(ENC_DEFLATE_S), ENC_DEFLATE_S};
@@ -91,35 +96,42 @@ static const action_string h_as07 = {ulpeer_what,    str_size(UPEER_KEY),       
 static const action_string h_as08 = {ulpeer_what,    str_size(HUB_KEY),          HUB_KEY};
 static const action_string h_as09 = {empty_action_c, str_size(X_TRY_UPEER_KEY),  X_TRY_UPEER_KEY}; /* maybe parse */
 static const action_string h_as10 = {try_hub_what,   str_size(X_TRY_HUB_KEY),    X_TRY_HUB_KEY};
-static const action_string h_as11 = {empty_action_c, str_size(UPEER_NEEDED_KEY), UPEER_NEEDED_KEY};
-static const action_string h_as12 = {empty_action_c, str_size(HUB_NEEDED_KEY),   HUB_NEEDED_KEY};
-static const action_string h_as13 = {empty_action_c, str_size(X_VERSION),        X_VERSION};
-static const action_string h_as14 = {empty_action_c, str_size(GGEP_KEY),         GGEP_KEY};
-static const action_string h_as15 = {empty_action_c, str_size(PONG_C_KEY),       PONG_C_KEY};
-static const action_string h_as16 = {empty_action_c, str_size(UPTIME_KEY),       UPTIME_KEY};
-static const action_string h_as17 = {empty_action_c, str_size(VEND_MSG_KEY),     VEND_MSG_KEY};
-static const action_string h_as18 = {empty_action_c, str_size(X_LOC_PREF),       X_LOC_PREF};
-static const action_string h_as19 = {empty_action_c, str_size(X_MAX_TTL_KEY),    X_MAX_TTL_KEY};
-static const action_string h_as20 = {empty_action_c, str_size(X_GUESS_KEY),      X_GUESS_KEY};
-static const action_string h_as21 = {empty_action_c, str_size(X_REQUERIES_KEY),  X_REQUERIES_KEY};
-static const action_string h_as22 = {empty_action_c, str_size(X_Q_ROUT_KEY),     X_Q_ROUT_KEY};
-static const action_string h_as23 = {empty_action_c, str_size(X_UQ_ROUT_KEY),    X_UQ_ROUT_KEY};
-static const action_string h_as24 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
-static const action_string h_as25 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
-static const action_string h_as26 = {empty_action_c, str_size(X_DEGREE),         X_DEGREE};
-static const action_string h_as27 = {empty_action_c, str_size(X_AUTH_CH_KEY),    X_AUTH_CH_KEY};
+static const action_string h_as11 = {listen_what,    str_size(X_MY_ADDR_KEY),    X_MY_ADDR_KEY};
+static const action_string h_as12 = {listen_what,    str_size(X_NODE_KEY),       X_NODE_KEY};
+static const action_string h_as13 = {listen_what,    str_size(NODE_KEY),         NODE_KEY};
+static const action_string h_as14 = {empty_action_c, str_size(UPEER_NEEDED_KEY), UPEER_NEEDED_KEY};
+static const action_string h_as15 = {empty_action_c, str_size(HUB_NEEDED_KEY),   HUB_NEEDED_KEY};
+static const action_string h_as16 = {empty_action_c, str_size(X_VERSION_KEY),    X_VERSION_KEY};
+static const action_string h_as17 = {empty_action_c, str_size(GGEP_KEY),         GGEP_KEY};
+static const action_string h_as18 = {empty_action_c, str_size(PONG_C_KEY),       PONG_C_KEY};
+static const action_string h_as19 = {empty_action_c, str_size(UPTIME_KEY),       UPTIME_KEY};
+static const action_string h_as20 = {empty_action_c, str_size(VEND_MSG_KEY),     VEND_MSG_KEY};
+static const action_string h_as21 = {empty_action_c, str_size(X_LOC_PREF_KEY),   X_LOC_PREF_KEY};
+static const action_string h_as22 = {empty_action_c, str_size(X_MAX_TTL_KEY),    X_MAX_TTL_KEY};
+static const action_string h_as23 = {empty_action_c, str_size(X_GUESS_KEY),      X_GUESS_KEY};
+static const action_string h_as24 = {empty_action_c, str_size(X_REQUERIES_KEY),  X_REQUERIES_KEY};
+static const action_string h_as25 = {empty_action_c, str_size(X_Q_ROUT_KEY),     X_Q_ROUT_KEY};
+static const action_string h_as26 = {empty_action_c, str_size(X_UQ_ROUT_KEY),    X_UQ_ROUT_KEY};
+static const action_string h_as27 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
+static const action_string h_as28 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
+static const action_string h_as29 = {empty_action_c, str_size(X_DEGREE_KEY),     X_DEGREE_KEY};
+static const action_string h_as30 = {empty_action_c, str_size(X_AUTH_CH_KEY),    X_AUTH_CH_KEY};
+static const action_string h_as31 = {crawler_what,   str_size(CRAWLER_KEY),      CRAWLER_KEY};
+static const action_string h_as32 = {empty_action_c, str_size(BYE_PKT_KEY),      BYE_PKT_KEY};
+static const action_string h_as33 = {empty_action_c, str_size(X_PROBE_Q_KEY),    X_PROBE_Q_KEY};
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
 	&h_as00, &h_as01, &h_as02, &h_as03, &h_as04, &h_as05, &h_as06, &h_as07, &h_as08,
 	&h_as09, &h_as10, &h_as11, &h_as12, &h_as13, &h_as14, &h_as15, &h_as16, &h_as17,
 	&h_as18, &h_as19, &h_as20, &h_as21, &h_as22, &h_as23, &h_as24, &h_as25, &h_as26,
-	&h_as27,
+	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33
 };
 
 /*
  * Funcs
  */
+#ifndef VALGRIND_ME_CON
 	/* constructor */
 static void g2_con_init(void)
 {
@@ -160,6 +172,7 @@ static void g2_con_deinit(void)
 		g2_con_free(atomic_pxa(tmp, &free_cons[i]));
 	}
 }
+#endif
 
 g2_connection_t *g2_con_alloc(size_t num)
 {
@@ -177,21 +190,23 @@ g2_connection_t *g2_con_alloc(size_t num)
 	return ret_val;
 }
 
-static void *my_zmalloc(void *opaque, unsigned int items, unsigned int size)
+#if 0
+static void *my_zmalloc(void *opaque GCC_ATTR_UNUSED_PARAM, unsigned int items, unsigned int size)
 {
 	void *tmp_ptr = malloc(items * size);
 
 	if(tmp_ptr)
-		logg_develd("zlib alloc o: 0x%p\tp: 0x%p\ts: %u * %u = %lu\n", opaque, tmp_ptr, items, size, (unsigned long) items * size);
-	
+		logg_develd_old("zlib alloc o: 0x%p\tp: 0x%p\ts: %u * %u = %lu\n", opaque, tmp_ptr, items, size, (unsigned long) items * size);
+
 	return tmp_ptr;
 }
 
-static void my_zfree(void *opaque, void *to_free)
+static void my_zfree(void *opaque GCC_ATTR_UNUSED_PARAM, void *to_free)
 {
-	logg_develd("zlib free o: 0x%p\tp: 0x%p\n", opaque, to_free);
+	logg_develd_old("zlib free o: 0x%p\tp: 0x%p\n", opaque, to_free);
 	free(to_free);
 }
+#endif
 
 void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
@@ -205,17 +220,27 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 			timeout_cancel(&work_entry->u.accept.header_complete_to);
 			DESTROY_TIMEOUT(&work_entry->u.accept.header_complete_to);
 		} else {
-			/* Handler timeouts */
+			timeout_cancel(&work_entry->u.handler.z_flush_to);
+			DESTROY_TIMEOUT(&work_entry->u.handler.z_flush_to);
 		}
 
-		if(Z_OK != inflateEnd(&work_entry->z_decoder)) {
-			if(work_entry->z_decoder.msg)
-				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder.msg);
+		if(work_entry->z_decoder)
+		{
+			if(Z_OK != inflateEnd(work_entry->z_decoder)) {
+				if(work_entry->z_decoder->msg)
+					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder->msg);
+			}
+			free(work_entry->z_decoder);
 		}
-		if(Z_OK != deflateEnd(&work_entry->z_encoder)) {
-			if(work_entry->z_encoder.msg)
-				logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder.msg);
+		if(work_entry->z_encoder)
+		{
+			if(Z_OK != deflateEnd(work_entry->z_encoder)) {
+				if(work_entry->z_encoder->msg)
+					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder->msg);
+			}
+			free(work_entry->z_encoder);
 		}
+		g2_conreg_remove(work_entry);
 	}
 	/*
 	 * wipe everything which is small, has many fields, of which only
@@ -252,15 +277,9 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->send.pos = 0;
 	work_entry->send.capacity = sizeof(work_entry->send.data);
 	work_entry->send.limit = work_entry->send.capacity;*/
-	/* zlib */
-	work_entry->z_decoder.zalloc = work_entry->z_encoder.zalloc = my_zmalloc;
-	work_entry->z_decoder.zfree = work_entry->z_encoder.zfree =  my_zfree;
-	work_entry->z_decoder.opaque = work_entry->z_encoder.opaque =  work_entry;
 	if(!new)
 	{
 		struct list_head *e, *n;
-
-		g2_conreg_remove(work_entry);
 
 		if(work_entry->recv)
 			recv_buff_free(work_entry->recv);
@@ -273,7 +292,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 		if(work_entry->build_packet)
 			g2_packet_free(work_entry->build_packet);
 
-		g2_qht_clean(work_entry->qht);
+		g2_qht_put(work_entry->qht);
 		g2_qht_put(work_entry->sent_qht);
 
 		list_for_each_safe(e, n, &work_entry->packets_to_send) {
@@ -294,6 +313,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->recv_u = NULL;
 	work_entry->send_u = NULL;
 
+	work_entry->qht = NULL;
 	work_entry->sent_qht = NULL;
 	work_entry->build_packet = NULL;
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
@@ -303,13 +323,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	pthread_mutex_unlock(&work_entry->lock);
 }
 
-void g2_con_free(g2_connection_t *to_free)
+static void g2_con_free_internal(g2_connection_t *to_free)
 {
-	struct list_head *e, *n;
-
-	if(!to_free)
-		return;
-
 	/* timeouts */
 	timeout_cancel(&to_free->active_to);
 
@@ -317,18 +332,26 @@ void g2_con_free(g2_connection_t *to_free)
 		timeout_cancel(&to_free->u.accept.header_complete_to);
 		DESTROY_TIMEOUT(&to_free->u.accept.header_complete_to);
 	} else {
-		/* Handler timeouts */
+		timeout_cancel(&to_free->u.handler.z_flush_to);
+		DESTROY_TIMEOUT(&to_free->u.handler.z_flush_to);
 	}
 
 	/* zlib */
-	if(unlikely(Z_OK != inflateEnd(&to_free->z_decoder))) {
-		if(to_free->z_decoder.msg)
-			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_decoder.msg);
+	if(to_free->z_decoder)
+	{
+		if(Z_OK != inflateEnd(to_free->z_decoder)) {
+			if(to_free->z_decoder->msg)
+				logg_posd(LOGF_DEBUG, "%s\n", to_free->z_decoder->msg);
+		}
+		free(to_free->z_decoder);
 	}
-
-	if(unlikely(Z_OK != deflateEnd(&to_free->z_encoder))) {
-		if(to_free->z_encoder.msg)
-			logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder.msg);
+	if(to_free->z_encoder)
+	{
+		if(Z_OK != deflateEnd(to_free->z_encoder)) {
+			if(to_free->z_encoder->msg)
+				logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder->msg);
+		}
+		free(to_free->z_encoder);
 	}
 
 	/* buffer */
@@ -345,6 +368,39 @@ void g2_con_free(g2_connection_t *to_free)
 	g2_qht_put(to_free->qht);
 	g2_qht_put(to_free->sent_qht);
 
+	shortlock_t_destroy(&to_free->pts_lock);
+	pthread_mutex_destroy(&to_free->lock);
+}
+
+void g2_con_free_glob(g2_connection_t *to_free)
+{
+	struct list_head *e, *n;
+
+	if(!to_free)
+		return;
+
+	g2_con_free_internal(to_free);
+	/* packets */
+	if(to_free->build_packet)
+		g2_packet_free_glob(to_free->build_packet);
+
+	list_for_each_safe(e, n, &to_free->packets_to_send) {
+		g2_packet_t *entry = list_entry(e, g2_packet_t, list);
+		list_del_init(e);
+		g2_packet_free_glob(entry);
+	}
+
+	free(to_free);
+}
+
+void g2_con_free(g2_connection_t *to_free)
+{
+	struct list_head *e, *n;
+
+	if(!to_free)
+		return;
+
+	g2_con_free_internal(to_free);
 	/* packets */
 	if(to_free->build_packet)
 		g2_packet_free(to_free->build_packet);
@@ -354,9 +410,6 @@ void g2_con_free(g2_connection_t *to_free)
 		list_del_init(e);
 		g2_packet_free(entry);
 	}
-
-	shortlock_t_destroy(&to_free->pts_lock);
-	pthread_mutex_destroy(&to_free->lock);
 
 	free(to_free);
 }
@@ -375,6 +428,7 @@ g2_connection_t *_g2_con_get_free(const char *from_file, const char *from_func, 
 g2_connection_t *g2_con_get_free(void)
 #endif
 {
+#ifndef VALGRIND_ME_CON
 	int failcount = 0;
 	g2_connection_t *ret_val = NULL;
 
@@ -393,6 +447,7 @@ g2_connection_t *g2_con_get_free(void)
 			}
 		}
 	} while(++failcount < 2);
+#endif
 
 	return g2_con_alloc(1);
 }
@@ -403,6 +458,7 @@ void _g2_con_ret_free(g2_connection_t *to_return, const char *from_file, const c
 void g2_con_ret_free(g2_connection_t *to_return)
 #endif
 {
+#ifndef VALGRIND_ME_CON
 	int failcount = 0;
 
 #ifdef DEBUG_CON_ALLOC
@@ -420,8 +476,9 @@ void g2_con_ret_free(g2_connection_t *to_return)
 			}
 		}
 	} while(++failcount < 2);
+#endif
 
-	hzp_deferfree(&to_return->hzp, to_return, (void (*)(void *))g2_con_free);
+	hzp_deferfree(&to_return->hzp, to_return, (void (*)(void *))g2_con_free_glob);
 }
 
 
@@ -531,16 +588,31 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 {
 	char buffer[INET6_ADDRSTRLEN+1];
+	union combo_addr l_addr;
 	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
+	char *z;
 	int ret_val = 0;
+	uint16_t port = 0;
 
 	strncpy(buffer, buffer_start(*to_con->recv), len);
+	/* brutally NUL terminate, there is a \r\n behind us */
 	buffer[len] = '\0';
 
-	ret_val = combo_addr_read(buffer, &to_con->sent_addr);
+	/* port */
+	z = strrchr(buffer, ':');
+	if(z) {
+		*z++ = '\0';
+		port = atoi(z);
+	}
+	/* IPv6? */
+	z = buffer;
+	if(*z == '[')
+		z++;
+	ret_val = combo_addr_read(z, &l_addr);
+	combo_addr_set_port(&l_addr, port);
 
 	if(0 < ret_val) {
-		logg_develd_old("found for Remote-IP:\t%pI\n", &to_con->sent_addr);
+		logg_develd_old("they say is our IP:\t%p#I\n", &l_addr);
 		to_con->u.accept.flags.addr_ok = true;
 		return false;
 	}
@@ -548,14 +620,15 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	{
 		to_con->u.accept.flags.addr_ok = false;
 		if(0 == ret_val)
-			logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
-			          "got illegal remote-ip", &to_con->remote_host,
-			           to_con->com_socket);
+			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
+			          "got illegal remote ip from", &to_con->remote_host,
+			           to_con->com_socket, (int)len, buffer);
 		else
-			logg_errno(LOGF_DEBUG, "reading remote-ip");
+			logg_errno(LOGF_DEBUG, "reading remote ip");
 
 		return true;
 	}
+	return false;
 }
 
 
@@ -601,33 +674,44 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
 	char buffer[INET6_ADDRSTRLEN+1];
-	union combo_addr l_addr;
 	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
+	char *z;
 	int ret_val = 0;
+	uint16_t port = 0;
 
 	strncpy(buffer, buffer_start(*to_con->recv), len);
+	/* brutally NUL terminate, there is a \r\n behind us */
 	buffer[len] = '\0';
 
-	ret_val = combo_addr_read(buffer, &l_addr);
+	/* port */
+// TODO: memrchr
+	z = strrchr(buffer, ':');
+	if(z) {
+		*z++ = '\0';
+		port = atoi(z);
+	}
+	/* IPv6? */
+	z = buffer;
+	if(*z == '[')
+		z++;
+	ret_val = combo_addr_read(z, &to_con->sent_addr);
+	combo_addr_set_port(&to_con->sent_addr, htons(port));
 
 	if(0 < ret_val) {
-		logg_develd_old("found for Listen-IP:\t%pI\n", &l_addr);
+		logg_develd_old("they think of their-IP:\t%p#I\n", &to_con->sent_addr);
 		return false;
 	}
-#if 0
 	else
 	{
 		if(0 == ret_val)
-			logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
-			          "got illegal listen-ip", &to_con->remote_host,
-			           to_con->com_socket);
+			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
+			          "got illegal listen ip from", &to_con->remote_host,
+			           to_con->com_socket, (int)len, buffer);
 		else
-			logg_errno(LOGF_DEBUG, "reading listen-ip");
+			logg_errno(LOGF_DEBUG, "reading listen ip");
 
 		return true;
 	}
-#endif
-	return false;
 }
 
 static bool try_hub_what(g2_connection_t *to_con, size_t distance)
@@ -695,6 +779,12 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 	}
 
 	return true;
+}
+
+static bool crawler_what(g2_connection_t *to_con, size_t distance GCC_ATTR_UNUSED_PARAM)
+{
+	to_con->u.accept.flags.had_crawler = true;
+	return false;
 }
 
 static bool empty_action_c(g2_connection_t *to_con GCC_ATTR_UNUSED_PARAM, size_t distance GCC_ATTR_UNUSED_PARAM)

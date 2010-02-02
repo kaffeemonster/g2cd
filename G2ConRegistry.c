@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <pthread.h>
+#include <unistd.h>
 /* own */
 #define _G2CONREGISTRY_C
 #include "G2ConRegistry.h"
@@ -481,6 +482,37 @@ bool g2_conreg_is_neighbour_hub(const union combo_addr *addr)
 	return false;
 }
 
+static intptr_t do_callback_level(struct g2_ht_bucket *b, intptr_t (*callback)(g2_connection_t *, void *), void *carg, unsigned level)
+{
+	unsigned i;
+	intptr_t res = 0;
+
+	for(i = 0; i < LEVEL_SIZE; i++)
+	{
+		if(level < (LEVEL_COUNT-1))
+			res |= do_callback_level(b->d.b[i], callback, carg, level + 1);
+		else
+		{
+			struct g2_ht_chain *c = b->d.c[i];
+			struct hlist_node *n;
+			g2_connection_t *node;
+
+			pthread_rwlock_rdlock(&c->lock);
+			hlist_for_each_entry(node, n, &c->list, registry) {
+				res |= callback(node, carg);
+			}
+			pthread_rwlock_unlock(&c->lock);
+		}
+	}
+	return res;
+}
+
+intptr_t g2_conreg_all_con(intptr_t (*callback)(g2_connection_t *, void *), void *carg)
+{
+	return do_callback_level(&ht_root, callback, carg, 0);
+}
+
+
 intptr_t g2_conreg_all_hub(const union combo_addr *filter, intptr_t (*callback)(g2_connection_t *, void *), void *carg)
 {
 	g2_connection_t *con;
@@ -595,13 +627,23 @@ static void do_cleanup_level(struct g2_ht_bucket *b, unsigned level)
 		}
 		else
 		{
+			struct hlist_node *n, *e;
+			g2_connection_t *connec;
+
 			if(!b->d.c[i]->qht)
 				continue;
 			t = b->d.c[i]->qht;
 			b->d.c[i]->qht = NULL;
 			atomic_set(&t->refcnt, 1);
 			g2_qht_put(t);
-// TODO: cleanup all connections in flight
+
+			hlist_for_each_entry_safe(connec, n, e, &b->d.c[i]->list, registry)
+			{
+				hlist_del(n);
+				INIT_HLIST_NODE(n);
+				close(connec->com_socket);
+				g2_con_free_glob(connec);
+			}
 		}
 
 		if(level < (LEVEL_COUNT-1))
@@ -612,6 +654,9 @@ static void do_cleanup_level(struct g2_ht_bucket *b, unsigned level)
 void g2_conreg_cleanup(void)
 {
 	do_cleanup_level(&ht_root, 0);
+	atomic_set(&ht_root.qht->refcnt, 1);
+	g2_qht_put(ht_root.qht);
+	ht_root.qht = NULL;
 }
 
 /*

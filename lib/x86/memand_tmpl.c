@@ -2,19 +2,19 @@
  * memand.c
  * and two memory region efficient, x86 implementation, template
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -473,7 +473,6 @@ alignment_size_t:
 		/* handle remaining in 32 bit, should be small and helps amd64 */
 			"mov	%9, %3\n\t"
 			"shr	$2, %3\n\t"
-			"test	%3, %3\n\t"
 			"jz	4f\n\t"
 			"xor	%1, %1\n"
 			"3:\n\t"

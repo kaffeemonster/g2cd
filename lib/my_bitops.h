@@ -42,6 +42,7 @@ LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(size_t introsort_u32(uint32_t a[], size_t n));
 LIB_MY_BITOPS_EXTRN(ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len));
 LIB_MY_BITOPS_EXTRN(ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len));
+LIB_MY_BITOPS_EXTRN(ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len));
 LIB_MY_BITOPS_EXTRN(int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len));
 
 LIB_MY_BITOPS_EXTRN(char *cpy_rest(char *dst, const char *src, unsigned i) GCC_ATTR_FASTCALL);
@@ -63,9 +64,17 @@ void *memcpy(void *restrict dst, const void *restrict src, size_t len);
 #  endif
 #  define MEMCPY_DEFINED
 # endif
+LIB_MY_BITOPS_EXTRN(void *memcpy_big(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_FASTCALL);
 # ifndef HAVE_MEMPCPY
 void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
 #  define MEMPCPY_DEFINED
+# endif
+# ifndef HAVE_MEMMOVE
+#  ifndef memmove
+/* outch! memmove as a macro is ... evil */
+void *memmove(void *dst, const void *src, size_t len);
+#  endif
+#  define MEMMOVE_DEFINED
 # endif
 LIB_MY_BITOPS_EXTRN(int strncasecmp_a(const char *s1, const char *s2, size_t n));
 char *strpcpy(char *restrict dst, const char *restrict src);
@@ -94,6 +103,8 @@ static inline void strreverse(char *begin, char *end)
 	while(end > begin)
 		tchar = *end, *end-- = *begin, *begin++ = tchar;
 }
+
+LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src, size_t len));
 
 struct test_cpu_feature
 {

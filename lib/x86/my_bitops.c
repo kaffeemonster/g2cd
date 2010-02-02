@@ -222,7 +222,7 @@ static void identify_cpu(void)
 	 * Problem: These functions may want to detect the cpu...
 	 * To prevent infinite recursion, just kick them out.
 	 * They should fall back to the generic impl. when confronted
-	 * with a not yet fully populated our_cpu and later sitch to
+	 * with a not yet fully populated our_cpu and later switch to
 	 * the right one.
 	 */
 	our_cpu.init_done = true;

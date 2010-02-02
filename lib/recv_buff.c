@@ -39,11 +39,12 @@ struct local_buffer_org
 
 /* Protos */
 	/* You better not kill this proto, or it wount work ;) */
+static inline struct norm_buff *recv_buff_alloc_system(void);
+static inline void recv_buff_free_system(struct norm_buff *);
+#ifndef VALGRIND_ME_RECV
 static void recv_buff_init(void) GCC_ATTR_CONSTRUCT;
 static void recv_buff_deinit(void) GCC_ATTR_DESTRUCT;
 static void recv_buff_free_lorg(void *);
-static inline struct norm_buff *recv_buff_alloc_system(void);
-static inline void recv_buff_free_system(struct norm_buff *);
 
 /* Vars */
 	/* buffer buffer */
@@ -145,9 +146,11 @@ static noinline struct local_buffer_org *recv_buff_init_lorg(void)
 	org->pos = i;
 	return org;
 }
+#endif
 
 void recv_buff_local_refill(void)
 {
+#ifndef VALGRIND_ME_RECV
 	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 	int i;
 
@@ -170,10 +173,12 @@ void recv_buff_local_refill(void)
 		}
 	}
 	org->pos = i;
+#endif
 }
 
 void recv_buff_local_free(void)
 {
+#ifndef VALGRIND_ME_RECV
 	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 	unsigned i;
 
@@ -185,6 +190,7 @@ void recv_buff_local_free(void)
 		org->buffs[i++] = NULL;
 		recv_buff_free_system(tmp);
 	}
+#endif
 }
 
 /*
@@ -193,8 +199,9 @@ void recv_buff_local_free(void)
  */
 struct norm_buff *recv_buff_local_get(void)
 {
-	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 	struct norm_buff *ret_val;
+#ifndef VALGRIND_ME_RECV
+	struct local_buffer_org *org = pthread_getspecific(key2lrecv);
 
 	if(!org) {
 		org = recv_buff_init_lorg();
@@ -202,14 +209,18 @@ struct norm_buff *recv_buff_local_get(void)
 			return recv_buff_alloc();
 	}
 
-	if(likely(org->pos < (int)anum(org->buffs))) {
+	if(likely(org->pos < (int)anum(org->buffs)))
+	{
 		ret_val = org->buffs[org->pos];
 		org->buffs[org->pos++] = NULL;
 		logg_develd_old("allocating recv_buff local pos: %d\n", org->pos);
+		ret_val->capacity = sizeof(ret_val->data);
+		buffer_clear(*ret_val);
 	}
 	else
+#endif
 		ret_val = recv_buff_alloc();
-	
+
 	return ret_val;
 }
 
@@ -218,6 +229,7 @@ struct norm_buff *recv_buff_local_get(void)
  */
 void recv_buff_local_ret(struct norm_buff *buf)
 {
+#ifndef VALGRIND_ME_RECV
 	struct local_buffer_org *org;
 
 	if(!buf)
@@ -234,11 +246,11 @@ void recv_buff_local_ret(struct norm_buff *buf)
 	}
 
 	if(likely(org->pos > 0)) {
-		buffer_clear(*buf);
 		org->buffs[--org->pos] = buf;
 		logg_develd_old("freeing recv_buff local pos: %d\n", org->pos);
 	}
 	else
+#endif
 		recv_buff_free(buf);
 }
 
@@ -256,6 +268,7 @@ static inline struct norm_buff *recv_buff_alloc_system(void)
 
 noinline struct norm_buff *recv_buff_alloc(void)
 {
+#ifndef VALGRIND_ME_RECV
 	int failcount = 0;
 	struct norm_buff *ret_val = NULL;
 
@@ -264,13 +277,18 @@ noinline struct norm_buff *recv_buff_alloc(void)
 		size_t i = 0;
 		do
 		{
-			if(atomic_pread(&free_buffs[i])) {
-				if((ret_val = atomic_pxa(ret_val, &free_buffs[i])))
+			if(atomic_pread(&free_buffs[i]))
+			{
+				if((ret_val = atomic_pxa(ret_val, &free_buffs[i]))) {
+					ret_val->capacity = sizeof(ret_val->data);
+					buffer_clear(*ret_val);
 					return ret_val;
+				}
 			}
 		} while(++i < anum(free_buffs));
 	} while(++failcount < 1);
-	
+#endif
+
 	return recv_buff_alloc_system();
 }
 
@@ -282,6 +300,7 @@ static inline void recv_buff_free_system(struct norm_buff *tf)
 
 void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 {
+#ifndef VALGRIND_ME_RECV
 	int failcount = 0;
 
 	if(!ret)
@@ -299,6 +318,7 @@ void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 			}
 		} while(++i < anum(free_buffs));
 	} while(++failcount < 1);
+#endif
 
 	recv_buff_free_system(ret);
 }

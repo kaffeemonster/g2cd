@@ -2,7 +2,7 @@
  * G2GUIDCache.h
  * header for known GUID cache foo
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -29,14 +29,13 @@
 # include <stdbool.h>
 # include <time.h>
 # include "lib/combo_addr.h"
+# include "lib/guid.h"
 
 # ifndef _G2GUIDCACHE_C
 #  define _G2GUIDC_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 # else
 #  define _G2GUIDC_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif
-
-# define GUID_SIZE 16
 
 /*
  * this enum is sorted by "importance" of

@@ -2,7 +2,7 @@
  * my_epoll_poll.c
  * wrapper to get epoll on systems providing kqueue (BSDs)
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -129,6 +129,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	} else
 		tsp_tmp = NULL;
 
+// TODO: this prop. needs a lock, to disable the other oneshot
 	ev_val = kevent(epfd, NULL, 0, ev_list, maxevents, tsp_tmp);
 	if(-1 == ev_val)
 		return -1;

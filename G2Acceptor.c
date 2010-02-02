@@ -190,10 +190,10 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 		socklen_t sin_size = sizeof(our_local_addr);
 
 		if(!getsockname(work_entry->com_socket, casa(&our_local_addr), &sin_size))
-			logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
+			logg(l, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
 			     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
 		else
-			logg(LOGF_DEBUG, "Connection\tFrom: %p#I\tTo: us (getsockname fail)\tFDNum: %i -> %s\n",
+			logg(l, "Connection\tFrom: %p#I\tTo: us\t\tFDNum: %i -> %s\n",
 			     &work_entry->remote_host, work_entry->com_socket, msg);
 	}
 }
@@ -228,7 +228,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == close(work_entry->com_socket) && EINTR == errno);
-		handle_accept_give_msg(work_entry, LOGF_DEBUG, "too many connections");
+		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "too many connections");
 		return false;
 	}
 
@@ -237,7 +237,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == close(work_entry->com_socket) && EINTR == errno);
-		handle_accept_give_msg(work_entry, LOGF_DEBUG, "ip already connected");
+		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "ip already connected");
 		return false;
 	}
 // TODO: add after search is not atomic
@@ -275,7 +275,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	work_entry->u.accept.header_complete_to.data = work_entry;
 	timeout_add(&work_entry->u.accept.header_complete_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
 
-	handle_accept_give_msg(work_entry, LOGF_DEVEL, "going to handshake");
+	handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "going to handshake");
 
 	return true;
 
@@ -427,7 +427,7 @@ killit:
 		return w_entry;
 	}
 
-	logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
+	logg_posd(LOGF_DEVEL_OLD, "%s Ip: %p#I\tFDNum: %i\n",
 	          w_entry->flags.dismissed ? "Dismissed!" : "Problem!",
 	          &w_entry->remote_host, w_entry->com_socket);
 
@@ -458,11 +458,21 @@ static inline bool abort_g2_500(g2_connection_t *to_con)
 	return true;
 }
 
-static inline bool abort_g2_501(g2_connection_t *to_con)
+static inline bool abort_g2_501_bare(g2_connection_t *to_con)
 {
 	if(str_size(STATUS_501 "\r\n\r\n") < buffer_remaining(*to_con->send)) {
 		strlitcpy(buffer_start(*to_con->send), STATUS_501 "\r\n\r\n");
 		to_con->send->pos += str_size(STATUS_501 "\r\n\r\n");
+	}
+	to_con->flags.dismissed = true;
+	return true;
+}
+
+static inline bool abort_g2_501(g2_connection_t *to_con)
+{
+	if(str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n") < buffer_remaining(*to_con->send)) {
+		strlitcpy(buffer_start(*to_con->send), GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
+		to_con->send->pos += str_size(GNUTELLA_STRING " " STATUS_501 "\r\n\r\n");
 	}
 	to_con->flags.dismissed = true;
 	return true;
@@ -478,15 +488,19 @@ static inline bool abort_g2_400(g2_connection_t *to_con)
 	return true;
 }
 
-static noinline void header_handle_line(g2_connection_t *to_con, char *line, size_t len)
+static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 {
+	char *line;
 	char *ret_val, *f_start, *f_end, *c_start;
-	size_t i, f_num = 0;
+	size_t i, f_num = 0, old_pos;
 	ssize_t f_dist, c_dist;
 	bool f_found;
 
+	line = buffer_start(*to_con->recv);
 	ret_val = memchr(line, ':', len);
 	if(unlikely(!ret_val)) /* no ':' on line? */
+		goto out_fixup;
+	if((ptrdiff_t)((line + len) - ret_val) < 2) /* any room for field data? */
 		goto out_fixup;
 
 	/* filter leading garbage */
@@ -528,7 +542,8 @@ static noinline void header_handle_line(g2_connection_t *to_con, char *line, siz
 	}
 
 	/* after this, move buffer forward */
-	to_con->recv->pos += ret_val - line + 1;
+	old_pos = to_con->recv->pos;
+	to_con->recv->pos += (ret_val + 1) - line;
 	/* chars left for field content? */
 	c_start = ret_val + 1;
 	c_dist = (line + len) - c_start;
@@ -546,12 +561,10 @@ static noinline void header_handle_line(g2_connection_t *to_con, char *line, siz
 		} else {
 			logg_develd("\"%.*s\"\n", (int) c_dist, c_start);
 		}
-		to_con->recv->pos += c_dist;
 	} else {
 		logg_devel("Field with no data recieved!\n");
 	}
-
-	return;
+	to_con->recv->pos = old_pos;
 
 out_fixup:
 	/* skip this bullshit */
@@ -602,13 +615,13 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			if(likely(!strlitcmp(buffer_start(*to_con->recv), GNUTELLA_CONNECT_STRING)))
 				to_con->recv->pos += str_size(GNUTELLA_CONNECT_STRING);
 			else
-				return abort_g2_501(to_con);
+				return abort_g2_501_bare(to_con);
 
 			/* CR? */
 			if(likely('\r' == *buffer_start(*to_con->recv)))
 				to_con->recv->pos++;
 			else
-				return abort_g2_501(to_con);
+				return abort_g2_400(to_con);
 
 			/* LF? */
 			if(likely('\n' == *buffer_start(*to_con->recv))) {
@@ -616,7 +629,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->connect_state++;
 				to_con->u.accept.header_bytes_recv = str_size(GNUTELLA_CONNECT_STRING) + 2;
 			} else
-				return abort_g2_501(to_con);
+				return abort_g2_400(to_con);
 	/* gravel over the header field as they arrive */
 		case HAS_CONNECT_STRING:
 			if(unlikely(!buffer_remaining(*to_con->recv))) {
@@ -633,7 +646,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				dist = next - start;
 				logg_develd_old("line: %zu, %zu \"%.*s\"\n", dist, buffer_remaining(*to_con->recv), dist, start);
 				if(likely(dist))
-					header_handle_line(to_con, start, dist);
+					header_handle_line(to_con, dist);
 				to_con->recv->pos += 2;
 				to_con->u.accept.header_bytes_recv += dist + 2;
 				if(0 == dist) {
@@ -688,31 +701,6 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
-	/* what's the accepted encoding? */
-		case CHECK_ENC_OUT:
-			/*
-			 * if nothing was send, default to no encoding (Shareaza tries to
-			 * save space in the header, so no failure if absent)
-			 */
-			if(!to_con->u.accept.flags.enc_out_ok)
-				to_con->encoding_out = ENC_NONE;
-			else
-			{
-				/* reset set encoding to none, if we could not agree about it */
-				if(to_con->encoding_out != server.settings.default_out_encoding)
-					to_con->encoding_out = ENC_NONE;
-// TODO: deflateInit if the other side and we want to deflate
-				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u))
-				{
-					to_con->send_u = recv_buff_alloc();
-					if(!to_con->send_u)
-						return abort_g2_500(to_con);
-					logg_devel("Allocated send_u\n");
-				}
-			}
-			/* set our desired ingress encoding */
-			to_con->encoding_in = server.settings.default_in_encoding;
-			to_con->connect_state++;
 	/* how about the user-agent */
 		case CHECK_UAGENT:
 			/* even if it's empty, the field should be send */
@@ -726,6 +714,50 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
+	/* what's the accepted encoding? */
+		case CHECK_ENC_OUT:
+			/*
+			 * if nothing was send, default to no encoding (Shareaza tries to
+			 * save space in the header, so no failure if absent)
+			 */
+			if(!to_con->u.accept.flags.enc_out_ok)
+				to_con->encoding_out = ENC_NONE;
+			else
+			{
+				/* reset set encoding to none, if we could not agree about it */
+				if(to_con->encoding_out !=
+				   (to_con->flags.upeer ? server.settings.hub_out_encoding : server.settings.default_out_encoding))
+					to_con->encoding_out = ENC_NONE;
+				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u))
+				{
+					to_con->send_u = recv_buff_alloc();
+					if(!to_con->send_u)
+						return abort_g2_500(to_con);
+				}
+
+				if(ENC_DEFLATE == to_con->encoding_out)
+				{
+					to_con->z_encoder = malloc(sizeof(*to_con->z_encoder));
+					if(to_con->z_encoder)
+					{
+						memset(to_con->z_encoder, 0, sizeof(*to_con->z_encoder));
+						if(Z_OK != deflateInit(to_con->z_encoder, Z_DEFAULT_COMPRESSION))
+						{
+							if(to_con->z_encoder->msg)
+								logg_posd(LOGF_DEBUG, "%s\n", to_con->z_encoder->msg);
+							free(to_con->z_encoder);
+							to_con->z_encoder = NULL;
+							to_con->encoding_out = ENC_NONE;
+						}
+					}
+					else
+						to_con->encoding_out = ENC_NONE;
+				}
+			}
+			/* set our desired ingress encoding */
+			to_con->encoding_in =
+				to_con->flags.upeer ? server.settings.hub_in_encoding : server.settings.default_in_encoding;
+			to_con->connect_state++;
 		case BUILD_ANSWER:
 			/*
 			 * it should be our first comunication, and if someone
@@ -755,12 +787,12 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLH				\
-	GNUTELLA_STRING " " STATUS_400 "to many hubs\r\n"	\
+	GNUTELLA_STRING " 400 to many hubs\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
 	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLC				\
-	GNUTELLA_STRING " " STATUS_400 "to many connections\r\n"	\
+	GNUTELLA_STRING " 400 to many connections\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
 	LISTEN_ADR_KEY ": "
 
@@ -773,18 +805,29 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* copy start of header */
 // TODO: finer granularity of stepping for smaller sendbuffer?
 			/* could we place it all in our sendbuffer? */
-			if(likely(str_size(HED_2_PART_1_FULLC) < buffer_remaining(*to_con->send))) {
-				if(to_con->flags.upeer && atomic_read(&server.status.act_hub_sum) >= server.settings.max_hub_sum) {
-					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLH);
-					to_con->send->pos += str_size(HED_2_PART_1_FULLH);
-					to_con->flags.dismissed = true;
+			if(likely(str_size(HED_2_PART_1_FULLC) < buffer_remaining(*to_con->send)))
+			{
+				if(to_con->flags.upeer)
+				{
+					if(atomic_read(&server.status.act_hub_sum) >= server.settings.max_hub_sum) {
+						strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLH);
+						to_con->send->pos += str_size(HED_2_PART_1_FULLH);
+						to_con->flags.dismissed = true;
+					} else if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
+						strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLC);
+						to_con->send->pos += str_size(HED_2_PART_1_FULLC);
+						to_con->flags.dismissed = true;
+					} else {
+						strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
+						to_con->send->pos += str_size(HED_2_PART_1);
+					}
 				}
-				else if(atomic_read(&server.status.act_connection_sum) >= server.settings.max_connection_sum) {
+				else if(atomic_read(&server.status.act_connection_sum) >=
+					     (server.settings.max_connection_sum - server.settings.max_hub_sum)) {
 					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLC);
 					to_con->send->pos += str_size(HED_2_PART_1_FULLC);
 					to_con->flags.dismissed = true;
-				}
-				else {
+				} else {
 					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1);
 					to_con->send->pos += str_size(HED_2_PART_1);
 				}
@@ -907,7 +950,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": " G2_FALSE);
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": " G2_FALSE);
 				}
-				if(server.status.our_server_upeer_needed) {
+				if(atomic_read(&server.status.act_hub_sum) < server.settings.max_hub_sum) {
 					cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": " G2_TRUE);
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": " G2_TRUE);
 				} else {
@@ -1038,7 +1081,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				dist = next - start;
 				logg_develd_old("line: %u \"%.*s\"\n", dist, dist, start);
 				if(likely(dist))
-					header_handle_line(to_con, start, dist);
+					header_handle_line(to_con, dist);
 				to_con->recv->pos += 2;
 				to_con->u.accept.header_bytes_recv += dist + 2;
 				if(0 == dist) {
@@ -1102,7 +1145,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->encoding_in = ENC_NONE;
 			else
 			{
-				/* abort, if we are could not agree about it */
+				/* abort, if we could not agree about it */
 				if(to_con->encoding_in != server.settings.default_in_encoding)
 					return abort_g2_400(to_con);
 
@@ -1114,11 +1157,21 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 				if(ENC_DEFLATE == to_con->encoding_in)
 				{
-					if(Z_OK != inflateInit(&to_con->z_decoder)) {
-						if(to_con->z_decoder.msg)
-							logg_posd(LOGF_DEBUG, "%s\n", to_con->z_decoder.msg);
-						return abort_g2_500(to_con);
+					to_con->z_decoder = malloc(sizeof(*to_con->z_decoder));
+					if(to_con->z_decoder)
+					{
+						memset(to_con->z_decoder, 0, sizeof(*to_con->z_decoder));
+						if(Z_OK != inflateInit(to_con->z_decoder))
+						{
+							if(to_con->z_decoder->msg)
+								logg_posd(LOGF_DEBUG, "%s\n", to_con->z_decoder->msg);
+							free(to_con->z_decoder);
+							to_con->z_decoder = NULL;
+							return abort_g2_500(to_con);
+						}
 					}
+					else
+						return abort_g2_500(to_con);
 				}
 			}
 			to_con->connect_state++;
@@ -1128,7 +1181,15 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* wipe out the shared space again */
 			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
 			to_con->connect_state = G2CONNECTED;
-			handle_accept_give_msg(to_con, LOGF_DEBUG, "accepted");
+			INIT_TIMEOUT(&to_con->u.handler.z_flush_to);
+			/* OK, handshake was a success, now put the connec in the right place */
+			if(to_con->flags.upeer) {
+				if(!g2_conreg_promote_hub(to_con))
+					to_con->flags.dismissed = true;
+				/* connection is now a hub, remove from QHTs */
+				g2_conreg_mark_dirty(to_con);
+			}
+			handle_accept_give_msg(to_con, LOGF_DEVEL_OLD, "accepted");
 			more_bytes_needed = true;
 			break;
 		case G2CONNECTED:

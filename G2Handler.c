@@ -128,13 +128,15 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
 		struct norm_buff *d_target = NULL;
+		bool compact_ubuff = false, old_flush = false;
+
 		if(ENC_DEFLATE == w_entry->encoding_out)
 			d_target = w_entry->send_u;
 		else
 			d_target = w_entry->send;
 
 		if(buffer_remaining(*d_target) < 10)
-			goto no_fill_before_write;
+			goto no_pfill_before_write;
 
 		shortlock_t_lock(&w_entry->pts_lock);
 		if(!list_empty(&w_entry->packets_to_send))
@@ -175,11 +177,82 @@ more_packet_encode:
 		}
 		else
 			shortlock_t_unlock(&w_entry->pts_lock);
-// TODO: handle compression
 
-no_fill_before_write:
+no_pfill_before_write:
+		if(ENC_DEFLATE == w_entry->encoding_out)
+		{
+			if(buffer_remaining(*w_entry->send))
+			{
+				buffer_flip(*w_entry->send_u);
+retry_pack:
+				logg_develd_old("++++ cbytes: %zu\n", buffer_remaining(*w_entry->send));
+				logg_develd_old("**** space: %zu\n", buffer_remaining(*w_entry->send_u));
+				w_entry->z_encoder->next_in = (Bytef *)buffer_start(*w_entry->send_u);
+				w_entry->z_encoder->avail_in = buffer_remaining(*w_entry->send_u);
+				w_entry->z_encoder->next_out = (Bytef *)buffer_start(*w_entry->send);
+				w_entry->z_encoder->avail_out = buffer_remaining(*w_entry->send);
+
+				old_flush = w_entry->u.handler.z_flush;
+				barrier();
+				logg_develd_old("z_flush: %c\n", old_flush ? 't' : 'f');
+				switch(deflate(w_entry->z_encoder, old_flush ?  Z_SYNC_FLUSH : Z_NO_FLUSH))
+				{
+				case Z_OK:
+					w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->z_encoder->avail_in);
+					w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->z_encoder->avail_out);
+					break;
+				case Z_STREAM_END:
+					logg_devel("Z_STREAM_END\n");
+					return w_entry;
+				case Z_NEED_DICT:
+					logg_devel("Z_NEED_DICT\n");
+					return w_entry;
+				case Z_DATA_ERROR:
+					logg_devel("Z_DATA_ERROR\n");
+					return w_entry;
+				case Z_STREAM_ERROR:
+					logg_devel("Z_STREAM_ERROR\n");
+					return w_entry;
+				case Z_MEM_ERROR:
+					logg_devel("Z_MEM_ERROR\n");
+					return w_entry;
+				case Z_BUF_ERROR:
+					logg_devel("Z_BUF_ERROR\n");
+					break;
+				default:
+					logg_devel("deflate was not Z_OK\n");
+					return w_entry;
+				}
+				compact_ubuff = true;
+			}
+			logg_develd_old("++++ cbytes: %zu\n", w_entry->send->pos);
+			logg_develd_old("**** space: %zu\n", buffer_remaining(*w_entry->send_u));
+		}
+
 		if(!do_write(p_entry, epoll_fd))
 			return w_entry;
+
+		if(ENC_NONE != w_entry->encoding_out)
+		{
+// TODO: loop till zlib says more data
+			if(buffer_remaining(*w_entry->send) && buffer_remaining(*w_entry->send_u))
+				goto retry_pack;
+			if(compact_ubuff)
+				buffer_compact(*w_entry->send_u);
+			if(buffer_remaining(*w_entry->send_u) > 10)
+			{
+				shortlock_t_lock(&w_entry->pts_lock);
+				if(!list_empty(&w_entry->packets_to_send))
+						goto more_packet_encode;
+				shortlock_t_unlock(&w_entry->pts_lock);
+			}
+			if(!old_flush) {
+				w_entry->u.handler.z_flush_to.data = w_entry;
+				w_entry->u.handler.z_flush_to.fun  = handler_z_flush_timeout;
+				timeout_add(&w_entry->u.handler.z_flush_to, 20);
+			} else
+				w_entry->u.handler.z_flush = false;
+		}
 	}
 
 	/* read */
@@ -192,7 +265,6 @@ no_fill_before_write:
 		 */
 		g2_packet_t *build_packet = NULL;
 		struct norm_buff *d_source = NULL;
-		struct norm_buff *d_target = NULL;
 		bool retry, compact_cbuff = false, save_build_packet = false;
 
 		w_entry->flags.last_data_active = false;
@@ -203,7 +275,7 @@ no_fill_before_write:
 
 		if(ENC_NONE == w_entry->encoding_in)
 			d_source = w_entry->recv;
-		else
+		else if(ENC_DEFLATE == w_entry->encoding_in)
 		{
 			buffer_flip(*w_entry->recv);
 retry_unpack:
@@ -212,19 +284,19 @@ retry_unpack:
 			if(buffer_remaining(*w_entry->recv))
 			{
 		/*if(ENC_DEFLATE == (*w_entry)->encoding_in)*/
-				w_entry->z_decoder.next_in = (Bytef *)buffer_start(*w_entry->recv);
-				w_entry->z_decoder.avail_in = buffer_remaining(*w_entry->recv);
-				w_entry->z_decoder.next_out = (Bytef *)buffer_start(*d_source);
-				w_entry->z_decoder.avail_out = buffer_remaining(*d_source);
+				w_entry->z_decoder->next_in = (Bytef *)buffer_start(*w_entry->recv);
+				w_entry->z_decoder->avail_in = buffer_remaining(*w_entry->recv);
+				w_entry->z_decoder->next_out = (Bytef *)buffer_start(*d_source);
+				w_entry->z_decoder->avail_out = buffer_remaining(*d_source);
 
 				logg_develd_old("++++ cbytes: %u\n", buffer_remaining(*w_entry->recv));
 				logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 
-				switch(inflate(&w_entry->z_decoder, Z_SYNC_FLUSH))
+				switch(inflate(w_entry->z_decoder, Z_SYNC_FLUSH))
 				{
 				case Z_OK:
-					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder.avail_in);
-					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder.avail_out);
+					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder->avail_in);
+					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder->avail_out);
 					break;
 				case Z_STREAM_END:
 					logg_devel("Z_STREAM_END\n");
@@ -251,6 +323,40 @@ retry_unpack:
 			}
 			compact_cbuff = true;
 		}
+#ifdef HAVE_LZO
+		else if(ENC_LZO == w_entry->encoding_in)
+		{
+			/*
+			 * LZO compression is a pipe dream...
+			 *
+			 * The reason why lzo looked so good besides beeing fast is:
+			 * - no mem needed on decompress
+			 * - only a user supplied wmem needed for compression, which
+			 *   is "dead" after return (can use TLS)
+			 * But these advantages have a reason: it has no builtin
+			 * support to compress "running" streams. One or several
+			 * Chunks -> OK, "transparent" streams -> NO.
+			 *
+			 * This may be ok with most use cases, but sucks in our case.
+			 * Compression:
+			 * - no mem window, so every "stop" (we see at most some packets
+			 *   at once) is like a full finish sync flush
+			 *   -> bad compression, or hacking lzo while loosing the "no
+			 *      persistent state" advantage (give it a memory window)
+			 * Decompression:
+			 * - does not tell how many bytes got consumed, it even errs out
+			 *   if not all could be consumed.
+			 *   -> could be fixed with a wrapping format or hacking lzo...
+			 * - would also need a mem window...
+			 *
+			 * We either have to chunk our continous stream or hack a sliding
+			 * window into the guts of lzo (+ API adaption).
+			 */
+			return w_entry;
+		}
+#endif
+		else
+			return w_entry; /* this should not happen */
 
 		logg_develd_old("++++ ospace: %u\n", buffer_remaining(*w_entry->recv));
 		logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
@@ -268,7 +374,7 @@ retry_unpack:
 
 			logg_develd_old("**** bytes: %u\n", buffer_remaining(*d_source));
 
-			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.default_max_g2_packet_length, false))
+			if(!g2_packet_extract_from_stream(d_source, build_packet, server.settings.max_g2_packet_length, false))
 			{
 				logg_posd(LOGF_DEBUG, "%s Ip: %p#I\tFDNum: %i\n",
 				          "failed to decode packet-stream", &w_entry->remote_host,
@@ -282,10 +388,6 @@ retry_unpack:
 				   PACKET_EXTRACTION_COMPLETE == build_packet->packet_decode)
 				{
 					struct ptype_action_args parg;
-					if(ENC_DEFLATE == w_entry->encoding_out)
-						d_target = w_entry->send_u;
-					else
-						d_target = w_entry->send;
 
 					parg.connec      = w_entry;
 					parg.src_addr    = NULL;

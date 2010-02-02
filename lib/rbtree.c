@@ -300,7 +300,7 @@ struct rb_node *rb_last(struct rb_root *root)
 	struct rb_node	*n;
 
 	n = root->rb_node;
-	if (!n)
+	if (unlikely(!n))
 		return NULL;
 	while (n->rb_right)
 		n = n->rb_right;

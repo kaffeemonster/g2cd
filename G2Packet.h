@@ -62,104 +62,111 @@
  */
 #define G2_PACKET_TYPES \
 	ENUM_CMD( UNKNOWN, 0 ), /* The unknown !! ALWAYS keep at zero !! */ \
-	ENUM_CMD( CRAWLA , 1 ), \
-	ENUM_CMD( CRAWLR , 1 ), \
-	ENUM_CMD( HAW    , 1 ), \
-	ENUM_CMD( KHL    , 1 ), \
-	ENUM_CMD( LNI    , 1 ), \
-	ENUM_CMD( PI     , 1 ), \
-	ENUM_CMD( PO     , 1 ), \
-	ENUM_CMD( PUSH   , 1 ), \
-	ENUM_CMD( Q2     , 1 ), \
-	ENUM_CMD( QA     , 1 ), \
-	ENUM_CMD( QH2    , 1 ), \
-	ENUM_CMD( QHT    , 1 ), \
-	ENUM_CMD( QKR    , 3 ), \
-	ENUM_CMD( QKA    , 1 ), \
-	ENUM_CMD( UPROC  , 1 ), \
-	ENUM_CMD( UPROD  , 1 ), \
-	ENUM_CMD( KHLR   , 1 ), /* UDP */ \
-	ENUM_CMD( KHLA   , 1 ), /* UDP */ \
-	ENUM_CMD( DIS    , 1 ), /* UDP, KHL extention */ \
-	ENUM_CMD( JCT    , 1 ), /* UDP connect test */ /* root packets */ \
-	ENUM_CMD( G2CDc  , 1 ), \
-	ENUM_CMD( DN     , 1 ), \
-	ENUM_CMD( GU     , 1 ), \
-	ENUM_CMD( HS     , 1 ), \
-	ENUM_CMD( LS     , 1 ), \
-	ENUM_CMD( NA     , 1 ), \
-	ENUM_CMD( MD     , 1 ), \
-	ENUM_CMD( TS     , 1 ), \
-	ENUM_CMD( URN    , 1 ), \
-	ENUM_CMD( NH     , 1 ), /* KHL(A) */ \
-	ENUM_CMD( CH     , 1 ), /* KHL(A) */ \
-	ENUM_CMD( UKHLID , 1 ), /* KHLA/KHLR? */ \
-	ENUM_CMD( YOURIP , 1 ), /* KHLA */ \
-	ENUM_CMD( CV     , 1 ), /* version */ \
-	ENUM_CMD( V      , 1 ), /* commom child packets */ \
-	ENUM_CMD( FW     , 1 ), /* LNI? */ \
-	ENUM_CMD( RTR    , 0 ), /* LNI */ \
-	ENUM_CMD( UP     , 0 ), /* LNI */ \
-	ENUM_CMD( HA     , 0 ), /* LNI */ \
-	ENUM_CMD( BUP    , 1 ), /* QH2 */ \
-	ENUM_CMD( BH     , 1 ), /* QH2 */ \
-	ENUM_CMD( BUSY   , 1 ), /* QH2 */ \
-	ENUM_CMD( UNSTA  , 1 ), /* QH2 */ \
-	ENUM_CMD( H      , 1 ), /* QH2 */ \
-	ENUM_CMD( HG     , 1 ), /* QH2 */ \
-	ENUM_CMD( PCH    , 1 ), /* QH2 */ \
-	ENUM_CMD( UPRO   , 1 ), /* QH2 */ \
-	ENUM_CMD( CSC    , 1 ), /* QH2/H */ \
-	ENUM_CMD( COM    , 1 ), /* QH2/H */ \
-	ENUM_CMD( G      , 1 ), /* QH2/H */ \
-	ENUM_CMD( ID     , 1 ), /* QH2/H */ \
-	ENUM_CMD( PART   , 1 ), /* QH2/H */ \
-	ENUM_CMD( PVU    , 1 ), /* QH2/H */ \
-	ENUM_CMD( SZ     , 1 ), /* QH2/H */ \
-	ENUM_CMD( URL    , 1 ), /* QH2/H */ \
-	ENUM_CMD( SS     , 1 ), /* QH2/HG */ \
-	ENUM_CMD( QKY    , 1 ), /* Q2 extention, + key & no addr */ \
-	ENUM_CMD( I      , 1 ), /* Q2 */ \
-	ENUM_CMD( SZR    , 1 ), /* Q2 */ \
-	ENUM_CMD( UDP    , 1 ), /* Q2 PI */ \
-	ENUM_CMD( D      , 1 ), /* QA */ \
-	ENUM_CMD( FR     , 1 ), /* QA */ \
-	ENUM_CMD( RA     , 3 ), /* QA */ \
-	ENUM_CMD( S      , 1 ), /* QA */ \
-	ENUM_CMD( NICK   , 1 ), /* QH2/UPRO */ \
-	ENUM_CMD( SNA    , 1 ), /* QKA/QKR */ \
-	ENUM_CMD( QNA    , 1 ), /* QKA/QKR */ \
-	ENUM_CMD( QK     , 1 ), /* QKA */ \
-	ENUM_CMD( CACHED , 1 ), /* QKA */ \
-	ENUM_CMD( RNA    , 1 ), /* QKR */ \
-	ENUM_CMD( REF    , 2 ), /* QKR */ \
-	ENUM_CMD( RLEAF  , 4 ), /* CRAWLR */ \
-	ENUM_CMD( RNAME  , 4 ), /* CRAWLR */ \
-	ENUM_CMD( RGPS   , 4 ), /* CRAWLR */ \
-	ENUM_CMD( REXT   , 4 ), /* CRAWLR */ \
-	ENUM_CMD( NL     , 0 ), /* CRAWLA */ \
-	ENUM_CMD( SELF   , 0 ), /* CRAWLA */ \
-	ENUM_CMD( HUB    , 0 ), /* CRAWLA */ \
-	ENUM_CMD( LEAF   , 0 ), /* CRAWLA */ \
-	ENUM_CMD( GPS    , 0 ), /* CRAWLA */ \
-	ENUM_CMD( NAME   , 0 ), /* CRAWLA, same as NICK, idiots */ \
-	ENUM_CMD( RELAY  , 1 ), /* PI PO */ \
-	ENUM_CMD( TO     , 1 ), \
-	ENUM_CMD( XML    , 1 ), /* UPROD */ \
-	ENUM_CMD( dna    , 0 ), /* GnucDNA */ \
-	ENUM_CMD( CR     , 0 ), /* GnucDNA */ \
-	ENUM_CMD( NAT    , 0 ), /* ?? */ \
-	ENUM_CMD( G1     , 0 ), /* ?? */ \
-	ENUM_CMD( QH1    , 0 ), /* ?? */ \
-	ENUM_CMD( IDENT  , 0 ), /* GnucDNA */ \
-	ENUM_CMD( NBW    , 0 ), /* GnucDNA */ \
-	ENUM_CMD( PM     , 0 ), /* GnucDNA */ \
-	ENUM_CMD( CM     , 0 ), /* GnucDNA */ \
-	ENUM_CMD( TFW    , 0 ), /* ?? */ \
-	ENUM_CMD( G2NS   , 0 ), /* ?? */ \
-	ENUM_CMD( HURN   , 0 ), \
-	ENUM_CMD( HKEY   , 0 ), \
-	ENUM_CMD( MAXIMUM, 0 ) /* loop counter, hopefully none invents a Packet with this name... */
+	ENUM_CMD( CRAWLA ,      0 ), \
+	ENUM_CMD( CRAWLR ,     34 ), \
+	ENUM_CMD( HAW    ,   1464 ), \
+	ENUM_CMD( KHL    ,  10065 ), \
+	ENUM_CMD( LNI    ,  23226 ), \
+	ENUM_CMD( PI     ,  24756 ), \
+	ENUM_CMD( PO     ,      0 ), \
+	ENUM_CMD( PUSH   ,      1 ), \
+	ENUM_CMD( Q2     , 585085 ), \
+	ENUM_CMD( QA     ,  15635 ), \
+	ENUM_CMD( QH2    ,  44285 ), \
+	ENUM_CMD( QHT    ,  11458 ), \
+	ENUM_CMD( QKR    , 258528 ), \
+	ENUM_CMD( QKA    ,  17385 ), \
+	ENUM_CMD( UPROC  ,    649 ), \
+	ENUM_CMD( UPROD  ,      0 ), \
+	ENUM_CMD( KHLR   ,      3 ), /* UDP */ \
+	ENUM_CMD( KHLA   ,      0 ), /* UDP */ \
+	ENUM_CMD( DIS    ,      1 ), /* UDP, KHL extention */ \
+	ENUM_CMD( JCT    ,      0 ), /* UDP connect test */ /* root packets */ \
+	ENUM_CMD( G2CDc  ,      0 ), \
+	ENUM_CMD( DN     ,  87891 ), \
+	ENUM_CMD( GU     ,  27226 ), \
+	ENUM_CMD( HS     ,   3124 ), \
+	ENUM_CMD( LS     ,  23225 ), \
+	ENUM_CMD( NA     ,  24690 ), \
+	ENUM_CMD( MD     ,  54438 ), \
+	ENUM_CMD( TS     ,  10065 ), \
+	ENUM_CMD( URN    ,1043964 ), \
+	ENUM_CMD( NH     ,      1 ), /* KHL(A) */ \
+	ENUM_CMD( CH     , 287328 ), /* KHL(A) */ \
+	ENUM_CMD( UKHLID ,      5 ), /* KHLA/KHLR? */ \
+	ENUM_CMD( YOURIP ,      0 ), /* KHLA */ \
+	ENUM_CMD( CV     ,      0 ), /* version */ \
+	ENUM_CMD( V      ,  24689 ), /* commom child packets */ \
+	ENUM_CMD( FW     ,   9494 ), /* LNI? */ \
+	ENUM_CMD( RTR    ,     93 ), /* LNI */ \
+	ENUM_CMD( UP     ,    199 ), /* LNI */ \
+	ENUM_CMD( HA     ,    199 ), /* LNI */ \
+	ENUM_CMD( NFW    ,      1 ), /* LNI */ \
+	ENUM_CMD( TCPNFW ,      1 ), /* LNI */ \
+	ENUM_CMD( UDPFW  ,      1 ), /* LNI */ \
+	ENUM_CMD( UDPNFW ,      1 ), /* LNI */ \
+	ENUM_CMD( BUP    ,      1 ), /* QH2 */ \
+	ENUM_CMD( BH     ,      1 ), /* QH2 */ \
+	ENUM_CMD( BUSY   ,      1 ), /* QH2 */ \
+	ENUM_CMD( UNSTA  ,      1 ), /* QH2 */ \
+	ENUM_CMD( H      ,      1 ), /* QH2 */ \
+	ENUM_CMD( HG     ,      1 ), /* QH2 */ \
+	ENUM_CMD( PCH    ,      1 ), /* QH2 */ \
+	ENUM_CMD( UPRO   ,      1 ), /* QH2 */ \
+	ENUM_CMD( CSC    ,      1 ), /* QH2/H */ \
+	ENUM_CMD( COM    ,      1 ), /* QH2/H */ \
+	ENUM_CMD( G      ,      1 ), /* QH2/H */ \
+	ENUM_CMD( ID     ,      1 ), /* QH2/H */ \
+	ENUM_CMD( PART   ,      1 ), /* QH2/H */ \
+	ENUM_CMD( PVU    ,      1 ), /* QH2/H */ \
+	ENUM_CMD( SZ     ,      1 ), /* QH2/H */ \
+	ENUM_CMD( URL    ,      1 ), /* QH2/H */ \
+	ENUM_CMD( SS     ,      1 ), /* QH2/HG */ \
+	ENUM_CMD( QKY    ,      1 ), /* Q2 extention, + key & no addr */ \
+	ENUM_CMD( I      , 400525 ), /* Q2 */ \
+	ENUM_CMD( SZR    , 365881 ), /* Q2 */ \
+	ENUM_CMD( UDP    , 592569 ), /* Q2 PI */ \
+	ENUM_CMD( G1     ,    122 ), /* Q2 */ \
+	ENUM_CMD( G1PP   ,      0 ), /* QH2 */ \
+	ENUM_CMD( NOG1   ,     43 ), /* Q2 */ \
+	ENUM_CMD( D      ,      1 ), /* QA */ \
+	ENUM_CMD( FR     ,      1 ), /* QA */ \
+	ENUM_CMD( RA     ,      1 ), /* QA */ \
+	ENUM_CMD( S      ,      1 ), /* QA */ \
+	ENUM_CMD( NICK   ,      1 ), /* QH2/UPRO */ \
+	ENUM_CMD( SNA    ,  66687 ), /* QKA/QKR */ \
+	ENUM_CMD( QNA    ,  39421 ), /* QKA/QKR */ \
+	ENUM_CMD( QK     ,  18846 ), /* QKA */ \
+	ENUM_CMD( CACHED ,      1 ), /* QKA */ \
+	ENUM_CMD( RNA    ,  19709 ), /* QKR */ \
+	ENUM_CMD( REF    ,      1 ), /* QKR */ \
+	ENUM_CMD( RLEAF  ,     34 ), /* CRAWLR */ \
+	ENUM_CMD( RNAME  ,     34 ), /* CRAWLR */ \
+	ENUM_CMD( RGPS   ,     34 ), /* CRAWLR */ \
+	ENUM_CMD( REXT   ,     34 ), /* CRAWLR */ \
+	ENUM_CMD( NL     ,      0 ), /* CRAWLA */ \
+	ENUM_CMD( SELF   ,      0 ), /* CRAWLA */ \
+	ENUM_CMD( HUB    ,      0 ), /* CRAWLA */ \
+	ENUM_CMD( LEAF   ,      0 ), /* CRAWLA */ \
+	ENUM_CMD( GPS    ,    199 ), /* CRAWLA */ \
+	ENUM_CMD( NAME   ,      0 ), /* CRAWLA, same as NICK, idiots */ \
+	ENUM_CMD( RELAY  ,   6727 ), /* PI PO */ \
+	ENUM_CMD( TO     ,      1 ), \
+	ENUM_CMD( XML    ,      1 ), /* UPROD */ \
+	ENUM_CMD( dna    , 167288 ), /* GnucDNA */ \
+	ENUM_CMD( CR     ,   5824 ), /* GnucDNA */ \
+	ENUM_CMD( NAT    ,    343 ), /* ?? */ \
+	ENUM_CMD( QH1    ,    738 ), /* ?? */ \
+	ENUM_CMD( IDENT  ,     73 ), /* GnucDNA */ \
+	ENUM_CMD( NBW    ,    199 ), /* GnucDNA */ \
+	ENUM_CMD( PM     ,      0 ), /* GnucDNA */ \
+	ENUM_CMD( CM     ,    199 ), /* GnucDNA */ \
+	ENUM_CMD( TFW    ,     74 ), /* ?? */ \
+	ENUM_CMD( G2NS   ,      5 ), /* ?? */ \
+	ENUM_CMD( CLOSE  ,      4 ), /* ?? */ \
+	ENUM_CMD( HURN   ,    651 ), \
+	ENUM_CMD( HKEY   ,    842 ), \
+	ENUM_CMD( MAXIMUM,      0 ) /* loop counter, hopefully none invents a Packet with this name... */
 
 #define ENUM_CMD(x, y) PT_##x
 enum g2_ptype
@@ -274,6 +281,7 @@ _G2PACK_EXTRN(bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void
 _G2PACK_EXTRN(intptr_t g2_packet_hub_qht_match(g2_connection_t *con, void *data));
 _G2PACK_EXTRN(intptr_t g2_packet_hub_qht_done(g2_connection_t *con, void *data));
 _G2PACK_EXTRN(intptr_t g2_packet_leaf_qht_match(g2_connection_t *con, void *data));
+_G2PACK_EXTRN(intptr_t send_HAW_callback(g2_connection_t *con, void *carg));
 
 # endif /* _HAVE_G2_P_TYPE */
 #endif /* _NEED_G2_P_TYPE */

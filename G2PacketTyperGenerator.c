@@ -2,19 +2,19 @@
  * G2PacketTyperGenerator.c
  * Automaic generator for the G2-Packet typer tables
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -35,7 +35,7 @@
 struct p_names
 {
 	const char c[8];
-	const int weight;
+	const long long weight;
 };
 
 #define ENUM_CMD(x, y) { .c = str_it(x), .weight = (y) }
@@ -52,7 +52,7 @@ struct tree_hl
 	char c;
 	bool last;
 	enum g2_ptype type;
-	int weight;
+	long long weight;
 	int line;
 	size_t num_child;
 	size_t size_child;
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-static void make_tree_hl_name_r(const char *name, struct tree_hl *t, int weight, enum g2_ptype type)
+static void make_tree_hl_name_r(const char *name, struct tree_hl *t, long long weight, enum g2_ptype type)
 {
 	struct tree_hl *x;
 	int i;
@@ -195,7 +195,7 @@ recurse:
 	}
 }
 
-static void make_tree_hl_name(const char *name, int weight, enum g2_ptype type)
+static void make_tree_hl_name(const char *name, long long weight, enum g2_ptype type)
 {
 	struct tree_hl *t;
 	unsigned c = name[0];
@@ -270,7 +270,7 @@ static void clean_tree_hl(void)
 
 static void print_tree_hl_r(struct tree_hl *t, int level)
 {
-	printf("%c %i%s\t", t->c ? t->c : '0', t->weight, t->last ? "!" : "");
+	printf("%c %lli%s\t", t->c ? t->c : '0', t->weight, t->last ? "!" : "");
 
 	if(!t->last)
 	{

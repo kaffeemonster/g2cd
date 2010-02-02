@@ -2,19 +2,19 @@
  * my_epoll_poll.c
  * wrapper to get epoll on systems providing event ports (Solaris 10)
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version
  * 2 as published by the Free Software Foundation.
- * 
+ *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public
  * License along with g2cd; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
@@ -81,7 +81,11 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 		 */
 		return port_associate(epfd, PORT_SOURCE_FD, fd, events, event->data.ptr);
 	case EPOLL_CTL_DEL:
-		return port_dissociate(epfd, PORT_SOURCE_FD, fd);
+		/*
+		 * sometimes dissociate returns ENOENT, which isn't a deadly problem
+		 * see other software like apache
+		 */
+		return port_dissociate(epfd, PORT_SOURCE_FD, fd) == 0 ? 0 : (ENOENT == errno ? 0 : -1);
 	}
 	errno = EINVAL;
 	return -1;

@@ -43,7 +43,6 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <unistd.h>
-#include <libxml/xmlreader.h>
 /* Own Includes */
 #define _G2MAINSERVER_C
 #include "lib/other.h"
@@ -52,6 +51,7 @@
 #include "G2UDP.h"
 #include "G2Connection.h"
 #include "G2ConRegistry.h"
+#define _NEED_G2_P_TYPE
 #include "G2Packet.h"
 #include "G2PacketSerializer.h"
 #include "timeout.h"
@@ -73,27 +73,32 @@ static pthread_t main_threads[THREAD_SUM];
 static int sock_com[THREAD_SUM_COM][2];
 static struct pollfd sock_poll[THREAD_SUM_COM + 1];
 static volatile sig_atomic_t server_running = true;
+static volatile sig_atomic_t dump_stats;
+static volatile sig_atomic_t dump_conreg;
 
 /* helper vars */
-static bool be_daemon = DEFAULT_BE_DAEMON;
+static bool be_daemon;
 static int log_to_fd = -1;
+static time_t last_HAW;
 
 /* bulk data */
-static const char guid_file_name[] = DEFAULT_FILE_GUID;
-static const char profile_file_name[] = DEFAULT_FILE_PROFILE;
-static const char user_name[] = DEFAULT_USER;
+static const char *guid_file_name;
+static const char *profile_file_name;
+static const char *user_name;
 
 /* Internal prototypes */
 static inline void clean_up_m(void);
 static inline void parse_cmdl_args(int, char **);
 static inline void fork_to_background(void);
-static inline void handle_config(void);
+static noinline void handle_config(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
 static void init_prng(void);
 static noinline void read_uprofile(void);
 static void adjust_our_niceness(int);
 static void sig_stop_func(int signr, siginfo_t *, void *);
+static void sig_dump_func(int signr, siginfo_t *, void *);
+static intptr_t dump_a_hub(g2_connection_t *con, void *carg);
 
 int main(int argc, char **args)
 {
@@ -215,6 +220,19 @@ int main(int argc, char **args)
 		}
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
+
+		memset(&new_sas, 0, sizeof(new_sas));
+		new_sas.sa_sigaction = sig_dump_func;
+		sigemptyset(&new_sas.sa_mask);
+		new_sas.sa_flags = SA_SIGINFO;
+		if(sigaction(SIGUSR1, &new_sas, NULL))
+			logg_pos(LOGF_WARN, "Error registering stat dump handler\n");
+		memset(&new_sas, 0, sizeof(new_sas));
+		new_sas.sa_sigaction = sig_dump_func;
+		sigemptyset(&new_sas.sa_mask);
+		new_sas.sa_flags = SA_SIGINFO;
+		if(sigaction(SIGUSR2, &new_sas, NULL))
+			logg_pos(LOGF_WARN, "Error registering conreg dump handler\n");
 	}
 
 	/* make our hzp ready */
@@ -227,7 +245,7 @@ int main(int argc, char **args)
 		int num_poll = poll(sock_poll,
 				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
 				long_poll ? 11300 : 1100);
-		local_time_now = time(NULL);
+		update_local_time();
 		switch(num_poll)
 		{
 		/* Normally: see what has happened */
@@ -270,6 +288,11 @@ int main(int argc, char **args)
 				g2_qk_tick();
 				/* clean up udp reassambly cache */
 				g2_udp_reas_timeout();
+				/* time to send a HAW again? */
+				if(last_HAW < local_time_now - (5 * 60)) {
+					g2_conreg_random_hub(NULL, send_HAW_callback, NULL);
+					last_HAW = local_time_now;
+				}
 			}
 			break;
 		/* Something bad happened */
@@ -280,6 +303,22 @@ int main(int argc, char **args)
 			/* and get out here (at the moment) */
 			server_running = false;
 			break;
+		}
+		if(dump_stats)
+		{
+			logg(LOGF_INFO, "Connections: %u (%u hubs)\n",
+			     atomic_read(&server.status.act_connection_sum),
+			     atomic_read(&server.status.act_hub_sum));
+			g2_conreg_all_hub(NULL, dump_a_hub, NULL);
+			dump_stats = false;
+		}
+		if(dump_conreg)
+		{
+			logg(LOGF_INFO, "Connections: %u (%u hubs)\n",
+			     atomic_read(&server.status.act_connection_sum),
+			     atomic_read(&server.status.act_hub_sum));
+			g2_conreg_all_con(dump_a_hub, NULL);
+			dump_conreg = false;
 		}
 	}
 
@@ -353,6 +392,12 @@ int main(int argc, char **args)
 	 * but we don't need them, since we do not query.
 	 */
 	g2_conreg_cleanup();
+	/*
+	 * wipe out all remaining udp reassambly cache entrys
+	 */
+	local_time_now += 5000;
+	g2_udp_reas_timeout();
+	/* double scan to free everything */
 	hzp_scan(0);
 	hzp_scan(0);
 
@@ -361,10 +406,24 @@ int main(int argc, char **args)
 	return EXIT_SUCCESS;
 }
 
+static intptr_t dump_a_hub(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
+{
+	logg(LOGF_INFO, "\t%p#I\t-> %p#G %s l:%u\t\"%s\"\n", &con->remote_host, con->guid, con->vendor_code, con->u.handler.leaf_count, con->uagent);
+	return 0;
+}
+
 static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGINT == signr || SIGHUP == signr)
 		server_running = false;
+}
+
+static void sig_dump_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
+{
+	if(SIGUSR1 == signr)
+		dump_stats = true;
+	if(SIGUSR2 == signr)
+		dump_conreg = true;
 }
 
 static inline void parse_cmdl_args(int argc, char **args)
@@ -467,13 +526,25 @@ static inline void fork_to_background(void)
 
 static const struct config_item conf_opts[] =
 {
-	CONF_ITEM("max_connection_sum", &server.settings.max_connection_sum, config_parser_handle_int),
-	CONF_ITEM("max_hub_sum",        &server.settings.max_hub_sum,        config_parser_handle_int),
-	CONF_ITEM("nice_adjust",        &server.settings.nice_adjust,        config_parser_handle_int),
-	CONF_ITEM("num_threads",        &server.settings.num_threads,        config_parser_handle_int),
+	CONF_ITEM("max_connection_sum",   &server.settings.max_connection_sum,       config_parser_handle_int),
+	CONF_ITEM("max_hub_sum",          &server.settings.max_hub_sum,              config_parser_handle_int),
+	CONF_ITEM("nice_adjust",          &server.settings.nice_adjust,              config_parser_handle_int),
+	CONF_ITEM("num_threads",          &server.settings.num_threads,              config_parser_handle_int),
+	CONF_ITEM("max_g2_packet_length", &server.settings.max_g2_packet_length,     config_parser_handle_int),
+	CONF_ITEM("data_root_dir",        &server.settings.data_root_dir,            config_parser_handle_string),
+	CONF_ITEM("entropy_source",       &server.settings.entropy_source,           config_parser_handle_string),
+	CONF_ITEM("nick_name",            &server.settings.nick.name,                config_parser_handle_string),
+	CONF_ITEM("log_time_date_format", &server.settings.logging.time_date_format, config_parser_handle_string),
+	CONF_ITEM("gwc_boot_url",         &server.settings.khl.gwc_boot_url,         config_parser_handle_string),
+	CONF_ITEM("gwc_cache_filename",   &server.settings.khl.gwc_cache_fname,      config_parser_handle_string),
+	CONF_ITEM("khl_dump_filename",    &server.settings.khl.dump_fname,           config_parser_handle_string),
+	CONF_ITEM("guid_dump_filename",   &server.settings.guid.dump_fname,          config_parser_handle_string),
+	CONF_ITEM("guid_filename",        &guid_file_name,                           config_parser_handle_string),
+	CONF_ITEM("profile_filename",     &profile_file_name,                        config_parser_handle_string),
+	CONF_ITEM("user_name",            &user_name,                                config_parser_handle_string),
 };
 
-static inline void handle_config(void)
+static noinline void handle_config(void)
 {
 	FILE *config = NULL;
 	unsigned int tmp_id_2[sizeof(server.settings.our_guid)];
@@ -481,45 +552,50 @@ static inline void handle_config(void)
 	size_t i;
 
 	/* whats fixed */
-// TODO: switch according to hub need
-	/* set to true on startup, switch when enough hubs */
-	server.status.our_server_upeer_needed = false;
 	atomic_set(&server.status.act_connection_sum, 0);
 	atomic_set(&server.status.act_hub_sum, 0);
+	server.status.our_server_upeer = DEFAULT_SERVER_UPEER;
 
 	/*
 	 * var settings
 	 * first round: apply defaults
 	 */
-	server.settings.data_root_dir = DEFAULT_DATA_ROOT_DIR;
-	server.settings.entropy_source = DEFAULT_ENTROPY_SOURCE;
-	server.settings.config_file = DEFAULT_CONFIG_FILE;
-	server.settings.nice_adjust = DEFAULT_NICE_ADJUST;
-	server.settings.num_threads = DEFAULT_NUM_THREADS;
-	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL;
-	server.settings.logging.add_date_time = DEFAULT_LOG_ADD_TIME;
-	server.settings.logging.time_date_format = DEFAULT_LOG_TIME_FORMAT;
-	server.settings.bind.ip4.s_fam = AF_INET;
-	server.settings.bind.ip4.in.sin_port = htons(DEFAULT_PORT);
-	server.settings.bind.ip4.in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
-	server.settings.bind.use_ip4 = true;
-	server.settings.bind.ip6.s_fam = AF_INET6;
-	server.settings.bind.ip6.in6.sin6_port = htons(DEFAULT_PORT);
-	server.settings.bind.ip6.in6.sin6_addr = in6addr_any;
-	server.settings.bind.use_ip6 = true;
-	server.status.our_server_upeer = DEFAULT_SERVER_UPEER;
-	server.settings.default_in_encoding = DEFAULT_ENC_IN;
-	server.settings.default_out_encoding = DEFAULT_ENC_OUT;
-	server.settings.max_connection_sum = DEFAULT_CON_MAX;
-	server.settings.max_hub_sum = DEFAULT_HUB_MAX;
-	server.settings.default_max_g2_packet_length = DEFAULT_PCK_LEN_MAX;
-	server.settings.profile.want_2_send = DEFAULT_SEND_PROFILE;
-	server.settings.khl.gwc_boot_url = DEFAULT_GWC_BOOT;
-	server.settings.khl.gwc_cache_fname = DEFAULT_GWC_DB;
-	server.settings.khl.dump_fname = DEFAULT_KHL_DUMP;
-	server.settings.guid.dump_fname = DEFAULT_GUID_DUMP;
-	server.settings.qht.compression = DEFAULT_QHT_COMPRESSION;
-	server.settings.qht.compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL;
+	server.settings.data_root_dir                = DEFAULT_DATA_ROOT_DIR;
+	server.settings.entropy_source               = DEFAULT_ENTROPY_SOURCE;
+	server.settings.config_file                  = DEFAULT_CONFIG_FILE;
+	server.settings.nick.name                    = DEFAULT_NICK_NAME;
+	server.settings.nice_adjust                  = DEFAULT_NICE_ADJUST;
+	server.settings.num_threads                  = DEFAULT_NUM_THREADS;
+	server.settings.logging.act_loglevel         = DEFAULT_LOGLEVEL;
+	server.settings.logging.add_date_time        = DEFAULT_LOG_ADD_TIME;
+	server.settings.logging.time_date_format     = DEFAULT_LOG_TIME_FORMAT;
+	server.settings.bind.ip4.s_fam               = AF_INET;
+	server.settings.bind.ip4.in.sin_port         = htons(DEFAULT_PORT);
+	server.settings.bind.ip4.in.sin_addr.s_addr  = htonl(DEFAULT_ADDR);
+	server.settings.bind.use_ip4                 = true;
+	server.settings.bind.ip6.s_fam               = AF_INET6;
+	server.settings.bind.ip6.in6.sin6_port       = htons(DEFAULT_PORT);
+	server.settings.bind.ip6.in6.sin6_addr       = in6addr_any;
+	server.settings.bind.use_ip6                 = true;
+	server.settings.default_in_encoding          = DEFAULT_ENC_IN;
+	server.settings.default_out_encoding         = DEFAULT_ENC_OUT;
+	server.settings.hub_in_encoding              = DEFAULT_HUB_ENC_IN;
+	server.settings.hub_out_encoding             = DEFAULT_HUB_ENC_OUT;
+	server.settings.max_connection_sum           = DEFAULT_CON_MAX;
+	server.settings.max_hub_sum                  = DEFAULT_HUB_MAX;
+	server.settings.max_g2_packet_length         = DEFAULT_PCK_LEN_MAX;
+	server.settings.profile.want_2_send          = DEFAULT_SEND_PROFILE;
+	server.settings.khl.gwc_boot_url             = DEFAULT_GWC_BOOT;
+	server.settings.khl.gwc_cache_fname          = DEFAULT_GWC_DB;
+	server.settings.khl.dump_fname               = DEFAULT_KHL_DUMP;
+	server.settings.guid.dump_fname              = DEFAULT_GUID_DUMP;
+	server.settings.qht.compression              = DEFAULT_QHT_COMPRESSION;
+	server.settings.qht.compress_internal        = DEFAULT_QHT_COMPRESS_INTERNAL;
+
+	be_daemon         = DEFAULT_BE_DAEMON;
+	guid_file_name    = DEFAULT_FILE_GUID;
+	profile_file_name = DEFAULT_FILE_PROFILE;
+	user_name         = DEFAULT_USER;
 
 	/*
 	 * second round: read config file
@@ -556,6 +632,22 @@ static inline void handle_config(void)
 
 	if(server.settings.profile.want_2_send)
 		read_uprofile();
+
+	/* use the hostname if no nick is supplied */
+	if(!server.settings.nick.name)
+	{
+		char *tmp_str = malloc(255);
+		if(!tmp_str)
+			return;
+		if(0 > gethostname(tmp_str, 254)) {
+			logg_errno(LOGF_INFO, "couldn't get hostname");
+			free(tmp_str);
+			return;
+		}
+		tmp_str[254] = '\0';
+		server.settings.nick.name = tmp_str;
+	}
+	server.settings.nick.len = strlen(server.settings.nick.name) + 1;
 	return;
 
 err:
@@ -589,7 +681,7 @@ static inline void change_the_user(void)
 	if(setuid((uid_t) nameinfo->pw_uid))
 	{
 		logg_errno(LOGF_WARN, "setting UID");
-/* 
+/*
  * Abort disabeled during devel. Maybe configurable with
  * commandline-switch?
  */
@@ -602,17 +694,17 @@ static inline void change_the_user(void)
 	/* Attention! Our Windau-friends know about users and user-
 	 * rights (at least in the not DOS(c)-based Systems), but
 	 * they could never Imagine, that a programm wants to change
-	 * it's privilages during operation (at leat it is possible
+	 * it's privilages during operation (at least it is possible
 	 * from Cygwin). So when run under Cygwin, it is *NOT*
 	 * possible to change the uid. The gid could be changed, but
 	 * again: this is simply Cygwin-internal emulated. So:
 	 * - Get the unpriviledged account you could find. Create
 	 *   one or use "Guest". Guest *should* be unprivilaged
 	 *   enough (some Win-experts around?). The Guest-account
-	 *   have to be simply enabeled.
+	 *   has to be simply enabeled.
 	 * - The Name of the Guest-account is a localized string,
 	 *   thanks Bill (this makes it tricky to handle it from
-	 *   a Programm)...
+	 *   a programm)...
 	 * - Use the Win/Cygwin-delivered tools to start the program
 	 *   *directly* under the wanted account (example: bla.exe->
 	 *   richt-click->"Run as" or when setting up a "Service"
@@ -640,13 +732,6 @@ static inline void setup_resources(void)
 	size_t i;
 	struct rlimit our_limit;
 
-#ifdef LIBXML_READER_ENABLED
-	/* check for ABI and init libxml */
-	LIBXML_TEST_VERSION
-#else
-# error libxml without reader support
-#endif
-
 	/* check and raise our open-file limit */
 /*
  * WARNING:
@@ -658,7 +743,7 @@ static inline void setup_resources(void)
  * Gentoo). So even if this is successfully set, opening fd's
  * could still fail.
  */
-#define FD_RESSERVE 20UL
+#define FD_RESSERVE 40UL
 	if(likely(!getrlimit(RLIMIT_NOFILE, &our_limit)))
 	{
 		logg_posd(LOGF_DEBUG,
@@ -693,7 +778,7 @@ static inline void setup_resources(void)
 		}
 	}
 	else
-		logg_errno(LOGF_WARN, "geting FD-limit");
+		logg_errno(LOGF_WARN, "getting FD-limit");
 
 	if(pthread_attr_init(&server.settings.t_def_attr)) {
 		logg_errno(LOGF_CRIT, "initialising pthread_attr");
@@ -764,7 +849,7 @@ static void init_prng(void)
 // TODO: install some bogus sheme to set up the buffer with entropy
 
 	/*
-	 * Even if we could not get entropy, feed fd into the prng
+	 * Even if we could not get entropy, feed rd into the prng
 	 * if everything failes, its "random" stack data, undefined
 	 * behaivior for the rescue...
 	 */
@@ -912,11 +997,9 @@ static inline void clean_up_m(void)
 	free((void*)(intptr_t)server.settings.profile.packet_uprod);
 	free((void*)(intptr_t)server.settings.profile.xml);
 
-	xmlCleanupParser();
-
-	fclose(stdin);
-	fclose(stdout); // get a sync if we output to a file
-	fclose(stderr);
+//	fclose(stdin);
+//	fclose(stdout); // get a sync if we output to a file
+//	fclose(stderr);
 }
 
 #ifdef __linux__

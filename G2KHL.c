@@ -1060,6 +1060,11 @@ bool g2_khl_tick(int *fd)
 			state = KHL_FILL;
 		else
 			state = KHL_IDLE;
+// TODO: anounce ourself to gwc
+		/*
+		 * wget -v -S -U G2CD -O -
+		 * "http://cache.trillinux.org/g2/bazooka.php?update=1&ip=217.87.64.8:6346&x_leaves=0&net=gnutella2&client=G2CD&version=0.0.0.10&ping=1"
+		 */
 		long_poll = true;
 		break;
 	case KHL_MAXIMUM:

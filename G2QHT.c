@@ -33,6 +33,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <time.h>
 #include <pthread.h>
 /* debug file */
@@ -41,7 +42,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <zlib.h>
-#include <libxml/xmlreader.h>
 /* other */
 #include "lib/other.h"
 /* Own includes */
@@ -506,9 +506,9 @@ void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
 }
 
-static tchar_t *to_base16(const unsigned char *h, tchar_t *wptr, unsigned num)
+static noinline tchar_t *to_base16(const unsigned char *h, tchar_t *wptr, unsigned num)
 {
-	static const char base16c[] = "0123456789abcdef";
+	static const unsigned char base16c[] = "0123456789abcdef";
 	unsigned i;
 	for(i = 0; i < num; i++) {
 		*wptr++ = base16c[h[i] / 16];
@@ -518,9 +518,9 @@ static tchar_t *to_base16(const unsigned char *h, tchar_t *wptr, unsigned num)
 }
 
 #define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
-static tchar_t *to_base32(const unsigned char *h, tchar_t *wptr, unsigned num)
+static noinline tchar_t *to_base32(const unsigned char *h, tchar_t *wptr, unsigned num)
 {
-	static const char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
+	static const unsigned char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
 	unsigned b32chars = B32_LEN(num), i = 0, ch = 0;
 	int shift = 11;
 
@@ -550,7 +550,7 @@ void g2_qht_search_add_sha1(const unsigned char *h)
 void g2_qht_search_add_ttr(const unsigned char *h)
 {
 	tchar_t ih[sizeof(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
-	tchar_t *wptr = strplitcpy(ih, URN_TTR);
+	tchar_t *wptr = strplitctcpy(ih, URN_TTR);
 	wptr = to_base32(h, wptr, 24);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -559,7 +559,7 @@ void g2_qht_search_add_ttr(const unsigned char *h)
 void g2_qht_search_add_ed2k(const unsigned char *h)
 {
 	tchar_t ih[sizeof(URN_ED2K) + 16 * 2]; /* hex encoding */
-	tchar_t *wptr = strplitcpy(ih, URN_ED2K);
+	tchar_t *wptr = strplitctcpy(ih, URN_ED2K);
 	wptr = to_base16(h, wptr, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -568,7 +568,7 @@ void g2_qht_search_add_ed2k(const unsigned char *h)
 void g2_qht_search_add_bth(const unsigned char *h)
 {
 	tchar_t ih[sizeof(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
-	tchar_t *wptr = strplitcpy(ih, URN_BTH);
+	tchar_t *wptr = strplitctcpy(ih, URN_BTH);
 	wptr = to_base32(h, wptr, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -577,7 +577,7 @@ void g2_qht_search_add_bth(const unsigned char *h)
 void g2_qht_search_add_md5(const unsigned char *h)
 {
 	tchar_t ih[sizeof(URN_MD5) + 16 * 2]; /* hex encoding */
-	tchar_t *wptr = strplitcpy(ih, URN_MD5);
+	tchar_t *wptr = strplitctcpy(ih, URN_MD5);
 	wptr = to_base16(h, wptr, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
@@ -1241,48 +1241,86 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 */
 		if(metadata && metadata_len)
 		{
-			xmlTextReader *reader = xmlReaderForMemory(metadata, metadata_len, "", "utf-8",
-			                            /*XML_PARSE_NOERROR|XML_PARSE_NOWARNING|*/ XML_PARSE_NONET);
-			int ret;
+			/*
+			 * XML parsing my ass...
+			 * since most clients only sent bullshit, nothing wellform, no chance
+			 * to validate it if you do not know/guess whats in there and we
+			 * simply take any attr for hashes anyway:
+			 * XML is a waste of space, cpu time, dependency
+			 *
+			 * If really needed -> revision 199 in scm
+			 */
+			char *w_ptr, *s;
+			size_t remain;
+			char *txt_tbuf;
 
-			if(!reader)
+			txt_tbuf = (char *)qht_get_scratch2(QHT_DEFAULT_BYTES);
+			if(!txt_tbuf)
 				goto check_dn;
 
-			for(ret = xmlTextReaderRead(reader); 1 == ret; ret = xmlTextReaderRead(reader))
+			remain = metadata_len;
+			w_ptr = metadata;
+
+			for(s = memchr(w_ptr, '=', remain); s; s = memchr(w_ptr, '=', remain))
 			{
-				if(xmlTextReaderDepth(reader) > 40)
+				tchar_t *str_buf, *wptr, *str_buf_orig;
+				size_t len, o_len, tlen;
+				char *txt;
+
+				remain -= (s - w_ptr);
+				if(!remain)
 					break;
-				while(xmlTextReaderMoveToNextAttribute(reader) > 0)
+				w_ptr = s + 1;
+				if('"' != *w_ptr)
+					continue;
+				if(!memcmp(w_ptr - str_size("Namespace") - 1, "Namespace", str_size("Namespace")))
+					continue;
+				w_ptr++;
+				remain--;
+				if(!remain)
+					break;
+				s = memchr(w_ptr, '"', remain);
+				if(!s)
+					len = remain;
+				else
+					len = s - w_ptr;
+				remain -= len;
+
+				if(len >= QHT_DEFAULT_BYTES)
+					break; /* this should not happen... */
+
+				txt = txt_tbuf;
+				o_len = len;
+				len = decode_html_entities_utf8(txt, w_ptr, len);
+				while(*txt && isblank(*txt))
+					txt++, len--;
+				while(len && isblank(*(txt + len - 1)))
+					txt[--len] = '\0';
+
+				logg_develd_old("len: %zu\t\"%s\" \"%.*s\"\n", len, txt, (int)o_len, w_ptr);
+				if(len)
 				{
-					const xmlChar *attr_val = xmlTextReaderConstValue(reader);
-					tchar_t *attr_tval;
-					size_t attr_len, attr_tlen;
+					str_buf = qht_zpad_alloc(zmem, len + 10, sizeof(tchar_t));
+					if(!str_buf)
+						break;
+					str_buf_orig = str_buf;
 
-					if(!attr_val)
-						continue;
-					attr_len = strlen((const char *)attr_val);
-					attr_tval = qht_zpad_alloc(zmem, attr_len + 10, sizeof(tchar_t));
-					if(!attr_tval)
-						continue;
-					attr_tlen = utf8totcs(attr_tval, attr_len + 9 , (const char *)attr_val, &attr_len);
-					if(!attr_tlen || attr_len) { /* no output or input not consumed? */
-						qht_zpad_free(zmem, attr_tval);
-						continue;
-					}
+					tlen = utf8totcs(str_buf, len + 9, txt, &len);
+					if(!tlen || len) /* no output or input not consumed? */
+						break;
 
-					attr_tval[attr_tlen] = '\0';
-					attr_tlen = tstrptolower(attr_tval) - attr_tval;
-					if(attr_tlen) {
-						tchar_t *wptr = make_keywords(attr_tval);
-						qht_zpad_free(zmem, attr_tval);
-						if(wptr)
-							fill_word_list(&word_list, wptr, zmem);
-					}
-					else
-						qht_zpad_free(zmem, attr_tval);
+					wptr = make_keywords(str_buf);
+					qht_zpad_free(zmem, str_buf_orig);
+					if(wptr)
+						fill_word_list(&word_list, wptr, zmem);
 				}
+				if(!remain)
+					break;
+				w_ptr = s + 1;
+				remain--;
+				if(!remain)
+					break;
 			}
-			xmlFreeTextReader(reader);
 		}
 check_dn:
 		if(dn && dn_len)
@@ -1518,7 +1556,7 @@ bool g2_qht_global_search_bucket(struct qht_search_walk *qsw, struct qhtable *t)
 		hzp_ref(HZP_QHTDAT, qd = container_of(t->data, struct qht_data, data));
 	} while(qd != container_of(t->data, struct qht_data, data));
 
-	if(!t->data || COMP_RLE == t->compressed)
+	if(!t->data || COMP_RLE == t->compressed || t->flags.reset_needed)
 		goto out_unref;
 
 	num = qsw->num;
@@ -1611,14 +1649,14 @@ static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_
 	res = bitfield_encode(ndata, QHT_RLE_MAXSIZE, data, qht_size);
 	if(res < 0)
 	{
-		logg_develd("QHT %p could not be compressed!\n", table);
+		logg_develd_old("QHT %p could not be compressed!\n", table);
 		tcomp = COMP_NONE;
 		res = qht_size;
 		ndata = data;
 	}
 	else
 	{
-		logg_develd("QHT %p compressed - 1:%u.%u\n", table,
+		logg_develd_old("QHT %p compressed - 1:%u.%u\n", table,
 		            (unsigned)(qht_size / res),
 		            (unsigned)(((qht_size % res) * 1000) / res));
 		tcomp = COMP_RLE;
@@ -1715,7 +1753,7 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 					zpad->z.avail_in = frag->length;
 					frag = frag->next;
 				} else if(Z_STREAM_END != res) {
-					logg_develd("failure compressing patch: %i\n", res);
+					logg_develd("failure decompressing patch: %i\n", res);
 					break;
 				}
 			} while(Z_STREAM_END != res);
@@ -1770,30 +1808,41 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 void g2_qht_aggregate(struct qhtable *to, struct qhtable *from)
 {
 	size_t qht_size = DIV_ROUNDUP(to->entries, BITS_PER_CHAR);
-	uint8_t *from_ptr;
 
 	qht_size = qht_size <= DIV_ROUNDUP(from->entries, BITS_PER_CHAR) ? qht_size :
 	           DIV_ROUNDUP(from->entries, BITS_PER_CHAR);
 
-	if(COMP_RLE == from->compressed)
+	if(to->flags.reset_needed || COMP_RLE != from->compressed)
 	{
-		ssize_t res;
-		from_ptr = qht_get_scratch1(qht_size);
-		if(!from_ptr)
-			return;
-		res = bitfield_decode(from_ptr, qht_size, from->data, from->data_length);
-		if(res < 0)
-			logg_develd("failed to de-rle QHT %p: %zi\n", to, res);
-			/* means we have not enough space, but we can use the bytes... */
+		uint8_t *from_ptr;
+		if(COMP_RLE == from->compressed)
+		{
+			ssize_t res;
+			from_ptr = qht_get_scratch1(qht_size);
+			if(!from_ptr)
+				return;
+			res = bitfield_decode(from_ptr, qht_size, from->data, from->data_length);
+			if(res < 0)
+				logg_develd("failed to de-rle QHT %p: %zi\n", from, res);
+				/* means we have not enough space, but we can use the bytes... */
+		}
+		else
+			from_ptr = from->data;
+
+		if(to->flags.reset_needed) {
+			memcpy(to->data, from_ptr, qht_size);
+			to->flags.reset_needed = false;
+		} else
+			memand(to->data, from_ptr, qht_size);
 	}
 	else
-		from_ptr = from->data;
-
-	if(to->flags.reset_needed) {
-		memcpy(to->data, from_ptr, qht_size);
-		to->flags.reset_needed = false;
-	} else
-		memand(to->data, from_ptr, qht_size);
+	{
+		ssize_t res;
+		res = bitfield_and(to->data, qht_size, from->data, from->data_length);
+		if(res < 0)
+			logg_develd("failed to de-rle_and QHT %p: %zi\n", from, res);
+			/* means we have not enough space, but we can use the bytes... */
+	}
 }
 
 struct qht_fragment *g2_qht_frag_alloc(size_t len)
@@ -1980,9 +2029,15 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag, uint8_t *
 	}
 
 	legal_len = DIV_ROUNDUP(ttable->entries, BITS_PER_CHAR);
-// TODO: If the patch is compressed, we are just guessing a max length
+	/*
+	 * stop this, there are some large QHTs after compress
+	 * (prop. Hubs), but don't allow data to grow, compression
+	 * should at least yield +/- 0.
+	 * TODO: If the patch is compressed, we are just guessing a max length
+	 *
 	if(frag->compressed)
-		legal_len /= 2;
+		legal_len = (legal_len * 6) / 8;
+	 */
 	/*
 	 * ATM check is sane, we are checking the real sizes of the
 	 * really recieved data, not user supplied data...
@@ -2043,6 +2098,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 // TODO: new data is not initialised
 	/* try with this early reset_needed. membar? */
 	tmp_table->flags.reset_needed = true;
+	barrier();
 	if(!try_compress)
 	{
 		if(tmp_table->data_length < w_size)

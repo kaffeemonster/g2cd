@@ -2,7 +2,7 @@
  * my_epoll_poll.c
  * wrapper to get epoll on systems providing poll
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -32,13 +32,14 @@
 #include "atomic.h"
 
 /*
- * This can only handle one poll instance, which is broken ATM
+ * This can only handle one epoll instance, which is EXACTLY the number in g2cd
  */
 
 /* put the poison on the top, there should be kernel-mem -> sig11 */
 #define EPDATA_POISON	0xFEEBDAEDFEEBDAEDUL
 #define CAPACITY_INCREMENT 100
 static pthread_mutex_t my_epoll_wmutex;
+static pthread_mutex_t my_epoll_pmutex;
 struct poll_data
 {
 	struct hzp_free hzp;
@@ -119,6 +120,9 @@ static void my_epoll_init(void)
 	/* generate a lock for shared free_cons */
 	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
 		diedie("creating my_epoll writes mutex");
+	/* generate a lock for emulating oneshot */
+	if(pthread_mutex_init(&my_epoll_pmutex, NULL))
+		diedie("creating my_epoll poll mutex");
 
 	tmp_ptr = malloc(sizeof(*fds) + (sizeof(struct epoll_event) * ((size_t)EPOLL_QUEUES * 20 + 1)));
 	if(!tmp_ptr)
@@ -248,6 +252,8 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		return -1;
 	}
 
+	if(pthread_mutex_lock(&my_epoll_pmutex))
+		diedie("locking my_epoll poll mutex");
 retry:
 	while(read(poll_pipe_fd, some_buf, sizeof(some_buf)) == sizeof(some_buf))
 		/* empty poll wake pipe beforehand */;
@@ -292,7 +298,7 @@ retry:
 		for(f_buf = poll_buf; num_poll && maxevents; f_buf++)
 		{
 			if(!f_buf->revents)
-					continue;
+				continue;
 
 			num_poll--;
 			if(f_buf->fd == poll_pipe_fd) { /* our interrupter */
@@ -336,6 +342,8 @@ retry:
 	free(poll_buf);
 	if(!ret_val && keep_going)
 		goto retry;
+	if(pthread_mutex_unlock(&my_epoll_pmutex))
+		diedie("unlocking my_epoll poll mutex");
 
 	return ret_val;
 }

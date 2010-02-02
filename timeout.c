@@ -2,7 +2,7 @@
  * timeout.c
  * thread to handle the varios server timeouts needed
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -289,11 +289,18 @@ static int kick_timeouts(void)
 	 * and work on timeouts while they are
 	 * below now (timed out).
 	 */
-	for(timespec_fill(&now), t = timeout_nearest();
+	timespec_fill(&now);
+	local_time_now = now.tv_sec;
+	set_master_time(now.tv_sec);
+	for(t = timeout_nearest();
 	    t && !timespec_after(&t->t, &now);
 	    timespec_fill(&now), t = timeout_nearest())
 	{
 		int ret = 0;
+
+		/* we "have" the master clock */
+		local_time_now = now.tv_sec;
+		set_master_time(now.tv_sec);
 		/* lock the timeout */
 		pthread_mutex_lock(&t->lock);
 		logg_develd_old("now: %li.%li\tto: %li.%li\n",
@@ -313,7 +320,6 @@ static int kick_timeouts(void)
 		/* release the tree lock */
 		pthread_mutex_unlock(&wakeup.mutex);
 
-		local_time_now = now.tv_sec;
 		/* work on the timeout */
 		if(t->fun)
 			ret = t->fun(t->data);
@@ -360,6 +366,8 @@ static int kick_timeouts(void)
 			t->rearm_in_progress = false;
 		}
 	}
+	/* save last time for calculating next sleep */
+	wakeup.time = now;
 	return ret_val;
 }
 
@@ -377,9 +385,10 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 	g2_set_thread_name(OUR_PROC " timeout");
 
 	pthread_mutex_lock(&wakeup.mutex);
+	/* initialise time first run */
+	timespec_fill(&wakeup.time);
 	while(!wakeup.abort)
 	{
-		struct timeout *t;
 		int ret_val;
 
 		if(!(--refill_count)) {
@@ -387,6 +396,8 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 			refill_count = EVENT_SPACE / 2;
 		}
 
+#if 0
+		struct timeout *t;
 		t = timeout_nearest();
 		if(t)
 			wakeup.time = t->t;
@@ -394,6 +405,14 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 			timespec_fill(&wakeup.time);
 			timespec_add(&wakeup.time, DEFAULT_TIMEOUT);
 		}
+#endif
+		/*
+		 * We wakeup every second to set the master clock
+		 * If we handle timeouts once every second, thats "fast"
+		 * enough.
+		 */
+		wakeup.time.tv_sec++;
+		wakeup.time.tv_nsec = 0;
 
 		ret_val = pthread_cond_timedwait(&wakeup.cond, &wakeup.mutex, &wakeup.time);
 		/* someone woken us */

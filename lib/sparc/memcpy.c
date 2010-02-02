@@ -2,7 +2,7 @@
  * memcpy.c
  * memcpy, sparc/sparc64 impl.
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -46,8 +46,8 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	if(SYSTEM_MIN_BYTES_WORK < len)
 	{
 		/* see if an alignment is possible */
-		size_t i = (((intptr_t)dst_c) & ((ALIGNMENT_WANTED) - 1)) ^
-		           (((intptr_t)src_c) & ((ALIGNMENT_WANTED) - 1));
+		size_t i = ALIGN_DOWN_DIFF(dst_c, ALIGNMENT_WANTED) ^
+		           ALIGN_DOWN_SIFF(src_c, ALIGNMENT_WANTED);
 		if(unlikely(!i))
 		{
 			size_t cnt, t1, t2;

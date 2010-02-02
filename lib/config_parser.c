@@ -1,8 +1,8 @@
 /*
- * config_parser.h
+ * config_parser.c
  * config file parser
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -91,8 +91,36 @@ bool config_parser_handle_int(struct list_head *head, void *data)
 	}
 	*target = (int)tmp;
 	if(!list_is_last(&t->list, head))
-		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens, hopefully OK\n",
-		     first->ctx->in_filename, first->ctx->line_num);
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+	return true;
+}
+
+bool config_parser_handle_string(struct list_head *head, void *data)
+{
+	struct ptoken *t, *first;
+	char **target = data;
+	char *tmp;
+
+	first = list_entry(head->next, struct ptoken, list);
+	t = config_token_after_equal(head);
+	if(!t) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Option \"%s\" wants a value assigned, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+	tmp = malloc(t->d.len + 1);
+	if(!tmp) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Couldn't allocate memory for option \"%s\", will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+	memcpy(tmp, t->d.t, t->d.len);
+	tmp[t->d.len] = '\0';
+	*target = tmp;
+	if(!list_is_last(&t->list, head))
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
 	return true;
 }
 

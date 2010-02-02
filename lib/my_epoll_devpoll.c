@@ -2,7 +2,7 @@
  * my_epoll_devpoll.c
  * wrapper to get epoll on solaris with /dev/poll
  *
- * Copyright (c) 2005-2009 Jan Seiffert
+ * Copyright (c) 2005-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,7 +24,7 @@
  */
 
 /*
- * Ok, this is now a little bit up working. It compiles, and it
+ * Ok, this is now a little bit working. It compiles, and it
  * basicaly works, minor TODOs, testig and bug-fixing.
  */
 
@@ -49,6 +49,7 @@
 #define EPDATA_POISON	0xFEEBDAEDFEEBDAEDUL
 #define CAPACITY_INCREMENT 100
 static pthread_mutex_t my_epoll_wmutex;
+static pthread_mutex_t my_epoll_pmutex;
 struct dev_poll_data
 {
 	struct hzp_free hzp;
@@ -127,6 +128,10 @@ static void my_epoll_init(void)
 	/* generate a lock for shared free_cons */
 	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
 		diedie("creating my_epoll writes mutex");
+
+	/* generate a lock to make oneshot fds atomic */
+	if(pthread_mutex_init(&my_epoll_pmutex, NULL))
+		diedie("creating my_epoll poll mutex");
 
 	tmp_ptr = malloc(sizeof(*tmp_ptr) + sizeof(epoll_data_t) * ((size_t)EPOLL_QUEUES * 20 + 1));
 	if(!tmp_ptr)
@@ -291,6 +296,9 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	do_poll.dp_nfds = maxevents;
 	do_poll.dp_timeout = timeout;
 
+	if(pthread_mutex_lock(&my_epoll_pmutex))
+		diedie("locking my_epoll poll mutex");
+
 	num_poll = ioctl(epfd, DP_POLL, &do_poll);
 	switch(num_poll)
 	{
@@ -348,6 +356,8 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		logg_errno(LOGF_DEBUG, "ioctl");
 		break;
 	}
+	if(pthread_mutex_unlock(&my_epoll_pmutex))
+		diedie("unlocking my_epoll poll mutex");
 
 	return ret_val;
 }

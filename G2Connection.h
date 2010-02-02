@@ -44,9 +44,9 @@ enum g2_connection_states
 	ADVANCE_TIMEOUTS,
 	CHECK_ACCEPT,
 	CHECK_ADDR,
-	CHECK_ENC_OUT,
-	CHECK_UAGENT,
 	CHECK_UPEER,
+	CHECK_UAGENT,
+	CHECK_ENC_OUT,
 	BUILD_ANSWER,
 	HEADER_2,
 	ANSWER_200,
@@ -120,6 +120,8 @@ typedef struct g2_connection
 				time_t     UPROC;
 			} send_stamps;
 			unsigned leaf_count;
+			struct timeout z_flush_to;
+			bool z_flush;
 		} handler;
 		struct
 		{
@@ -138,6 +140,7 @@ typedef struct g2_connection
 				bool    upeer_ok;
 				bool    upeer_needed_ok;
 				bool    second_header;
+				bool    had_crawler;
 			} flags;
 		} accept;
 	} u;
@@ -150,8 +153,8 @@ typedef struct g2_connection
 	char             uagent[40+1];
 	char             vendor_code[4+1];
 	uint8_t          guid[16];
-	z_stream         z_decoder;
-	z_stream         z_encoder;
+	z_stream         *z_decoder;
+	z_stream         *z_encoder;
 /* ----- Everthing above this gets simply wiped ------ */
 	struct norm_buff *recv;
 	struct norm_buff *send;
@@ -177,7 +180,7 @@ typedef struct
 } action_string;
 
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
-# define KNOWN_HEADER_FIELDS_SUM  28
+# define KNOWN_HEADER_FIELDS_SUM  34
 
 /* Stringconstants */
 /* var */
@@ -204,6 +207,9 @@ typedef struct
 # define ACCEPT_ENC_KEY    "Accept-Encoding"
 # define REMOTE_ADR_KEY    "Remote-IP"
 # define LISTEN_ADR_KEY    "Listen-IP"
+# define X_MY_ADDR_KEY     "X-My-Address"
+# define X_NODE_KEY        "X-Node"
+# define NODE_KEY          "Node"
 # define CONTENT_KEY       "Content-Type"
 # define CONTENT_ENC_KEY   "Content-Encoding"
 # define UPEER_KEY         "X-Ultrapeer"
@@ -213,22 +219,25 @@ typedef struct
 # define X_TRY_UPEER_KEY   "X-Try-Ultrapeers"
 # define X_TRY_HUB_KEY     "X-Try-Hubs"
 /* Leacher broken stuff */
-# define X_AUTH_CH_KEY     "X-Auth-Challange"
+# define X_AUTH_CH_KEY     "X-Auth-Challenge"
 /* G1 Stuff we want to silently ignore */
-# define X_VERSION         "X-Version"
+# define X_VERSION_KEY     "X-Version"
 # define X_MAX_TTL_KEY     "X-Max-TTL"
 # define X_GUESS_KEY       "X-Guess"
 # define X_REQUERIES_KEY   "X-Requeries"
-# define X_LOC_PREF        "X-Locale-Pref"
+# define X_LOC_PREF_KEY    "X-Locale-Pref"
 # define X_Q_ROUT_KEY      "X-Query-Routing"
 # define X_UQ_ROUT_KEY     "X-Ultrapeer-Query-Routing"
 # define X_DYN_Q_KEY       "X-Dynamic-Querying"
 # define X_EXT_PROBES_KEY  "X-Ext-Probes"
-# define X_DEGREE          "X-Degree"
+# define X_DEGREE_KEY      "X-Degree"
+# define X_PROBE_Q_KEY     "X-Probe-Queries"
+# define BYE_PKT_KEY       "Bye-Packet"
 # define GGEP_KEY          "GGEP"
 # define PONG_C_KEY        "Pong-Caching"
 # define UPTIME_KEY        "Uptime"
 # define VEND_MSG_KEY      "Vendor-Message"
+# define CRAWLER_KEY       "Crawler"
 
 # ifndef _G2CONNECTION_C
 #  define _G2CON_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
@@ -254,6 +263,7 @@ _G2CON_EXTRN(void g2_con_ret_free(g2_connection_t *));
 _G2CON_EXTRN(g2_connection_t *g2_con_alloc(size_t) GCC_ATTR_MALLOC);
 _G2CON_EXTRN(void _g2_con_clear(g2_connection_t *, int) GCC_ATTR_FASTCALL);
 _G2CON_EXTRN(void g2_con_free(g2_connection_t *));
+_G2CON_EXTRN(void g2_con_free_glob(g2_connection_t *));
 # ifdef HELGRIND_ME
 _G2CON_EXTRN(void g2_con_helgrind_transfer(g2_connection_t *) GCC_ATTR_FASTCALL);
 # else

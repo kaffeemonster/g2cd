@@ -180,8 +180,8 @@ ARCH_FLAGS += -mtune=$(ARCH)
 #ARCH_FLAGS += -minline-all-stringops
 #ARCH_FLAGS += -minline-stringops-dynamically
 # gcc 4.3??
-#ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
-#ARCH_FLAGS += -maccumulate-outgoing-args
+ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
+ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
 # specified, it does not "know" special registers (MMX/SSE) which
@@ -269,7 +269,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -foptimize-sibling-calls
+#OPT_FLAGS = -O2 -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -299,7 +299,6 @@ LDLIBS_BASE += -ldl #-lm
 #LDLIBS_BASE += -lrt
 #	a lib providing dbm_*, berkleydb will fit, prop. also anything else
 LDLIBS_BASE += -ldb
-LDLIBS_BASE += -lxml2
 #	on old solaris it's in the dbm lib, part of system
 #LDLIBS_BASE += -ldbm
 LDLIBS_Z = -lz $(LDLIBS_BASE)
@@ -358,7 +357,6 @@ LDFLAGS += -L./lib/
 #
 # get our modulepath in the ring, if not used does not harm
 CFLAGS += -Izlib
-CFLAGS += `xml2-config --cflags`
 
 #
 # Macros & Misc
@@ -380,7 +378,9 @@ CFLAGS += -DHAVE_CONFIG_H
 CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DASSERT_BUFFERS
 #CFLAGS += -DQHT_DUMP
+#CFLAGS += -DUDP_DUMP
 #CFLAGS += -DHELGRIND_ME
+CFLAGS += -DVALGRIND_ME
 CFLAGS += -DHAVE_BINUTILS=218
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen
@@ -436,9 +436,9 @@ DATEFLAGS = -u +%Y%m%d-%H%M
 #	Name of Program
 MAIN = g2cd
 #	Version-ding-dong
-VERSION = 0.0.00.10
+VERSION = 0.0.00.11
 DISTNAME = $(MAIN)-$(VERSION)
-LONGNAME = Go2CHub $(VERSION) programming Experiment
+LONGNAME = Go2CDaemon $(VERSION)
 
 #
 #	mostly all files depend on these header's
@@ -856,12 +856,12 @@ G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h 
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
-G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h
+G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h lib/guid.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h lib/tchar.h
 G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
-G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h
+G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h lib/guid.h
 timeout.o: timeout.h
 gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h  lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
@@ -873,6 +873,7 @@ G2QueryKey.h: lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
 G2QHT.h: lib/hzp.h lib/atomic.h lib/tchar.h
+G2GUIDCache.h: lib/guid.h
 timeout.h: lib/list.h lib/hzp.h
 
 #

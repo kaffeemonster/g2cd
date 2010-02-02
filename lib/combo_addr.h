@@ -284,7 +284,7 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 		return false;
 	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8   "this" net, "this" host */
 		return false;
-	if(IP_CMP(a, 0xA0000000, SLASH08)) /* 010.000.000.000/8   private */
+	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private */
 		return false;
 	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
 	   subject to allocation to RIRs? -> RFC 5735 */
@@ -324,6 +324,69 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 		return false;
 out:
 	return true;
+}
+
+static inline bool combo_addr_is_forbidden(const union combo_addr *addr)
+{
+	in_addr_t a;
+
+// TODO: when IPv6 is common, change it
+	if(unlikely(AF_INET6 == addr->s_fam))
+	{
+		const struct in6_addr *a6 = &addr->in6.sin6_addr;
+		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
+			return true;
+		if(unlikely(IN6_IS_ADDR_LOOPBACK(a6)))
+			return true;
+		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
+			return true;
+		/* keep test for v4 last */
+		if(IN6_IS_ADDR_V4MAPPED(a6) ||
+		   IN6_IS_ADDR_V4COMPAT(a6))
+			a = a6->s6_addr32[3];
+		else
+			goto out;
+	}
+	else
+		a = addr->in.sin_addr.s_addr;
+
+	/* according to RFC 3330 & RFC 5735 */
+	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
+		return true;
+	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8   "this" net, "this" host */
+		return true;
+	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
+	   subject to allocation to RIRs? -> RFC 5735 */
+	/* 24.0.0.0/8 IP over cable television systems
+	   subject to allocation to RIRs  -> RFC 5735 */
+	/* 39.0.0.0/8 Class A Subnet experiment
+	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
+		return true;
+	/* 128.0.0.0/16 lowest class B net
+	   subject to allocation to RIRs  -> RFC 5735 */
+	/* 191.255.0.0/16 highest class B
+	   subject to allocation to RIRs  -> RFC 5735 */
+	/* 192.0.0.0/24 lowest class C
+	   Future protocol assignments */
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+		return true;
+	if(IP_CMP(a, 0xC0586300, SLASH16)) /* 192.088.099.000/24  6to4 relays anycast */
+		return true; /* only sinks, not source */
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
+		return true;
+	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
+		return true;
+	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
+		return true;
+	/* 223.255.255.0/24 highest class C
+	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
+		return true;
+	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
+		return true;
+out:
+	return false;
 }
 # undef SLASH04
 # undef SLASH08

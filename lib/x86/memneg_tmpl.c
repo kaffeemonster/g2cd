@@ -2,7 +2,7 @@
  * memneg.c
  * neg a memory region efficient, x86 implementation, template
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -796,7 +796,6 @@ alignment_size_t:
 		/* handle remaining in 32 bit, should be small and helps amd64 */
 			"mov	%9, %3\n\t"
 			"shr	$2, %3\n\t"
-			"test	%3, %3\n\t"
 			"jz	4f\n\t"
 			"xor	%1, %1\n"
 			"3:\n\t"

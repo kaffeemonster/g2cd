@@ -60,6 +60,7 @@ LIBHEADS = \
 	$(MPL)/config_parser.h \
 	$(MPL)/recv_buff.h \
 	$(MPL)/udpfromto.h \
+	$(MPL)/guid.h \
 	$(MPL)/hzp.h \
 	$(MPL)/atomic.h \
 	$(MPL)/ansi_prng.h \
@@ -169,10 +170,14 @@ MEMNEGSRC = \
 	$(MPL)/sparc/memneg.c
 MEMCPYSRC = \
 	$(MPL)/generic/memcpy.c \
-	$(MPL)/sparc/memcpy.c
+	$(MPL)/sparc/memcpy.c \
+	$(MPL)/x86/memcpy_tmpl.c \
+	$(MPL)/x86/memcpy.c
 MEMPCPYSRC = \
 	$(MPL)/generic/mempcpy.c \
 	$(MPL)/sparc/mempcpy.c
+MEMMOVESRC = \
+	$(MPL)/generic/memmove.c
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
@@ -245,6 +250,7 @@ LIBASRCS = \
 	$(MEMNEGSRC) \
 	$(MEMCPYSRC) \
 	$(MEMPCPYSRC) \
+	$(MEMMOVESRC) \
 	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
@@ -268,7 +274,9 @@ LIBSRCS = \
 	$(MPL)/bitfield_rle.c \
 	$(MPL)/cpy_rest.c \
 	$(MPL)/config_parser.c \
+	$(MPL)/entities.c \
 	$(MPL)/flsst.c \
+	$(MPL)/guid.c \
 	$(MPL)/hzp.c \
 	$(MPL)/inet_ntop.c \
 	$(MPL)/inet_pton.c \
@@ -280,6 +288,7 @@ LIBSRCS = \
 	$(MPL)/mempopcnt.c \
 	$(MPL)/memcpy.c \
 	$(MPL)/mempcpy.c \
+	$(MPL)/memmove.c \
 	$(MPL)/mem_searchrn.c \
 	$(MPL)/my_epoll.c \
 	$(MPL)/my_bitops.c \
@@ -305,6 +314,7 @@ BITOPOBJS = \
 	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
 	$(MPL)/config_parser.o \
+	$(MPL)/entities.o \
 	$(MPL)/flsst.o \
 	$(MPL)/introsort.o \
 	$(MPL)/memxorcpy.o \
@@ -313,6 +323,7 @@ BITOPOBJS = \
 	$(MPL)/mempopcnt.o \
 	$(MPL)/memcpy.o \
 	$(MPL)/mempcpy.o \
+	$(MPL)/memmove.o \
 	$(MPL)/mem_searchrn.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/strnlen.o \
@@ -344,6 +355,7 @@ LIBOBJS = \
 	$(MPL)/atomic.o \
 	$(MPL)/ansi_prng.o \
 	$(MPL)/backtrace.o \
+	$(MPL)/guid.o \
 	$(MPL)/hzp.o \
 	$(MPL)/inet_ntop.o \
 	$(MPL)/inet_pton.o \
@@ -424,6 +436,7 @@ $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/memcpy.o: $(MEMCPYSRC)
 $(MPL)/mempcpy.o: $(MEMPCPYSRC)
+$(MPL)/memmove.o: $(MEMMOVESRC)
 $(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
