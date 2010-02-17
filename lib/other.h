@@ -166,6 +166,12 @@ static inline int isblank(int c)
 # define GCC_ATTR_ALIGNED(x)
 #endif
 
+#if _GNUC_PREREQ (2,7)
+# define GCC_ATTR_ALIAS(x) GCC_ATTRIB(alias(x))
+#else
+# define GCC_ATTR_ALIAS(x)
+#endif
+
 #if _GNUC_PREREQ (2,7) || _SUNC_PREREQ(0x5100)
 # define GCC_ATTR_CONSTRUCT GCC_ATTRIB(__constructor__)
 # define GCC_ATTR_DESTRUCT GCC_ATTRIB(__destructor__)
@@ -303,7 +309,7 @@ typedef void (*sighandler_t)(int);
 #   define cpu_relax() asm volatile("pause")
 #  elif defined(__powerpc64__)
 #   define cpu_relax() asm volatile("or 1,1,1\n\tor 2,2,2")
-#  elif defined(__IA64__)
+#  elif defined(__ia64__)
 #   define cpu_relax() asm volatile ("hint @pause" ::: "memory")
 #  else
 #   define cpu_relax() barrier();

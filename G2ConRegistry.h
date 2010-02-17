@@ -30,7 +30,7 @@
 # include "G2Connection.h"
 # include "lib/combo_addr.h"
 
-#define CONREG_LEVEL_COUNT 3
+#define CONREG_LEVEL_COUNT 4
 
 # ifndef _G2CONREGISTRY_C
 #  define _G2CONREGISTRY_EXTRN(x) extern x GCC_ATTR_VIS("hidden")

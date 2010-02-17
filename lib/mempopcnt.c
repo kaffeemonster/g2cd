@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,7 +47,7 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/mempopcnt.c"
-# elif defined(__IA64__)
+# elif defined(__ia64__)
 #  include "ia64/mempopcnt.c"
 # elif defined(__sparc) || defined(__sparc_)
 #  include "sparc/mempopcnt.c"

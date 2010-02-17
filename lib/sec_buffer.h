@@ -4,7 +4,7 @@
  * helper-macros, which hopefully make working safe with this
  * buffers
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -123,7 +123,7 @@ struct pointer_buff
 # define buffer_compact(x) \
 	do { \
 		if(buffer_remaining(x)) \
-			if((x).pos) memmove((x).data, \
+			if((x).pos) my_memmove((x).data, \
 				buffer_start(x), \
 				buffer_remaining(x)); \
 		buffer_unflip(x); \

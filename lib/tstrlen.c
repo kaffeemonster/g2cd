@@ -45,6 +45,8 @@
 #  include "ppc/tstrlen.c"
 # elif defined(__alpha__)
 #  include "alpha/tstrlen.c"
+# elif defined(__arm__)
+#  include "arm/tstrlen.c"
 # else
 #  include "generic/tstrlen.c"
 # endif

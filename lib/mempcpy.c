@@ -2,7 +2,7 @@
  * mempcpy.c
  * mempcpy for non-GNU platforms
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -42,11 +42,6 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-#ifndef MEMPCPY_DEFINED
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
-#define MEMPCPY_DEFINED
-#endif
-
 #ifdef I_LIKE_ASM
 # if defined(__sparc) || defined(__sparc__)
 	/* works for both */
@@ -56,5 +51,10 @@ void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
 # endif
 #else
 # include "generic/mempcpy.c"
+#endif
+
+#undef mempcpy
+#ifndef MEMPCPY_DEFINED
+void *mempcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_mempcpy");
 #endif
 /* EOF */

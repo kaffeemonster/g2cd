@@ -78,6 +78,7 @@ LIBHEADS = \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
 	$(MPL)/sparc/sparc_vis.h \
+	$(MPL)/ia64/ia64.h \
 	$(MPL)/generic/little_endian.h \
 	$(MPL)/generic/big_endian.h
 
@@ -178,6 +179,12 @@ MEMPCPYSRC = \
 	$(MPL)/sparc/mempcpy.c
 MEMMOVESRC = \
 	$(MPL)/generic/memmove.c
+MEMCHRSRC = \
+	$(MPL)/generic/memchr.c \
+	$(MPL)/alpha/memchr.c \
+	$(MPL)/arm/memchr.c \
+	$(MPL)/x86/memchr.c \
+	$(MPL)/ppc/memchr.c
 MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
@@ -189,21 +196,26 @@ MEMPOPCNTSRC = \
 MEM_SEARCHRNSRC = \
 	$(MPL)/generic/mem_searchrn.c \
 	$(MPL)/alpha/mem_searchrn.c \
+	$(MPL)/arm/mem_searchrn.c \
 	$(MPL)/x86/mem_searchrn.c \
 	$(MPL)/ppc/mem_searchrn.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
 	$(MPL)/alpha/strnlen.c \
+	$(MPL)/arm/strnlen.c \
 	$(MPL)/x86/strnlen.c \
 	$(MPL)/ppc/strnlen.c
 STRLENSRC = \
 	$(MPL)/generic/strlen.c \
 	$(MPL)/alpha/strlen.c \
+	$(MPL)/arm/strlen.c \
+	$(MPL)/ia64/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
 STRCHRNULSRC = \
 	$(MPL)/generic/strchrnul.c \
 	$(MPL)/alpha/strchrnul.c \
+	$(MPL)/arm/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
 STRNCASECMP_ASRC = \
@@ -214,14 +226,23 @@ STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \
 	$(MPL)/ppc/strnpcpy.c
+TO_BASE16SRC = \
+	$(MPL)/generic/to_base16.c \
+	$(MPL)/arm/to_base16.c \
+	$(MPL)/alpha/to_base16.c \
+	$(MPL)/ia64/to_base16.c \
+	$(MPL)/ppc/to_base16.c \
+	$(MPL)/x86/to_base16.c
 TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
 	$(MPL)/alpha/tstrlen.c \
+	$(MPL)/arm/tstrlen.c \
 	$(MPL)/x86/tstrlen.c \
 	$(MPL)/ppc/tstrlen.c
 TSTRCHRNULSRC = \
 	$(MPL)/generic/tstrchrnul.c \
 	$(MPL)/alpha/tstrchrnul.c \
+	$(MPL)/arm/tstrchrnul.c \
 	$(MPL)/x86/tstrchrnul.c \
 	$(MPL)/ppc/tstrchrnul.c
 TSTRNCMPSRC = \
@@ -229,6 +250,7 @@ TSTRNCMPSRC = \
 ADLER32SRC = \
 	$(MPL)/generic/adler32.c \
 	$(MPL)/arm/adler32.c \
+	$(MPL)/ia64/adler32.c \
 	$(MPL)/sparc/adler32.c \
 	$(MPL)/x86/adler32.c \
 	$(MPL)/ppc/adler32.c
@@ -251,6 +273,7 @@ LIBASRCS = \
 	$(MEMCPYSRC) \
 	$(MEMPCPYSRC) \
 	$(MEMMOVESRC) \
+	$(MEMCHRSRC) \
 	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
@@ -258,6 +281,7 @@ LIBASRCS = \
 	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
+	$(TO_BASE16SRC) \
 	$(TSTRLENSRC) \
 	$(TSTRCHRNULSRC) \
 	$(TSTRNCMPSRC) \
@@ -289,6 +313,7 @@ LIBSRCS = \
 	$(MPL)/memcpy.c \
 	$(MPL)/mempcpy.c \
 	$(MPL)/memmove.c \
+	$(MPL)/memchr.c \
 	$(MPL)/mem_searchrn.c \
 	$(MPL)/my_epoll.c \
 	$(MPL)/my_bitops.c \
@@ -296,6 +321,7 @@ LIBSRCS = \
 	$(MPL)/recv_buff.c \
 	$(MPL)/rbtree.c \
 	$(MPL)/udpfromto.c \
+	$(MPL)/print_ts.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
 	$(MPL)/strchr.c \
@@ -303,6 +329,7 @@ LIBSRCS = \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
+	$(MPL)/to_base16.c \
 	$(MPL)/tstrlen.c \
 	$(MPL)/tstrchrnul.c \
 	$(MPL)/tstrncmp.c \
@@ -324,6 +351,7 @@ BITOPOBJS = \
 	$(MPL)/memcpy.o \
 	$(MPL)/mempcpy.o \
 	$(MPL)/memmove.o \
+	$(MPL)/memchr.o \
 	$(MPL)/mem_searchrn.o \
 	$(MPL)/popcountst.o \
 	$(MPL)/strnlen.o \
@@ -336,6 +364,7 @@ BITOPOBJS = \
 	$(MPL)/my_bitops.o
 
 TCHAROBJS = \
+	$(MPL)/to_base16.o \
 	$(MPL)/tstrlen.o \
 	$(MPL)/tstrchrnul.o \
 	$(MPL)/tstrncmp.o \
@@ -364,6 +393,7 @@ LIBOBJS = \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
+	$(MPL)/print_ts.o \
 	$(MPL)/vsnprintf.o
 
 # target for this module
@@ -437,6 +467,7 @@ $(MPL)/memneg.o: $(MEMNEGSRC)
 $(MPL)/memcpy.o: $(MEMCPYSRC)
 $(MPL)/mempcpy.o: $(MEMPCPYSRC)
 $(MPL)/memmove.o: $(MEMMOVESRC)
+$(MPL)/memchr.o: $(MEMCHRSRC)
 $(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
@@ -444,6 +475,7 @@ $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
+$(MPL)/to_base16.o: $(TO_BASE16SRC)
 $(MPL)/tstrlen.o: $(TSTRLENSRC)
 $(MPL)/tstrchrnul.o: $(TSTRCHRNULSRC)
 $(MPL)/tstrncmp.o: $(TSTRNCMPSRC)
@@ -452,6 +484,7 @@ $(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
 $(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
+%(MPL)/print_ts.o: $(MPL)/itoa.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h

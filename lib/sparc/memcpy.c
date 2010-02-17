@@ -54,6 +54,17 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 			/* and there was much rejoicing... */
 			i = ALIGN_DIFF(dst_c, ALIGNMENT_WANTED);
 			len -= i;
+			/*
+			 * ldda from %asi QUAD_LDD (quad load 16 b aligned?)
+			 * does not use the dcache, so a membar #sync is needed
+			 * before (errata)
+			 * there are many problems with block loads, so a
+			 * membar #sync is the best way to prevent that
+			 * block stores could hang US-III+ with 7:1(1050MHz)
+			 * or 8:1 (1200MHz) Fireplane clock ratio
+			 * a store to the same cache line after a block store
+			 * -> data corruption -> membar #sync
+			 */
 			asm (
 				"tst	%3\n\t"
 				"bz	7f\n"
@@ -202,7 +213,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	return dst;
 }
 
-void *memcpy(void *restrict dst, const void *restrict src, size_t len)
+void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
 		return cpy_rest_o(dst, src, len);

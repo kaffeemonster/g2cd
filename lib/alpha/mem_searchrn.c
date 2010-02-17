@@ -55,7 +55,7 @@ void *mem_searchrn(void *s, size_t len)
 	p  = (char *)ALIGN_DOWN(s, SOUL);
 	rn = (*(size_t *)p);
 	rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
-	rr = cmpbge(rr, 0x0101010101010101UL);;
+	rr = cmpbeqz(rr);
 	if(!HOST_IS_BIGENDIAN) {
 		rr <<= k + SOULM1 * BITS_PER_CHAR;
 		rr >>= k + SOULM1 * BITS_PER_CHAR;
@@ -74,7 +74,7 @@ void *mem_searchrn(void *s, size_t len)
 		else
 			last_rr = rr << SOULM1;
 		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-		rn  = cmpbge(rn, 0x0101010101010101UL);;
+		rn  = cmpbeqz(rn);
 		if(!HOST_IS_BIGENDIAN)
 			rr &= rn >> 1;
 		else
@@ -91,14 +91,14 @@ void *mem_searchrn(void *s, size_t len)
 		p += SOUL;
 		rn = *(size_t *)p;
 		rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
-		rr = cmpbge(rr, 0x0101010101010101UL);;
+		rr = cmpbeqz(rr);
 		if(unlikely(len <= SOUL))
 			break;
 		len -= SOUL;
 		if(rr || last_rr)
 		{
 			rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-			rn = cmpbge(rn, 0x0101010101010101UL);;
+			rn = cmpbeqz(rn);
 			last_rr &= rn;
 			if(last_rr)
 				return p - 1;
@@ -125,7 +125,7 @@ void *mem_searchrn(void *s, size_t len)
 	if(rr || last_rr)
 	{
 		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-		rn = cmpbge(rn, 0x0101010101010101UL);;
+		rn = cmpbeqz(rn);
 		last_rr &= rn;
 		if(last_rr)
 			return p - 1;

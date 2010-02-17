@@ -132,14 +132,22 @@ static GCC_ATTR_FASTCALL void *DFUNC_NAME(memcpy, ARCH_NAME_SUFFIX)(void *restri
 				"1:\n\t"
 				"sub	$-128, %0\n\t"
 				SSE_PREFETCH(112(%1))
-				SSE_LOAD8(-64(%1), %%xmm0)
-				SSE_LOAD8(-48(%1), %%xmm1)
-				SSE_LOAD8(-32(%1), %%xmm2)
-				SSE_LOAD8(-16(%1), %%xmm3)
-				SSE_LOAD8(  0(%1), %%xmm4)
-				SSE_LOAD8( 16(%1), %%xmm5)
-				SSE_LOAD8( 32(%1), %%xmm6)
-				SSE_LOAD8( 48(%1), %%xmm7)
+				SSE_LOAD8L(-64(%1), %%xmm0)
+				SSE_LOAD8L(-48(%1), %%xmm1)
+				SSE_LOAD8L(-32(%1), %%xmm2)
+				SSE_LOAD8L(-16(%1), %%xmm3)
+				SSE_LOAD8L(  0(%1), %%xmm4)
+				SSE_LOAD8L( 16(%1), %%xmm5)
+				SSE_LOAD8L( 32(%1), %%xmm6)
+				SSE_LOAD8L( 48(%1), %%xmm7)
+				SSE_LOAD8H(-64(%1), %%xmm0)
+				SSE_LOAD8H(-48(%1), %%xmm1)
+				SSE_LOAD8H(-32(%1), %%xmm2)
+				SSE_LOAD8H(-16(%1), %%xmm3)
+				SSE_LOAD8H(  0(%1), %%xmm4)
+				SSE_LOAD8H( 16(%1), %%xmm5)
+				SSE_LOAD8H( 32(%1), %%xmm6)
+				SSE_LOAD8H( 48(%1), %%xmm7)
 				"sub	$-128, %1\n\t"
 				"dec	%3\n\t"
 #ifdef WANT_BIG
@@ -172,7 +180,8 @@ static GCC_ATTR_FASTCALL void *DFUNC_NAME(memcpy, ARCH_NAME_SUFFIX)(void *restri
 				"jz	4f\n\t"
 				".p2align 2\n"
 				"3:\n\t"
-				SSE_LOAD8(0(%1), %%xmm0)
+				SSE_LOAD8L(0(%1), %%xmm0)
+				SSE_LOAD8H(0(%1), %%xmm0)
 				"add	$16, %1\n\t"
 				"dec	%3\n\t"
 #ifdef WANT_BIG

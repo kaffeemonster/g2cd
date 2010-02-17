@@ -35,7 +35,7 @@
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # ifdef ADLER32_C
-LIB_MY_BITOPS_EXTRN(uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len));
+uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len);
 # endif
 LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
@@ -57,25 +57,20 @@ LIB_MY_BITOPS_EXTRN(void *memand(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memneg(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(size_t mempopcnt(const void *s, size_t len));
 LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
-# ifndef HAVE_MEMCPY
-#  ifndef memcpy
-/* outch! memcpy as a macro is ... evil */
-void *memcpy(void *restrict dst, const void *restrict src, size_t len);
-#  endif
-#  define MEMCPY_DEFINED
-# endif
+# undef memcpy
+LIB_MY_BITOPS_EXTRN(void *my_memcpy(void *restrict dst, const void *restrict src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memcpy_big(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_FASTCALL);
+# undef mempcpy
 # ifndef HAVE_MEMPCPY
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
+void *mempcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_mempcpy");
+;
 #  define MEMPCPY_DEFINED
 # endif
-# ifndef HAVE_MEMMOVE
-#  ifndef memmove
-/* outch! memmove as a macro is ... evil */
-void *memmove(void *dst, const void *src, size_t len);
-#  endif
-#  define MEMMOVE_DEFINED
-# endif
+LIB_MY_BITOPS_EXTRN(void *my_mempcpy(void *restrict dst, const void *restrict src, size_t len));
+# undef memmove
+LIB_MY_BITOPS_EXTRN(void *my_memmove(void *dst, const void *src, size_t len));
+# undef memchr
+LIB_MY_BITOPS_EXTRN(void *my_memchr(const void *s, int c, size_t n));
 LIB_MY_BITOPS_EXTRN(int strncasecmp_a(const char *s1, const char *s2, size_t n));
 char *strpcpy(char *restrict dst, const char *restrict src);
 char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen);

@@ -84,21 +84,34 @@ static inline size_t ctlz(unsigned long a)
 #define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
 #define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << SOULM1 * BITS_PER_CHAR) : cttz((x)))
 
+# define cmpbeqz(a) (cmpbge(0, a))
 # if _GNUC_PREREQ(3, 3)
-#  define cmpbge(a, b)	(unsigned long)__builtin_alpha_cmpbge((long)a, (long)b)
-#  define zapnot(a, mask)	(unsigned long)__builtin_alpha_zapnot((long)a, (long)mask)
+#  define cmpbge	__builtin_alpha_cmpbge
+#  define zapnot	__builtin_alpha_zapnot
 # else
 static inline unsigned long cmpbge(unsigned long a, unsigned long b)
 {
 	unsigned long r;
-	asm ("cmpbge	%1, %2, %0" : "=r" (r) : "r" (a), "r" (b));
+	asm ("cmpbge	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (b));
 	return r;
 }
 static inline unsigned long zapnot(unsigned long a, unsigned long mask)
 {
 	unsigned long r;
-	asm ("cmpbge	%1, %2, %0" : "=r" (r) : "r" (a), "r" (mask));
+	asm ("zapnot	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
 	return r;
 }
+# endif
+# ifdef __alpha_max__
+#  if _GNUC_PREREQ(3, 3)
+#   define unpkbw	__builtin_alpha_unpkbw
+#  else
+static inline unsigned long unpkbw(unsigned long a)
+{
+	unsigned long r;
+	asm (".arch ev6; unpkbw	%r1, %0" : "=r" (r) : "rJ" (a));
+	return r;
+}
+#  endif
 # endif
 #endif

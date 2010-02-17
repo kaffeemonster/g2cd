@@ -32,7 +32,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	vector unsigned short v0;
 	vector unsigned short v_c;
-	vector unsigned short v_perm;
+	vector unsigned char v_perm;
 	vector unsigned short x;
 	vector bool short m1, m2;
 	uint32_t r;
@@ -54,9 +54,9 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	m2 = vec_cmpeq(x, v_c);
 	m1 = vec_or(m1, m2);
 	v_perm = vec_lvsl(0, (unsigned short *)(uintptr_t)s);
-	m1 = vec_perm(m1, v0, v_perm);
+	m1 = (vector bool short)vec_perm((vector unsigned short)m1, v0, v_perm);
 	v_perm = vec_lvsr(0, (unsigned short *)(uintptr_t)s);
-	m1 = vec_perm(v0, m1, v_perm);
+	m1 = (vector bool short)vec_perm(v0, (vector unsigned short)m1, v_perm);
 
 	while(vec_all_eq(m1, v0))
 	{

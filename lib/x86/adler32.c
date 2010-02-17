@@ -284,7 +284,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 				"jne	1b"
 			: /* %0 */ "=R" (s1),
 			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=R" (buf),
+			  /* %2 */ "=abdSD" (buf),
 			  /* %3 */ "=c" (k),
 			  /* %4 */ "="CLOB"R" (t)
 			: /* %5 */ "r" (16 - n),
@@ -478,7 +478,7 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 				"jne	1b"
 			: /* %0 */ "=R" (s1),
 			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=R" (buf),
+			  /* %2 */ "=abdDS" (buf),
 			  /* %3 */ "=c" (k),
 			  /* %4 */ "="CLOB"R" (t)
 			: /* %5 */ "r" (16 - n),
@@ -676,7 +676,7 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 				"jne	1b"
 			: /* %0 */ "=R" (s1),
 			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=R" (buf),
+			  /* %2 */ "=abdSD" (buf),
 			  /* %3 */ "=c" (k),
 			  /* %4 */ "="CLOB"R" (t)
 			: /* %5 */ "r" (16 - n),

@@ -303,7 +303,7 @@ struct zpad *qht_get_zpad(void)
 }
 
 /**/
-static inline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
+static noinline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
 {
 	struct scratch *scratch = pthread_getspecific(scratch_key);
 
@@ -319,9 +319,9 @@ static inline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t lengt
 	 * we fix it up once and by hand...
 	 */
 	length += 16;
-	if(scratch)
+	if(likely(scratch))
 	{
-		if(scratch->length >= length)
+		if(likely(scratch->length >= length))
 			return (unsigned char *)ALIGN(scratch->data, 16);
 		else
 		{
@@ -496,7 +496,7 @@ static uint32_t g2_qht_search_number_word(const tchar_t *s, size_t start, size_t
 	return g2_qht_hnumber(h, QHT_DEFAULT_BITS);
 }
 
-void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
+noinline void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 {
 	struct search_hash_buffer *shb =
 		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
@@ -504,17 +504,6 @@ void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 	if(!shb || shb->num >= shb->size)
 		return;
 	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
-}
-
-static noinline tchar_t *to_base16(const unsigned char *h, tchar_t *wptr, unsigned num)
-{
-	static const unsigned char base16c[] = "0123456789abcdef";
-	unsigned i;
-	for(i = 0; i < num; i++) {
-		*wptr++ = base16c[h[i] / 16];
-		*wptr++ = base16c[h[i] % 16];
-	}
-	return wptr;
 }
 
 #define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
@@ -537,48 +526,48 @@ static noinline tchar_t *to_base32(const unsigned char *h, tchar_t *wptr, unsign
 	return wptr;
 }
 
-#define URN_SHA1 "urn:sha1:"
 void g2_qht_search_add_sha1(const unsigned char *h)
 {
-	tchar_t ih[sizeof(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
-	tchar_t *wptr = strplitctcpy(ih, URN_SHA1);
+	static const tchar_t URN_SHA1[] = {'u','r','n',':','s','h','a','1',':'};
+	tchar_t ih[anum(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
+	tchar_t *wptr = mempcpy(ih, URN_SHA1, sizeof(URN_SHA1));
 	wptr = to_base32(h, wptr, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
-#define URN_TTR "urn:tree:tiger/:"
 void g2_qht_search_add_ttr(const unsigned char *h)
 {
-	tchar_t ih[sizeof(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
-	tchar_t *wptr = strplitctcpy(ih, URN_TTR);
+	static const tchar_t URN_TTR[] = {'u','r','n',':','t','r','e','e',':','t','i','g','e','r','/',':'};
+	tchar_t ih[anum(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
+	tchar_t *wptr = mempcpy(ih, URN_TTR, sizeof(URN_TTR));
 	wptr = to_base32(h, wptr, 24);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
-#define URN_ED2K "urn:ed2khash:"
 void g2_qht_search_add_ed2k(const unsigned char *h)
 {
-	tchar_t ih[sizeof(URN_ED2K) + 16 * 2]; /* hex encoding */
-	tchar_t *wptr = strplitctcpy(ih, URN_ED2K);
-	wptr = to_base16(h, wptr, 16);
+	static const tchar_t URN_ED2K[] = {'u','r','n',':','e','d','2','k','h','a','s','h',':'};
+	tchar_t ih[anum(URN_ED2K) + 16 * 2]; /* hex encoding */
+	tchar_t *wptr = mempcpy(ih, URN_ED2K, sizeof(URN_ED2K));
+	wptr = to_base16(wptr, h, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
-#define URN_BTH "urn:btih:"
 void g2_qht_search_add_bth(const unsigned char *h)
 {
-	tchar_t ih[sizeof(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
-	tchar_t *wptr = strplitctcpy(ih, URN_BTH);
+	static const tchar_t URN_BTH[] = {'u','r','n',':','b','t','i','h',':'};
+	tchar_t ih[anum(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
+	tchar_t *wptr = mempcpy(ih, URN_BTH, sizeof(URN_BTH));
 	wptr = to_base32(h, wptr, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
-#define URN_MD5 "urn:md5:"
 void g2_qht_search_add_md5(const unsigned char *h)
 {
-	tchar_t ih[sizeof(URN_MD5) + 16 * 2]; /* hex encoding */
-	tchar_t *wptr = strplitctcpy(ih, URN_MD5);
-	wptr = to_base16(h, wptr, 16);
+	static const tchar_t URN_MD5[] = {'u','r','n',':','m','d','5',':'};
+	tchar_t ih[anum(URN_MD5) + 16 * 2]; /* hex encoding */
+	tchar_t *wptr = mempcpy(ih, URN_MD5, sizeof(URN_MD5));
+	wptr = to_base16(wptr, h, 16);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
@@ -1261,7 +1250,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 			remain = metadata_len;
 			w_ptr = metadata;
 
-			for(s = memchr(w_ptr, '=', remain); s; s = memchr(w_ptr, '=', remain))
+			for(s = my_memchr(w_ptr, '=', remain); s; s = my_memchr(w_ptr, '=', remain))
 			{
 				tchar_t *str_buf, *wptr, *str_buf_orig;
 				size_t len, o_len, tlen;
@@ -1279,7 +1268,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 				remain--;
 				if(!remain)
 					break;
-				s = memchr(w_ptr, '"', remain);
+				s = my_memchr(w_ptr, '"', remain);
 				if(!s)
 					len = remain;
 				else
@@ -1556,6 +1545,7 @@ bool g2_qht_global_search_bucket(struct qht_search_walk *qsw, struct qhtable *t)
 		hzp_ref(HZP_QHTDAT, qd = container_of(t->data, struct qht_data, data));
 	} while(qd != container_of(t->data, struct qht_data, data));
 
+	mem_barrier(&t->data);
 	if(!t->data || COMP_RLE == t->compressed || t->flags.reset_needed)
 		goto out_unref;
 
@@ -1572,7 +1562,7 @@ bool g2_qht_global_search_bucket(struct qht_search_walk *qsw, struct qhtable *t)
 		uint32_t n = hashes[i];
 		if(n > entries)
 			break;
-		if(!(qd->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR))))
+		if(unlikely(!(qd->data[n / BITS_PER_CHAR] & (1 << (n % BITS_PER_CHAR)))))
 			hashes[j++] = n;
 	}
 	/* did something match */
@@ -1668,7 +1658,7 @@ static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_
 		            COMP_NONE == tcomp ? "not" : "", res);
 		return false;
 	}
-	memcpy(t_data->data, ndata, res);
+	my_memcpy(t_data->data, ndata, res);
 	if(table->data) {
 		t_x = atomic_px(t_x, (atomicptr_t *)&table->data);
 		g2_qht_data_free(t_x);
@@ -1830,7 +1820,7 @@ void g2_qht_aggregate(struct qhtable *to, struct qhtable *from)
 			from_ptr = from->data;
 
 		if(to->flags.reset_needed) {
-			memcpy(to->data, from_ptr, qht_size);
+			my_memcpy(to->data, from_ptr, qht_size);
 			to->flags.reset_needed = false;
 		} else
 			memand(to->data, from_ptr, qht_size);
@@ -2047,7 +2037,7 @@ int g2_qht_add_frag(struct qhtable *ttable, struct qht_fragment *frag, uint8_t *
 		return -1;
 	}
 
-	memcpy(frag->data, data, frag->length);
+	my_memcpy(frag->data, data, frag->length);
 	*t = frag;
 
 	logg_develd_old("nr: %u\tcount: %u\n", frag->nr, frag->count);

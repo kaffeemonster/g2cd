@@ -322,3 +322,7 @@ void GCC_ATTR_FASTCALL recv_buff_free(struct norm_buff *ret)
 
 	recv_buff_free_system(ret);
 }
+
+/*@unused@*/
+static char const rcsid_rcb[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

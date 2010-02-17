@@ -89,7 +89,18 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		vs1 = vsetq_lane_u32(s1, vs1, 0);
 		vs2 = vsetq_lane_u32(s2, vs2, 0);
 restart_loop:
-		o_k = k = len < 4 * NMAX ? (unsigned)len : 4 * NMAX;
+		/*
+		 * s2 grows very fast (quadratic?), even if we accumulate
+		 * in 4 dwords, more rounds means nonlinear growth.
+		 * Since we have to prepare for the worst (qht all 0xff),
+		 * only do 2 times the work.
+		 * NEON is the only SIMD unit which can do the modulus so
+		 * cheap and instead save an expensive coprocessor->cpu
+		 * move...
+		 * (Other archs also want to save the move and stay longer
+		 * in the loop, but missing goodies make it not worthwhile)
+		 */
+		o_k = k = len < 2 * NMAX ? (unsigned)len : 2 * NMAX;
 		len -= k;
 
 		if(likely(k >= SOVUCQ))
@@ -187,9 +198,9 @@ restart_loop:
 			if(o_k > NMAX)
 			{
 				/*
-				 * we can stay 4 times NMAX in the loops above and
-				 * fill all 4 uint32_t near overflow.
-				 * Then we have to make the modulus on all vector elements.
+				 * we can stay 2 times NMAX in the loops above and
+				 * fill the first uint32_t of s2 near overflow.
+				 * Then we have to take the modulus on all vector elements.
 				 * There is only one problem:
 				 * No divide.
 				 *

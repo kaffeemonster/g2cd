@@ -31,7 +31,8 @@
 #undef SSE_FENCE
 #undef SSE_MOVE
 #undef SSE_LOAD
-#undef SSE_LOAD8
+#undef SSE_LOAD8L
+#undef SSE_LOAD8H
 #undef SSE_STORE
 #undef SSE_AND
 #undef SSE_XOR
@@ -68,14 +69,16 @@
 #  define SSE_STORE(x, y)	"movntdq	" #x ", " #y "\n\t"
 #  define SSE_AND(x, y)	"pand	" #x ", " #y "\n\t"
 #  define SSE_XOR(x, y)	"pxor	" #x ", " #y "\n\t"
-#  define SSE_LOAD8(x, y)	"movlpd	" #x ", " #y "\n\tmovhpd	8+" #x ", " #y "\n\t"
+#  define SSE_LOAD8L(x, y)	"movlpd	" #x ", " #y "\n\t"
+#  define SSE_LOAD8H(x, y)	"movhpd	8+" #x ", " #y "\n\t"
 #  ifdef HAVE_SSE3
 #   define SSE_LOAD(x, y)	"lddqu	" #x ", " #y "\n\t"
 #  else
 #   define SSE_LOAD(x, y)	"movdqu	" #x ", " #y "\n\t"
 #  endif
 # else
-#  define SSE_LOAD8(x, y)	"movlps	" #x ", " #y "\n\tmovhps	8+" #x ", " #y "\n\t"
+#  define SSE_LOAD8L(x, y)	"movlps	" #x ", " #y "\n\t"
+#  define SSE_LOAD8H(x, y)	"movhps	8+" #x ", " #y "\n\t"
 #  define SSE_MOVE(x, y)	"movaps	" #x ", " #y "\n\t"
 #  define SSE_STORE(x, y)	"movntps	" #x ", " #y "\n\t"
 #  define SSE_AND(x, y)	"andps	" #x ", " #y "\n\t"

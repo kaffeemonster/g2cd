@@ -98,11 +98,11 @@ alignment_failed:
 	return dst;
 }
 
-void *memmove(void *dst, const void *src, size_t len)
+void *my_memmove(void *dst, const void *src, size_t len)
 {
 	/* we know we have a forward copying memcpy */
 	if(likely(dst <= src) || (const char *)src + len < (char *)dst) {
-		if(likely(len < 16))
+		if(unlikely(len < 16))
 			return cpy_rest_o(dst, src, len);
 		else
 			return memcpy_big(dst, src, len);

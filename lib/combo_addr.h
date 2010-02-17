@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -282,7 +282,7 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 	/* according to RFC 3330 & RFC 5735 */
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return false;
-	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8   "this" net, "this" host */
+	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
 		return false;
 	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private */
 		return false;
@@ -353,7 +353,7 @@ static inline bool combo_addr_is_forbidden(const union combo_addr *addr)
 	/* according to RFC 3330 & RFC 5735 */
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return true;
-	if(IP_CMP(a, 0x00000000, SLASH08)) /* 000.000.000.000/8   "this" net, "this" host */
+	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
 		return true;
 	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
 	   subject to allocation to RIRs? -> RFC 5735 */

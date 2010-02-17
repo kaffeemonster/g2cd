@@ -319,6 +319,7 @@ ARITH_FUNC(sub32)
 
 static GCC_ATTR_CONST inline unsigned long long pdist(unsigned long long a, unsigned long long b, unsigned long long acc)
 {
+	/* Errata 16: pdist and a store in the same inst. group corrupt dcache??? */
 	asm ("pdist	%1, %2, %0" : "=e" (acc) : "e" (a), "e" (b), "0" (acc));
 	return acc;
 }

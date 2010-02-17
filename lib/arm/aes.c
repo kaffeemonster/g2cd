@@ -105,7 +105,7 @@ static inline uint8x16_t pshufb(uint8x16_t x, uint8x16_t idx)
 	 * give the compiler a chance to schedule the two vtbl
 	 * independently by putting them in two asms
 	 *
-	 * scheduling still sucks, because the compiler does not see
+	 * scheduling still sucks, because the compiler does not know
 	 * that this are expensive instructions (2 cycles, 3 to result,
 	 * 7 to writeback (whatever that means...)), but otherwise the
 	 * compiler would totaly f*** it up:

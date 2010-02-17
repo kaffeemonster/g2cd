@@ -46,6 +46,8 @@
 #  include "ppc/mem_searchrn.c"
 # elif defined(__alpha__)
 #  include "alpha/mem_searchrn.c"
+# elif defined(__arm__)
+#  include "arm/mem_searchrn.c"
 # else
 #  include "generic/mem_searchrn.c"
 # endif

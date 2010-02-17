@@ -2,7 +2,7 @@
  * G2Connection.c
  * helper-function for G2-Connections
  *
- * Copyright (c) 2004 - 2010 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -587,16 +587,15 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 
 static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 {
-	char buffer[INET6_ADDRSTRLEN+1];
+	char *buffer;
 	union combo_addr l_addr;
-	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
 	char *z;
 	int ret_val = 0;
 	uint16_t port = 0;
 
-	strncpy(buffer, buffer_start(*to_con->recv), len);
+	buffer = buffer_start(*to_con->recv);
 	/* brutally NUL terminate, there is a \r\n behind us */
-	buffer[len] = '\0';
+	buffer[distance] = '\0';
 
 	/* port */
 	z = strrchr(buffer, ':');
@@ -612,7 +611,7 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	combo_addr_set_port(&l_addr, port);
 
 	if(0 < ret_val) {
-		logg_develd_old("they say is our IP:\t%p#I\n", &l_addr);
+		logg_develd("they say is our IP:\t%p#I\n", &l_addr);
 		to_con->u.accept.flags.addr_ok = true;
 		return false;
 	}
@@ -622,7 +621,7 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 		if(0 == ret_val)
 			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
 			          "got illegal remote ip from", &to_con->remote_host,
-			           to_con->com_socket, (int)len, buffer);
+			           to_con->com_socket, (int)distance, buffer);
 		else
 			logg_errno(LOGF_DEBUG, "reading remote ip");
 
@@ -673,15 +672,14 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 
 static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
-	char buffer[INET6_ADDRSTRLEN+1];
-	size_t len = distance < INET6_ADDRSTRLEN ? distance : INET6_ADDRSTRLEN;
+	char *buffer;
 	char *z;
 	int ret_val = 0;
 	uint16_t port = 0;
 
-	strncpy(buffer, buffer_start(*to_con->recv), len);
+	buffer = buffer_start(*to_con->recv);
 	/* brutally NUL terminate, there is a \r\n behind us */
-	buffer[len] = '\0';
+	buffer[distance] = '\0';
 
 	/* port */
 // TODO: memrchr
@@ -698,7 +696,7 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 	combo_addr_set_port(&to_con->sent_addr, htons(port));
 
 	if(0 < ret_val) {
-		logg_develd_old("they think of their-IP:\t%p#I\n", &to_con->sent_addr);
+		logg_develd("they think of their-IP:\t%p#I\n", &to_con->sent_addr);
 		return false;
 	}
 	else
@@ -706,7 +704,7 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 		if(0 == ret_val)
 			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
 			          "got illegal listen ip from", &to_con->remote_host,
-			           to_con->com_socket, (int)len, buffer);
+			           to_con->com_socket, (int)distance, buffer);
 		else
 			logg_errno(LOGF_DEBUG, "reading listen ip");
 

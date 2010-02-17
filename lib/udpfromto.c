@@ -176,8 +176,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	for(cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg))
 	{
 # ifdef HAVE_IP_PKTINFO
-		if(SOL_IP      == cmsg->cmsg_level &&
-		    IP_PKTINFO == cmsg->cmsg_type)
+// TODO: change when IPv6 is big
+		if(likely(SOL_IP      == cmsg->cmsg_level &&
+		           IP_PKTINFO == cmsg->cmsg_type))
 		{
 			struct sockaddr_in *toi = (struct sockaddr_in *)to;
 			struct in_pktinfo *ip = (struct in_pktinfo *)CMSG_DATA(cmsg);

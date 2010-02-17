@@ -47,6 +47,8 @@
 #  include "ppc/tstrchrnul.c"
 # elif defined(__alpha__)
 #  include "alpha/tstrchrnul.c"
+# elif defined(__arm__)
+#  include "arm/tstrchrnul.c"
 # else
 #  include "generic/tstrchrnul.c"
 # endif

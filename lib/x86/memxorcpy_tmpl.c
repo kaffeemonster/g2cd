@@ -272,8 +272,10 @@ alignment_8:
 			"1:\n\t"
 			SSE_PREFETCH(128(%1))
 			SSE_PREFETCHW(128(%2))
-			SSE_LOAD8(  0(%1), %%xmm0)
-			SSE_LOAD8( 16(%1), %%xmm1)
+			SSE_LOAD8L(  0(%1), %%xmm0)
+			SSE_LOAD8L( 16(%1), %%xmm1)
+			SSE_LOAD8H(  0(%1), %%xmm0)
+			SSE_LOAD8H( 16(%1), %%xmm1)
 			"add	$32, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
 			SSE_XOR(  16(%2), %%xmm1)
@@ -286,7 +288,8 @@ alignment_8:
 			"2:\n\t"
 			"test	$16, %4\n\t"
 			"je	3f\n\t"
-			SSE_LOAD8(  0(%1), %%xmm0)
+			SSE_LOAD8L(  0(%1), %%xmm0)
+			SSE_LOAD8H(  0(%1), %%xmm0)
 			"add	$16, %1\n\t"
 			SSE_XOR(    (%2), %%xmm0)
 			SSE_STORE(%%xmm0,  (%2))
@@ -333,11 +336,15 @@ alignment_8:
 			SSE_PREFETCH(128(%1))
 			SSE_PREFETCH(128(%2))
 			SSE_PREFETCHW(128(%3))
-			SSE_LOAD8(  0(%1), %%xmm0)
-			SSE_LOAD8( 16(%1), %%xmm1)
+			SSE_LOAD8L(  0(%1), %%xmm0)
+			SSE_LOAD8L( 16(%1), %%xmm1)
+			SSE_LOAD8H(  0(%1), %%xmm0)
+			SSE_LOAD8H( 16(%1), %%xmm1)
 			"add	$32, %1\n\t"
-			SSE_LOAD8(  0(%2), %%xmm2)
-			SSE_LOAD8( 16(%2), %%xmm3)
+			SSE_LOAD8L(  0(%2), %%xmm2)
+			SSE_LOAD8L( 16(%2), %%xmm3)
+			SSE_LOAD8H(  0(%2), %%xmm2)
+			SSE_LOAD8H( 16(%2), %%xmm3)
 			SSE_XOR(  %%xmm0, %%xmm2)
 			SSE_XOR(  %%xmm1, %%xmm3)
 			"add	$32, %2\n\t"
@@ -350,9 +357,11 @@ alignment_8:
 			"2:\n\t"
 			"test	$16, %5\n\t"
 			"je	3f\n\t"
-			SSE_LOAD8(  0(%1), %%xmm0)
+			SSE_LOAD8L(  0(%1), %%xmm0)
+			SSE_LOAD8H(  0(%1), %%xmm0)
 			"add	$16, %1\n\t"
-			SSE_LOAD8(  0(%2), %%xmm1)
+			SSE_LOAD8L(  0(%2), %%xmm1)
+			SSE_LOAD8H(  0(%2), %%xmm1)
 			SSE_XOR(   %%xmm0, %%xmm1)
 			"add	$16, %2\n"
 			SSE_STORE(%%xmm1,  (%3))

@@ -2,7 +2,7 @@
  * aes_tab_gen.c
  * AES table generation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -198,9 +198,9 @@ static int output_tab(uint32_t tab[4][256], const char *of_name)
 	fout = fopen(of_name, "wb");
 	if(!fout)
 		return EXIT_FAILURE;
-	ret = fwrite(tab, 1, sizeof(tab), fout);
+	ret = fwrite(tab, 4 * 256 * sizeof(uint32_t), 1, fout);
 	fclose(fout);
-	if(sizeof(tab) != ret) {
+	if(1 != ret) {
 		remove(of_name);
 		return EXIT_FAILURE;
 	}

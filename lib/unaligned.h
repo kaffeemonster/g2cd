@@ -22,7 +22,7 @@
 #  include "mips/unaligned.h"
 # elif defined(__arm__)
 #  include "arm/unaligned.h"
-# elif defined(__IA64__)
+# elif defined(__ia64__)
 #  include "ia64/unaligned.h"
 # elif defined(__alpha__)
 #  include "alpha/unaligned.h"

@@ -398,7 +398,7 @@ static noinline const char *nop_finish(char *buf, const char *fmt, struct format
 {
 	size_t fmt_len = fmt - spec->fmt_start;
 	/* whatever the user wants, don't know, print literatly */
-	memcpy(buf, spec->fmt_start, spec->len + fmt_len < spec->maxlen ? fmt_len : spec->maxlen - spec->len);
+	my_memcpy(buf, spec->fmt_start, spec->len + fmt_len < spec->maxlen ? fmt_len : spec->maxlen - spec->len);
 	spec->len += fmt_len;
 	return end_format(buf+ fmt_len, fmt, spec);
 }
@@ -1274,7 +1274,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	}
 
 	if(s != buf)
-		memcpy(buf, s, err_str_len);
+		my_memcpy(buf, s, err_str_len);
 #else
 	if(!strerror_r(errno, buf, sav))
 		err_str_len += strnlen(buf, sav);
@@ -1335,13 +1335,13 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 			if(!spec->u.flags.left) {
 				memset(buf, ' ', d_len < maxlen ? d_len : maxlen);
 				maxlen -= d_len;
-				memcpy(buf + d_len, s, r_len < maxlen ? r_len : maxlen);
+				my_memcpy(buf + d_len, s, r_len < maxlen ? r_len : maxlen);
 			} else {
 				memset(buf + d_len, ' ', r_len + d_len < maxlen ? d_len : maxlen - r_len);
-				memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
+				my_memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
 			}
 		} else
-			memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
+			my_memcpy(buf, s, r_len < maxlen ? r_len : maxlen);
 		buf += spec->precision;
 		len += spec->precision;
 	}
@@ -1431,7 +1431,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 		memset(&ps, 0, sizeof(ps));
 		ret_val = wcrtomb(tbuf, wc, &ps);
 		if((size_t)-1 != ret_val) {
-			memcpy(buf, tbuf, sav > ret_val ? ret_val : sav);
+			my_memcpy(buf, tbuf, sav > ret_val ? ret_val : sav);
 			len = ret_val;
 		} else
 			len = 0;
@@ -1789,7 +1789,7 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 		m = strchrnul(fmt, '%');
 		diff = m - fmt;
 		if(likely(diff))
-			buf = mempcpy(buf, fmt, cur_fmt.len + diff < cur_fmt.maxlen ? diff : cur_fmt.maxlen - cur_fmt.len);
+			buf = my_mempcpy(buf, fmt, cur_fmt.len + diff < cur_fmt.maxlen ? diff : cur_fmt.maxlen - cur_fmt.len);
 		cur_fmt.len += diff;
 		fmt = m;
 

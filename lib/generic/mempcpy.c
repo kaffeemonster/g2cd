@@ -2,7 +2,7 @@
  * mempcpy.c
  * mempcpy for non-GNU platforms, genereic impl.
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -105,7 +105,7 @@ alignment_failed:
 	return cpy_rest(dst_c, src_c, len);
 }
 
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len)
+void *my_mempcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
 		return cpy_rest(dst, src, len);

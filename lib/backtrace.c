@@ -2,7 +2,7 @@
  * backtrace.c
  * try to spit out a backtrace on crashes
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -328,9 +328,9 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	 * I mean, an old sun an a new Linux i386 have it in sync, gnarf
  	*/
 #  if __WORDSIZE == 32
-	greg_iter = (unsigned long *)&uc->uc_mcontext.uc_regs->gregs[i];
+	greg_iter = (unsigned long *)&uc->uc_mcontext.uc_regs->gregs[0];
 #  else
-	greg_iter = (unsigned long *)&uc->uc_mcontext.gp_regs[i];
+	greg_iter = (unsigned long *)&uc->uc_mcontext.gp_regs[0];
 #  endif
 # elif defined(__arm__)
 	/* and again, hey, lets define something somehow different.
@@ -343,6 +343,9 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		greg_space[i] = uc->uc_mcontext.sc_regs[i];
 	greg_space[32] = uc->uc_mcontext.sc_pc;
 	greg_iter = greg_space;
+# elif defined(__ia64__)
+#  define NGREG 52
+	greg_iter = (unsigned long *)&uc->uc_mcontext.sc_ip;
 # else
 	greg_iter = (unsigned long *)&uc->uc_mcontext.gregs[0];
 # endif

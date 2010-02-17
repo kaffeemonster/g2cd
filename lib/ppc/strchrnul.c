@@ -57,9 +57,9 @@ char *strchrnul(const char *s, int c)
 	m2 = vec_cmpeq(x, v_c);
 	m1 = vec_or(m1, m2);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
-	m1 = vec_perm(m1, v0, v_perm);
+	m1 = (vector bool char)vec_perm((vector unsigned char)m1, v0, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
-	m1 = vec_perm(v0, m1, v_perm);
+	m1 = (vector bool char)vec_perm(v0, (vector unsigned char)m1, v_perm);
 
 	while(vec_all_eq(m1, v0)) {
 		p += SOVUC;

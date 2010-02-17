@@ -688,7 +688,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			{
 				size_t buff_remain_source = buffer_remaining(*source);
 				logg_develd_old("copying %zu of %u\n", buff_remain_source, target->length);
-				memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_source);
+				my_memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_source);
 				target->data_trunk.pos += buff_remain_source;
 				source->pos += buff_remain_source;
 				target->more_bytes_needed = true;
@@ -698,7 +698,7 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 			{
 				size_t buff_remain_target = buffer_remaining(target->data_trunk);
 				logg_develd_old("copying %zu of %u -> done\n", buff_remain_target, target->length);
-				memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_target);
+				my_memcpy(buffer_start(target->data_trunk), buffer_start(*source), buff_remain_target);
 				target->data_trunk.pos += buff_remain_target;
 				source->pos += buff_remain_target;
 			}
@@ -1132,7 +1132,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 			{
 				size_t len = buffer_remaining(source->data_trunk);
 				len = len < buffer_remaining(*target) ? len : buffer_remaining(*target);
-				memcpy(buffer_start(*target), buffer_start(source->data_trunk), len);
+				my_memcpy(buffer_start(*target), buffer_start(source->data_trunk), len);
 				target->pos += len;
 				source->data_trunk.pos += len;
 			}
@@ -1257,7 +1257,7 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, 
 				g2_ptype_names[p->type], buffer_remaining(p->data_trunk));
 			if(!(tmp_ptr = malloc(sizeof(p->pd.out))))
 				return -1;
-			memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
+			my_memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
 			p->data_trunk.data = tmp_ptr;
 			p->data_trunk_is_freeable = true;
 		}

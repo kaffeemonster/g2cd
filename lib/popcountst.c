@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -41,7 +41,7 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/popcountst.c"
-# elif defined(__IA64__)
+# elif defined(__ia64__)
 #  include "ia64/popcountst.c"
 # elif defined(__sparc) || defined(__sparc__)
 	/* works for both */

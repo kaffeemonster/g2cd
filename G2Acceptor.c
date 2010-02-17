@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * thread to accept connection and handshake G2
  *
- * Copyright (c) 2004-2009, Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -497,7 +497,7 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	bool f_found;
 
 	line = buffer_start(*to_con->recv);
-	ret_val = memchr(line, ':', len);
+	ret_val = my_memchr(line, ':', len);
 	if(unlikely(!ret_val)) /* no ':' on line? */
 		goto out_fixup;
 	if((ptrdiff_t)((line + len) - ret_val) < 2) /* any room for field data? */
@@ -983,8 +983,6 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					cp_ret = strplitcpy(buffer_start(*to_con->send), X_TRY_HUB_KEY ": ");
 					while(khl_num--)
 					{
-						struct tm when_tm;
-
 						if(AF_INET6 == khl_e[khl_num].na.s_fam)
 							*cp_ret++ = '[';
 						cp_ret = combo_addr_print_c(&khl_e[khl_num].na, cp_ret, INET6_ADDRSTRLEN);
@@ -993,8 +991,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 						*cp_ret++ = ':';
 						cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
 						*cp_ret++ = ' ';
-						gmtime_r(&khl_e[khl_num].when, &when_tm);
-						cp_ret += strftime(cp_ret, 20, "%Y-%m-%dT%H:%MZ", &when_tm);
+						cp_ret += print_ts(cp_ret, 20, &khl_e[khl_num].when);
 						*cp_ret++ = ',';
 						*cp_ret++ = ' ';
 					}

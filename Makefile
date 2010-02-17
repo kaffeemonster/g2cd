@@ -41,57 +41,87 @@ TARGET_ENDIAN = little
 
 #
 # Name of your Programs
+
 #	compiler
-CC = gcc
-#CC = x86_64-pc-linux-gnu-gcc
-#CC = powerpc-linux-gnu-gcc
-#CC = powerpc64-linux-gnu-gcc
-#CC = alpha-linux-gnu-gcc
-#CC = arm-unknown-linux-gnu-gcc
 HOSTCC = gcc
+#
+# use host
+#
+CC = gcc
+AS = as
+AR_PROG = ar
+RANLIB_PROG = ranlib
+OBJCOPY = objcopy
+STRIP = strip
+#
+# x86_64
+#
+#CC = x86_64-pc-linux-gnu-gcc
+#AS = x86_64-pc-linux-gnu-as
+#AR_PROG = x86_64-pc-linux-gnu-ar
+#RANLIB_PROG = x86_64-pc-linux-gnu-ranlib
+#OBJCOPY = x86_64-pc-linux-gnu-objcopy
+#STRIP = x86_64-pc-linux-gnu-strip
+#
+# powerpc
+#
+#CC = powerpc-linux-gnu-gcc
+#AS = powerpc-linux-gnu-as
+#AR_PROG = powerpc-linux-gnu-ar
+#RANLIB_PROG = powerpc-linux-gnu-ranlib
+#OBJCOPY = powerpc-linux-gnu-objcopy
+#STRIP = powerpc-linux-gnu-strip
+#
+# powerpc64
+#
+#CC = powerpc64-linux-gnu-gcc
+#AS = powerpc64-linux-gnu-as
+#AR_PROG = powerpc64-linux-gnu-ar
+#RANLIB_PROG = powerpc64-linux-gnu-ranlib
+#OBJCOPY = powerpc64-linux-gnu-objcopy
+#STRIP = powerpc64-linux-gnu-strip
+#
+# alpha
+#
+#CC = alpha-linux-gnu-gcc
+#AS = alpha-linux-gnu-as
+#AR_PROG = alpha-linux-gnu-ar
+#RANLIB_PROG = alpha-linux-gnu-ranlib
+#OBJCOPY = alpha-linux-gnu-objcopy
+#STRIP = alpha-linux-gnu-strip
+#
+# arm
+#
+#CC = arm-unknown-linux-gnu-gcc
+#AS = arm-unknown-linux-gnu-as
+#AR_PROG = arm-unknown-linux-gnu-ar
+#RANLIB_PROG = arm-unknown-linux-gnu-ranlib
+#OBJCOPY = arm-unknown-linux-gnu-objcopy
+#STRIP = arm-unknown-linux-gnu-strip
+#
+# ia64
+#
+#CC = ia64-linux-gnu-gcc
+#AS = ia64-linux-gnu-as
+#AR_PROG = ia64-linux-gnu-ar
+#RANLIB_PROG = ia64-linux-gnu-ranlib
+#OBJCOPY = ia64-linux-gnu-objcopy
+#STRIP = ia64-linux-gnu-strip
+
+#	version info
 # gcc
 CC_VER_INFO = --version
 # sun studio
 #CC_VER_INFO = -V
 CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $(CC) -E -xc - | tr -c "[:digit:]\n" " " |  tail -n 1)"
-AS = as
-#AS = x86_64-pc-linux-gnu-as
-#AS = powerpc-linux-gnu-as
-#AS = powerpc64-linux-gnu-as
-#AS = alpha-linux-gnu-as
-#AS = arm-unknown-linux-gnu-as
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
-AR_PROG = ar
-#AR_PROG = x86_64-pc-linux-gnu-ar
-#AR_PROG = powerpc-linux-gnu-ar
-#AR_PROG = powerpc64-linux-gnu-ar
-#AR_PROG = alpha-linux-gnu-ar
-#AR_PROG = arm-unknown-linux-gnu-ar
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ $(AR_PROG)
 ARFLAGS = cru
-RANLIB_PROG = ranlib
-#RANLIB_PROG = x86_64-pc-linux-gnu-ranlib
-#RANLIB_PROG = powerpc-linux-gnu-ranlib
-#RANLIB_PROG = powerpc64-linux-gnu-ranlib
-#RANLIB_PROG = alpha-linux-gnu-ranlib
-#RANLIB_PROG = arm-unknown-linux-gnu-ranlib
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ $(RANLIB_PROG)
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
-OBJCOPY = objcopy
-#OBJCOPY = x86_64-pc-linux-gnu-objcopy
-#OBJCOPY = powerpc-linux-gnu-objcopy
-#OBJCOPY = powerpc64-linux-gnu-objcopy
-#OBJCOPY = alpha-linux-gnu-objcopy
-#OBJCOPY = arm-unknown-linux-gnu-objcopy
-STRIP = strip
-#STRIP = x86_64-pc-linux-gnu-strip
-#STRIP = powerpc-linux-gnu-strip
-#STRIP = powerpc64-linux-gnu-strip
-#STRIP = alpha-linux-gnu-strip
-#STRIP = arm-unknown-linux-gnu-strip
 RM = rm -f
 #BIN2O_OPTS = -d sun -l 8
 
@@ -164,6 +194,7 @@ ARCH = athlon64-sse3
 #ARCH = niagara
 #ARCH = cortex-a8
 #ARCH = ev67
+#ARCH=mckinley
 # set the march
 ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)
@@ -180,8 +211,8 @@ ARCH_FLAGS += -mtune=$(ARCH)
 #ARCH_FLAGS += -minline-all-stringops
 #ARCH_FLAGS += -minline-stringops-dynamically
 # gcc 4.3??
-ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
-ARCH_FLAGS += -maccumulate-outgoing-args
+#ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
+#ARCH_FLAGS += -maccumulate-outgoing-args
 # ! SHIT !
 # gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
 # specified, it does not "know" special registers (MMX/SSE) which
@@ -206,7 +237,7 @@ CFLAGS += $(ARCH_FLAGS)
 #
 # stuff it here, were -save-temps is
 #	this hopefully makes compilation faster, gcc-specific?
-CFLAGS += -pipe
+#CFLAGS += -pipe
 #CFLAGS += -save-temps
 CFLAGS += -g3 # -pg
 #	sun studio
@@ -348,9 +379,12 @@ LDFLAGS += -L./lib/
 # (additional)
 #LDFLAGS += -L$(ZLIB_LPATH)/lib -Wl,R,$(ZLIB_LPATH)/lib
 
+#
+# Pull in some functions
+#
 #LDFLAGS += -Wl,-u,strlen
 #LDFLAGS += -Wl,-u,strnlen
-#LDFLAGS += -Wl,-u,adler32
+LDFLAGS += -Wl,-u,adler32
 
 #
 # Include Paths

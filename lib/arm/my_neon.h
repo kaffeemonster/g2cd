@@ -26,8 +26,9 @@
 #ifndef MY_NEON_H
 # define MY_NEON_H
 
-# define SOVUCQ sizeof(uint8x16_t)
-# define SOVUC sizeof(uint8x8_t)
+# if defined(__ARM_NEON__)
+#  define SOVUCQ sizeof(uint8x16_t)
+#  define SOVUC sizeof(uint8x8_t)
 
 static inline uint8x16_t neon_simple_alignq(uint8x16_t a, uint8x16_t b, unsigned amount)
 {
@@ -68,5 +69,89 @@ static inline uint8x8_t neon_simple_align(uint8x8_t a, uint8x8_t b, unsigned amo
 	}
 	return b;
 }
+# endif
 
+# define ACMP_MSK 0x000F0000
+# define ACMP_SHR 16
+# define ACMP_SHL 12
+# define ACMP_NRB 4
+
+static inline unsigned long alu_ucmp_gte_sel(unsigned long a, unsigned long b, unsigned long sel_a, unsigned long sel_b)
+{
+	unsigned long t, sel;
+
+	/* a >= b ? sel_a : sel_b */
+	asm(
+		/*          Rn >= Rm -> 1 */
+		"usub8	%0, %2, %3\n\t"
+		/*   1 -> Rn  Rm <- 0 */
+		"sel	%1, %4, %5"
+		: /* %0 */ "=&r" (t),
+		  /* %1 */ "=&r" (sel)
+		: /* %2 */ "r" (a),
+		  /* %3 */ "r" (b),
+		  /* %4 */ "r" (sel_a),
+		  /* %5 */ "r" (sel_b)
+	);
+	return sel;
+}
+
+# define alu_ucmp_eqz_msk(a) alu_ucmp_gte_msk(0, a)
+static inline unsigned long alu_ucmp_gte_msk(unsigned long a, unsigned long b)
+{
+	unsigned long res;
+
+	/* a >= b ? 1 : 0 */
+	asm(
+		/*          Rn >= Rm -> 1 */
+		"usub8	%0, %1, %2\n\t"
+		"mrs	%0, CPSR" /* we want the APSR, but gas doesn't know about it */
+		: /* %0 */ "=r" (res)
+		: /* %1 */ "r" (a),
+		  /* %2 */ "r" (b)
+	);
+	/* bit 16 to 19 */
+	return res;
+}
+
+# define alu_ucmp16_eqz_msk(a) alu_ucmp16_gte_msk(0, a)
+static inline unsigned long alu_ucmp16_gte_msk(unsigned long a, unsigned long b)
+{
+	unsigned long res;
+
+	/* a >= b ? 1 : 0 */
+	asm(
+		/*          Rn >= Rm -> 1 */
+		"usub16	%0, %1, %2\n\t"
+		"mrs	%0, CPSR" /* we want the APSR, but gas doesn't know about it */
+		: /* %0 */ "=r" (res)
+		: /* %1 */ "r" (a),
+		  /* %2 */ "r" (b)
+	);
+	/* bit 16 to 19 */
+	return res;
+}
+
+# if _GNUC_PREREQ (4,0)
+#  define ctlz(a) __builtin_clz(a)
+#  define cttz(a) __builtin_ctz(a)
+# else
+static inline unsigned ctlz(size_t a)
+{
+	unsigned r;
+	asm("clz	%0, %1" : "=r" (r) : "r" (a));
+	return r;
+}
+
+static inline unsigned cttz(size_t a)
+{
+	unsigned r;
+	/* thumb2?? rsb & and */
+	asm("rbit	%0, %1" : "=r" (r) : "r" (a));
+	return ctlz(r);
+}
+# endif
+
+# define arm_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
+# define arm_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << ACMP_SHL) : cttz((x) >> ACMP_SHR))
 #endif

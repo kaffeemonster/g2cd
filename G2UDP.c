@@ -343,6 +343,22 @@ static void udp_reas_cache_entry_free(struct udp_reas_cache_entry *e)
 	hlist_add_head(&e->node, &cache.free_list);
 }
 
+static void udp_reas_cache_entry_free_unlocked(struct udp_reas_cache_entry *e)
+{
+	struct reas_knot *next;
+
+	for(next = e->e.first; next;) {
+		struct norm_buff *n = knot2buff(next);
+		next = next->next;
+		recv_buff_local_ret(n);
+	}
+	memset(e, 0, sizeof(*e));
+
+	pthread_mutex_lock(&cache.lock);
+	hlist_add_head(&e->node, &cache.free_list);
+	pthread_mutex_unlock(&cache.lock);
+}
+
 static void udp_reas_cache_entry_free_glob(struct udp_reas_cache_entry *e)
 {
 	struct reas_knot *next;
@@ -654,7 +670,7 @@ out_zfree:
 	if(e->e.deflate && zp)
 		inflateEnd(&zp->z);
 out_free_e:
-	udp_reas_cache_entry_free(e);
+	udp_reas_cache_entry_free_unlocked(e);
 	return ret_val;
 }
 
@@ -685,7 +701,7 @@ static noinline void reas_knots_optimize(struct reas_knot *x, struct norm_buff *
 			size_t clen = buffer_remaining(*c);
 
 			blen = blen < clen ? blen : clen;
-			memcpy(buffer_start(*b), buffer_start(*c), blen);
+			my_memcpy(buffer_start(*b), buffer_start(*c), blen);
 			b->pos += blen;
 			c->pos += blen;
 			buffer_compact(*c);
@@ -805,6 +821,30 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		unsigned i, pc;
 
 		SET_BIT(e->e.parts_recv, p->part - 1);
+		/* create "all parts received" mask */
+		recv_mask = 0;
+		for(pc = e->e.part_count, i = 0; pc >= BPLONG && i < anum(e->e.parts_recv); pc -= BPLONG, i++)
+			recv_mask |= (~0UL) ^ e->e.parts_recv[i];
+		if(i < anum(e->e.parts_recv)) {
+			recv_mask |= ((1UL << pc) - 1) ^ e->e.parts_recv[i++];
+			for(; i < anum(e->e.parts_recv); i++)
+				recv_mask |= 0 ^ e->e.parts_recv[i];
+		}
+		/*
+		 * If we have all parts, we can unlock the cache NOW!
+		 *
+		 * If the packet is complete, there are some heavy actions
+		 * ahead, mainly deflating the received packet 95% of the
+		 * time (lots of cpu cycles), but also the last two optimize
+		 * runs and packet_extract_from_stream burns cpu cycles
+		 * under the lock. Prevent that by unlocking now, we do not
+		 * need any serialization after this point.
+		 * This lock will still be the UDP contention point
+		 * (assumed...), but this should help a lot.
+		 */
+		if(recv_mask == 0)
+			pthread_mutex_unlock(&cache.lock);
+
 		n_knot->nr   = p->part;
 		n_knot->end  = p->part;
 		n_knot->next = NULL;
@@ -820,21 +860,18 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		/* optimize */
 		reas_knots_optimize(e->e.first, d_hold);
 
-		/* all parts received? */
-		recv_mask = 0;
-		for(pc = e->e.part_count, i = 0; pc >= BPLONG && i < anum(e->e.parts_recv); pc -= BPLONG, i++)
-			recv_mask |= (~0UL) ^ e->e.parts_recv[i];
-		if(i < anum(e->e.parts_recv)) {
-			recv_mask |= ((1UL << pc) - 1) ^ e->e.parts_recv[i++];
-			for(; i < anum(e->e.parts_recv); i++)
-				recv_mask |= 0 ^ e->e.parts_recv[i];
-		}
 		if(recv_mask == 0) {
 			/* take a last shot at concatinating */
 			if(e->e.first->next)
 				reas_knots_optimize(e->e.first, d_hold);
 			ret_val = packet_reasamble(e, st_pack, d_hold);
-			goto out_unlock;
+
+			/*
+			 * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			 * We already unlocked and free'd the entry, get out!
+			 * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+			 */
+			return ret_val;
 		}
 	}
 
@@ -1110,7 +1147,7 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		d_len = buffer_remaining(*d_hold);
 		c_len = buffer_remaining(*c_data);
 		d_len = d_len < c_len ? d_len : c_len;
-		memcpy(buffer_start(*d_hold), buffer_start(*c_data), d_len);
+		my_memcpy(buffer_start(*d_hold), buffer_start(*c_data), d_len);
 		d_hold->pos += d_len;
 		c_data->pos += d_len;
 		buffer_flip(*d_hold);
@@ -1176,6 +1213,9 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 	struct list_head answer;
 	struct norm_buff *d_hold = *d_hold_sp;
 	uint8_t tmp_byte;
+
+	if(combo_addr_is_forbidden(from))
+		return true;
 
 	if(!buffer_remaining(*d_hold))
 		return true;
@@ -1509,11 +1549,11 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	ssize_t result;
 	union combo_addr to_st;
 
-	if(combo_addr_is_forbidden(to)) {
+	if(unlikely(combo_addr_is_forbidden(to))) {
 		buffer_skip(*d_hold);
 		return 0;
 	}
-	if(!combo_addr_port(to)) {
+	if(unlikely(!combo_addr_port(to))) {
 // TODO: investigate this phenomenom
 		logg_develd_old("addr %p#I without port! Fallback...\n", to);
 		to_st = *to;
@@ -1530,7 +1570,7 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 			0,
 			casac(to),
 			sizeof(*to));
-	} while(-1 == result && EINTR == errno);
+	} while(unlikely(-1 == result) && EINTR == errno);
 
 	switch(result)
 	{
@@ -1583,7 +1623,7 @@ static inline bool handle_udp_sock(struct epoll_event *udp_poll, struct norm_buf
  *                     struct sockaddr *to, socklen_t *tolen); */
 		result = recvfromto(from_fd, buffer_start(*d_hold), buffer_remaining(*d_hold),
 		                    0, casa(from), &from_len, casa(to), &to_len);
-	} while(-1 == result && EINTR == errno);
+	} while(unlikely(-1 == result) && EINTR == errno);
 
 	switch(result)
 	{

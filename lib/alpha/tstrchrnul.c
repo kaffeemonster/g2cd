@@ -45,10 +45,10 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	p  = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL) * BITS_PER_CHAR;
 	x  = *(const size_t *)p;
-	r  = cmpbge(x, 0x0101010101010101UL);
+	r  = cmpbeqz(x);
 	r  = r & ((r & 0xAA) >> 1);
 	x ^= mask;
-	x  = cmpbge(x, 0x0101010101010101UL);
+	x  = cmpbeqz(x);
 	r |= x & ((x & 0xAA) >> 1);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
@@ -61,10 +61,10 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	{
 		p += SOUL;
 		x  = *(const size_t *)p;
-		r  = cmpbge(x, 0x0101010101010101UL);
+		r  = cmpbeqz(x);
 		r  = r & ((r & 0xAA) >> 1);
 		x ^= mask;
-		x  = cmpbge(x, 0x0101010101010101UL);
+		x  = cmpbeqz(x);
 		r |= x & ((x & 0xAA) >> 1);
 	} while(!r);
 	r = alpha_nul_byte_index_e(r) / 2;

@@ -2,7 +2,7 @@
  * log_facility.c
  * logging logic/magic/functions
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -410,7 +410,7 @@ realloc:
 			}
 
 			if(s != buffer_start(*logg_buff))
-				memcpy(buffer_start(*logg_buff), s, err_str_len);
+				my_memcpy(buffer_start(*logg_buff), s, err_str_len);
 			logg_buff->pos += err_str_len;
 #else
 			if(!strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)))

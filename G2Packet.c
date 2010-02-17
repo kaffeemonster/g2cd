@@ -942,8 +942,8 @@ static intptr_t forward_lit_callback_ignore(g2_connection_t *con, void *carg)
 				g2_packet_free(t);
 				return 0;
 			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
+			my_memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			          buffer_remaining(source->data_trunk));
 		}
 	}
 	t->is_literal = true;
@@ -986,8 +986,8 @@ static intptr_t forward_lit_callback_found(g2_connection_t *con, void *carg)
 				g2_packet_free(t);
 				return 1;
 			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
+			my_memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			          buffer_remaining(source->data_trunk));
 		}
 	}
 	t->is_literal = true;
@@ -1128,7 +1128,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 		if(url_str && g2_packet_steal_data_space(url, strlen(url_str)))
 		{
 			url->type = PT_URL;
-			memcpy(buffer_start(yourip->data_trunk), url_str, strlen(url_str));
+			my_memcpy(buffer_start(yourip->data_trunk), url_str, strlen(url_str));
 			url->big_endian = HOST_IS_BIGENDIAN;
 			list_add_tail(&url->list, &khla->children);
 		}
@@ -2073,8 +2073,8 @@ intptr_t g2_packet_leaf_qht_match(g2_connection_t *con, void *data)
 				g2_packet_free(t);
 				return 0;
 			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
+			my_memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			          buffer_remaining(source->data_trunk));
 		}
 	}
 	t->is_literal = true;
@@ -2114,8 +2114,8 @@ intptr_t g2_packet_hub_qht_match(g2_connection_t *con, void *data)
 				g2_packet_free(t);
 				goto out;
 			}
-			memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
-			       buffer_remaining(source->data_trunk));
+			my_memcpy(buffer_start(t->data_trunk), buffer_start(source->data_trunk),
+			          buffer_remaining(source->data_trunk));
 		}
 	}
 	t->is_literal = true;
@@ -2191,8 +2191,8 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 			/* data still lingers in the recv buff, we have to copy it */
 			if(!g2_packet_steal_data_space_lit(source, buffer_remaining(pb)))
 				goto out_fail_free_all;
-			memcpy(buffer_start(source->data_trunk), buffer_start(pb),
-			       buffer_remaining(pb));
+			my_memcpy(buffer_start(source->data_trunk), buffer_start(pb),
+			          buffer_remaining(pb));
 		}
 	}
 

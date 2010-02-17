@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, IA64 implementation
  *
- * Copyright (c) 2005-2008 Jan Seiffert
+ * Copyright (c) 2005-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,7 +30,7 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 	tmp = _m64_popcnt(n);
 #  else
 #   if _GNUC_PREREQ(3,4)
-	tmp = __builtin_popcntl(n);
+	tmp = __builtin_popcountll(n);
 #   else
 	__asm__ ("popcnt\t%0=%1\n" : "=r" (tmp) : "r" (n));
 #   endif /* _GNUC_PREREQ(3,4) */

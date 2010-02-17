@@ -2,7 +2,7 @@
  * tchar.h
  * header-file for the tchar stuff
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -61,6 +61,8 @@ LIB_TCHAR_EXTRN(int tstrncmp(const tchar_t *s1, const tchar_t *s2, size_t n));
 LIB_TCHAR_EXTRN(tchar_t *tstrchrnul(const tchar_t *s, tchar_t c));
 LIB_TCHAR_EXTRN(tchar_t *tstrptolower(tchar_t *s));
 LIB_TCHAR_EXTRN(size_t utf8totcs(tchar_t *dst, size_t dl, const char *src, size_t *sl));
+
+LIB_TCHAR_EXTRN(tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len));
 
 static inline tchar_t *tstr_trimleft(tchar_t *s)
 {

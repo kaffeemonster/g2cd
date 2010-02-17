@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, x86 implementation
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -335,12 +335,12 @@ static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))strnlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strnlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = test_cpu_feature_cmov_callback},
 # endif
 #endif
-	{.func = (void (*)(void))strnlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))strnlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
 #ifndef __x86_64__
-	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},
 #endif
 	{.func = (void (*)(void))strnlen_x86, .flags_needed = -1, .callback = NULL},
 };

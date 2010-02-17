@@ -106,7 +106,7 @@ alignment_failed:
 	return dst;
 }
 
-void *memcpy(void *restrict dst, const void *restrict src, size_t len)
+void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
 		return cpy_rest_o(dst, src, len);

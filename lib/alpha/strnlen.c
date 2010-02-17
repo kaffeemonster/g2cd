@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, alpha implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,7 +49,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	k = k > 0 ? k  : 0;
 
 	p = (const char *)ALIGN_DOWN(s, SOUL);
-	r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+	r = cmpbeqz(*(const unsigned long *)p);
 	if(!HOST_IS_BIGENDIAN) {
 		r <<= k     + SOULM1 * BITS_PER_CHAR;
 		r >>= k + f + SOULM1 * BITS_PER_CHAR;
@@ -66,7 +66,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	do
 	{
 		p += SOST;
-		r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+		r = cmpbeqz(*(const unsigned long *)p);
 		if(maxlen <= SOUL)
 			break;
 		maxlen -= SOUL;
@@ -88,3 +88,4 @@ size_t strnlen(const char *s, size_t maxlen)
 }
 
 static char const rcsid_snla[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

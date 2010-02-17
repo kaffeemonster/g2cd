@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -105,7 +105,7 @@ typedef union xxxxxx4
 #  if defined(__i386__) || defined(__x86_64__)
 	/* work for both */
 #   include "x86/atomic.h"
-#  elif defined(__IA64__)
+#  elif defined(__ia64__)
 #   include "ia64/atomic.h"
 #  elif defined(__sparc__) || defined(__sparc)
 	/* for both archs */

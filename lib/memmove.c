@@ -39,16 +39,13 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-/* memmove as a macro... */
-#undef memmove
-#ifndef MEMMOVE_DEFINED
-void *memmove(void *dst, const void *src, size_t len);
-#define MEMMOVE_DEFINED
-#endif
-
 #ifdef I_LIKE_ASM
 #  include "generic/memmove.c"
 #else
 # include "generic/memmove.c"
 #endif
+
+/* memmove as a macro... yeah */
+#undef memmove
+void *memmove(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memmove");
 /* EOF */

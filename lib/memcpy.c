@@ -39,13 +39,6 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-/* memcpy as a macro... */
-#undef memcpy
-#ifndef MEMCPY_DEFINED
-void *memcpy(void *restrict dst, const void *restrict src, size_t len);
-#define MEMCPY_DEFINED
-#endif
-
 #ifdef I_LIKE_ASM
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
@@ -59,4 +52,8 @@ void *memcpy(void *restrict dst, const void *restrict src, size_t len);
 #else
 # include "generic/memcpy.c"
 #endif
+
+/* memcpy as a macro... autschen */
+#undef memcpy
+void *memcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
 /* EOF */

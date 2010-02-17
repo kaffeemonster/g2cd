@@ -43,7 +43,7 @@ size_t tstrlen(const tchar_t *s)
 	 */
 	p = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
-	r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+	r = cmpbeqz(*(const unsigned long *)p);
 	r = r & ((r & 0xAA) >> 1);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
@@ -55,7 +55,7 @@ size_t tstrlen(const tchar_t *s)
 	do
 	{
 		p += SOUL;
-		r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+		r = cmpbeqz(*(const unsigned long *)p);
 		r = r & ((r & 0xAA) >> 1);
 	} while(!r);
 	r = alpha_nul_byte_index_e(r) / 2;

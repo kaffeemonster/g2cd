@@ -2,7 +2,7 @@
  * bitfield_rle.c
  * run length encoding for bitfields, esp. QHTs
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,8 +30,9 @@
 
 /*
  * General note:
- * despite their general name, these functions use a fixed rle sheme
- * invented by me optimized for sparsely populated bitfields (like QHTs).
+ * Despite their general name, these functions use a fixed rle sheme
+ * invented by me (while taking a crap) optimized for sparsely
+ * populated bitfields (like QHTs).
  *
  * - Bytes with one bit cleared are expressed by a prefix (0xE0)
  *   or'ed with the bit index.
@@ -45,6 +46,7 @@
  * byte prefixed with 0xF0 or'ed with the length of the run length,
  * followed by the length of the run in host endian.
  *
+ * The result:
  * This gives a maximum compression of 4 bytes for an empty QHT (1:32768).
  * A mostly empty QHT like after you installed Shareaza (only the
  * .exe is shared) compresses to ~122 bytes (1:1074.3)
@@ -67,6 +69,87 @@
  * To prevent this and size grows the user should provide a buffer smaller
  * than the input data to stop these functions early and fallback to
  * uncompressed handling.
+ */
+
+// TODO: add a "sync block"
+/*
+ * While this all works quite well, we have a problem:
+ * bitfield_lookup is cheaper than bitfield_decode
+ * (avg. half the cost), it is still, with the call count,
+ * our most expensive function.
+ * We have for ex. 213,522 calls with 8,742,356,171 instructions
+ * executed. (next is memand with 1.6 Mrd instructions)
+ *
+ * Ohoh...
+ *
+ * This is made worse by a bad interaction.
+ * QHTs which are "full" take more time to walk but also
+ * aggrevate more hits.
+ * That sometimes hub QHTs are compressed does not help,
+ * too. (need to fix this...)
+ *
+ * Two cheopo graphs to make the problem obvious:
+ *
+ *                                     Search hit propability
+ *                                                ^
+ *                                            |   | high
+ *                                           /    |
+ *                                           |    |
+ *                                           |    |
+ *                                          /     |
+ *                                         /      |
+ *                                        /       |
+ *                                       /        |
+ *                                      /         |
+ *                     /---------------/          |
+ *             -------/                           | low
+ * QHT entries <----------------------------------+
+ *              empty                         full
+ *
+ *                                          lookup time
+ *                                                ^
+ *                                            |   | high
+ *                                           /    |
+ *                                           |    |
+ *                                           |    |
+ *                                          /     |
+ *                                         /      |
+ *                                        /       |
+ *                                       /        |
+ *                                      /         |
+ *                     /---------------/          |
+ *             -------/                           | low
+ * QHT entries <----------------------------------+
+ *              empty                         full
+ *
+ * 37% of the searches consist of a single value (prop. 
+ * search for a hash, sha1, tiger, etc.), so...
+ *
+ * Idea:
+ * Add a sync block to the rle'd bitfields.
+ * We start the data with a flag byte. If it says
+ * "have sync block", we have added a kind of index
+ * at the end:
+ *
+ * num syncs: n
+ * 0  : bitfield index a - rle offset u
+ * 1  : bitfield index b - rle offset v
+ * ...
+ * n-1: bitfield index e - rle offset y
+ * n  : bitfield index f - rle offset z
+ *
+ * With "bitfield index" sorted in ascending order.
+ * This way a lookup can first search the index for the
+ * last pair smaller than the hash to search, and then
+ * start walking from that rle offset.
+ * We can generate the index while encoding.
+ * For example by generating an index entry every
+ * "quarter", four entries total. Even such a low number
+ * of entries (and low mem comsumtion) would really
+ * help to start the decoding much nearer the target
+ * offset.
+ *
+ * And yeah: i also invented that while taking a crap...
  */
 
 /*
@@ -180,7 +263,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 					"shr	$2, %0\n\t"
 					"jz	1f\n\t"
 					"mov	%0, %3\n\t"
-					"repe scasl\n\t" /* (0x0051D59A) */
+					"repe scasl\n\t" /* (0x0051D59A) execution */
 					"sub	$4, %1\n\t"
 					"inc	%0\n\t"
 					"sub	%0, %3\n\t"
@@ -380,7 +463,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			cnt = cnt <= t_len ? cnt : t_len;
 			*r_wptr++ = cnt | 0x80;
 			o_row -= cnt;
-			r_wptr = mempcpy(r_wptr, o_data, cnt);
+			r_wptr = my_mempcpy(r_wptr, o_data, cnt);
 			o_data += cnt;
 			t_len -= cnt;
 		}
@@ -417,7 +500,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			cnt = c & 0x3F;
 			cnt = cnt <= s_len ? cnt : s_len;
 			cnt = cnt <= t_len ? cnt : t_len;
-			r_wptr = mempcpy(r_wptr, data + 1, cnt);
+			r_wptr = my_mempcpy(r_wptr, data + 1, cnt);
 			t_len -= cnt;
 			cnt++;
 			data += cnt;
@@ -435,7 +518,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			continue;
 		}
 
-		if(unlikely(!(c & 0x10)))
+		if(likely(!(c & 0x10)))
 		{
 		/* one bit */
 			*r_wptr++ = ~(1 << (c & 0x0F));
@@ -526,7 +609,7 @@ ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_l
 		size_t t;
 		uint8_t c = *data;
 
-		if(unlikely(!(c & 0x80)))
+		if(likely(!(c & 0x80)))
 		{
 			data++;
 			s_len--;
@@ -559,7 +642,7 @@ ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_l
 			continue;
 		}
 
-		if(unlikely(!(c & 0x10)))
+		if(likely(!(c & 0x10)))
 		{
 		/* one bit */
 			*r_wptr++ &= ~(1 << (c & 0x0F));
@@ -617,7 +700,7 @@ write_out_ff:
 		cnt = cnt <= t_len ? cnt : t_len;
 		r_wptr += cnt;
 		/*
-		 * our decode came to a intermidiated step, so next is a
+		 * our decode came to a intermidiat step, so next is a
 		 * break in the 0xff's, which means we will write -> prefetch
 		 */
 		prefetchw(r_wptr);
@@ -640,7 +723,8 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 	{
 		/*
 		 * when the act. bit index is below the bit pos, we have to
-		 * restart. Sort your numbers, kids.
+		 * restart.
+		 * Sort your numbers, kids. Look next door, introsort_u32.
 		 */
 		if(unlikely(vals[i] < bpos)) {
 			dwptr = data;
@@ -697,7 +781,7 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 			}
 
 			/* one bit */
-			if(unlikely(!(c & 0x10)))
+			if(likely(!(c & 0x10)))
 			{
 				if(dist < 8) { /* dist in this byte? */
 					if((unsigned)(c & ~0xE0) == dist)

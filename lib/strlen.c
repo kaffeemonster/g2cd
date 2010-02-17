@@ -2,7 +2,7 @@
  * strlen.c
  * strlen just for fun
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -54,6 +54,10 @@ size_t strlen(const char *s);
 #  include "ppc/strlen.c"
 # elif defined(__alpha__)
 #  include "alpha/strlen.c"
+# elif defined(__arm__)
+#  include "arm/strlen.c"
+# elif defined(__ia64__)
+#  include "ia64/strlen.c"
 # else
 #  include "generic/strlen.c"
 # endif

@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -296,14 +296,14 @@ static always_inline int atomic_fetch_and_add_64(int val, atomic_t *ptr)
 //TODO: I think this must be all substituted by macros...
 static always_inline int atomic_fetch_and_add(int val, atomic_t *ptr)
 {
-	switch(sizeof(val));
+	switch(sizeof(val))
 	{
 	case 4:
 		return atomic_fetch_and_add_32(val, ptr);
 	case 8:
 		return atomic_fetch_and_add_64(val, ptr);
 	}
-	return _illigal_int_size(nval, ptr);
+	return _illigal_int_size(val, ptr);
 }
 
 # define atomic_add_return(val, ptr) \
@@ -325,9 +325,9 @@ static always_inline int atomic_fetch_and_add(int val, atomic_t *ptr)
 : _atomic_sub_return((val), ptr)
 
 
-# define atomic_inc(x) ((void) atomic_add_return(1, (x)))
+# define atomic_inc(x) (atomic_add_return(1, (x)))
 # define atomic_inc_return(x) (atomic_add_return(1, (x)))
-# define atomic_dec(x) ((void) atomic_sub_return(1, (x)))
+# define atomic_dec(x) (atomic_sub_return(1, (x)))
 # define atomic_dec_test(x) (atomic_sub_return(1, (x)) == 0)
 
 #endif /* LIB_IMPL_ATOMIC_H */

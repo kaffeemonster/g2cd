@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, alpha implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -43,7 +43,7 @@ size_t strlen(const char *s)
 	 */
 	p = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
-	r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+	r = cmpbeqz(*(const unsigned long *)p);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
 	else
@@ -54,7 +54,7 @@ size_t strlen(const char *s)
 	do
 	{
 		p += SOST;
-		r = cmpbge(*(const unsigned long *)p, 0x0101010101010101UL);
+		r = cmpbeqz(*(const unsigned long *)p);
 	} while(!r);
 	r = alpha_nul_byte_index_e(r);
 	return p - s + r;

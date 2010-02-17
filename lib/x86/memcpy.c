@@ -295,7 +295,7 @@ noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *rest
 	return memcpy_big_ptr(dst, src, len);
 }
 
-void *memcpy(void *restrict dst, const void *restrict src, size_t len)
+void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
 		return cpy_rest_o(dst, src, len);

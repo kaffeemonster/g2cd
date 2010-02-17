@@ -2,7 +2,7 @@
  * mempcpy.c
  * mempcpy for non-GNU platforms, sparc/sparc64 impl.
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -202,7 +202,7 @@ static noinline GCC_ATTR_FASTCALL void *mempcpy_big(void *restrict dst, const vo
 	return dst_end + 1;
 }
 
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len)
+void *my_mempcpy(void *restrict dst, const void *restrict src, size_t len)
 {
 	if(likely(len < 16))
 		return cpy_rest(dst, src, len);

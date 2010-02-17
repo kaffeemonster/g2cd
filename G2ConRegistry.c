@@ -217,7 +217,7 @@
  */
 
 #define LEVEL_COUNT CONREG_LEVEL_COUNT
-#define LEVEL_SHIFT 3
+#define LEVEL_SHIFT 2
 #define LEVEL_SIZE (1 << LEVEL_SHIFT)
 #define LEVEL_MASK (LEVEL_SIZE - 1)
 #define TOTAL_SIZE (1 << (LEVEL_SHIFT * LEVEL_COUNT))
@@ -798,7 +798,7 @@ out_unlock:
 
 	if(new_sub && !new_sub->flags.reset_needed) {
 		if(new_master->flags.reset_needed) {
-			memcpy(new_master->data, new_sub->data, new_master->data_length);
+			my_memcpy(new_master->data, new_sub->data, new_master->data_length);
 			new_master->flags.reset_needed = false;
 		} else
 			memand(new_master->data, new_sub->data, new_master->data_length);
@@ -845,7 +845,7 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 	if(new_sub && !new_sub->flags.reset_needed && new_master)
 	{
 		if(new_master->flags.reset_needed) {
-			memcpy(new_master->data, new_sub->data, new_master->data_length);
+			my_memcpy(new_master->data, new_sub->data, new_master->data_length);
 			new_master->flags.reset_needed = false;
 		} else
 			memand(new_master->data, new_sub->data, new_master->data_length);

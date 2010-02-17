@@ -171,7 +171,7 @@ static size_t putc_utf8(unsigned long cp, char *buffer)
 
 static size_t parse_entity(const char *current, char **to, const char **from, size_t len)
 {
-	const char *end = memchr(current, ';', len);
+	const char *end = my_memchr(current, ';', len);
 	size_t remaining;
 
 	if(!end)
@@ -223,9 +223,9 @@ size_t decode_html_entities_utf8(char *dest, const char *src, size_t len)
 	char *to = dest;
 	size_t x, remaining = len;
 
-	while(remaining && (current = memchr(from, '&', remaining)))
+	while(remaining && (current = my_memchr(from, '&', remaining)))
 	{
-		memcpy(to, from, (size_t)(current - from));
+		my_memcpy(to, from, (size_t)(current - from));
 		to += current - from;
 		remaining -= current - from;
 		if(!remaining)
@@ -241,7 +241,7 @@ size_t decode_html_entities_utf8(char *dest, const char *src, size_t len)
 		remaining--;
 	}
 	if(remaining)
-		memcpy(to, from, remaining);
+		my_memcpy(to, from, remaining);
 	to += remaining;
 	*to = '\0';
 	return (size_t)(to - dest);
