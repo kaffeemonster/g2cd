@@ -1,8 +1,8 @@
 /*
  * strnlen.c
- * strnlen for non-GNU platforms, alpha implementation
+ * strnlen for non-GNU platforms, ia64 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,12 +23,12 @@
  * $Id: $
  */
 
-#include "alpha.h"
+#include "ia64.h"
 
 size_t strnlen(const char *s, size_t maxlen)
 {
 	const char *p;
-	unsigned long r;
+	unsigned long long r, t;
 	long f, k;
 	prefetch(s);
 
@@ -44,48 +44,47 @@ size_t strnlen(const char *s, size_t maxlen)
 	 * Even this beeing strNlen, this n can be seen as a "hint"
 	 * We can overread and underread, but should cut the result.
 	 */
-	f = ALIGN_DOWN_DIFF(s, SOUL);
-	k = SOUL - f - (long)maxlen;
+	f = ALIGN_DOWN_DIFF(s, SOULL);
+	k = SOULL - f - (long)maxlen;
 	k = k > 0 ? k  : 0;
 
-	p = (const char *)ALIGN_DOWN(s, SOUL);
-	r = cmpbeqz(*(const unsigned long *)p);
+	p = (const char *)ALIGN_DOWN(s, SOULL);
+	r = *(const unsigned long long *)p;
 	if(!HOST_IS_BIGENDIAN) {
-		r <<= k     + SOULM1 * BITS_PER_CHAR;
-		r >>= k + f + SOULM1 * BITS_PER_CHAR;
+		r |= (~0ULL) >> ((SOULL - f) * BITS_PER_CHAR);
+		r |= (~0ULL) << ((SOULL - k) * BITS_PER_CHAR);
 	} else {
-		r >>= k;
-		r <<= k + f + SOULM1 * BITS_PER_CHAR;
+		r |= (~0ULL) << ((SOULL - f) * BITS_PER_CHAR);
+		r |= (~0ULL) >> ((SOULL - k) * BITS_PER_CHAR);
 	}
-	if(r)
-		return alpha_nul_byte_index_b(r);
+	r = czx1(r);
+	if(r < SOULL)
+		return r;
 	else if(k)
 		return maxlen;
 
-	maxlen -= SOUL - f;
+	maxlen -= SOULL - f;
 	do
 	{
-		p += SOUL;
-		r = cmpbeqz(*(const unsigned long *)p);
-		if(maxlen <= SOUL)
+		p += SOULL;
+		t = *(const unsigned long *)p;
+		if(maxlen <= SOULL)
 			break;
-		maxlen -= SOUL;
-	} while(!r);
-	k = SOUL - (long)maxlen;
+		r = czx1(t);
+		if(r < SOULL)
+			return p - s + r;
+		maxlen -= SOULL;
+	} while(r == SOULL);
+	k = SOULL - (long)maxlen;
 	k = k > 0 ? k : 0;
-	if(!HOST_IS_BIGENDIAN) {
-		r <<= k + SOULM1 * BITS_PER_CHAR;
-		r >>= k + SOULM1 * BITS_PER_CHAR;
-	} else {
-		r >>= k;
-		r <<= k + SOULM1 * BITS_PER_CHAR;
-	}
-	if(likely(r))
-		r = alpha_nul_byte_index_b(r);
+	if(!HOST_IS_BIGENDIAN)
+		t |= (~0ULL) << ((SOULL - k) * BITS_PER_CHAR);
 	else
-		r = maxlen;
+		t |= (~0ULL) >> ((SOULL - k) * BITS_PER_CHAR);
+	r = czx1(t);
+	r = r < SOULL ? r : maxlen;
 	return p - s + r;
 }
 
-static char const rcsid_snla[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_snlia64[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

@@ -72,6 +72,8 @@ size_t strnlen(const char *s, size_t maxlen);
 #  include "alpha/strnlen.c"
 # elif defined(__arm__)
 #  include "arm/strnlen.c"
+# elif defined(__ia64__)
+#  include "ia64/strnlen.c"
 # else
 #  include "generic/strnlen.c"
 # endif

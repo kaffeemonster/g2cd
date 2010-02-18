@@ -49,6 +49,8 @@
 #  include "alpha/tstrchrnul.c"
 # elif defined(__arm__)
 #  include "arm/tstrchrnul.c"
+# elif defined(__ia64__)
+#  include "ia64/tstrchrnul.c"
 # else
 #  include "generic/tstrchrnul.c"
 # endif

@@ -47,6 +47,8 @@
 #  include "alpha/tstrlen.c"
 # elif defined(__arm__)
 #  include "arm/tstrlen.c"
+# elif defined(__ia64__)
+#  include "ia64/tstrlen.c"
 # else
 #  include "generic/tstrlen.c"
 # endif
