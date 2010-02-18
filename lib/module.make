@@ -235,6 +235,8 @@ TO_BASE16SRC = \
 	$(MPL)/ia64/to_base16.c \
 	$(MPL)/ppc/to_base16.c \
 	$(MPL)/x86/to_base16.c
+TO_BASE32SRC = \
+	$(MPL)/generic/to_base32.c
 TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
 	$(MPL)/alpha/tstrlen.c \
@@ -286,6 +288,7 @@ LIBASRCS = \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
 	$(TO_BASE16SRC) \
+	$(TO_BASE32SRC) \
 	$(TSTRLENSRC) \
 	$(TSTRCHRNULSRC) \
 	$(TSTRNCMPSRC) \
@@ -369,6 +372,7 @@ BITOPOBJS = \
 
 TCHAROBJS = \
 	$(MPL)/to_base16.o \
+	$(MPL)/to_base32.o \
 	$(MPL)/tstrlen.o \
 	$(MPL)/tstrchrnul.o \
 	$(MPL)/tstrncmp.o \
@@ -480,6 +484,7 @@ $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/to_base16.o: $(TO_BASE16SRC)
+$(MPL)/to_base32.o: $(TO_BASE32SRC)
 $(MPL)/tstrlen.o: $(TSTRLENSRC)
 $(MPL)/tstrchrnul.o: $(TSTRCHRNULSRC)
 $(MPL)/tstrncmp.o: $(TSTRNCMPSRC)

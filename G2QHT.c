@@ -506,32 +506,12 @@ noinline void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
 }
 
-#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
-static noinline tchar_t *to_base32(const unsigned char *h, tchar_t *wptr, unsigned num)
-{
-	static const unsigned char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
-	unsigned b32chars = B32_LEN(num), i = 0, ch = 0;
-	int shift = 11;
-
-	do
-	{
-		*wptr++ = base32c[((h[i] * 256 + h[i + 1]) >> shift) & 0x1F];
-		shift  -= 5;
-		if(shift <= 0) {
-			shift += BITS_PER_CHAR;
-			i++;
-		}
-	} while(++ch < b32chars - 1);
-	*wptr++ = base32c[(h[num - 1] << (b32chars * 5 % BITS_PER_CHAR)) & 0x1F];
-	return wptr;
-}
-
 void g2_qht_search_add_sha1(const unsigned char *h)
 {
 	static const tchar_t URN_SHA1[] = {'u','r','n',':','s','h','a','1',':'};
 	tchar_t ih[anum(URN_SHA1) + B32_LEN(20)]; /* base 32 encoding */
 	tchar_t *wptr = mempcpy(ih, URN_SHA1, sizeof(URN_SHA1));
-	wptr = to_base32(h, wptr, 20);
+	wptr = to_base32(wptr, h, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
@@ -540,7 +520,7 @@ void g2_qht_search_add_ttr(const unsigned char *h)
 	static const tchar_t URN_TTR[] = {'u','r','n',':','t','r','e','e',':','t','i','g','e','r','/',':'};
 	tchar_t ih[anum(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
 	tchar_t *wptr = mempcpy(ih, URN_TTR, sizeof(URN_TTR));
-	wptr = to_base32(h, wptr, 24);
+	wptr = to_base32(wptr, h, 24);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 
@@ -558,7 +538,7 @@ void g2_qht_search_add_bth(const unsigned char *h)
 	static const tchar_t URN_BTH[] = {'u','r','n',':','b','t','i','h',':'};
 	tchar_t ih[anum(URN_BTH) + B32_LEN(20)]; /* base 32 encoding */
 	tchar_t *wptr = mempcpy(ih, URN_BTH, sizeof(URN_BTH));
-	wptr = to_base32(h, wptr, 20);
+	wptr = to_base32(wptr, h, 20);
 	g2_qht_search_add_word(ih, 0, wptr - ih);
 }
 

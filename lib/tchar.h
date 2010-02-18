@@ -63,6 +63,8 @@ LIB_TCHAR_EXTRN(tchar_t *tstrptolower(tchar_t *s));
 LIB_TCHAR_EXTRN(size_t utf8totcs(tchar_t *dst, size_t dl, const char *src, size_t *sl));
 
 LIB_TCHAR_EXTRN(tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len));
+#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
+LIB_TCHAR_EXTRN(tchar_t *to_base32(tchar_t *dst, const unsigned char *src,  unsigned len));
 
 static inline tchar_t *tstr_trimleft(tchar_t *s)
 {
