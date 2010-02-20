@@ -81,6 +81,7 @@
 #define HAVE_STRNLEN
 #define HAVE_STRCHRNUL
 #define HAVE_MEMPCPY
+#define HAVE_BYTESWAP_H
 /* only select one or none of the following */
 #define HAVE_GNU_STRERROR_R
 /* Old Solaris does not have strerror_r, instaed strerror
