@@ -40,9 +40,9 @@
 #include "tchar.h"
 
 #ifdef I_LIKE_ASM
-//# if defined(__i386__) || defined(__x86_64__)
+# if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
-//#  include "x86/to_base32.c"
+#  include "x86/to_base32.c"
 //# elif defined(__powerpc__) || defined(__powerpc64__)
 //#  include "ppc/to_base32.c"
 //# elif defined(__alpha__)
@@ -51,9 +51,9 @@
 //#  include "arm/to_base32.c"
 //# elif defined(__ia64__)
 //#  include "ia64/to_base32.c"
-//# else
+# else
 #  include "generic/to_base32.c"
-//# endif
+# endif
 #else
 # include "generic/to_base32.c"
 #endif
