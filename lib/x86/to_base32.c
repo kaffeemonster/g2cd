@@ -31,21 +31,21 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
+tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len);
 # endif
 # if HAVE_BINUTILS >= 217
+tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len);
 # endif
 #endif
+tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len);
 #ifndef __x86_64__
 tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len);
 #endif
 
-static const uint8_t unity_mask[16] GCC_ATTR_ALIGNED(16) =
-		{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-
 static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 {
 	/* 1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16 */
-	{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF},
+	{0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00},
 	{0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF},
 	{0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF},
 	{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF},
@@ -56,9 +56,543 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 };
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
+tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
+{
+	asm (
+			"cmp	$8, %2\n\t"
+			"jb	2f\n\t"
+			"movdqa	-64+%3, %%xmm3\n\t"
+			"movdqa	-16+%3, %%xmm0\n\t"
+#   ifdef __x86_64__
+			"movdqa	%3, %%xmm8\n\t"
+			"pxor	%%xmm7, %%xmm7\n\t"
+#   endif
+			"movdqa	16+%3, %%xmm6\n\t"
+			"movdqa	32+%3, %%xmm4\n\t"
+			"movdqa	48+%3, %%xmm5\n\t"
+			"cmp	$16, %2\n\t"
+			"jb	3f\n\t"
+			".p2align 2\n"
+			"1:\n\t"
+			"lddqu	(%1), %%xmm1\n\t"            /* fetch input data */
+#   ifndef __x86_64__
+			"movdqa	%3, %%xmm7\n\t"
+#   endif
+			"sub	$10, %2\n\t"
+			"add	$10, %1\n\t"
+			/* swab endianess */
+			"pshufb	%%xmm3, %%xmm1\n\t"
+			/* partionate */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"pslldq	$5, %%xmm1\n\t"              /* shift copy */
+			"punpckhqdq	%%xmm2, %%xmm1\n\t"       /* eliminate & join */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"psrlq	$0xc, %%xmm1\n\t"            /* shift copy */
+			"pblendw	$0x33, %%xmm1, %%xmm2\n\t"   /* eleminate & join */
+			"movdqa	%%xmm2, %%xmm1\n\t"          /* copy */
+			"psrld	$0x6, %%xmm2\n\t"            /* shift copy */
+			"pblendw	$0x55, %%xmm2, %%xmm1\n\t"   /* eleminate & join */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"psrlw	$0x3, %%xmm1\n\t"            /* shift copy */
+			"pblendvb %%xmm0, %%xmm1, %%xmm2\n\t" /* eliminate & join */
+			"psrlw	$0x3, %%xmm2\n\t"            /* bring it down */
+#   ifdef __x86_64__
+			"pand	%%xmm8, %%xmm2\n\t"             /* eliminate */
+#   else
+			"pand	%%xmm7, %%xmm2\n\t"             /* eliminate */
+			"pxor	%%xmm7, %%xmm7\n\t"
+#   endif
+			/* convert */
+			"paddb	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm2, %%xmm1\n\t"
+			"pcmpgtb	%%xmm4, %%xmm2\n\t"
+			"pand	%%xmm5, %%xmm2\n\t"
+			"psubb	%%xmm2, %%xmm1\n\t"
+			/* write out */
+			"cmp	$15, %2\n\t"
+			"pshufb	%%xmm3, %%xmm1\n\t"
+			"movdqa	%%xmm1, %%xmm2\n\t"
+			"punpckhbw	%%xmm7, %%xmm1\n\t"
+			"punpcklbw	%%xmm7, %%xmm2\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"movdqu	%%xmm2, 0x10(%0)\n\t"
+			"lea	32(%0), %0\n\t"
+			"ja	1b\n\t"
+			"cmp	$8, %2\n\t"
+			"jb	2f\n"
+			"3:\n\t"
+			"movq	(%1), %%xmm1\n\t"       /* fetch input data */
+#   ifndef __x86_64__
+			"movdqa	%3, %%xmm7\n\t"
+#   endif
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	4f\n\t"
+			"pinsrw	$4, 3(%1), %%xmm1\n\t"
+			"4:\n\t"
+			/* swab endianess */
+			"pshufb	%%xmm3, %%xmm1\n\t"
+			/* partionate */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"pslldq	$5, %%xmm1\n\t"              /* shift copy */
+			"punpckhqdq	%%xmm2, %%xmm1\n\t"       /* eliminate & join */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"psrlq	$0xc, %%xmm1\n\t"            /* shift copy */
+			"pblendw	$0x33, %%xmm1, %%xmm2\n\t"   /* eleminate & join */
+			"movdqa	%%xmm2, %%xmm1\n\t"          /* copy */
+			"psrld	$0x6, %%xmm2\n\t"            /* shift copy */
+			"pblendw	$0x55, %%xmm2, %%xmm1\n\t"   /* eleminate & join */
+			"movdqa	%%xmm1, %%xmm2\n\t"          /* copy */
+			"psrlw	$0x3, %%xmm1\n\t"            /* shift copy */
+			"pblendvb %%xmm0, %%xmm1, %%xmm2\n\t" /* eliminate & join */
+			"psrlw	$0x3, %%xmm2\n\t"            /* bring it down */
+#   ifdef __x86_64__
+			"pand	%%xmm8, %%xmm2\n\t"             /* eliminate */
+#   else
+			"pand	%%xmm7, %%xmm2\n\t"             /* eliminate */
+			"pxor	%%xmm7, %%xmm7\n\t"
+#   endif
+			/* convert */
+			"paddb	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm2, %%xmm1\n\t"
+			"pcmpgtb	%%xmm4, %%xmm2\n\t"
+			"pand	%%xmm5, %%xmm2\n\t"
+			"psubb	%%xmm2, %%xmm1\n\t"
+			/* write out */
+			"pshufb	%%xmm3, %%xmm1\n\t"
+			"movdqa	%%xmm1, %%xmm2\n\t"
+			"punpckhbw	%%xmm7, %%xmm1\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	5f\n\t"
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"punpcklbw	%%xmm7, %%xmm2\n\t"
+			"movdqu	%%xmm2,     (%0)\n\t"
+			"lea	16(%0), %0\n"
+			"5:\n\t"
+			"cmp	$7, %2\n\t"
+			"ja	3b\n"
+			"2:"
+		: /* %0 */ "=r" (dst),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (len)
+		: /* %3 */ "m" (vals[4][0]),
+		  /*    */ "0" (dst),
+		  /*    */ "1" (src),
+		  /*    */ "2" (len)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#   ifdef __x86_64__
+		  , "xmm8"
+#   endif
+#  endif
+	);
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
+}
+# endif
+
 # if HAVE_BINUTILS >= 217
+tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
+{
+	asm (
+			"cmp	$8, %2\n\t"
+			"jb	2f\n\t"
+			"movdqa	-48+%3, %%xmm7\n\t"
+			"movdqa	-32+%3, %%xmm6\n\t"
+			"movdqa	-16+%3, %%xmm5\n\t"
+#   ifdef __x86_64__
+			"movdqa	%3, %%xmm8\n\t"
+			"movdqa	16+%3, %%xmm9\n\t"
+#   endif
+			"movdqa	32+%3, %%xmm3\n\t"
+			"movdqa	48+%3, %%xmm4\n\t"
+			"cmp	$16, %2\n\t"
+			"jb	3f\n\t"
+			".p2align 2\n"
+			"1:\n\t"
+			"lddqu	(%1), %%xmm0\n\t"       /* fetch input data */
+			"sub	$10, %2\n\t"
+			"add	$10, %1\n\t"
+			/* swab endianess */
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			/* partionate */
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"pslldq	$5, %%xmm0\n\t"        /* shift copy */
+			"punpckhqdq	%%xmm1, %%xmm0\n\t" /* eliminate & join */
+			"movdqa	%%xmm7, %%xmm2\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"psrlq	$0xc, %%xmm0\n\t"      /* shift copy */
+			"pand	%%xmm7, %%xmm1\n\t"       /* eliminate */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm6, %%xmm1\n\t"       /* eliminate */
+			"psrld	$0x6, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm5, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm5, %%xmm1\n\t"       /* eliminate */
+			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+#   ifndef __x86_64__
+			"movdqa	%3, %%xmm0\n\t"
+#   endif
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+#   ifndef __x86_64__
+			"movdqa	16+%3, %%xmm2\n\t"
+#   else
+			"pxor	%%xmm2, %%xmm2\n\t"
+#   endif
+			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
+#   ifdef __x86_64__
+			"pand	%%xmm8, %%xmm1\n\t"       /* eliminate */
+#   else
+			"pand	%%xmm0, %%xmm1\n\t"       /* eliminate */
+#   endif
+			/* convert */
+#   ifdef __x86_64__
+			"paddb	%%xmm9, %%xmm1\n\t"
+#   else
+			"paddb	%%xmm2, %%xmm1\n\t"
+			"pxor	%%xmm2, %%xmm2\n\t"
+#   endif
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpgtb	%%xmm3, %%xmm0\n\t"
+			"pand	%%xmm4, %%xmm0\n\t"
+			"psubb	%%xmm0, %%xmm1\n\t"
+			/* write out */
+			"cmp	$15, %2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"punpckhbw	%%xmm2, %%xmm1\n\t"
+			"punpcklbw	%%xmm2, %%xmm0\n\t"
+			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"movdqu	%%xmm0, 0x10(%0)\n\t"
+			"lea	32(%0), %0\n\t"
+			"ja	1b\n\t"
+			"cmp	$8, %2\n\t"
+			"jb	2f\n"
+			"3:\n\t"
+			"movq	(%1), %%xmm0\n\t"       /* fetch input data */
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	4f\n\t"
+			"pinsrw	$4, 3(%1), %%xmm0\n\t"
+			"4:\n\t"
+			/* swab endianess */
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			/* partionate */
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"pslldq	$5, %%xmm0\n\t"        /* shift copy */
+			"punpckhqdq	%%xmm1, %%xmm0\n\t" /* eliminate & join */
+			"movdqa	%%xmm7, %%xmm2\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"psrlq	$0xc, %%xmm0\n\t"      /* shift copy */
+			"pand	%%xmm7, %%xmm1\n\t"       /* eliminate */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm6, %%xmm1\n\t"       /* eliminate */
+			"psrld	$0x6, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm5, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm5, %%xmm1\n\t"       /* eliminate */
+			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+#   ifndef __x86_64__
+			"movdqa	%3, %%xmm0\n\t"
+#   endif
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+#   ifndef __x86_64__
+			"movdqa	16+%3, %%xmm2\n\t"
+#   else
+			"pxor	%%xmm2, %%xmm2\n\t"
+#   endif
+			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
+#   ifdef __x86_64__
+			"pand	%%xmm8, %%xmm1\n\t"       /* eliminate */
+#   else
+			"pand	%%xmm0, %%xmm1\n\t"       /* eliminate */
+#   endif
+			/* convert */
+#   ifdef __x86_64__
+			"paddb	%%xmm9, %%xmm1\n\t"
+#   else
+			"paddb	%%xmm2, %%xmm1\n\t"
+			"pxor	%%xmm2, %%xmm2\n\t"
+#   endif
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpgtb	%%xmm3, %%xmm0\n\t"
+			"pand	%%xmm4, %%xmm0\n\t"
+			"psubb	%%xmm0, %%xmm1\n\t"
+			/* write out */
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"punpckhbw	%%xmm2, %%xmm0\n\t"
+			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			"movdqu	%%xmm0,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	5f\n\t"
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"punpcklbw	%%xmm2, %%xmm1\n\t"
+			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"lea	16(%0), %0\n"
+			"5:\n\t"
+			"cmp	$7, %2\n\t"
+			"ja	3b\n"
+			"2:"
+		: /* %0 */ "=r" (dst),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (len)
+		: /* %3 */ "m" (vals[4][0]),
+		  /*    */ "0" (dst),
+		  /*    */ "1" (src),
+		  /*    */ "2" (len)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#   ifdef __x86_64__
+		  , "xmm8", "xmm9"
+#   endif
+#  endif
+	);
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
+}
 # endif
 #endif
+
+tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
+{
+	asm (
+			"cmp	$8, %2\n\t"
+			"jb	2f\n\t"
+			"movdqa	-48+%3, %%xmm7\n\t"
+			"movdqa	-32+%3, %%xmm6\n\t"
+			"movdqa	-16+%3, %%xmm5\n\t"
+#ifdef __x86_64__
+			"movdqa	%3, %%xmm8\n\t"
+			"movdqa	16+%3, %%xmm9\n\t"
+#endif
+			"movdqa	32+%3, %%xmm3\n\t"
+			"movdqa	48+%3, %%xmm4\n\t"
+			"cmp	$16, %2\n\t"
+			"jb	3f\n\t"
+			".p2align 2\n"
+			"1:\n\t"
+			"movdqu	(%1), %%xmm0\n\t"       /* fetch input data */
+			"sub	$10, %2\n\t"
+			"add	$10, %1\n\t"
+			/* swab endianess */
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			/* partionate */
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"pslldq	$5, %%xmm0\n\t"        /* shift copy */
+			"punpckhqdq	%%xmm1, %%xmm0\n\t" /* eliminate & join */
+			"movdqa	%%xmm7, %%xmm2\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"psrlq	$0xc, %%xmm0\n\t"      /* shift copy */
+			"pand	%%xmm7, %%xmm1\n\t"       /* eliminate */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm6, %%xmm1\n\t"       /* eliminate */
+			"psrld	$0x6, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm5, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm5, %%xmm1\n\t"       /* eliminate */
+			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+#ifndef __x86_64__
+			"movdqa	%3, %%xmm0\n\t"
+#endif
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+#ifndef __x86_64__
+			"movdqa	16+%3, %%xmm2\n\t"
+#else
+			"pxor	%%xmm2, %%xmm2\n\t"
+#endif
+			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
+#ifdef __x86_64__
+			"pand	%%xmm8, %%xmm1\n\t"       /* eliminate */
+#else
+			"pand	%%xmm0, %%xmm1\n\t"       /* eliminate */
+#endif
+			/* convert */
+#ifdef __x86_64__
+			"paddb	%%xmm9, %%xmm1\n\t"
+#else
+			"paddb	%%xmm2, %%xmm1\n\t"
+			"pxor	%%xmm2, %%xmm2\n\t"
+#endif
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpgtb	%%xmm3, %%xmm0\n\t"
+			"pand	%%xmm4, %%xmm0\n\t"
+			"psubb	%%xmm0, %%xmm1\n\t"
+			/* write out */
+			"cmp	$15, %2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"punpckhbw	%%xmm2, %%xmm1\n\t"
+			"punpcklbw	%%xmm2, %%xmm0\n\t"
+			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"movdqu	%%xmm0, 0x10(%0)\n\t"
+			"lea	32(%0), %0\n\t"
+			"ja	1b\n\t"
+			"cmp	$8, %2\n\t"
+			"jb	2f\n"
+			"3:\n\t"
+			"movq	(%1), %%xmm0\n\t"       /* fetch input data */
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	4f\n\t"
+			"pinsrw	$4, 3(%1), %%xmm0\n\t"
+			"4:\n\t"
+			/* swab endianess */
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			/* partionate */
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"pslldq	$5, %%xmm0\n\t"        /* shift copy */
+			"punpckhqdq	%%xmm1, %%xmm0\n\t" /* eliminate & join */
+			"movdqa	%%xmm7, %%xmm2\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"    /* copy */
+			"psrlq	$0xc, %%xmm0\n\t"      /* shift copy */
+			"pand	%%xmm7, %%xmm1\n\t"       /* eliminate */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm6, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm6, %%xmm1\n\t"       /* eliminate */
+			"psrld	$0x6, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+			"movdqa	%%xmm5, %%xmm2\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"    /* copy */
+			"pand	%%xmm5, %%xmm1\n\t"       /* eliminate */
+			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
+			"pandn	%%xmm0, %%xmm2\n\t"
+#ifndef __x86_64__
+			"movdqa	%3, %%xmm0\n\t"
+#endif
+			"por	%%xmm2, %%xmm1\n\t"       /* join */
+#ifndef __x86_64__
+			"movdqa	16+%3, %%xmm2\n\t"
+#else
+			"pxor	%%xmm2, %%xmm2\n\t"
+#endif
+			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
+#ifdef __x86_64__
+			"pand	%%xmm8, %%xmm1\n\t"       /* eliminate */
+#else
+			"pand	%%xmm0, %%xmm1\n\t"       /* eliminate */
+#endif
+			/* convert */
+#ifdef __x86_64__
+			"paddb	%%xmm9, %%xmm1\n\t"
+#else
+			"paddb	%%xmm2, %%xmm1\n\t"
+			"pxor	%%xmm2, %%xmm2\n\t"
+#endif
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpgtb	%%xmm3, %%xmm0\n\t"
+			"pand	%%xmm4, %%xmm0\n\t"
+			"psubb	%%xmm0, %%xmm1\n\t"
+			/* write out */
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"punpckhbw	%%xmm2, %%xmm0\n\t"
+			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
+			"movdqu	%%xmm0,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	5f\n\t"
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"punpcklbw	%%xmm2, %%xmm1\n\t"
+			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
+			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"movdqu	%%xmm1,     (%0)\n\t"
+			"lea	16(%0), %0\n"
+			"5:\n\t"
+			"cmp	$7, %2\n\t"
+			"ja	3b\n"
+			"2:"
+		: /* %0 */ "=r" (dst),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (len)
+		: /* %3 */ "m" (vals[4][0]),
+		  /*    */ "0" (dst),
+		  /*    */ "1" (src),
+		  /*    */ "2" (len)
+#ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+# ifdef __x86_64__
+		  , "xmm8", "xmm9"
+# endif
+#endif
+	);
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
+}
 
 #ifndef __x86_64__
 tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len)
@@ -131,9 +665,9 @@ tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len)
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
-#ifdef __MMX__
+# ifdef __MMX__
 		: "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7"
-#endif
+# endif
 	);
 	return to_base32_generic(dst, src, len);
 }
@@ -143,10 +677,13 @@ static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
+	{.func = (void (*)(void))to_base32_SSE41, .flags_needed = CFEATURE_SSE4_1},
 # endif
 # if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))to_base32_SSE3, .flags_needed = CFEATURE_SSE3},
 # endif
 #endif
+	{.func = (void (*)(void))to_base32_SSE2, .flags_needed = CFEATURE_SSE2},
 #ifndef __x86_64__
 	{.func = (void (*)(void))to_base32_SSE, .flags_needed = CFEATURE_SSE},
 #endif

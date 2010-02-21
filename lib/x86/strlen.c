@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, x86 implementation
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -54,6 +54,14 @@
  * And near by, sorry gcc, your bsf handling sucks.
  * bsf generates flags, no need to test beforehand,
  * but AFTERWARDS!!!
+ * But bsf can be slow, and thanks to the _new_ Atom, which
+ * again needs 17 clock cycles, the P4 also isn't very
+ * glorious...
+ * On the other hand, the bsf HAS to happen at some point.
+ * Since most strings are short, the first is a hit, and
+ * we can save all the other handling, jumping, etc.
+ * I think i measured that at one point...
+ * Hmmm, but not on the offenders...
  */
 
 #include "x86_features.h"
@@ -133,8 +141,9 @@ static size_t strlen_SSE2(const char *s)
 		"prefetcht0	64(%1)\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%2, %0\n\t"
 		"2:"
@@ -175,8 +184,9 @@ static size_t strlen_SSE(const char *s)
 		"prefetcht0	64(%1)\n\t"
 		"pcmpeqb	%%mm1, %%mm0\n\t"
 		"pmovmskb	%%mm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%2, %0\n\t"
 		"2:\n\t"
@@ -216,7 +226,6 @@ static size_t strlen_x86(const char *s)
 		"and	%7, %0\n\t"
 		"shr	%b5, %0\n\t"
 		"shl	%b5, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
@@ -231,9 +240,9 @@ static size_t strlen_x86(const char *s)
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
 		"and	%7, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jz	1b\n"
 		"2:\n\t"
+		"bsf	%0, %0\n\t"
 		"shr	$3, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%6, %0"

@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platform, x86 implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,6 +49,14 @@
  * And near by, sorry gcc, your bsf handling sucks.
  * bsf generates flags, no need to test beforehand,
  * but AFTERWARDS!!!
+ * But bsf can be slow, and thanks to the _new_ Atom, which
+ * again needs 17 clock cycles, the P4 also isn't very
+ * glorious...
+ * On the other hand, the bsf HAS to happen at some point.
+ * Since most strings are short, the first is a hit, and
+ * we can save all the other handling, jumping, etc.
+ * I think i measured that at one point...
+ * Hmmm, but not on the offenders...
  */
 
 #include "x86_features.h"
@@ -149,7 +157,6 @@ static char *strchrnul_SSSE3(const char *s, int c)
 		"pmovmskb	%%xmm0, %0\n\t"
 		"shr	%b2, %0\n\t"
 		"shl	%b2, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
@@ -160,9 +167,10 @@ static char *strchrnul_SSSE3(const char *s, int c)
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"por	%%xmm3, %%xmm0\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
 		"2:"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
 		  /* %1 */ "=&r" (p),
@@ -217,7 +225,6 @@ static char *strchrnul_SSE2(const char *s, int c)
 		"pmovmskb	%%xmm0, %0\n\t"
 		"shr	%b2, %0\n\t"
 		"shl	%b2, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
@@ -228,9 +235,10 @@ static char *strchrnul_SSE2(const char *s, int c)
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"por	%%xmm3, %%xmm0\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
 		"2:"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
 		  /* %1 */ "=&r" (p),
@@ -275,7 +283,6 @@ static char *strchrnul_SSE(const char *s, int c)
 		"pmovmskb	%%mm0, %0\n\t"
 		"shr	%b2, %0\n\t"
 		"shl	%b2, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
@@ -286,9 +293,10 @@ static char *strchrnul_SSE(const char *s, int c)
 		"pcmpeqb	%%mm2, %%mm3\n\t"
 		"por	%%mm3, %%mm0\n\t"
 		"pmovmskb	%%mm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
 		"2:\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
 		  /* %1 */ "=r" (p),
@@ -347,7 +355,6 @@ static char *strchrnul_x86(const char *s, int c)
 		"and	%9, %0\n\t"
 		"shr	%b8, %0\n\t"
 		"shl	%b8, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
@@ -373,9 +380,9 @@ static char *strchrnul_x86(const char *s, int c)
 		"and	%3, %2\n\t"
 		"or	%2, %0\n\t"
 		"and	%9, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jz	1b\n"
 		"2:\n\t"
+		"bsf	%0, %0\n\t"
 		"shr	$3, %0\n\t"
 		"add	%1, %0\n\t"
 	: /* %0 */ "=&a" (ret),

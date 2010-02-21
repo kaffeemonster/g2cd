@@ -59,6 +59,14 @@
  * And near by, sorry gcc, your bsf handling sucks.
  * bsf generates flags, no need to test beforehand,
  * but AFTERWARDS!!!
+ * But bsf can be slow, and thanks to the _new_ Atom, which
+ * again needs 17 clock cycles, the P4 also isn't very
+ * glorious...
+ * On the other hand, the bsf HAS to happen at some point.
+ * Since most strings are short, the first is a hit, and
+ * we can save all the other handling, jumping, etc.
+ * I think i measured that at one point...
+ * Hmmm, but not on the offenders...
  */
 
 #include "x86_features.h"

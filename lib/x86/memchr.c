@@ -49,6 +49,14 @@
  * And near by, sorry gcc, your bsf handling sucks.
  * bsf generates flags, no need to test beforehand,
  * but AFTERWARDS!!!
+ * But bsf can be slow, and thanks to the _new_ Atom, which
+ * again needs 17 clock cycles, the P4 also isn't very
+ * glorious...
+ * On the other hand, the bsf HAS to happen at some point.
+ * Since most strings are short, the first is a hit, and
+ * we can save all the other handling, jumping, etc.
+ * I think i measured that at one point...
+ * Hmmm, but not on the offenders...
  */
 
 #include "x86_features.h"
@@ -147,7 +155,6 @@ static void *memchr_SSSE3(const void *s, int c, size_t n)
 		"ja	1f\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	5f\n\t"
 		"neg	%2\n\t"
 		".p2align 1\n"
@@ -170,9 +177,9 @@ static void *memchr_SSSE3(const void *s, int c, size_t n)
 		"shl	%b3, %w0\n\t"
 		"shr	%b3, %w0\n"
 		"4:\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"5:\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		".subsection 2\n"
 		".p2align 2\n"
@@ -183,7 +190,6 @@ static void *memchr_SSSE3(const void *s, int c, size_t n)
 		"mov	%2, %3\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"jmp	5b\n\t"
 		".previous"
@@ -234,7 +240,6 @@ static void *memchr_SSE2(const void *s, int c, size_t n)
 		"ja	1f\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	5f\n\t"
 		"neg	%2\n\t"
 		".p2align 1\n"
@@ -257,9 +262,9 @@ static void *memchr_SSE2(const void *s, int c, size_t n)
 		"shl	%b3, %w0\n\t"
 		"shr	%b3, %w0\n"
 		"4:\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"5:\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		".subsection 2\n"
 		".p2align 2\n"
@@ -270,7 +275,6 @@ static void *memchr_SSE2(const void *s, int c, size_t n)
 		"mov	%2, %3\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"jmp	5b\n\t"
 		".previous"
@@ -315,7 +319,6 @@ static void *memchr_SSE(const void *s, int c, size_t n)
 		"ja	1f\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"jnz	5f\n\t"
 		"neg	%2\n\t"
 		".p2align 1\n"
@@ -338,9 +341,9 @@ static void *memchr_SSE(const void *s, int c, size_t n)
 		"shl	%b3, %b0\n\t"
 		"shr	%b3, %b0\n"
 		"4:\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"5:\n\t"
+		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		".subsection 2\n\t"
 		".p2align 2\n"
@@ -351,7 +354,6 @@ static void *memchr_SSE(const void *s, int c, size_t n)
 		"mov	%2, %3\n\t"
 		"shr	%b3, %0\n\t"
 		"shl	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
 		"cmovz	%0, %1\n\t"
 		"jmp	5b\n\t"
 		".previous"

@@ -40,9 +40,6 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
 	uint64_t m1, t1, t2;
 
-# if HOST_IS_BIGENDIAN == 0
-	d1 = __swab64(d1);
-# endif
 	d2   = d1;                    /* copy */
 	d2 >>= 12;                    /* shift copy */
 	d1  &= 0xFFFFFFFF00000000ULL; /* eliminate */
@@ -86,9 +83,6 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	uint32_t b1, b2;
 	uint32_t m1, m2, t1, t2;
 
-# if HOST_IS_BIGENDIAN == 0
-	d1 = __swab64(d1);
-# endif
 	d2 = d1;                                   /* copy */
 	d2 >>= 12;                                 /* shift copy */
 	a1   = (d1 & 0xFFFFFFFF00000000ULL) >> 32; /* split it */
@@ -131,12 +125,17 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	return dst + 8;
 }
 
+static inline uint32_t rol32(uint32_t word, unsigned int shift)
+{
+	return (word << shift) | (word >> (32 - shift));
+}
+
 F_NAME(tchar_t *, to_base32, _generic)(tchar_t *dst, const unsigned char *src, unsigned len)
 {
 #ifndef ONLY_REMAINDER
 	while(len >= sizeof(uint64_t))
 	{
-		uint64_t d = get_unaligned((const uint64_t *)src);
+		uint64_t d = get_unaligned_be64(src);
 		src += 5;
 		len -= 5;
 		dst = do_40bit(dst, d);
@@ -144,13 +143,8 @@ F_NAME(tchar_t *, to_base32, _generic)(tchar_t *dst, const unsigned char *src, u
 #endif
 	while(len >= 5)
 	{
-#if HOST_IS_BIGENDIAN == 0
-		uint64_t d =  ((uint64_t)get_unaligned((const uint32_t *)src)) |
-		             (((uint64_t)src[4]) << 32);
-#else
-		uint64_t d = ((uint64_t)(get_unaligned((const uint32_t *)src)) << 32) |
-		             ((uint64_t)(src[4]) << 24);
-#endif
+		uint64_t d = ((uint64_t)get_unaligned_be32(src) << 32) |
+		             ((uint64_t)src[4] << 24);
 		src += 5;
 		len -= 5;
 		dst = do_40bit(dst, d);
@@ -167,14 +161,14 @@ F_NAME(tchar_t *, to_base32, _generic)(tchar_t *dst, const unsigned char *src, u
 		for(i = len, d = 0; i; i--)
 			d = (d << 8) | *src++;
 
-		/* bring up */
-		d <<= (sizeof(d) - len) * BITS_PER_CHAR;
+		/* bring to start position */
+		d = rol32(d, (sizeof(d) - len) * BITS_PER_CHAR + 5);
 		i = 0;
 		/* write out */
 		do
 		{
-			*dst++ = base32c[(d >> (32 - 5)) & 0x1F];
-			d <<= 5;
+			*dst++ = base32c[d & 0x1F];
+			d = rol32(d, 5);
 		} while(++i < b32chars);
 	}
 	return dst;
