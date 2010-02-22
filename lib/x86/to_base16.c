@@ -165,7 +165,7 @@ static tchar_t *to_base16_SSE2(tchar_t *dst, const unsigned char *src, unsigned 
 #endif
 	);
 	if(unlikely(len))
-		return to_base16_SSE(dst, src, len);
+		return to_base16_MMX(dst, src, len);
 	return dst;
 }
 
@@ -221,7 +221,7 @@ static tchar_t *to_base16_SSSE3(tchar_t *dst, const unsigned char *src, unsigned
 #endif
 	);
 	if(unlikely(len))
-		return to_base16_SSE(dst, src, len);
+		return to_base16_MMX(dst, src, len);
 	return dst;
 }
 

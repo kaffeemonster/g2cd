@@ -34,10 +34,11 @@
 # define F_NAME(z, x, y) static noinline z x##y
 #endif
 
+#ifndef HAVE_DO_40BIT
 static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 {
 	uint64_t d2;
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
+# if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
 	uint64_t m1, t1, t2;
 
 	d2   = d1;                    /* copy */
@@ -48,7 +49,7 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	d2   = d1;                    /* copy */
 	d2 >>= 6;                     /* shift copy */
 	d1  &= 0xFFFF0000FFFF0000ULL; /* eliminate */
-	d2  &= 0x0000FFFF0000FFFFULL;
+ 	d2  &= 0x0000FFFF0000FFFFULL;
 	d1  |= d2;                    /* join */
 	d2   = d1;                    /* copy */
 	d2 >>= 3;                     /* shift copy */
@@ -78,7 +79,7 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	t1 >>= 16; t2 >>= 16;
 	dst[1] = (t1 & 0x0000ffff);
 	dst[0] = (t2 & 0x0000ffff);
-#else
+# else
 	uint32_t a1, a2;
 	uint32_t b1, b2;
 	uint32_t m1, m2, t1, t2;
@@ -121,9 +122,10 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	t1 >>= 16; t2 >>= 16;
 	dst[1] = (t1 & 0x0000ffff);
 	dst[0] = (t2 & 0x0000ffff);
-#endif
+# endif
 	return dst + 8;
 }
+#endif
 
 static inline uint32_t rol32(uint32_t word, unsigned int shift)
 {

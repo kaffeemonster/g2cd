@@ -45,12 +45,12 @@
 #  include "x86/to_base32.c"
 //# elif defined(__powerpc__) || defined(__powerpc64__)
 //#  include "ppc/to_base32.c"
-//# elif defined(__alpha__)
-//#  include "alpha/to_base32.c"
-//# elif defined(__arm__)
-//#  include "arm/to_base32.c"
-//# elif defined(__ia64__)
-//#  include "ia64/to_base32.c"
+# elif defined(__alpha__)
+#  include "alpha/to_base32.c"
+# elif defined(__arm__)
+#  include "arm/to_base32.c"
+# elif defined(__ia64__)
+#  include "ia64/to_base32.c"
 # else
 #  include "generic/to_base32.c"
 # endif

@@ -2,7 +2,7 @@
  * alpha.h
  * special alpha instructions
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,7 +31,7 @@
 
 # include "../other.h"
 
-#ifdef __alpha_cix__
+# ifdef __alpha_cix__
 static inline size_t ctlz(unsigned long a)
 {
 	size_t r;
@@ -52,7 +52,7 @@ static inline size_t cttz(unsigned long a)
 	asm ("cttz	%1, %0" : "=r" (r) : "r" (a));
 	return r;
 }
-#else
+# else
 /*
  * if CIX is not avail... we need a fallback
  *
@@ -79,10 +79,10 @@ static inline size_t ctlz(unsigned long a)
 	asm("extbl	%1, %2, %0" : "=r" (r) : "r" (0x0201040003050607UL), "r" (((a * 23) & 0xff) >> 5));
 	return r;
 }
-#endif
+# endif
 
-#define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
-#define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << SOULM1 * BITS_PER_CHAR) : cttz((x)))
+# define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
+# define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << SOULM1 * BITS_PER_CHAR) : cttz((x)))
 
 # define cmpbeqz(a) (cmpbge(0, a))
 # if _GNUC_PREREQ(3, 3)

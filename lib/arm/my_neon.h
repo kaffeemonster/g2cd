@@ -2,7 +2,7 @@
  * my_neon.h
  * little arm neon helper
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,6 +27,7 @@
 # define MY_NEON_H
 
 # if defined(__ARM_NEON__)
+#  include <arm_neon.h>
 #  define SOVUCQ sizeof(uint8x16_t)
 #  define SOVUC sizeof(uint8x8_t)
 

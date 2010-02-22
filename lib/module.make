@@ -237,6 +237,9 @@ TO_BASE16SRC = \
 	$(MPL)/x86/to_base16.c
 TO_BASE32SRC = \
 	$(MPL)/generic/to_base32.c \
+	$(MPL)/alpha/to_base32.c \
+	$(MPL)/arm/to_base32.c \
+	$(MPL)/ia64/to_base32.c \
 	$(MPL)/x86/to_base32.c
 TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
