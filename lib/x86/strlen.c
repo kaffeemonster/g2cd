@@ -226,6 +226,7 @@ static size_t strlen_x86(const char *s)
 		"and	%7, %0\n\t"
 		"shr	%b5, %0\n\t"
 		"shl	%b5, %0\n\t"
+		"test	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
