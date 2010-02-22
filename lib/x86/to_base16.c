@@ -37,7 +37,7 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 	{0x27272727, 0x27272727, 0x27272727, 0x27272727},
 };
 
-static noinline tchar_t *to_base16_SSE(tchar_t *dst, const unsigned char *src, unsigned len)
+static noinline tchar_t *to_base16_MMX(tchar_t *dst, const unsigned char *src, unsigned len)
 {
 #ifndef __x86_64__
 	asm(
@@ -234,7 +234,7 @@ static const struct test_cpu_feature t_feat[] =
 #endif
 	{.func = (void (*)(void))to_base16_SSE2, .flags_needed = CFEATURE_SSE2},
 #ifndef __x86_64__
-	{.func = (void (*)(void))to_base16_SSE, .flags_needed = CFEATURE_SSE},
+	{.func = (void (*)(void))to_base16_MMX, .flags_needed = CFEATURE_MMX},
 #endif
 	{.func = (void (*)(void))to_base16_generic, .flags_needed = -1 },
 };

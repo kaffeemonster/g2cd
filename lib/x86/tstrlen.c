@@ -288,6 +288,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))tstrlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))tstrlen_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+	{.func = (void (*)(void))tstrlen_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = NULL},
 #endif
 	{.func = (void (*)(void))tstrlen_x86, .flags_needed = -1, .callback = NULL},
 };

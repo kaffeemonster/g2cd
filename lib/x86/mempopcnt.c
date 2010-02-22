@@ -874,6 +874,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))mempopcnt_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
 #ifndef __x86_64__
 	{.func = (void (*)(void))mempopcnt_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))mempopcnt_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = test_cpu_feature_cmov_callback},
 	{.func = (void (*)(void))mempopcnt_MMX, .flags_needed = CFEATURE_MMX},
 #endif
 	{.func = (void (*)(void))mempopcnt_generic, .flags_needed = -1 },

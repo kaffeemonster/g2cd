@@ -435,6 +435,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strnpcpy_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
 #ifndef __x86_64__
 	{.func = (void (*)(void))strnpcpy_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+	{.func = (void (*)(void))strnpcpy_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = NULL},
 #endif
 	{.func = (void (*)(void))strnpcpy_x86, .flags_needed = -1, .callback = NULL},
 };

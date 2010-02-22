@@ -686,6 +686,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))to_base32_SSE2, .flags_needed = CFEATURE_SSE2},
 #ifndef __x86_64__
 	{.func = (void (*)(void))to_base32_SSE, .flags_needed = CFEATURE_SSE},
+	{.func = (void (*)(void))to_base32_SSE, .flags_needed = CFEATURE_MMXEXT},
 #endif
 	{.func = (void (*)(void))to_base32_generic, .flags_needed = -1 },
 };
