@@ -726,7 +726,7 @@ static tchar_t *make_keywords(const tchar_t *s)
 	for(; *wptr; pos++, wptr++)
 	{
 		bool character;
-		unsigned distance;
+		int distance;
 
 		boundary[0] = boundary[1];
 		boundary[1] = SC_NONE;
@@ -741,14 +741,14 @@ static tchar_t *make_keywords(const tchar_t *s)
 		   (boundary[0] & (SC_HIRAGANA | SC_KATAKANA)))
 			boundary[1] = boundary[0];
 
-		character = (boundary[1] & SC_REGULAR) && ('-' == *wptr || '=' == *wptr);
+		character = !!(boundary[1] & SC_REGULAR); /* || (expression && ('-' == *wptr || '=' == *wptr)); */
 		if('-' == *wptr)
 			negativ = true;
-		else if('=' == *wptr)
+		else if(' ' == *wptr)
 			negativ = false;
 		distance = !character ? 1 : 0;
 
-		if(!(!character || (boundary[0] != boundary[1] && pos)))
+		if(!((!character || boundary[0] != boundary[1]) && pos))
 			continue;
 
 		if(pos > prev_word)
@@ -811,7 +811,6 @@ static tchar_t *make_keywords(const tchar_t *s)
 				}
 			}
 		}
-
 		prev_word = pos + distance;
 	}
 
@@ -928,7 +927,7 @@ static void fill_word_list(struct list_head *word_list, const tchar_t *in, struc
 	}
 }
 
-static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *word_list)
+static noinline bool hash_word_list(struct search_hash_buffer *shb, struct list_head *word_list)
 {
 	static const tchar_t common_words[][8] =
 	{
@@ -985,8 +984,10 @@ static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *wor
 		{
 			size_t i;
 			bool found = false;
-			for(i = 0; i < anum(common_words); i++) {
-				if(0 == tstrncmp(common_words[i], lcursor->data, w_len)) {
+			for(i = 0; i < anum(common_words); i++)
+			{
+				if(common_words[i][0] == lcursor->data[0] &&
+				   0 == tstrncmp(common_words[i], lcursor->data, w_len)) {
 					found = true;
 					break;
 				}
@@ -995,6 +996,7 @@ static bool hash_word_list(struct search_hash_buffer *shb, struct list_head *wor
 				num_common++;
 			else
 				num_valid++;
+//		printf("found %c nc %u nv %u\n", found ? 't' : 'f', num_common, num_valid);
 			shb->hashes[shb->num++] = g2_qht_search_number_word(lcursor->data, 0, w_len);
 			if(shb->num >= shb->size)
 				break;
@@ -1111,6 +1113,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 	{
 		LIST_HEAD(word_list);
 		struct zpad *zmem = qht_get_zpad(); /* dipping into all mem rescources.. */
+		bool valid;
 
 		if(!zmem)
 			goto cont;
@@ -1380,8 +1383,12 @@ check_dn:
 		}
 
 work_list:
+		valid = hash_word_list(shb, &word_list);
+//		printf("valid: %c had_urn: %c == %c\n",
+//		       valid ? 't' : 'f', had_urn ? 't': 'f',
+//		       (!valid && !had_urn) ? 't' : 'f');
 		/* refuse query if no "valid" word and no urn */
-		if(!hash_word_list(shb, &word_list) && !had_urn)
+		if(!valid && !had_urn)
 			return false;
 	}
 cont:

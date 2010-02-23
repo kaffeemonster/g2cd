@@ -96,10 +96,10 @@ size_t utf8totcs(tchar_t *dst, size_t dl, const char *src, size_t *sl)
 			break;
 
 		src += len;
-		sll -= len;
+		sll -= (unsigned)len < sll ? (unsigned)len : sll;
 	}
 
-	*sl = *sl - sll;
+	*sl = sll;
 	return dl - cnt;
 }
 

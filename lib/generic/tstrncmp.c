@@ -25,6 +25,7 @@
 
 int tstrncmp(const tchar_t *s1, const tchar_t *s2, size_t n)
 {
+#if 0
 	size_t w1, w2;
 	size_t m1, m2;
 	size_t i, j, cycles;
@@ -98,7 +99,7 @@ LOOP_SOST:
 	}
 
 SINGLE_WORD:
-	for(; i; i -= 2, n -= 2)
+	for(; i; i -= sizeof(tchar_t), n -= sizeof(tchar_t))
 	{
 		c1 = (unsigned) *s1++;
 		c2 = (unsigned) *s2++;
@@ -119,6 +120,16 @@ SINGLE_WORD:
 				goto LOOP_SOST;
 		}
 	}
+#else
+	for(; n; n--)
+	{
+		unsigned c1, c2;
+		c1 = (unsigned) *s1++;
+		c2 = (unsigned) *s2++;
+		if(!(c1 && c2 && c1 == c2))
+			return (int)c1 - (int)c2;
+	}
+#endif
 
 	return 0;
 }
