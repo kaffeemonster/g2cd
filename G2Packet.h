@@ -113,6 +113,7 @@
 	ENUM_CMD( HG     ,      1 ), /* QH2 */ \
 	ENUM_CMD( PCH    ,      1 ), /* QH2 */ \
 	ENUM_CMD( UPRO   ,      1 ), /* QH2 */ \
+	ENUM_CMD( CS     ,      1 ), /* QH2 */ \
 	ENUM_CMD( CSC    ,      1 ), /* QH2/H */ \
 	ENUM_CMD( COM    ,      1 ), /* QH2/H */ \
 	ENUM_CMD( G      ,      1 ), /* QH2/H */ \

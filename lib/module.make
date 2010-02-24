@@ -341,6 +341,7 @@ LIBSRCS = \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
 	$(MPL)/to_base16.c \
+	$(MPL)/to_base32.c \
 	$(MPL)/tstrlen.c \
 	$(MPL)/tstrchrnul.c \
 	$(MPL)/tstrncmp.c \

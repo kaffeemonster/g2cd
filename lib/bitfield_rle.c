@@ -71,7 +71,6 @@
  * uncompressed handling.
  */
 
-// TODO: add a "sync block"
 /*
  * While this all works quite well, we have a problem:
  * bitfield_lookup is cheaper than bitfield_decode
@@ -122,8 +121,9 @@
  * QHT entries <----------------------------------+
  *              empty                         full
  *
- * 37% of the searches consist of a single value (prop. 
- * search for a hash, sha1, tiger, etc.), so...
+ * ~50% of the searches consist of a single value (prop.
+ * search for a single word or hash, sha1, tiger, etc.),
+ * so...
  *
  * Idea:
  * Add a sync block to the rle'd bitfields.
@@ -150,7 +150,14 @@
  * offset.
  *
  * And yeah: i also invented that while taking a crap...
+ *
+ * Update:
+ * This seems to work quite fine, taking the default
+ * instruction count needed for lookup down by a factor
+ * of 10. The cost on encode is neglegtable.
  */
+// TODO: is this bug free?
+// TODO: more than 4 syncblocks?
 
 /*
  * bitfield_encode - run length encode a bit field
@@ -192,6 +199,15 @@
  *
  * Please refer to the general notes about these functions.
  */
+
+struct sync_block
+{
+	uint32_t idx;
+	uint32_t off;
+};
+/* steal first 2 bit for the number of sync blocks */
+#define NUM_SYNC_MASK (0x07)
+#define NUM_SYNC_MAX  4
 
 static unsigned popcnt_8(unsigned v)
 {
@@ -242,14 +258,53 @@ static const struct
 
 ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
 {
-	uint8_t *r_wptr = res;
+	struct sync_block synb[NUM_SYNC_MAX];
+	uint8_t *r_wptr = res, *flags = NULL;
 	const uint8_t *o_data;
+	size_t idx, idx_step, os_len;
 	ssize_t c_len;
-	unsigned cnt, o_row;
+	unsigned cnt, o_row, num_syn = 0, syn_len;
+
+	if(likely(t_len))
+	{
+		/* add a flag byte */
+		t_len--;
+		flags = r_wptr++;
+	}
+	/* reserve space for sync block */
+	syn_len = NUM_SYNC_MAX * sizeof(struct sync_block);
+	syn_len = syn_len < t_len ? syn_len : t_len;
+	syn_len = (syn_len / sizeof(struct sync_block)) * sizeof(struct sync_block);
+	t_len -= syn_len;
+
+	/* prepare sync blocks */
+	idx_step = s_len / (NUM_SYNC_MAX + 1); /* equally distributed */
+	for(cnt = 0, idx = idx_step; cnt < NUM_SYNC_MAX; cnt++, idx += idx_step) {
+		synb[cnt].idx = idx;
+		synb[cnt].off = 0;
+	}
+	os_len = s_len;
 
 	while(likely(t_len) && likely(s_len))
 	{
 		uint8_t z = *data;
+
+		/* is it time to emit a sync block? */
+		if(unlikely(os_len - s_len >= synb[num_syn].idx))
+		{
+			synb[num_syn].idx = os_len - s_len;
+			synb[num_syn].off = r_wptr - (res + 1);
+			num_syn++;
+			/* did we compress better than expected? */
+			if(likely(num_syn < NUM_SYNC_MAX) && unlikely(synb[num_syn - 1].idx >= synb[num_syn].idx))
+			{
+				/* reindex */
+				idx_step = s_len / ((NUM_SYNC_MAX - num_syn) + 1);
+				for(cnt = num_syn, idx = synb[num_syn - 1].idx + idx_step;
+				    cnt < NUM_SYNC_MAX; cnt++, idx += idx_step)
+					synb[cnt].idx = idx;
+			}
+		}
 
 		if(likely(0xFF == z))
 		{
@@ -398,7 +453,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 			cnt = popcnt_8(~z);
 			if(likely(1 == cnt || 2 == cnt))
 			{
-				if(1 == cnt)
+				if(likely(1 == cnt))
 					*r_wptr++ = (__builtin_ffs(~z) - 1) | 0xE0;
 				else
 					*r_wptr++ = twos_index[(~z) & 0xFF] | 0xC0;
@@ -469,6 +524,17 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		}
 	}
 
+	if(flags)
+	{
+		*flags = 0;
+		if(num_syn)
+		{
+			unsigned n_syn_len = num_syn * sizeof(struct sync_block);
+			syn_len = n_syn_len < syn_len ? n_syn_len : syn_len;
+			r_wptr  = my_mempcpy(r_wptr, synb, syn_len);
+			*flags |= syn_len / sizeof(struct sync_block);
+		}
+	}
 	c_len = r_wptr - res;
 	if(s_len)
 		c_len = -c_len;
@@ -477,9 +543,22 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 
 ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
 {
-	uint8_t *r_wptr = res;
+	uint8_t *r_wptr = res, flags;
 	ssize_t c_len;
 	size_t cnt = 0;
+
+	if(likely(s_len))
+	{
+		/* read flag byte */
+		s_len--;
+		flags = *data++;
+		/* skip syncs, if any */
+		if(likely(flags & NUM_SYNC_MASK)) {
+			unsigned sync_size = (flags & NUM_SYNC_MASK) * sizeof(struct sync_block);
+			sync_size = s_len > sync_size ? sync_size : s_len;
+			s_len -= sync_size;
+		}
+	}
 
 	while(likely(t_len) && likely(s_len))
 	{
@@ -600,9 +679,22 @@ write_out_ff:
 
 ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
 {
-	uint8_t *r_wptr = res;
+	uint8_t *r_wptr = res, flags;
 	ssize_t c_len;
 	size_t cnt = 0;
+
+	if(likely(s_len))
+	{
+		/* read flag byte */
+		s_len--;
+		flags = *data++;
+		/* skip syncs, if any */
+		if(flags & NUM_SYNC_MASK) {
+			unsigned sync_size = (flags & NUM_SYNC_MASK) * sizeof(struct sync_block);
+			sync_size = s_len > sync_size ? sync_size : s_len;
+			s_len -= sync_size;
+		}
+	}
 
 	while(likely(t_len) && likely(s_len))
 	{
@@ -715,11 +807,31 @@ write_out_ff:
 
 int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len)
 {
-	const uint8_t *dwptr = data;
-	size_t i, rem_len;
+	struct sync_block synb[NUM_SYNC_MAX];
+	const uint8_t *dwptr;
+	size_t i, rem_len, synpos;
+	unsigned num_syn = 0, flags;
 	uint32_t bpos;
 
-	for(i = 0, bpos = 0, rem_len = s_len; i < v_len; i++)
+	if(likely(s_len))
+	{
+		/* read flag byte */
+		s_len--;
+		flags = *data++;
+		/* extract syncs, if any */
+		num_syn = flags & NUM_SYNC_MASK;
+		if(likely(num_syn))
+		{
+			unsigned sync_size = num_syn * sizeof(struct sync_block);
+			if(unlikely(sync_size >= s_len || num_syn > NUM_SYNC_MAX))
+				return 0; /* somethings broken here */
+			my_memcpy(synb, data + s_len - sync_size, sync_size);
+			s_len -= sync_size;
+		}
+	}
+
+	for(i = 0, synpos = 0, bpos = 0, rem_len = s_len, dwptr = data;
+	    i < v_len; i++)
 	{
 		/*
 		 * when the act. bit index is below the bit pos, we have to
@@ -727,9 +839,23 @@ int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, siz
 		 * Sort your numbers, kids. Look next door, introsort_u32.
 		 */
 		if(unlikely(vals[i] < bpos)) {
-			dwptr = data;
-			bpos = 0;
+			dwptr   = data;
+			bpos    = 0;
 			rem_len = s_len;
+			synpos  = 0;
+		}
+		/* check if we can fast forward with the sync block */
+		if(likely(num_syn))
+		{
+			unsigned last_fit = synpos;
+			while(synpos < num_syn && vals[i] / BITS_PER_CHAR >= synb[synpos].idx)
+				last_fit = synpos++;
+			synpos = last_fit;
+			if(vals[i] / BITS_PER_CHAR >= synb[synpos].idx && synb[synpos].idx > bpos / BITS_PER_CHAR) {
+				dwptr   = data + synb[synpos].off;
+				bpos    = synb[synpos].idx * BITS_PER_CHAR;
+				rem_len = s_len - synb[synpos].off;
+			}
 		}
 
 		while(likely(rem_len))

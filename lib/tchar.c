@@ -132,6 +132,7 @@ tchar_t *tstrptolower(tchar_t *s)
 
 void tistypemix(const tchar_t *s, size_t len, bool *word, bool *digit, bool *mix)
 {
+	*word  = false;
 	*digit = false;
 
 	for(; *s && len; s++, len--)

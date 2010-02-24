@@ -455,7 +455,7 @@ static uint32_t g2_qht_hnumber(uint32_t h, unsigned bits)
 	return (uint32_t)hash;
 }
 
-static uint32_t g2_qht_search_number_word(const tchar_t *s, size_t start, size_t len)
+static noinline uint32_t g2_qht_search_number_word(const tchar_t *s, size_t start, size_t len)
 {
 	uint32_t h;
 	int b;
@@ -472,9 +472,29 @@ static uint32_t g2_qht_search_number_word(const tchar_t *s, size_t start, size_t
 		 * ????
 		 * What are they doing?
 		 */
-		v   = (v < 'A' || v > 'Z' ? v : v + 'a' - 'A') & 0xFF;
+		v   = (v < 'A' || v > 'Z' ? v : v + ('a' - 'A')) & 0xFF;
 		v <<= b * BITS_PER_CHAR;
-		b   = (b + 1) & 3;
+		/*
+		 * b   = (b + 1) & 3;
+		 * and the brokenness continues...
+		 * The above is basically an optimized (b + 1) % 8.
+		 * The problem is the modulo 8. They count till 7, so
+		 * they basically want to shift v at max 7 * 8 = 56 times
+		 * to the left. This can not work, assuming int is 32 bit
+		 * this would mean they take the first 4 chars, than ingore
+		 * 4 chars (shifted to nirvana, xor with 0), than take 4
+		 * chars...
+		 * The the reason it works: x86 shift take the shift count
+		 * modulo 32, so it wraps around again.
+		 * But this only works as long as you do not have an arch
+		 * which can (only) do 64 bit shifts (x86_64 can still do
+		 * 32 bit shifts) or the compiler gets clever and start
+		 * to see "Hey, with a shift count of > 32 only 0 remains"
+		 * (or plays with some C/C++ rule that shifts larger than
+		 * the type are undefined, which would be VERY unpleasant...)
+		 * Fix it for good in the code, hoping it is the right thing.
+		 */
+		b   = (b + 1) % 4;
 		h  ^= v;
 	}
 	/*
