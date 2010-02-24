@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -112,6 +112,7 @@ K_SHIFT:
 
 static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/mem_searchrn.c"
 #endif
 /* EOF */

@@ -37,7 +37,7 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 	{0x27272727, 0x27272727, 0x27272727, 0x27272727},
 };
 
-static noinline tchar_t *to_base16_MMX(tchar_t *dst, const unsigned char *src, unsigned len)
+static noinline unsigned char *to_base16_MMX(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 #ifndef __x86_64__
 	asm(
@@ -67,21 +67,12 @@ static noinline tchar_t *to_base16_MMX(tchar_t *dst, const unsigned char *src, u
 		"pand	%%mm5, %%mm3\n\t"
 		"paddb	%%mm1, %%mm0\n\t"
 		"paddb	%%mm3, %%mm4\n\t"
-		"pxor	%%mm3, %%mm3\n\t"
 		"movq	%%mm4, %%mm1\n\t"
-		"punpckhbw	%%mm0, %%mm1\n\t"
 		"punpcklbw	%%mm0, %%mm4\n\t"
-		"movq	%%mm4, %%mm0\n\t"
-		"punpcklbw	%%mm3, %%mm0\n\t"
-		"punpckhbw	%%mm3, %%mm4\n\t"
-		"movq	%%mm0,   (%0)\n\t"
-		"movq	%%mm4,  8(%0)\n\t"
-		"movq	%%mm1, %%mm4\n\t"
-		"punpcklbw	%%mm3, %%mm1\n\t"
-		"punpckhbw	%%mm3, %%mm4\n\t"
-		"movq	%%mm1, 16(%0)\n\t"
-		"movq	%%mm4, 24(%0)\n\t"
-		"add	$32, %0\n\t"
+		"punpckhbw	%%mm0, %%mm1\n\t"
+		"movq	%%mm4,   (%0)\n\t"
+		"movq	%%mm1,  8(%0)\n\t"
+		"add	$16, %0\n\t"
 		"cmp	$8, %2\n\t"
 		"jae	1b\n"
 		"2:"
@@ -104,7 +95,7 @@ static noinline tchar_t *to_base16_MMX(tchar_t *dst, const unsigned char *src, u
 	return dst;
 }
 
-static tchar_t *to_base16_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base16_SSE2(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm(
 		"cmp	$16, %2\n\t"
@@ -133,21 +124,12 @@ static tchar_t *to_base16_SSE2(tchar_t *dst, const unsigned char *src, unsigned 
 		"pand	%%xmm5, %%xmm3\n\t"
 		"paddb	%%xmm1, %%xmm0\n\t"
 		"paddb	%%xmm3, %%xmm4\n\t"
-		"pxor	%%xmm3, %%xmm3\n\t"
 		"movdqa	%%xmm4, %%xmm1\n\t"
-		"punpckhbw	%%xmm0, %%xmm1\n\t"
 		"punpcklbw	%%xmm0, %%xmm4\n\t"
-		"movdqa	%%xmm4, %%xmm0\n\t"
-		"punpcklbw	%%xmm3, %%xmm0\n\t"
-		"punpckhbw	%%xmm3, %%xmm4\n\t"
-		"movdqu	%%xmm0,    (%0)\n\t"
-		"movdqu	%%xmm4,  16(%0)\n\t"
-		"movdqa	%%xmm1, %%xmm4\n\t"
-		"punpcklbw	%%xmm3, %%xmm1\n\t"
-		"punpckhbw	%%xmm3, %%xmm4\n\t"
-		"movdqu	%%xmm1, 32(%0)\n\t"
-		"movdqu	%%xmm4, 48(%0)\n\t"
-		"add	$64, %0\n\t"
+		"punpckhbw	%%xmm0, %%xmm1\n\t"
+		"movdqu	%%xmm4,    (%0)\n\t"
+		"movdqu	%%xmm1,  16(%0)\n\t"
+		"add	$32, %0\n\t"
 		"cmp	$16, %2\n\t"
 		"jae	1b\n"
 		"2:"
@@ -169,7 +151,7 @@ static tchar_t *to_base16_SSE2(tchar_t *dst, const unsigned char *src, unsigned 
 	return dst;
 }
 
-static tchar_t *to_base16_SSSE3(tchar_t *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base16_SSSE3(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm(
 		"cmp	$16, %2\n\t"
@@ -189,21 +171,12 @@ static tchar_t *to_base16_SSSE3(tchar_t *dst, const unsigned char *src, unsigned
 		"psrlq	$4, %%xmm1\n\t"
 		"pshufb	%%xmm0, %%xmm2\n\t"
 		"pshufb	%%xmm1, %%xmm3\n\t"
-		"pxor	%%xmm4, %%xmm4\n\t"
 		"movdqa	%%xmm3, %%xmm1\n\t"
-		"punpckhbw	%%xmm2, %%xmm1\n\t"
 		"punpcklbw	%%xmm2, %%xmm3\n\t"
-		"movdqa	%%xmm3, %%xmm0\n\t"
-		"punpcklbw	%%xmm4, %%xmm0\n\t"
-		"punpckhbw	%%xmm4, %%xmm3\n\t"
-		"movdqu	%%xmm0,    (%0)\n\t"
-		"movdqu	%%xmm3,  16(%0)\n\t"
-		"movdqa	%%xmm1, %%xmm3\n\t"
-		"punpcklbw	%%xmm4, %%xmm1\n\t"
-		"punpckhbw	%%xmm4, %%xmm3\n\t"
-		"movdqu	%%xmm1, 32(%0)\n\t"
-		"movdqu	%%xmm3, 48(%0)\n\t"
-		"add	$64, %0\n\t"
+		"punpckhbw	%%xmm2, %%xmm1\n\t"
+		"movdqu	%%xmm3,    (%0)\n\t"
+		"movdqu	%%xmm1,  16(%0)\n\t"
+		"add	$32, %0\n\t"
 		"cmp	$16, %2\n\t"
 		"jae	1b\n"
 		"2:"
@@ -239,11 +212,11 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))to_base16_generic, .flags_needed = -1 },
 };
 
-static tchar_t *to_base16_runtime_sw(tchar_t *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);
 /*
  * Func ptr
  */
-static tchar_t *(*to_base16_ptr)(tchar_t *s, const unsigned char *src, unsigned len) = to_base16_runtime_sw;
+static unsigned char *(*to_base16_ptr)(unsigned char *s, const unsigned char *src, unsigned len) = to_base16_runtime_sw;
 
 /*
  * constructor
@@ -259,7 +232,7 @@ static void to_base16_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static tchar_t *to_base16_runtime_sw(tchar_t *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	to_base16_select();
 	return to_base16(dst, src, len);
@@ -268,7 +241,7 @@ static tchar_t *to_base16_runtime_sw(tchar_t *dst, const unsigned char *src, uns
 /*
  * trampoline
  */
-tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	return to_base16_ptr(dst, src, len);
 }

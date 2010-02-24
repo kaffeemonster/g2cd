@@ -91,6 +91,10 @@ char *strchrnul(const char *s, int c) GCC_ATTR_PURE;
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))
 # define strplitcpy(x, y)	(mempcpy((x), (y), str_size(y)))
 
+LIB_MY_BITOPS_EXTRN(unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len));
+#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
+LIB_MY_BITOPS_EXTRN(unsigned char *to_base32(unsigned char *dst, const unsigned char *src,  unsigned len));
+
 static inline void strreverse(char *begin, char *end)
 {
 	char tchar;

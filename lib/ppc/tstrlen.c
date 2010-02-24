@@ -2,7 +2,7 @@
  * tstrlen.c
  * tstrlen, ppc implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -61,6 +61,7 @@ size_t tstrlen(const tchar_t *s)
 
 static char const rcsid_tslp[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/tstrlen.c"
 #endif
 /* EOF */

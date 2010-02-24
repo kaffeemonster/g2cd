@@ -35,11 +35,11 @@
 #endif
 
 #ifndef HAVE_DO_40BIT
-static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
+static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 {
 	uint64_t d2;
 # if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
-	uint64_t m1, t1, t2;
+	uint64_t m1;
 
 	d2   = d1;                    /* copy */
 	d2 >>= 12;                    /* shift copy */
@@ -60,29 +60,17 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	d1  &= 0x1F1F1F1F1F1F1F1FULL; /* eliminate */
 
 	/* convert */
-	d1  += 0x4141414141414141ULL;
-	m1   = has_greater(d1, 0x5A);
+	d1  += 0x6161616161616161ULL;
+	m1   = has_greater(d1, 0x7A);
 	m1 >>= 7;
-	m1   = 0x29 * m1;
+	m1   = 0x49 * m1;
 	d1  -= m1;
 	/* write out */
-	t1     =  d1 & 0x00FF00FF00FF00FFULL;
-	t2     = (d1 & 0xFF00FF00FF00FF00ULL) >> 8;
-	dst[7] = (t1 & 0x0000ffff);
-	dst[6] = (t2 & 0x0000ffff);
-	t1 >>= 16; t2 >>= 16;
-	dst[5] = (t1 & 0x0000ffff);
-	dst[4] = (t2 & 0x0000ffff);
-	t1 >>= 16; t2 >>= 16;
-	dst[3] = (t1 & 0x0000ffff);
-	dst[2] = (t2 & 0x0000ffff);
-	t1 >>= 16; t2 >>= 16;
-	dst[1] = (t1 & 0x0000ffff);
-	dst[0] = (t2 & 0x0000ffff);
+	put_unaligned_be64(d1, dst);
 # else
 	uint32_t a1, a2;
 	uint32_t b1, b2;
-	uint32_t m1, m2, t1, t2;
+	uint32_t m1, m2;
 
 	d2 = d1;                                   /* copy */
 	d2 >>= 12;                                 /* shift copy */
@@ -102,26 +90,14 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	a1  &= 0x1F1F1F1FUL; a2  &= 0x1F1F1F1FUL;  /* eliminate */
 
 	/* convert */
-	a1  += 0x41414141UL;          a2  += 0x41414141UL;
-	m1   = has_greater(a1, 0x5A); m2   = has_greater(a2, 0x5A);
+	a1  += 0x61616161UL;          a2  += 0x61616161UL;
+	m1   = has_greater(a1, 0x7A); m2   = has_greater(a2, 0x7A);
 	m1 >>= 7;                     m2 >>= 7;
-	m1   = 0x29 * m1;             m2   = 0x29 * m2;
+	m1   = 0x49 * m1;             m2   = 0x49 * m2;
 	a1  -= m1;                    a2  -= m2;
 	/* write out */
-	t1     =  a2 & 0x00FF00FFUL;
-	t2     = (a2 & 0xFF00FF00UL) >> 8;
-	dst[7] = (t1 & 0x0000ffff);
-	dst[6] = (t2 & 0x0000ffff);
-	t1 >>= 16; t2 >>= 16;
-	dst[5] = (t1 & 0x0000ffff);
-	dst[4] = (t2 & 0x0000ffff);
-	t1     =  a1 & 0x00FF00FFUL;
-	t2     = (a1 & 0xFF00FF00UL) >> 8;
-	dst[3] = (t1 & 0x0000ffff);
-	dst[2] = (t2 & 0x0000ffff);
-	t1 >>= 16; t2 >>= 16;
-	dst[1] = (t1 & 0x0000ffff);
-	dst[0] = (t2 & 0x0000ffff);
+	put_unaligned_be32(a1, dst);
+	put_unaligned_be32(a2, dst+4);
 # endif
 	return dst + 8;
 }
@@ -132,7 +108,7 @@ static inline uint32_t rol32(uint32_t word, unsigned int shift)
 	return (word << shift) | (word >> (32 - shift));
 }
 
-F_NAME(tchar_t *, to_base32, _generic)(tchar_t *dst, const unsigned char *src, unsigned len)
+F_NAME(unsigned char *, to_base32, _generic)(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 #ifndef ONLY_REMAINDER
 	while(len >= sizeof(uint64_t))
@@ -154,7 +130,7 @@ F_NAME(tchar_t *, to_base32, _generic)(tchar_t *dst, const unsigned char *src, u
 	/* less than 32 bit left */
 	if(len)
 	{
-		static const unsigned char base32c[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567=";
+		static const unsigned char base32c[] = "abcdefghijklmnopqrstuvwxyz234567=";
 		unsigned b32chars = B32_LEN(len);
 		uint32_t d;
 		unsigned i;

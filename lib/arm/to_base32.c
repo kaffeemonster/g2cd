@@ -36,12 +36,12 @@
 # define HAVE_DO_40BIT
 # include "my_neon.h"
 
-static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
+static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 {
 	uint64_t d2;
 	uint32_t a1, a2;
 	uint32_t b1, b2;
-	uint32_t m1, m2, t1, t2, t3, t4;
+	uint32_t m1, m2;
 
 	d2 = d1;                                   /* copy */
 	d2 >>= 12;                                 /* shift copy */
@@ -61,37 +61,25 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	a1  &= 0x1F1F1F1FUL; a2  &= 0x1F1F1F1FUL;  /* eliminate */
 
 	/* convert */
-	a1  += 0x41414141UL;          a2  += 0x41414141UL;
-	m1   = alu_ucmp_gte_sel(a1, 0x5B5B5B5BUL, 0x29292929UL, 0);
-	m2   = alu_ucmp_gte_sel(a2, 0x5B5B5B5BUL, 0x29292929UL, 0);
+	a1  += 0x61616161UL;          a2  += 0x61616161UL;
+	m1   = alu_ucmp_gte_sel(a1, 0x7B7B7B7BUL, 0x49494949UL, 0);
+	m2   = alu_ucmp_gte_sel(a2, 0x7B7B7B7BUL, 0x49494949UL, 0);
 	a1  -= m1;                    a2 -= m2;
 	/* write out */
-	/*
-	 * on the one hand the compiler tends to genreate
-	 * crazy instruction sequences with
-	 * ux* himself, but when he should solve this, he
-	 * creates a truckload of shifts and consumes registers,
-	 * spill spill spill.
-	 * Unfortunatly there are no real unpack/pack instructions
-	 * This ux_/pkh stuff is near. Still, also with the legacy
-	 * "unaligned stores are verboten!" situation, this is no
-	 * fun/helpfull.
-	 * To not get to deep into trouble, only help the compiler
-	 * to not generate the worst code.
-	 * Some straight half word stores are a good start...
-	 */
-	asm("uxtb16	%0, %1, ror #24" : "=r" (t1) : "r" (a1));
-	asm("uxtb16	%0, %1, ror #16" : "=r" (t2) : "r" (a1));
-	asm("uxtb16	%0, %1, ror #24" : "=r" (t3) : "r" (a2));
-	asm("uxtb16	%0, %1, ror #16" : "=r" (t4) : "r" (a2));
-	dst[0] = (t1 & 0x0000ffff);
-	dst[1] = (t2 & 0x0000ffff);
-	dst[2] = (t1 & 0xffff0000) >> 16;
-	dst[3] = (t2 & 0xffff0000) >> 16;
-	dst[4] = (t3 & 0x0000ffff);
-	dst[5] = (t4 & 0x0000ffff);
-	dst[6] = (t3 & 0xffff0000) >> 16;
-	dst[7] = (t4 & 0xffff0000) >> 16;
+	dst[7] = (a2 & 0x000000ff);
+	a2 >>= BITS_PER_CHAR;
+	dst[6] = (a2 & 0x000000ff);
+	a2 >>= BITS_PER_CHAR;
+	dst[5] = (a2 & 0x000000ff);
+	a2 >>= BITS_PER_CHAR;
+	dst[4] = (a2 & 0x000000ff);
+	dst[3] = (a1 & 0x000000ff);
+	a1 >>= BITS_PER_CHAR;
+	dst[2] = (a1 & 0x000000ff);
+	a1 >>= BITS_PER_CHAR;
+	dst[1] = (a1 & 0x000000ff);
+	a1 >>= BITS_PER_CHAR;
+	dst[0] = (a1 & 0x000000ff);
 	return dst + 8;
 }
 

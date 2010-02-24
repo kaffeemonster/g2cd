@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -90,6 +90,7 @@ OUT:
 
 static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/strnlen.c"
 #endif
 /* EOF */

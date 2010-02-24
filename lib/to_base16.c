@@ -24,7 +24,7 @@
  */
 
 /*
- * to_base16 - convert a binary string to a hex utf-16 string
+ * to_base16 - convert a binary string to a hex string
  * dst: memory where to write to
  * src: string to convert
  * num: number of bytes to convert
@@ -37,7 +37,6 @@
 
 #include "my_bitops.h"
 #include "my_bitopsm.h"
-#include "tchar.h"
 
 #ifdef I_LIKE_ASM
 # if defined(__i386__) || defined(__x86_64__)

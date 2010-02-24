@@ -24,12 +24,15 @@
  */
 
 /*
- * to_base32 - convert a binary string to a base32 utf-16 string
+ * to_base32 - convert a binary string to a base32
  * dst: memory where to write to
  * src: string to convert
  * num: number of bytes to convert
  *
  * return value: pointer behind the converted string
+ *
+ * NOTE: This function writes in lowercase!
+ *       The official base32 alphabet is uppercase!
  */
 
 #include "../config.h"
@@ -37,7 +40,6 @@
 
 #include "my_bitops.h"
 #include "my_bitopsm.h"
-#include "tchar.h"
 
 #ifdef I_LIKE_ASM
 # if defined(__i386__) || defined(__x86_64__)

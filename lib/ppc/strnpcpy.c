@@ -2,7 +2,7 @@
  * strnpcpy.c
  * strnpcpy for efficient concatination, ppc implementation
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -123,6 +123,7 @@ OUT_STORE:
 
 static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/strnlen.c"
 #endif
 /* EOF */

@@ -30,9 +30,7 @@
 #define HAVE_DO_40BIT
 #include "ia64.h"
 
-#define TCINUL (SOULL / sizeof(tchar_t))
-
-static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
+static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 {
 	uint64_t d2;
 
@@ -55,8 +53,8 @@ static tchar_t *do_40bit(tchar_t *dst, uint64_t d1)
 	d1  &= 0x1F1F1F1F1F1F1F1FULL; /* eliminate */
 
 	/* convert */
-	d1  += 0x4141414141414141ULL;
-	d1  -= 0x2929292929292929ULL & pcmp1gt(d1, 0x5A5A5A5A5A5A5A5AULL);
+	d1  += 0x6161616161616161ULL;
+	d1  -= 0x4949494949494949ULL & pcmp1gt(d1, 0x7A7A7A7A7A7A7A7AULL);
 	/* write out */
 	dst[0] = (d1 & 0xff00000000000000ULL) >> 56;
 	dst[1] = (d1 & 0x00ff000000000000ULL) >> 48;

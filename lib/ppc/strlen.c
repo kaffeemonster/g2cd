@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, ppc implementation
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -59,6 +59,7 @@ size_t strlen(const char *s)
 
 static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/strlen.c"
 #endif
 /* EOF */

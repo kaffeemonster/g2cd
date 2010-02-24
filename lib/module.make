@@ -77,6 +77,7 @@ LIBHEADS = \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
+	$(MPL)/ppc/ppc.h \
 	$(MPL)/sparc/sparc_vis.h \
 	$(MPL)/ia64/ia64.h \
 	$(MPL)/generic/little_endian.h \
@@ -373,11 +374,11 @@ BITOPOBJS = \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
+	$(MPL)/to_base16.o \
+	$(MPL)/to_base32.o \
 	$(MPL)/my_bitops.o
 
 TCHAROBJS = \
-	$(MPL)/to_base16.o \
-	$(MPL)/to_base32.o \
 	$(MPL)/tstrlen.o \
 	$(MPL)/tstrchrnul.o \
 	$(MPL)/tstrncmp.o \

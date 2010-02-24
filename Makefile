@@ -237,7 +237,7 @@ CFLAGS += $(ARCH_FLAGS)
 #
 # stuff it here, were -save-temps is
 #	this hopefully makes compilation faster, gcc-specific?
-#CFLAGS += -pipe
+CFLAGS += -pipe
 #CFLAGS += -save-temps
 CFLAGS += -g3 # -pg
 #	sun studio

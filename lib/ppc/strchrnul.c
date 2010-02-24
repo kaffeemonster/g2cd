@@ -74,6 +74,7 @@ char *strchrnul(const char *s, int c)
 
 static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/strchrnul.c"
 #endif
 /* EOF */

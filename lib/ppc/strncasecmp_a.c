@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, ppc implementation
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -154,6 +154,7 @@ LOOP_AGAIN:
 
 static char const rcsid_sncca[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/strncasecmp_a.c"
 #endif
 /* EOF */

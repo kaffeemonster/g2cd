@@ -35,14 +35,13 @@
 
 #if defined(__ALTIVEC__) && defined(__GNUC__)
 
-tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	vector unsigned char v_f;
 	vector unsigned char v_0;
 	vector unsigned char v_4;
 	vector unsigned char lut;
 	vector unsigned char in_l, in_h, in, t1, t2;
-	vector unsigned short o1, o2, o3, o4;
 
 	if(unlikely(len < SOVUC))
 		return to_base16_generic(dst, src, len);
@@ -63,14 +62,8 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 				in_h = vec_perm(lut, lut, vec_sr(in, v_4));
 				t1   = vec_mergeh(in_h, in_l);
 				t2   = vec_mergel(in_h, in_l);
-				o1   = (vector unsigned short)vec_mergeh(v_0, t1);
-				o2   = (vector unsigned short)vec_mergel(v_0, t1);
-				o3   = (vector unsigned short)vec_mergeh(v_0, t2);
-				o4   = (vector unsigned short)vec_mergel(v_0, t2);
-				vec_st(o1, 0 * SOVUC, dst);
-				vec_st(o2, 1 * SOVUC, dst);
-				vec_st(o3, 2 * SOVUC, dst);
-				vec_st(o4, 3 * SOVUC, dst);
+				vec_st(t1, 0 * SOVUC, dst);
+				vec_st(t2, 1 * SOVUC, dst);
 			}
 		}
 		else
@@ -87,27 +80,21 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 				in_h = vec_perm(lut, lut, vec_sr(in, v_4));
 				t1   = vec_mergeh(in_h, in_l);
 				t2   = vec_mergel(in_h, in_l);
-				o1   = (vector unsigned short)vec_mergeh(v_0, t1);
-				o2   = (vector unsigned short)vec_mergel(v_0, t1);
-				o3   = (vector unsigned short)vec_mergeh(v_0, t2);
-				o4   = (vector unsigned short)vec_mergel(v_0, t2);
-				vec_st(o1, 0 * SOVUC, dst);
-				vec_st(o2, 1 * SOVUC, dst);
-				vec_st(o3, 2 * SOVUC, dst);
-				vec_st(o4, 3 * SOVUC, dst);
+				vec_st(t1, 0 * SOVUC, dst);
+				vec_st(t2, 1 * SOVUC, dst);
 			}
 		}
 	}
 	else
 	{
 		unsigned d_diff;
-		vector unsigned short low, high, w_mask;
+		vector unsigned char low, high, w_mask;
 		vector unsigned char w_perm_r, w_perm_l;
 
 		d_diff = ALIGN_DOWN_DIFF(dst, SOVUC);
 		w_perm_r = vec_lvsr(0, dst);
 		w_perm_l = vec_lvsl(0, dst);
-		w_mask = (vector unsigned short)vec_perm(v_0, (vector unsigned char)vec_splat_s8(-1), w_perm_r);
+		w_mask = vec_perm(v_0, (vector unsigned char)vec_splat_s8(-1), w_perm_r);
 		low = vec_ld(0, dst);
 		if(IS_ALIGN(src, SOVUC))
 		{
@@ -118,20 +105,12 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 				in_h = vec_perm(lut, lut, vec_sr(in, v_4));
 				t1   = vec_mergeh(in_h, in_l);
 				t2   = vec_mergel(in_h, in_l);
-				o1   = (vector unsigned short)vec_mergeh(v_0, t1);
-				o2   = (vector unsigned short)vec_mergel(v_0, t1);
-				o3   = (vector unsigned short)vec_mergeh(v_0, t2);
-				o4   = (vector unsigned short)vec_mergel(v_0, t2);
-				high = vec_perm(o1, o1, w_perm_r);
+				high = vec_perm(t1, t1, w_perm_r);
 				low  = vec_sel(low, high, w_mask);
-				o1   = vec_perm(o1, o2, w_perm_l);
-				o2   = vec_perm(o2, o3, w_perm_l);
-				o3   = vec_perm(o3, o4, w_perm_l);
+				t1   = vec_perm(t1, t2, w_perm_l);
 				vec_st(low, 0 * SOVUC, dst);
-				vec_st( o1, 1 * SOVUC, dst);
-				vec_st( o2, 2 * SOVUC, dst);
-				vec_st( o3, 3 * SOVUC, dst);
-				low = o4;
+				vec_st( t1, 1 * SOVUC, dst);
+				low = t2;
 			}
 		}
 		else
@@ -148,24 +127,16 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 				in_h = vec_perm(lut, lut, vec_sr(in, v_4));
 				t1   = vec_mergeh(in_h, in_l);
 				t2   = vec_mergel(in_h, in_l);
-				o1   = (vector unsigned short)vec_mergeh(v_0, t1);
-				o2   = (vector unsigned short)vec_mergel(v_0, t1);
-				o3   = (vector unsigned short)vec_mergeh(v_0, t2);
-				o4   = (vector unsigned short)vec_mergel(v_0, t2);
-				high = vec_perm(o1, o1, w_perm_r);
+				high = vec_perm(t1, t1, w_perm_r);
 				low  = vec_sel(low, high, w_mask);
-				o1   = vec_perm(o1, o2, w_perm_l);
-				o2   = vec_perm(o2, o3, w_perm_l);
-				o3   = vec_perm(o3, o4, w_perm_l);
+				t1   = vec_perm(t1, t2, w_perm_l);
 				vec_st(low, 0 * SOVUC, dst);
-				vec_st( o1, 1 * SOVUC, dst);
-				vec_st( o2, 2 * SOVUC, dst);
-				vec_st( o3, 3 * SOVUC, dst);
-				low = o4;
+				vec_st( t1, 1 * SOVUC, dst);
+				low = t2;
 			}
 			high = vec_ld(0, dst);
-			w_mask = (vector unsigned short)vec_perm((vector unsigned char)vec_splat_s8(-1), v_0, w_perm_l);
-			low  = vec_perm(low, (vector unsigned short)v_0, w_perm_l);
+			w_mask = vec_perm((vector unsigned char)vec_splat_s8(-1), v_0, w_perm_l);
+			low  = vec_perm(low, v_0, w_perm_l);
 			low  = vec_sel(low, high, w_mask);
 			vec_st(low, 0, dst);
 		}

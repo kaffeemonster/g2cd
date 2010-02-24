@@ -31,15 +31,15 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len);
+unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
 # if HAVE_BINUTILS >= 217
-tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len);
+unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
 #endif
-tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len);
+unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len);
 #ifndef __x86_64__
-tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len);
+unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len);
 #endif
 
 static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
@@ -50,24 +50,21 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 	{0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF},
 	{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF},
 	{0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F},
-	{0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41},
-	{0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A},
-	{0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29},
+	{0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61},
+	{0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A},
+	{0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49},
 };
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
 			"movdqa	-64+%3, %%xmm3\n\t"
 			"movdqa	-16+%3, %%xmm0\n\t"
-#   ifdef __x86_64__
-			"movdqa	%3, %%xmm8\n\t"
-			"pxor	%%xmm7, %%xmm7\n\t"
-#   endif
+			"movdqa	%3, %%xmm7\n\t"
 			"movdqa	16+%3, %%xmm6\n\t"
 			"movdqa	32+%3, %%xmm4\n\t"
 			"movdqa	48+%3, %%xmm5\n\t"
@@ -76,9 +73,6 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 			".p2align 2\n"
 			"1:\n\t"
 			"lddqu	(%1), %%xmm1\n\t"            /* fetch input data */
-#   ifndef __x86_64__
-			"movdqa	%3, %%xmm7\n\t"
-#   endif
 			"sub	$10, %2\n\t"
 			"add	$10, %1\n\t"
 			/* swab endianess */
@@ -97,12 +91,7 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 			"psrlw	$0x3, %%xmm1\n\t"            /* shift copy */
 			"pblendvb %%xmm0, %%xmm1, %%xmm2\n\t" /* eliminate & join */
 			"psrlw	$0x3, %%xmm2\n\t"            /* bring it down */
-#   ifdef __x86_64__
-			"pand	%%xmm8, %%xmm2\n\t"             /* eliminate */
-#   else
 			"pand	%%xmm7, %%xmm2\n\t"             /* eliminate */
-			"pxor	%%xmm7, %%xmm7\n\t"
-#   endif
 			/* convert */
 			"paddb	%%xmm6, %%xmm2\n\t"
 			"movdqa	%%xmm2, %%xmm1\n\t"
@@ -112,20 +101,13 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 			/* write out */
 			"cmp	$15, %2\n\t"
 			"pshufb	%%xmm3, %%xmm1\n\t"
-			"movdqa	%%xmm1, %%xmm2\n\t"
-			"punpckhbw	%%xmm7, %%xmm1\n\t"
-			"punpcklbw	%%xmm7, %%xmm2\n\t"
 			"movdqu	%%xmm1,     (%0)\n\t"
-			"movdqu	%%xmm2, 0x10(%0)\n\t"
-			"lea	32(%0), %0\n\t"
+			"lea	16(%0), %0\n\t"
 			"ja	1b\n\t"
 			"cmp	$8, %2\n\t"
 			"jb	2f\n"
 			"3:\n\t"
 			"movq	(%1), %%xmm1\n\t"       /* fetch input data */
-#   ifndef __x86_64__
-			"movdqa	%3, %%xmm7\n\t"
-#   endif
 			"sub	$5, %2\n\t"
 			"add	$5, %1\n\t"
 			"cmp	$5, %2\n\t"
@@ -148,12 +130,7 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 			"psrlw	$0x3, %%xmm1\n\t"            /* shift copy */
 			"pblendvb %%xmm0, %%xmm1, %%xmm2\n\t" /* eliminate & join */
 			"psrlw	$0x3, %%xmm2\n\t"            /* bring it down */
-#   ifdef __x86_64__
-			"pand	%%xmm8, %%xmm2\n\t"             /* eliminate */
-#   else
 			"pand	%%xmm7, %%xmm2\n\t"             /* eliminate */
-			"pxor	%%xmm7, %%xmm7\n\t"
-#   endif
 			/* convert */
 			"paddb	%%xmm6, %%xmm2\n\t"
 			"movdqa	%%xmm2, %%xmm1\n\t"
@@ -162,17 +139,16 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 			"psubb	%%xmm2, %%xmm1\n\t"
 			/* write out */
 			"pshufb	%%xmm3, %%xmm1\n\t"
-			"movdqa	%%xmm1, %%xmm2\n\t"
-			"punpckhbw	%%xmm7, %%xmm1\n\t"
-			"movdqu	%%xmm1,     (%0)\n\t"
-			"lea	16(%0), %0\n\t"
 			"cmp	$5, %2\n\t"
-			"jb	5f\n\t"
+			"jb	6f\n\t"
 			"sub	$5, %2\n\t"
 			"add	$5, %1\n\t"
-			"punpcklbw	%%xmm7, %%xmm2\n\t"
-			"movdqu	%%xmm2,     (%0)\n\t"
-			"lea	16(%0), %0\n"
+			"movdqu	%%xmm1, (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"jmp	5f\n"
+			"6:\n\t"
+			"movq	%%xmm1, (%0)\n\t"
+			"lea	8(%0), %0\n\t"
 			"5:\n\t"
 			"cmp	$7, %2\n\t"
 			"ja	3b\n"
@@ -186,9 +162,6 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 		  /*    */ "2" (len)
 #  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
-#   ifdef __x86_64__
-		  , "xmm8"
-#   endif
 #  endif
 	);
 	if(len)
@@ -198,7 +171,7 @@ tchar_t *to_base32_SSE41(tchar_t *dst, const unsigned char *src, unsigned len)
 # endif
 
 # if HAVE_BINUTILS >= 217
-tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -254,8 +227,6 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #   ifndef __x86_64__
 			"movdqa	16+%3, %%xmm2\n\t"
-#   else
-			"pxor	%%xmm2, %%xmm2\n\t"
 #   endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #   ifdef __x86_64__
@@ -268,7 +239,6 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			"paddb	%%xmm9, %%xmm1\n\t"
 #   else
 			"paddb	%%xmm2, %%xmm1\n\t"
-			"pxor	%%xmm2, %%xmm2\n\t"
 #   endif
 			"movdqa	%%xmm1, %%xmm0\n\t"
 			"pcmpgtb	%%xmm3, %%xmm0\n\t"
@@ -277,17 +247,14 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			/* write out */
 			"cmp	$15, %2\n\t"
 			"movdqa	%%xmm1, %%xmm0\n\t"
-			"punpckhbw	%%xmm2, %%xmm1\n\t"
-			"punpcklbw	%%xmm2, %%xmm0\n\t"
-			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
 			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
-			"movdqu	%%xmm1,     (%0)\n\t"
-			"movdqu	%%xmm0, 0x10(%0)\n\t"
-			"lea	32(%0), %0\n\t"
+			"movdqu	%%xmm0,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
 			"ja	1b\n\t"
 			"cmp	$8, %2\n\t"
 			"jb	2f\n"
@@ -334,8 +301,6 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #   ifndef __x86_64__
 			"movdqa	16+%3, %%xmm2\n\t"
-#   else
-			"pxor	%%xmm2, %%xmm2\n\t"
 #   endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #   ifdef __x86_64__
@@ -348,7 +313,6 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			"paddb	%%xmm9, %%xmm1\n\t"
 #   else
 			"paddb	%%xmm2, %%xmm1\n\t"
-			"pxor	%%xmm2, %%xmm2\n\t"
 #   endif
 			"movdqa	%%xmm1, %%xmm0\n\t"
 			"pcmpgtb	%%xmm3, %%xmm0\n\t"
@@ -356,23 +320,23 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 			"psubb	%%xmm0, %%xmm1\n\t"
 			/* write out */
 			"movdqa	%%xmm1, %%xmm0\n\t"
-			"punpckhbw	%%xmm2, %%xmm0\n\t"
-			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
 			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
-			"movdqu	%%xmm0,     (%0)\n\t"
-			"lea	16(%0), %0\n\t"
 			"cmp	$5, %2\n\t"
 			"jb	5f\n\t"
 			"sub	$5, %2\n\t"
 			"add	$5, %1\n\t"
-			"punpcklbw	%%xmm2, %%xmm1\n\t"
-			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
-			"movdqu	%%xmm1,     (%0)\n\t"
-			"lea	16(%0), %0\n"
+			"movdqu	%%xmm0, (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"jmp	6f\n"
 			"5:\n\t"
+			"movq	%%xmm0, (%0)\n\t"
+			"lea	8(%0), %0\n"
+			"6:\n\t"
 			"cmp	$7, %2\n\t"
 			"ja	3b\n"
 			"2:"
@@ -397,7 +361,7 @@ tchar_t *to_base32_SSE3(tchar_t *dst, const unsigned char *src, unsigned len)
 # endif
 #endif
 
-tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -453,8 +417,6 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #ifndef __x86_64__
 			"movdqa	16+%3, %%xmm2\n\t"
-#else
-			"pxor	%%xmm2, %%xmm2\n\t"
 #endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #ifdef __x86_64__
@@ -467,7 +429,6 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			"paddb	%%xmm9, %%xmm1\n\t"
 #else
 			"paddb	%%xmm2, %%xmm1\n\t"
-			"pxor	%%xmm2, %%xmm2\n\t"
 #endif
 			"movdqa	%%xmm1, %%xmm0\n\t"
 			"pcmpgtb	%%xmm3, %%xmm0\n\t"
@@ -476,17 +437,14 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			/* write out */
 			"cmp	$15, %2\n\t"
 			"movdqa	%%xmm1, %%xmm0\n\t"
-			"punpckhbw	%%xmm2, %%xmm1\n\t"
-			"punpcklbw	%%xmm2, %%xmm0\n\t"
-			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
 			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
-			"movdqu	%%xmm1,     (%0)\n\t"
-			"movdqu	%%xmm0, 0x10(%0)\n\t"
-			"lea	32(%0), %0\n\t"
+			"movdqu	%%xmm0,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
 			"ja	1b\n\t"
 			"cmp	$8, %2\n\t"
 			"jb	2f\n"
@@ -533,8 +491,6 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #ifndef __x86_64__
 			"movdqa	16+%3, %%xmm2\n\t"
-#else
-			"pxor	%%xmm2, %%xmm2\n\t"
 #endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #ifdef __x86_64__
@@ -547,7 +503,6 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			"paddb	%%xmm9, %%xmm1\n\t"
 #else
 			"paddb	%%xmm2, %%xmm1\n\t"
-			"pxor	%%xmm2, %%xmm2\n\t"
 #endif
 			"movdqa	%%xmm1, %%xmm0\n\t"
 			"pcmpgtb	%%xmm3, %%xmm0\n\t"
@@ -555,23 +510,23 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 			"psubb	%%xmm0, %%xmm1\n\t"
 			/* write out */
 			"movdqa	%%xmm1, %%xmm0\n\t"
-			"punpckhbw	%%xmm2, %%xmm0\n\t"
-			"pshuflw	$0x1b,%%xmm0, %%xmm0\n\t"
-			"pshufhw	$0x1b,%%xmm0, %%xmm0\n\t"
+			"psrlw	$8, %%xmm0\n\t"
+			"psllw	$8, %%xmm1\n\t"
+			"por	%%xmm1, %%xmm0\n\t"
+			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
+			"pshufhw	$0x1b, %%xmm0, %%xmm0\n\t"
 			"pshufd	$0x4e, %%xmm0, %%xmm0\n\t"
-			"movdqu	%%xmm0,     (%0)\n\t"
-			"lea	16(%0), %0\n\t"
 			"cmp	$5, %2\n\t"
 			"jb	5f\n\t"
 			"sub	$5, %2\n\t"
 			"add	$5, %1\n\t"
-			"punpcklbw	%%xmm2, %%xmm1\n\t"
-			"pshuflw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufhw	$0x1b,%%xmm1, %%xmm1\n\t"
-			"pshufd	$0x4e, %%xmm1, %%xmm1\n\t"
-			"movdqu	%%xmm1,     (%0)\n\t"
-			"lea	16(%0), %0\n"
+			"movdqu	%%xmm0, (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"jmp	6f\n"
 			"5:\n\t"
+			"movq	%%xmm0, (%0)\n\t"
+			"lea	8(%0), %0\n"
+			"6:\n\t"
 			"cmp	$7, %2\n\t"
 			"ja	3b\n"
 			"2:"
@@ -595,7 +550,7 @@ tchar_t *to_base32_SSE2(tchar_t *dst, const unsigned char *src, unsigned len)
 }
 
 #ifndef __x86_64__
-tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -649,13 +604,12 @@ tchar_t *to_base32_SSE(tchar_t *dst, const unsigned char *src, unsigned len)
 			/* write out */
 			"cmp	$0x7, %2\n\t"
 			"movq	%%mm1, %%mm0\n\t"
-			"punpckhbw	%%mm2, %%mm1\n\t"
-			"punpcklbw	%%mm2, %%mm0\n\t"
-			"pshufw	$0x1b,%%mm1, %%mm1\n\t"
-			"pshufw	$0x1b,%%mm0, %%mm0\n\t"
-			"movq	%%mm1,    (%0)\n\t"
-			"movq	%%mm0, 0x8(%0)\n\t"
-			"lea	16(%0), %0\n\t"
+			"psrlw	$8, %%mm0\n\t"
+			"psllw	$8, %%mm1\n\t"
+			"por	%%mm1, %%mm0\n\t"
+			"pshufw	$0x1b, %%mm0, %%mm0\n\t"
+			"movq	%%mm0, (%0)\n\t"
+			"lea	8(%0), %0\n\t"
 			"ja	1b\n"
 			"2:"
 		: /* %0 */ "=r" (dst),
@@ -691,11 +645,11 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))to_base32_generic, .flags_needed = -1 },
 };
 
-static tchar_t *to_base32_runtime_sw(tchar_t *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);
 /*
  * Func ptr
  */
-static tchar_t *(*to_base32_ptr)(tchar_t *dst, const unsigned char *src, unsigned len) = to_base32_runtime_sw;
+static unsigned char *(*to_base32_ptr)(unsigned char *dst, const unsigned char *src, unsigned len) = to_base32_runtime_sw;
 
 /*
  * constructor
@@ -711,7 +665,7 @@ static void to_base32_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static tchar_t *to_base32_runtime_sw(tchar_t *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	to_base32_select();
 	return to_base32(dst, src, len);
@@ -720,7 +674,7 @@ static tchar_t *to_base32_runtime_sw(tchar_t *dst, const unsigned char *src, uns
 /*
  * trampoline
  */
-tchar_t *to_base32(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base32(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	return to_base32_ptr(dst, src, len);
 }

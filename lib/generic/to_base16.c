@@ -29,9 +29,9 @@
 # define F_NAME(z, x, y) static z x##y
 #endif
 
-#define TCINST (SOST / sizeof(tchar_t))
+#define CINST (SOST)
 
-F_NAME(tchar_t *, to_base16, _generic)(tchar_t *dst, const unsigned char *src, unsigned len)
+F_NAME(unsigned char *, to_base16, _generic)(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	static const unsigned char base16c[] = "0123456789abcdef";
 	unsigned i;
@@ -41,13 +41,12 @@ F_NAME(tchar_t *, to_base16, _generic)(tchar_t *dst, const unsigned char *src, u
 	{
 		MK_C(0x0f0f0f0fUL),
 		MK_C(0x30303030UL),
-		MK_C(0x00ff00ffUL)
 	};
 
 	for(; len >= SOST; len -= SOST, src += SOST)
 	{
 		size_t in_l, in_h, m_l, m_h;
-		size_t t1, t2, t3, t4;
+		size_t t1, t2;
 
 		in_l = get_unaligned((const size_t *)src);
 
@@ -63,32 +62,24 @@ F_NAME(tchar_t *, to_base16, _generic)(tchar_t *dst, const unsigned char *src, u
 		in_l += 0x27 * m_l;
 		if(!HOST_IS_BIGENDIAN)
 		{
-			t1    = in_h & vals[2];
-			t2    = in_l & vals[2];
-			t3    = (in_h & (~vals[2])) >> 8;
-			t4    = (in_l & (~vals[2])) >> 8;
-			for(i = 0; i < TCINST; i++, dst += 4)
+			t1 = in_h;
+			t2 = in_l;
+			for(i = 0; i < CINST; i++, dst += 2)
 			{
-				dst[0] = (t1 & 0x0000ffff);
-				dst[1] = (t2 & 0x0000ffff);
-				dst[2] = (t3 & 0x0000ffff);
-				dst[3] = (t4 & 0x0000ffff);
-				t1 >>= 16; t2 >>= 16; t3 >>= 16; t4 >>= 16;
+				dst[0] = (t1 & 0x000000ff);
+				dst[1] = (t2 & 0x000000ff);
+				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
 			}
 		}
 		else
 		{
-			t1    = (in_h & (~vals[2])) >> 8;
-			t2    = (in_l & (~vals[2])) >> 8;
-			t3    = in_h & vals[2];
-			t4    = in_l & vals[2];
-			for(i = TCINST; i; i--, dst += 4)
+			t1 = in_h;
+			t2 = in_l;
+			for(i = CINST; i; i--, dst += 2)
 			{
-				dst[(i * 4) - 4] = (t1 & 0x0000ffff);
-				dst[(i * 4) - 3] = (t2 & 0x0000ffff);
-				dst[(i * 4) - 2] = (t3 & 0x0000ffff);
-				dst[(i * 4) - 1] = (t4 & 0x0000ffff);
-				t1 >>= 16; t2 >>= 16; t3 >>= 16; t4 >>= 16;
+				dst[(i * 2) - 2] = (t1 & 0x000000ff);
+				dst[(i * 2) - 1] = (t2 & 0x000000ff);
+				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
 			}
 		}
 	}

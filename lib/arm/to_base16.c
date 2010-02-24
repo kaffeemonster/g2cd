@@ -30,10 +30,10 @@
 # define ARCH_NAME_SUFFIX _generic
 # define ONLY_REMAINDER
 # include "my_neon.h"
-static tchar_t *to_base16_generic(tchar_t *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base16_generic(unsigned char *dst, const unsigned char *src, unsigned len);
 # define SOUL (sizeof(unsigned long))
 
-tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	static const unsigned long vals[] =
 	{
@@ -74,8 +74,8 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 			 * Some straight half word stores are a good start...
 			 */
 			asm("uxtb16	%0, %1" : "=r" (t1) : "r" (in_h));
-			asm("uxtb16	%0, %1" : "=r" (t2) : "r" (in_l));
-			asm("uxtb16	%0, %1, ror #8" : "=r" (t3) : "r" (in_h));
+			asm("uxtb16	%0, %1" : "=r" (t3) : "r" (in_l));
+			asm("uxtb16	%0, %1, ror #8" : "=r" (t2) : "r" (in_h));
 			asm("uxtb16	%0, %1, ror #8" : "=r" (t4) : "r" (in_l));
 #if 0
 			/*
@@ -92,19 +92,21 @@ tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
 		}
 		else
 		{
-			asm("uxtb16	%0, %1, ror #24" : "=r" (t1) : "r" (in_h));
-			asm("uxtb16	%0, %1, ror #24" : "=r" (t2) : "r" (in_l));
-			asm("uxtb16	%0, %1, ror #16" : "=r" (t3) : "r" (in_h));
-			asm("uxtb16	%0, %1, ror #16" : "=r" (t4) : "r" (in_l));
+			asm("uxtb16	%0, %1, ror #24" : "=r" (t3) : "r" (in_h));
+			asm("uxtb16	%0, %1, ror #24" : "=r" (t1) : "r" (in_l));
+			asm("uxtb16	%0, %1, ror #16" : "=r" (t4) : "r" (in_h));
+			asm("uxtb16	%0, %1, ror #16" : "=r" (t2) : "r" (in_l));
 		}
-		dst[0] = (t1 & 0x0000ffff);
-		dst[1] = (t2 & 0x0000ffff);
-		dst[2] = (t3 & 0x0000ffff);
-		dst[3] = (t4 & 0x0000ffff);
-		dst[4] = (t1 & 0xffff0000) >> 16;
-		dst[5] = (t2 & 0xffff0000) >> 16;
-		dst[6] = (t3 & 0xffff0000) >> 16;
-		dst[7] = (t4 & 0xffff0000) >> 16;
+		t1 |= t3 << BITS_PER_CHAR;
+		t2 |= t4 << BITS_PER_CHAR;
+		dst[0] = (t1 & 0x000000ff);
+		dst[1] = (t1 & 0x0000ff00) >>  8;
+		dst[2] = (t2 & 0x000000ff);
+		dst[3] = (t2 & 0x0000ff00) >>  8;
+		dst[4] = (t1 & 0x00ff0000) >> 16;
+		dst[5] = (t1 & 0xff000000) >> 24;
+		dst[5] = (t2 & 0x00ff0000) >> 16;
+		dst[6] = (t2 & 0xff000000) >> 24;
 	}
 
 	if(unlikely(len))

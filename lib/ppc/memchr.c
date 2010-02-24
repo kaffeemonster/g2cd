@@ -105,6 +105,7 @@ OUT:
 
 static char const rcsid_mc[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
+# include "ppc.h"
 # include "../generic/memchr.c"
 #endif
 /* EOF */

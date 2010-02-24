@@ -28,9 +28,7 @@
 #include "../generic/to_base16.c"
 #include "ia64.h"
 
-#define TCINUL (SOULL / sizeof(tchar_t))
-
-tchar_t *to_base16(tchar_t *dst, const unsigned char *src, unsigned len)
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	static const uint64_t vals[] =
 	{
