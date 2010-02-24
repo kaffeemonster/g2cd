@@ -523,7 +523,7 @@ static noinline uint32_t g2_qht_search_number_word_luc(const unsigned char *s, s
 
 	/* see above */
 	for(h = 0; len >= sizeof(uint32_t); len -= sizeof(uint32_t), s += sizeof(uint32_t)) {
-		uint32_t v = get_unaligned_be32(s);
+		uint32_t v = get_unaligned_le32(s);
 		h  ^= v;
 	}
 	for(b = 0; len; len--, s++)
