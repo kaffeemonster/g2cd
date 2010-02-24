@@ -86,6 +86,7 @@ static void print_table_hl(void);
 static void print_table_ll(void);
 static void print_trailer(void);
 static void print_score(void);
+static void print_weight(void);
 
 int main(int argc, char *argv[])
 {
@@ -107,6 +108,9 @@ int main(int argc, char *argv[])
 				case 'v':
 					verbose++;
 					break;
+				case 'c':
+					print_weight();
+					return EXIT_SUCCESS;
 				default:
 					break;
 				}
@@ -554,3 +558,10 @@ static void print_score(void)
 		"/* EOF */\n",
 		out);
 };
+
+static void print_weight(void)
+{
+	unsigned i;
+	for(i = 0; i < PT_MAXIMUM; i++)
+		printf("%s\tcount: %llu\n", p_names[i].c, p_names[i].weight);
+}
