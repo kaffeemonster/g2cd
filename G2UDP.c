@@ -899,8 +899,14 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 	/* other variables */
 	struct simple_gup *sg = ev->data.ptr;
 	union combo_addr from, to;
+	static int warned;
 
 	buffer_clear(**d_hold_sp);
+	if(!warned && (*d_hold_sp)->capacity != NORM_BUFF_CAPACITY)
+	{
+		logg_develd("small buffer!: %zu\n", (*d_hold_sp)->capacity);
+		warned++;
+	}
 	if(!handle_udp_sock(ev, *d_hold_sp, &from, &to, sg->fd)) {
 		/* bad things */ ;
 // TODO: handle bad things
@@ -1454,7 +1460,8 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 
 			if(!(DECODE_FINISHED == g_packet->packet_decode ||
 			     PACKET_EXTRACTION_COMPLETE == g_packet->packet_decode)) {
-				logg_devel("packet extract stuck in wrong state\n");
+				logg_develd("packet extract stuck in wrong state: \"%s\"\n",
+				            g2_packet_decoder_state_name(g_packet->packet_decode));
 				goto out_free;
 			}
 		}

@@ -62,6 +62,11 @@ static const char *g2_packet_encoder_states_txt[] =
 	G2_PACKET_ENCODER_STATES
 };
 # undef ENUM_CMD
+
+const char *g2_packet_decoder_state_name(int i)
+{
+	return g2_packet_decoder_states_txt[i];
+}
 #endif
 
 // #define DEBUG_SERIALIZER
@@ -1083,7 +1088,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 		case SERIALIZE_TYPE8:
 			SERIALIZE_TYPE_ON_NUM(8, unlikely);
 			/* How to continue ? */
-			if(list_empty(&source->children)) {
+			if(source->is_literal || list_empty(&source->children)) {
 				source->packet_encode = SERIALIZE_DATA_PREP;
 				break;
 			} else

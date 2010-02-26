@@ -2243,7 +2243,8 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 
 	if(parg->connec)
 	{
-		if(rdata->udp_na_valid)
+		if(rdata->udp_na_valid &&
+		   !combo_addr_eq_ip(&rdata->udp_na, &parg->connec->remote_host))
 		{
 			struct list_head answer;
 			INIT_LIST_HEAD(&answer);
@@ -2866,12 +2867,25 @@ static bool handle_QH2(struct ptype_action_args *parg)
 
 	if(!g2_conreg_for_addr(&dest, forward_lit_callback_found, parg))
 	{
-		struct list_head answer;
-		/* seems to be a udp address */
+		struct list_head answer, orig_list;
+		bool orig_freeable, orig_dt_freeable;
+		/* the source packet is only borrowed, do not free it... */
+		orig_freeable = source->is_freeable;
+		orig_dt_freeable = source->data_trunk_is_freeable;
+		source->is_freeable = false;
+		source->data_trunk_is_freeable = false;
+		orig_list = source->list;
+		INIT_LIST_HEAD(&source->list);
+		/* seems to be a udp address, forward literal */
 		source->is_literal = true;
 		INIT_LIST_HEAD(&answer);
 		list_add_tail(&source->list, &answer);
+		/* send it */
 		g2_udp_send(&dest, &answer);
+		/* recreate state */
+		source->list = orig_list;
+		source->is_freeable = orig_freeable;
+		source->data_trunk_is_freeable = orig_dt_freeable;
 	}
 
 	return ret_val;

@@ -1306,7 +1306,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	const char *s;
 	char *t;
 	size_t len = 0, diff;
-	size_t maxlen = spec->maxlen - spec->len;
+	size_t maxlen = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 
 	s = va_arg(spec->ap, const char *);
 
@@ -1350,7 +1350,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 		t = strnpcpy(buf, s, maxlen);
 		diff = t - buf;
 		len += diff;
-		if(*t)
+		if(diff >= maxlen)
 		{ /* not complete? */
 			if(spec->precision) {
 				if(diff < spec->precision)

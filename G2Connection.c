@@ -608,9 +608,9 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	if(*z == '[')
 		z++;
 	ret_val = combo_addr_read(z, &l_addr);
-	combo_addr_set_port(&l_addr, port);
 
 	if(0 < ret_val) {
+		combo_addr_set_port(&l_addr, port);
 		logg_develd_old("they say is our IP:\t%p#I\n", &l_addr);
 		to_con->u.accept.flags.addr_ok = true;
 		return false;
@@ -693,9 +693,9 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 	if(*z == '[')
 		z++;
 	ret_val = combo_addr_read(z, &to_con->sent_addr);
-	combo_addr_set_port(&to_con->sent_addr, htons(port));
 
 	if(0 < ret_val) {
+		combo_addr_set_port(&to_con->sent_addr, htons(port));
 		logg_develd_old("they think of their-IP:\t%p#I\n", &to_con->sent_addr);
 		return false;
 	}

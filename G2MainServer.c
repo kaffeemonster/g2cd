@@ -639,12 +639,12 @@ static noinline void handle_config(void)
 		char *tmp_str = malloc(255);
 		if(!tmp_str)
 			return;
+		memset(tmp_str, 0, 255);
 		if(0 > gethostname(tmp_str, 254)) {
 			logg_errno(LOGF_INFO, "couldn't get hostname");
 			free(tmp_str);
 			return;
 		}
-		tmp_str[254] = '\0';
 		server.settings.nick.name = tmp_str;
 	}
 	server.settings.nick.len = strlen(server.settings.nick.name) + 1;
