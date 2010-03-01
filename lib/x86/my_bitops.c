@@ -538,7 +538,10 @@ static void identify_vendor(struct cpuinfo *cpu)
 #define HAVE_EMIT_EMMS
 void emit_emms(void)
 {
-	if(cpu_feature(CFEATURE_MMX))
+// TODO: do nothing if we have SSE2?
+	if(cpu_feature(CFEATURE_3DNOW))
+		asm volatile("femms");
+	else if(cpu_feature(CFEATURE_MMX))
 		asm volatile("emms");
 }
 

@@ -201,6 +201,9 @@ static void *gup_loop(void *param)
 //TODO: rethink event distribution
 		do
 		{
+			if(!worker.keep_going)
+				goto out;
+
 			if(index_poll >= num_poll) {
 				num_poll = my_epoll_wait(worker.epollfd, eevents, anum(eevents), 10000);
 				if(0 < num_poll)
@@ -228,10 +231,7 @@ static void *gup_loop(void *param)
 				repoll = true;
 				break;
 			}
-		} while(repoll && worker.keep_going);
-
-		if(!worker.keep_going)
-			break;
+		} while(repoll);
 
 		/* use result */
 		guppie = ev->data.ptr;
@@ -282,12 +282,12 @@ static void *gup_loop(void *param)
 			kg = handle_abort(&guppie->s_gup, ev);
 			break;
 		}
-		if(!kg) {
+		if(!kg && worker.keep_going) {
 			ssize_t w_res;
+			worker.keep_going = false;
 			do {
 				w_res = write(worker.from_main, "stop!", str_size("stop!"));
 			} while(str_size("stop!") != w_res && EINTR == errno);
-			worker.keep_going = false;
 			break;
 		}
 	}
@@ -315,7 +315,7 @@ void *gup(void *param)
 
 	from_main.gup = GUP_ABORT;
 	from_main.fd = *((int *)param);
-	worker.from_main = from_main.fd;
+	worker.from_main = *(((int *)param)-1);
 	logg(LOGF_INFO, "gup:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", from_main.fd, *(((int *)param)-1));
 
 	worker.epollfd = my_epoll_create(PD_START_CAPACITY);

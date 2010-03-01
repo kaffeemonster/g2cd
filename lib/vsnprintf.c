@@ -854,6 +854,7 @@ static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 	int k, qr_shift, ruf, s_n, sl = 0, slr = 0, dig_i;
 	bool use_mp;
 
+	emit_emms();
 	v = va_arg(spec->ap, double);
 
 	/* decompose float into sign, mantissa & exponent */
