@@ -304,5 +304,5 @@ void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 	return memcpy_big(dst, src, len);
 }
 
-static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

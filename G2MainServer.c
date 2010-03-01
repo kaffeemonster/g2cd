@@ -644,6 +644,7 @@ static noinline void handle_config(void)
 		}
 	}
 
+	emit_emms();
 	errno = 0;
 	d_lat = strtod(profile.latitude, &endptr);
 	if(endptr == profile.latitude || ERANGE == errno) {

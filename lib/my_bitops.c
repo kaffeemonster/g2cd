@@ -143,3 +143,10 @@ unsigned get_cpus_online(void)
 	return 1;
 }
 
+#ifndef HAVE_EMIT_EMMS
+void emit_emms(void)
+{
+}
+#endif
+
+static char const rcsid_mbo[] GCC_ATTR_USED_VAR = "$Id:$";

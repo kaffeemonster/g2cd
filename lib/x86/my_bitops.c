@@ -532,6 +532,17 @@ static void identify_vendor(struct cpuinfo *cpu)
 }
 
 /*
+ * emit a emms, or float math (with is normaly verboten)
+ * may crash
+ */
+#define HAVE_EMIT_EMMS
+void emit_emms(void)
+{
+	if(cpu_feature(CFEATURE_MMX))
+		asm volatile("emms");
+}
+
+/*
  * Callback test if we have 3dNow
  */
 int test_cpu_feature_3dnow_callback(void)
