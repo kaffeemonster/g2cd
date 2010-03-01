@@ -53,7 +53,6 @@
 #include "G2ConRegistry.h"
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
-#include "G2PacketSerializer.h"
 #include "timeout.h"
 #include "G2KHL.h"
 #include "G2GUIDCache.h"
@@ -82,9 +81,17 @@ static int log_to_fd = -1;
 static time_t last_HAW;
 
 /* bulk data */
-static const char *guid_file_name;
-static const char *profile_file_name;
 static const char *user_name;
+static struct
+{
+	const char *latitude;
+	const char *longitude;
+	const char *country;
+	const char *city;
+	const char *state;
+	const char *gender;
+	unsigned age;
+} profile;
 
 /* Internal prototypes */
 static inline void clean_up_m(void);
@@ -167,6 +174,15 @@ int main(int argc, char **args)
 	/* init guid cache */
 	if(!g2_guid_init())
 		return EXIT_FAILURE;
+
+	if(0 == memcmp(server.settings.our_guid, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", sizeof(server.settings.our_guid))) {
+		guid_generate(server.settings.our_guid);
+		logg(LOGF_NOTICE, "Our GUID was not configured, you maybe want to configure a constant GUID\nFor this run i generated one: %pG\n",
+		     server.settings.our_guid);
+	}
+	/* read the user-profile */
+	if(server.settings.profile.want_2_send)
+		read_uprofile();
 
 /* ANYTHING what need any priviledges should be done before */
 	/* Drop priviledges */
@@ -539,17 +555,28 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("gwc_cache_filename",   &server.settings.khl.gwc_cache_fname,      config_parser_handle_string),
 	CONF_ITEM("khl_dump_filename",    &server.settings.khl.dump_fname,           config_parser_handle_string),
 	CONF_ITEM("guid_dump_filename",   &server.settings.guid.dump_fname,          config_parser_handle_string),
-	CONF_ITEM("guid_filename",        &guid_file_name,                           config_parser_handle_string),
-	CONF_ITEM("profile_filename",     &profile_file_name,                        config_parser_handle_string),
 	CONF_ITEM("user_name",            &user_name,                                config_parser_handle_string),
+	CONF_ITEM("profile_latitude",     &profile.latitude,                         config_parser_handle_string),
+	CONF_ITEM("profile_longitude",    &profile.longitude,                        config_parser_handle_string),
+	CONF_ITEM("profile_country",      &profile.country,                          config_parser_handle_string),
+	CONF_ITEM("profile_city",         &profile.city,                             config_parser_handle_string),
+	CONF_ITEM("profile_state",        &profile.state,                            config_parser_handle_string),
+	CONF_ITEM("log_add_date_time",    &server.settings.logging.add_date_time,    config_parser_handle_bool),
+	CONF_ITEM("use_ipv4",             &server.settings.bind.use_ip4,             config_parser_handle_bool),
+	CONF_ITEM("use_ipv6",             &server.settings.bind.use_ip6,             config_parser_handle_bool),
+	CONF_ITEM("profile_want_2_send",  &server.settings.profile.want_2_send,      config_parser_handle_bool),
+	CONF_ITEM("crawl_send_clients",   &server.settings.nick.send_clients,        config_parser_handle_bool),
+	CONF_ITEM("crawl_send_gps",       &server.settings.nick.send_gps,            config_parser_handle_bool),
+	CONF_ITEM("qht_compress_internal",&server.settings.qht.compress_internal,    config_parser_handle_bool),
+	CONF_ITEM("be_daemon",            &be_daemon,                                config_parser_handle_bool),
+	CONF_ITEM("our_guid",             server.settings.our_guid,                  config_parser_handle_guid),
 };
 
 static noinline void handle_config(void)
 {
-	FILE *config = NULL;
-	unsigned int tmp_id_2[sizeof(server.settings.our_guid)];
-	unsigned int *tmp_id = tmp_id_2;
-	size_t i;
+	uint16_t s_lat, s_long;
+	double d_lat, d_long;
+	char *endptr;
 
 	/* whats fixed */
 	atomic_set(&server.status.act_connection_sum, 0);
@@ -572,11 +599,11 @@ static noinline void handle_config(void)
 	server.settings.bind.ip4.s_fam               = AF_INET;
 	server.settings.bind.ip4.in.sin_port         = htons(DEFAULT_PORT);
 	server.settings.bind.ip4.in.sin_addr.s_addr  = htonl(DEFAULT_ADDR);
-	server.settings.bind.use_ip4                 = true;
+	server.settings.bind.use_ip4                 = DEFAULT_USE_IPV4;
 	server.settings.bind.ip6.s_fam               = AF_INET6;
 	server.settings.bind.ip6.in6.sin6_port       = htons(DEFAULT_PORT);
 	server.settings.bind.ip6.in6.sin6_addr       = in6addr_any;
-	server.settings.bind.use_ip6                 = true;
+	server.settings.bind.use_ip6                 = DEFAULT_USE_IPV6;
 	server.settings.default_in_encoding          = DEFAULT_ENC_IN;
 	server.settings.default_out_encoding         = DEFAULT_ENC_OUT;
 	server.settings.hub_in_encoding              = DEFAULT_HUB_ENC_IN;
@@ -591,10 +618,17 @@ static noinline void handle_config(void)
 	server.settings.guid.dump_fname              = DEFAULT_GUID_DUMP;
 	server.settings.qht.compression              = DEFAULT_QHT_COMPRESSION;
 	server.settings.qht.compress_internal        = DEFAULT_QHT_COMPRESS_INTERNAL;
+	server.settings.nick.send_clients            = DEFAULT_NICK_SEND_CLIENTS;
+	server.settings.nick.send_gps                = DEFAULT_NICK_SEND_GPS;
 
 	be_daemon         = DEFAULT_BE_DAEMON;
-	guid_file_name    = DEFAULT_FILE_GUID;
-	profile_file_name = DEFAULT_FILE_PROFILE;
+	profile.latitude  = DEFAULT_PROFILE_LAT;
+	profile.longitude = DEFAULT_PROFILE_LONG;
+	profile.country   = DEFAULT_PROFILE_COUNTRY;
+	profile.city      = DEFAULT_PROFILE_CITY;
+	profile.state     = DEFAULT_PROFILE_STATE;
+	profile.gender    = DEFAULT_PROFILE_GENDER;
+	profile.age       = time(NULL) / (365 * 24 * 60 * 60); /* We are legion and we are born 1970 */;
 	user_name         = DEFAULT_USER;
 
 	/*
@@ -606,33 +640,39 @@ static noinline void handle_config(void)
 			logg(LOGF_NOTICE, "Config file \"%s\" not found, will continue with defaults\n", server.settings.config_file);
 		else {
 			logg_errnod(LOGF_ERR, "Error parsing config file \"%s\"", server.settings.config_file);
-			goto err;
+			die("giving up");
 		}
 	}
 
-	/* set the GUID */
-	if(!(config = fopen(guid_file_name, "r")))
-		goto err;
+	errno = 0;
+	d_lat = strtod(profile.latitude, &endptr);
+	if(endptr == profile.latitude || ERANGE == errno) {
+		logg(LOGF_NOTICE, "Latitude \"%s\" could not be parsed, setting to 0.0\n", profile.latitude);
+		d_lat = 0.0;
+		profile.latitude = "0.0";
+	}
+	errno = 0;
+	d_long = strtod(profile.longitude, &endptr);
+	if(endptr == profile.longitude || ERANGE == errno) {
+		logg(LOGF_NOTICE, "Longitude \"%s\" could not be parsed, setting to 0.0\n", profile.longitude);
+		d_long = 0.0;
+		profile.longitude = "0.0";
+	}
+	/*
+	 * two times 16 bit: latitude, longitude
+	 * normalized:
+	 * 180.0*$lat/65535.0-90.0 and 360.0*$lon/65535.0-180.0
+	 *
+	 * lat = (unsigned)((real_lat + 90.0) * 65535.0 / 180.0)
+	 * long = (unsigned)((real_long + 180.0) * 65535.0 / 360.0)
+	 */
+	d_lat  = (d_lat  +  90.0) * 65535.0 / 180.0;
+	d_long = (d_long + 180.0) * 65535.0 / 360.0;
+	s_lat  = d_lat  < 0.0 ? 0 : (d_lat  > 65535.0 ? 65535 : (uint16_t)d_lat);
+	s_long = d_long < 0.0 ? 0 : (d_long > 65535.0 ? 65535 : (uint16_t)d_long);
+	server.settings.nick.lat_long = (uint32_t)s_long | (uint32_t)s_lat << 16;
 
-	if(16 != fscanf(config,
-		"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
-		tmp_id, tmp_id+1, tmp_id+2, tmp_id+3, tmp_id+4, tmp_id+5,
-		tmp_id+6, tmp_id+7, tmp_id+8, tmp_id+9, tmp_id+10,
-		tmp_id+11, tmp_id+12, tmp_id+13, tmp_id+14, tmp_id+15))
-		goto err;
-		
-	for(i = 0; i < sizeof(server.settings.our_guid); i++)
-		server.settings.our_guid[i] = (uint8_t)tmp_id[i];
-
-	fclose(config);
-
-	/* read the user-profile */
-	server.settings.profile.packet_uprod = NULL;
 	server.settings.profile.xml          = NULL;
-
-	if(server.settings.profile.want_2_send)
-		read_uprofile();
-
 	/* use the hostname if no nick is supplied */
 	if(!server.settings.nick.name)
 	{
@@ -649,15 +689,6 @@ static noinline void handle_config(void)
 	}
 	server.settings.nick.len = strlen(server.settings.nick.name) + 1;
 	return;
-
-err:
-	{
-		int tmp_errno = errno;
-		logg(LOGF_ERR, "Tried to open/read guid-file \"%s\", but it failed!\n"
-				"Please check situation. Maybe you want to create one with gen_guid.sh?\n", guid_file_name);
-		errno = tmp_errno;
-		diedie("opening/reading guid-file");
-	}
 }
 
 static inline void change_the_user(void)
@@ -814,7 +845,7 @@ static inline void setup_resources(void)
 				if(close(sock_com[i-1][1]))
 					logg_errno(LOGF_WARN, "reclaiming FD's");
 			}
-			/* 
+			/*
 			 * calling cleanup here could be bad,
 			 * hopefully OS handles it
 			 */
@@ -823,11 +854,10 @@ static inline void setup_resources(void)
 	}
 
 	/* adding socket-fd's to a poll-structure */
-	for(i = 0; i < THREAD_SUM_COM; i++)
-	{
+	for(i = 0; i < THREAD_SUM_COM; i++) {
 		sock_poll[i].fd = sock_com[i][OUT];
 		sock_poll[i].events = POLLIN;
-	}	
+	}
 }
 
 static void init_prng(void)
@@ -853,7 +883,6 @@ static void init_prng(void)
 	 * if everything failes, its "random" stack data, undefined
 	 * behaivior for the rescue...
 	 */
-
 	logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
 	     server.settings.entropy_source);
 
@@ -862,97 +891,45 @@ static void init_prng(void)
 
 static void read_uprofile(void)
 {
-	struct norm_buff buff;
-	FILE *prof_file;
-	g2_packet_t *uprod, *xml;
-	char *wptr, *uprod_mem = NULL, *f_mem;
-	ssize_t ret;
-	size_t f_bytes, uprod_len;
-	bool f_mem_needed = false, uprod_mem_needed = false;
+	static const char *prof_str =
+		"<?xml version=\"1.0\"?>"
+		"<gProfile xmlns=\"http://www.shareaza.com/schemas/GProfile.xsd\">"
+			"<gnutella guid=\"%pG\"/>"
+			"<identity>"
+				"<handle primary=\"%s\"/>"
+			"</identity>"
+			"<vitals gender=\"%s\" age=\"%u\"/>"
+			"<location>"
+				"<political country=\"%s\" city=\"%s\" state=\"%s\"/>"
+				"<coordinates latitude=\"%s\" longitude=\"%s\"/>"
+			"</location>"
+			"<avatar path=\"\"/>"
+		"</gProfile>";
+	char *f_mem;
+	size_t f_bytes, r_bytes;
 
-	if(!(prof_file = fopen(profile_file_name, "r"))) {
-		logg_errno(LOGF_NOTICE, "opening profile-file");
+	f_bytes = server.settings.nick.len + strlen(profile.latitude) + strlen(profile.longitude) +
+	          strlen(profile.country) + strlen(profile.city) + strlen(profile.state) + strlen(profile.gender) +
+	          20 /* age */ + 8 + 4 + 4 + 4 + 12 + 4 /* guid */ + strlen(prof_str) + 100;
+
+	f_mem = malloc(f_bytes);
+	if(!f_mem) {
+		logg_errno(LOGF_WARN, "allocating mem for profile data");
 		return;
 	}
 
-	if(fseek(prof_file, 0, SEEK_END)) {
-		logg_errno(LOGF_NOTICE, "determinig profile-file size");
-		goto read_uprofile_end;
-	}
+	r_bytes = my_snprintf(f_mem, f_bytes, prof_str, server.settings.our_guid, server.settings.nick.name,
+	                      profile.gender, profile.age, profile.country, profile.city, profile.state,
+	                      profile.latitude, profile.longitude);
 
-	if((size_t)-1 == (f_bytes = (size_t) ftell(prof_file))) {
-		logg_errno(LOGF_NOTICE, "determinig profile-file size");
-		goto read_uprofile_end;
-	}
-
-	if(fseek(prof_file, 0, SEEK_SET)) {
-		logg_errno(LOGF_NOTICE, "determinig profile-file size");
-		goto read_uprofile_end;
-	}
-
-	g2_packet_local_alloc_init_min();
-	uprod = g2_packet_calloc();
-	xml   = g2_packet_calloc();
-	f_mem = malloc(f_bytes);
-	if(!(uprod && xml && f_mem)) {
-		logg_errno(LOGF_WARN, "allocating mem for uprod");
-		goto read_uprofile_free;
-	}
-
-	if(f_bytes != fread(f_mem, 1, f_bytes, prof_file)) {
-		logg_errno(LOGF_NOTICE, "reading profile-file");
-		goto read_uprofile_free;
-	}
-
-	uprod->type = PT_UPROD;
-	xml->type   = PT_XML;
-	xml->data_trunk.data  = f_mem;
-	xml->data_trunk.limit = xml->data_trunk.capacity = f_bytes;
-	list_add_tail(&xml->list, &uprod->children);
-	ret = g2_packet_serialize_prep_min(uprod);
-	if(-1 == ret) {
-		logg_pos(LOGF_NOTICE, "serializing uprod");
-		goto read_uprofile_free;
-	}
-
-	uprod_mem = malloc(ret);
-	if(!uprod_mem) {
-		logg_errno(LOGF_NOTICE, "allocating mem for uprod");
-		goto read_uprofile_free;
-	}
-	uprod_len = ret;
-
-	buff.pos = 0;
-	buff.limit = buff.capacity = NORM_BUFF_CAPACITY;
-
-	wptr = uprod_mem;
-	do
-	{
-		if(!g2_packet_serialize_to_buff(uprod, &buff)) {
-			logg_pos(LOGF_NOTICE, "serializing uprod");
-			goto read_uprofile_free;
-		}
-		buffer_flip(buff);
-		memcpy(wptr, buffer_start(buff), buffer_remaining(buff));
-		wptr += buffer_remaining(buff);
-		buffer_clear(buff);
-	} while(uprod->packet_encode != ENCODE_FINISHED);
-
-	server.settings.profile.packet_uprod        = uprod_mem;
-	server.settings.profile.packet_uprod_length = uprod_len;
-	server.settings.profile.xml        = f_mem;
-	server.settings.profile.xml_length = f_bytes;
-	uprod_mem_needed = true;
-	f_mem_needed     = true;
-
-read_uprofile_free:
-	if(!uprod_mem_needed)
-		free(uprod_mem);
-	if(!f_mem_needed)
+	if(r_bytes >= f_bytes) { /* should not happen */
+		logg(LOGF_WARN, "failed to generate profile data\n");
 		free(f_mem);
-	g2_packet_free(uprod);
-read_uprofile_end:
-	fclose(prof_file);
+		return;
+	}
+
+	server.settings.profile.xml        = f_mem;
+	server.settings.profile.xml_length = r_bytes;
 	return;
 }
 
@@ -994,10 +971,9 @@ static inline void clean_up_m(void)
 			/* output? */
 	}
 
-	free((void*)(intptr_t)server.settings.profile.packet_uprod);
 	free((void*)(intptr_t)server.settings.profile.xml);
 
-//	fclose(stdin);
+	fclose(stdin);
 //	fclose(stdout); // get a sync if we output to a file
 //	fclose(stderr);
 }
@@ -1007,7 +983,7 @@ static inline void clean_up_m(void)
 void g2_set_thread_name(const char *name)
 {
 	/*
-	 * we don't care for the result, either it works, nice
+	 * we don't care for the result, either it works, nice,
 	 * or not, also OK...
 	 */
 	prctl(PR_SET_NAME, name, 0, 0, 0);

@@ -1484,6 +1484,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 			 * has a plattform endian touch (first 3 fields),
 			 * but that plattform is "always" intel...
 			 */
+// TODO: GUIDs and enianess?
 			d1 = get_unaligned_le32(g); g += 4;
 			d2 = get_unaligned_le16(g); g += 2;
 			d3 = get_unaligned_le16(g); g += 2;

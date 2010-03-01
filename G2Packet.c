@@ -320,6 +320,7 @@ static const g2_ptype_action_func QH2_packet_dict[PT_MAXIMUM] =
 	[PT_UPRO ] = empty_action_p,
 	[PT_SS   ] = empty_action_p,
 	[PT_G1PP ] = empty_action_p, /* ?? */
+	[PT_CS   ] = empty_action_p, /* ?? */
 };
 
 /* QA-childs */
@@ -3680,9 +3681,11 @@ static bool handle_UPROC(struct ptype_action_args *parg)
 			return false;
 		}
 
-		uprod->type = PT_UPROD;
+		uprod->type       = PT_UPROD;
+		uprod->big_endian = HOST_IS_BIGENDIAN;
 		list_add(&xml->list, &uprod->children);
-		xml->type = PT_XML;
+		xml->type         = PT_XML;
+		xml->big_endian   = HOST_IS_BIGENDIAN;
 		xml->data_trunk.data     = (void*)(intptr_t)server.settings.profile.xml;
 		xml->data_trunk.capacity = server.settings.profile.xml_length;
 		buffer_clear(xml->data_trunk);
@@ -3721,51 +3724,56 @@ static intptr_t CRAWLR_callback(g2_connection_t *con, void *carg)
 {
 	struct ptype_action_args *parg = carg;
 	struct CRAWLR_data *rdata = parg->opaque;
-	g2_packet_t *nh, *na, *hs;
+	g2_packet_t *nl, *na;
 
-	nh = g2_packet_calloc();
+	nl = g2_packet_calloc();
 	na = g2_packet_calloc();
-	hs = g2_packet_calloc();
 
-	if(!(nh && na && hs))
+	if(!(nl && na))
 		goto out_free;
 
 	na->type = PT_NA;
 	if(!write_na_to_packet(na, &con->sent_addr))
 		goto out_free;
 
-	hs->type = PT_HS;
-	if(g2_packet_steal_data_space(hs, 2))
+	if(con->flags.upeer && con->u.handler.leaf_count)
 	{
-		uint16_t cons     = (uint16_t)con->u.handler.leaf_count;
-		put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
-		hs->big_endian = HOST_IS_BIGENDIAN;
-		list_add_tail(&hs->list, &nh->children);
+		g2_packet_t *hs = g2_packet_calloc();
+		if(hs)
+		{
+			hs->type = PT_HS;
+			if(g2_packet_steal_data_space(hs, 2))
+			{
+				uint16_t cons     = (uint16_t)con->u.handler.leaf_count;
+				put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
+				hs->big_endian = HOST_IS_BIGENDIAN;
+				list_add_tail(&hs->list, &nl->children);
+			}
+			else
+				g2_packet_free(hs);
+		}
+		nl->type = PT_NH;
 	}
 	else
-		g2_packet_free(hs);
-
-	list_add_tail(&na->list, &nh->children);
-
-	nh->type = PT_NH;
-	nh->big_endian = HOST_IS_BIGENDIAN;
+		nl->type = PT_NL;
+	nl->big_endian = HOST_IS_BIGENDIAN;
+	list_add_tail(&na->list, &nl->children);
 
 	if(rdata->gps)
 	{
-		/* add gps data to nh */
+		/* add gps data to nl */
 	}
 	if(rdata->name)
 	{
-		/* add nick to nh */
+		/* add nick to nl */
 	}
 
-	list_add_tail(&nh->list, &rdata->crawla->children);
+	list_add_tail(&nl->list, &rdata->crawla->children);
 	return 0;
 
 out_free:
-	g2_packet_free(nh);
+	g2_packet_free(nl);
 	g2_packet_free(na);
-	g2_packet_free(hs);
 	return 0;
 }
 
@@ -3845,23 +3853,22 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	hub->type = likely(server.status.our_server_upeer) ? PT_HUB : PT_LEAF;
 	list_add_tail(&hub->list, &self->children);
 
-	if(rdata.gps)
+	if(rdata.gps && server.settings.nick.send_gps)
 	{
-		/* add gps data to self */
-		/*
-		 * two times 16 bit: longitude, latitude
-		 * normalized:
-		 * 180.0*$lat/65535.0-90.0 and 360.0*$lon/65535.0-180.0
-		 *
-		 * lat = (unsigned)((real_lat + 90.0) * 65535.0 / 180.0)
-		 * long = (unsigned)((real_long + 180.0) * 65535.0 / 360.0)
-		 * ???
-		 * #define WORDLIM(x)  (WORD)( (x) < 0 ? 0 : ( (x) > 65535 ? 65535 : (x) ) )
-		 * WORD nLat = WORDLIM( ( nLatitude + 90.0f )   * 65535.0f / 180.0f );
-		 * WORD nLon = WORDLIM( ( nLongitude + 180.0f ) * 65535.0f / 360.0f );
-		 * #undef WORDLIM
-		 * return (DWORD)nLon + ( (DWORD)nLat << 16 );
-		 */
+		g2_packet_t *gps = g2_packet_calloc();
+		if(gps)
+		{
+			if(g2_packet_steal_data_space(gps, 4))
+			{
+				char *bf                 = buffer_start(gps->data_trunk);
+				gps->type                = PT_GPS;
+				gps->big_endian          = HOST_IS_BIGENDIAN;
+				put_unaligned(server.settings.nick.lat_long, (uint32_t *)bf);
+				list_add_tail(&gps->list, &self->children);
+			}
+			else
+				g2_packet_free(gps);
+		}
 	}
 	if(rdata.name && server.settings.nick.name)
 	{
@@ -3912,12 +3919,11 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 
 	rdata.crawla = crawla;
 	parg->opaque = &rdata;
-	g2_conreg_all_hub(NULL, CRAWLR_callback, parg);
 
-	if(rdata.leaf)
-	{
-		/* we will NEVER add this info */
-	}
+	if(rdata.leaf && server.settings.nick.send_clients)
+		g2_conreg_all_con(CRAWLR_callback, parg);
+	else
+		g2_conreg_all_hub(NULL, CRAWLR_callback, parg);
 
 	g2_packet_add2target(crawla, parg->target, parg->target_lock);
 

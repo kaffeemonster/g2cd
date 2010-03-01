@@ -1,0 +1,223 @@
+#include "builtin_defaults.h"
+#define COMMENTC #|
+#define COMMENT #
+COMMENTC -----------------------------------------------
+COMMENTC Example config file for g2cd
+COMMENTC -----------------------------------------------
+COMMENTC In here you will find config options for g2cd, with a little
+COMMENTC explanetion what they are good for and what is their default.
+COMMENTC The default is normaly written behind the option, but sometimes
+COMMENTC a more complex mechanism defines the default. Please refer
+COMMENTC to the explanetion of the option in such cases.
+COMMENTC
+
+COMMENTC -----------------------------------------------
+COMMENTC Unix server stuff
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC do we want to fork to the background?
+COMMENTC
+COMMENT be_daemon = DEFAULT_BE_DAEMON
+
+COMMENTC
+COMMENTC do we want to provide services over IPv4?
+COMMENTC
+COMMENT use_ipv4 = DEFAULT_USE_IPV4
+
+COMMENTC
+COMMENTC do we want to provide services over IPv6
+COMMENTC
+COMMENT use_ipv6 = DEFAULT_USE_IPV6
+
+COMMENTC
+COMMENTC What is the user account we want to run under
+COMMENTC
+COMMENT user_name = DEFAULT_USER
+
+
+COMMENTC -----------------------------------------------
+COMMENTC G2 server stuff
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC What is the GUID we are known by?
+COMMENTC A G2 Node has a "uniqe" GUID it is known by. The GUID is
+COMMENTC used for some basic tasks by the network, for example
+COMMENTC packet routing.
+COMMENTC It is generly advisable to set a fixed GUID so your hub
+COMMENTC can be reidentified.
+COMMENTC
+COMMENTC If you do not set a fixed GUID, a random one will be
+COMMENTC generated on every start.
+COMMENTC
+COMMENTC The format is:
+COMMENTC ABCDEF01-2345-6789-ABCD-EF0123456789
+COMMENTC
+COMMENT our_guid = <random>
+
+COMMENTC
+COMMENTC How many connections do we want to accept?
+COMMENTC -----------------------------------------------
+COMMENTC NOTE:
+COMMENTC Please make sure your enviroment (ulimits, RAM, connection
+COMMENTC bandwith, kernel, CPU) can sustain such a number of
+COMMENTC connections.
+COMMENTC Esp. make sure that the number of max. open file descriptors
+COMMENTC is configured large enough for the user account we run under.
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENT max_connection_sum = DEFAULT_CON_MAX
+
+COMMENTC
+COMMENTC How many Inter Hub connections we want to accept?
+COMMENTC This defines how many other hubs will be allowed to connect
+COMMENTC to us. Do not set this number to high. A rule of thumb is
+COMMENTC 2 per 300 connections, with a limit at ???.
+COMMENTC
+COMMENT max_hub_sum        = DEFAULT_HUB_MAX
+
+COMMENTC -----------------------------------------------
+COMMENTC Profile stuff
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC What is our nick name?
+COMMENTC It will be exposed on profile requests and to the crawler.
+COMMENTC
+COMMENTC The default is the hostname of this maschine.
+COMMENTC
+COMMENTC Note that this nick name will always be send to the crawler.
+COMMENTC If you do not want to expose the hostname, CHANGE this.
+COMMENTC
+COMMENT nick_name = <hostname>
+
+COMMENTC
+COMMENTC Do we want to answer profile requests?
+COMMENTC Not to run into comp. trouble, we send something.
+COMMENTC
+COMMENT profile_want_2_send = DEFAULT_SEND_PROFILE
+
+COMMENTC
+COMMENTC The latitude/longitude put into the profile.
+COMMENTC This gives your position on the world so it
+COMMENTC can be decide if you are near to someone and
+COMMENTC the crawler can draw nice maps.
+COMMENTC The coordinates are in WGS84 (aka GPS) in shorthand
+COMMENTC decimal notation (aka Decimal degrees with negative
+COMMENTC numbers for South and West)
+COMMENTC See maps.google or Wikipedia for coordinates.
+COMMENTC
+COMMENT profile_latitude = DEFAULT_PROFILE_LAT
+COMMENT profile_longitude = DEFAULT_PROFILE_LONG
+
+COMMENTC
+COMMENTC The country put into the profile
+COMMENTC
+COMMENT profile_country = DEFAULT_PROFILE_COUNTRY
+
+COMMENTC
+COMMENTC The city put into the profile
+COMMENTC
+COMMENT profile_city = DEFAULT_PROFILE_CITY
+
+COMMENTC
+COMMENTC The state put into the profile
+COMMENTC
+COMMENT profile_state = DEFAULT_PROFILE_STATE
+
+COMMENTC
+COMMENTC Do we want to send a complete list of connected clients
+COMMENTC on crawler request?
+COMMENTC Note that this has the potential to generate some traffic
+COMMENTC on high connection count since we can only protect our self
+COMMENTC with a timeout.
+COMMENTC
+COMMENT crawl_send_clients = DEFAULT_NICK_SEND_CLIENTS
+
+COMMENTC
+COMMENTC Do we want to send our GPS position (see profile) on
+COMMENTC crawler request?
+COMMENTC
+COMMENT crawl_send_gps = DEFAULT_NICK_SEND_GPS
+
+COMMENTC -----------------------------------------------
+COMMENTC Misc stuff
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC The number of worker threads we are going to spawn.
+COMMENTC 0 means autodetect == number of cpus
+COMMENTC
+COMMENTC Note: There will be additional threads to the number
+COMMENTC       configured.
+COMMENTC
+COMMENT num_threads = DEFAULT_NUM_THREADS
+
+COMMENTC
+COMMENTC Where do we read some bytes from to seed our PRNG?
+COMMENTC
+COMMENT entropy_source = DEFAULT_ENTROPY_SOURCE
+
+COMMENTC
+COMMENTC The root dir where g2cd can save persistent files
+COMMENTC
+COMMENT data_root_dir = DEFAULT_DATA_ROOT_DIR
+
+COMMENTC
+COMMENTC The file name of our Known Hub List dump
+COMMENTC
+COMMENT khl_dump_filename = DEFAULT_KHL_DUMP
+
+COMMENTC
+COMMENTC The file name of our GUID dump
+COMMENTC
+COMMENT guid_dump_filename = DEFAULT_GUID_DUMP
+
+COMMENTC
+COMMENTC The file name of our Gnutella Web Cache DB
+COMMENTC
+COMMENT gwc_cache_filename = DEFAULT_GWC_DB
+
+COMMENTC
+COMMENTC Our Gnutella Web Cache boot URL
+COMMENTC This URL is first inserted into your DB and never removed.
+COMMENTC
+COMMENT gwc_boot_url = DEFAULT_GWC_BOOT
+
+COMMENTC
+COMMENTC How much should we adjust our niceness?
+COMMENTC
+COMMENT nice_adjust = DEFAULT_NICE_ADJUST
+
+COMMENTC
+COMMENTC Should we add timestamps to our logging messages?
+COMMENTC
+COMMENT log_add_date_time = DEFAULT_LOG_ADD_TIME
+
+COMMENTC
+COMMENTC Which format to use for our timestamps?
+COMMENTC (see "man strftime")
+COMMENTC
+COMMENT log_time_date_format = DEFAULT_LOG_TIME_FORMAT
+
+COMMENTC -----------------------------------------------
+COMMENTC More misc stuff
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC Most of these options are only listed for completness,
+COMMENTC changing them is
+COMMENTC
+COMMENTC  N O T
+COMMENTC
+COMMENTC recommended.
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC Should we compress our internal QHTs?
+COMMENTC This will use more CPU, but saves a lot of RAM so you
+COMMENTC should say yes here.
+COMMENTC
+COMMENT qht_compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL
+
+COMMENTC
+COMMENTC What is the maximal accepted packet size?
+COMMENTC You you never raise this value, dragons be there...
+COMMENTC
+COMMENT max_g2_packet_length = DEFAULT_PCK_LEN_MAX
+

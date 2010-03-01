@@ -541,9 +541,9 @@ SRCS = \
 #
 AUX = \
 	Makefile \
-	gen_guid.sh \
-	profile.xml \
 	.mapfile \
+	g2cd.conf.in \
+	g2cd.conf \
 	COPYING \
 	README
 #
@@ -553,6 +553,10 @@ TARED_FILES = $(HEADS) $(SRCS) $(AUX)
 # normaly we would set it here, derived vom the mod-dirs, but..
 TARED_DIRS =
 
+AUXS = \
+	g2cd.conf \
+	.mapfile \
+	version.h
 #
 #	what should be made
 #
@@ -681,27 +685,30 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #	this command is EXTRA written out since it allows us to
 #	define a diffrent main-name and the solaris 5.7 'make'
 #	is a little...
-$(MAIN): $(OBJS) $(LIBCOMMON) .mapfile
+$(MAIN): $(AUXS) $(OBJS) $(LIBCOMMON)
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(CC) -o $@ $(OBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS)
 
 once: final
 final: .final
-.final: version.h $(LIBSRCS) $(LIBBINOBJS) $(MSRCS) $(HEADS) .mapfile
+.final: $(AUXS) $(LIBSRCS) $(LIBBINOBJS) $(MSRCS) $(HEADS)
 	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_Z) && touch $@
 
 withzlib: .withzlib
-.withzlib: $(OBJS) $(ZLIB) $(LIBCOMMON) .mapfile
+.withzlib: $(AUXS) $(OBJS) $(ZLIB) $(LIBCOMMON)
 	@./ccdrv -s$(VERBOSE) "LD[$(MAIN)]" $(CC) -o $(MAIN) $(OBJS) $(LDFLAGS) $(ZLIB) $(LIBCOMMON) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 	
 oncewithzlib686: finalwithzlib686
 finalwithzlib686: .finalwithzlib686
-.finalwithzlib686: version.h $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(ZSRCS_686) $(MSRCS) $(HEADS) .mapfile
+.finalwithzlib686: $(AUXS) $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(ZSRCS_686) $(MSRCS) $(HEADS)
 	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) -DASMV -DNO_UNDERLINE $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(ZSRCS_686) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
 oncewithzlib: finalwithzlib
 finalwithzlib: .finalwithzlib
-.finalwithzlib: version.h $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(MSRCS) $(HEADS) .mapfile
+.finalwithzlib: $(AUXS) $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(MSRCS) $(HEADS)
 	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
+
+g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
+	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P - < g2cd.conf.in > $@"
 
 #	someday we need this, dependend on all or $(MAIN)
 install:

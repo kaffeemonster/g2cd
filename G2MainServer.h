@@ -102,6 +102,9 @@ _G2MAIN_EXTRNVAR(struct
 			{
 				const char *name;
 				size_t len;
+				uint32_t lat_long;
+				bool send_clients;
+				bool send_gps;
 			} nick;
 			struct
 			{
@@ -119,8 +122,6 @@ _G2MAIN_EXTRNVAR(struct
 			struct
 			{
 				bool want_2_send;
-				const char *packet_uprod;
-				size_t packet_uprod_length;
 				const char *xml;
 				size_t xml_length;
 			} profile;

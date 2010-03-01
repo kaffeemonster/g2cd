@@ -34,3 +34,4 @@ zlib/contrib
 .arflockgate
 lib/aes_tab_gen
 lib/five_tab_gen
+g2cd.conf

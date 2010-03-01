@@ -76,4 +76,6 @@ struct config_item
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_read(const char *filename, const struct config_item cf[], size_t num_cf));
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_int(struct list_head *, void *));
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_string(struct list_head *, void *));
+LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_bool(struct list_head *, void *));
+LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_guid(struct list_head *, void *));
 #endif /* LIB_CONFIG_PARSER_H */

@@ -36,6 +36,10 @@
 #define DEFAULT_ADDR		INADDR_ANY
 
 #define DEFAULT_BE_DAEMON	false
+
+#define DEFAULT_USE_IPV4 true
+#define DEFAULT_USE_IPV6 true
+
 #define DEFAULT_USER		"nobody"
 #define DEFAULT_NICE_ADJUST	3
 #define DEFAULT_NUM_THREADS	0 /* autodetect */
@@ -51,8 +55,14 @@
 #define DEFAULT_QHT_COMPRESSION COMP_DEFLATE
 #define DEFAULT_QHT_COMPRESS_INTERNAL true
 
-#define DEFAULT_FILE_GUID	"guid.txt"
-#define DEFAULT_FILE_PROFILE	"profile.xml"
+#define DEFAULT_NICK_SEND_CLIENTS false
+#define DEFAULT_NICK_SEND_GPS true
+#define DEFAULT_PROFILE_LAT	"43.119234"
+#define DEFAULT_PROFILE_LONG	"6.359982"
+#define DEFAULT_PROFILE_COUNTRY	"Somewhere"
+#define DEFAULT_PROFILE_CITY	"Somecity"
+#define DEFAULT_PROFILE_STATE	"Somestate"
+#define DEFAULT_PROFILE_GENDER	"Male"
 
 #define DEFAULT_CON_MAX		150
 #define DEFAULT_HUB_MAX		4
@@ -64,6 +74,7 @@
 #define DEFAULT_ENC_OUT		ENC_NONE
 #define DEFAULT_HUB_ENC_IN	ENC_DEFLATE
 #define DEFAULT_HUB_ENC_OUT	ENC_DEFLATE
+
 
 /* real constants, should not be run-time configurable */
 #define NORM_BUFF_CAPACITY	(4096 - (3 * sizeof(size_t)))

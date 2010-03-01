@@ -124,6 +124,106 @@ bool config_parser_handle_string(struct list_head *head, void *data)
 	return true;
 }
 
+bool config_parser_handle_bool(struct list_head *head, void *data)
+{
+	static const struct tr_vals
+	{
+		bool val;
+		char txt[6];
+	} tr_vals[] =
+	{
+		{true, "true"}, {false, "false"}, {true, "yes"}, {false, "no"},
+		{true, "1"}, {false, "0"}, {true, "t"}, {false, "f"}, {true, "y"}, {false, "n"},
+	};
+	struct ptoken *t, *first;
+	bool *target = data, found;
+	unsigned i;
+
+	first = list_entry(head->next, struct ptoken, list);
+	t = config_token_after_equal(head);
+	if(!t) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Option \"%s\" wants a value assigned, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+	for(i = 0, found = false; i < anum(tr_vals); i++)
+	{
+		if(0 == strcmp(tr_vals[i].txt, t->d.t)) {
+			*target = tr_vals[i].val;
+			found = true;
+			break;
+		}
+	}
+	if(!found) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: I don't understand \"%s\"  for a boolean value, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+		return true;
+	}
+	if(!list_is_last(&t->list, head))
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+	return true;
+}
+
+bool config_parser_handle_guid(struct list_head *head, void *data)
+{
+	struct ptoken *t, *first;
+	unsigned char *target = data;
+	union
+	{
+		unsigned tmp_ints[16];
+		struct
+		{
+			unsigned f[4];
+			unsigned long long l;
+		} s;
+	} x;
+	unsigned i, *tmp_id = x.tmp_ints;
+
+	first = list_entry(head->next, struct ptoken, list);
+	t = config_token_after_equal(head);
+	if(!t) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Option \"%s\" wants a value assigned, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+	if(16 != sscanf(t->d.t,
+	                "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+	                tmp_id, tmp_id+1, tmp_id+2, tmp_id+3, tmp_id+4, tmp_id+5,
+	                tmp_id+6, tmp_id+7, tmp_id+8, tmp_id+9, tmp_id+10,
+	                tmp_id+11, tmp_id+12, tmp_id+13, tmp_id+14, tmp_id+15)) {
+		if(5 != sscanf(t->d.t,
+		              "%08X-%04X-%04X-%04X-%012llX",
+		              x.s.f, x.s.f+1, x.s.f+2, x.s.f+3, &x.s.l)) {
+			logg(LOGF_NOTICE, "Parsing config file %s@%zu: \"%s\" does not seem to be a valid guid, will ignore\n",
+			     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+			return true;
+		}
+		else
+		{
+			/*
+			 * guids come from windows systems, their format
+			 * has a plattform endian touch (first 3 fields),
+			 * but that plattform is "always" intel...
+			 */
+// TODO: GUIDs and enianess?
+			put_unaligned_le32(x.s.f[0], target);
+			put_unaligned_le16(x.s.f[1], target + 4);
+			put_unaligned_le16(x.s.f[2], target + 6);
+			put_unaligned_be16(x.s.f[3], target + 8);
+			put_unaligned_be16(x.s.l >> 32, target + 10);
+			put_unaligned_be32(x.s.l, target + 12);
+		}
+	} else {
+		for(i = 0; i < 16; i++)
+			target[i] = (unsigned char)tmp_id[i];
+	}
+	if(!list_is_last(&t->list, head))
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+	return true;
+}
+
 bool config_parser_read(const char *filename, const struct config_item cf[], size_t num_cf)
 {
 	struct pctx ctx;
