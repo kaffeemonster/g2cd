@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2007-2009 Jan Seiffert
+ * Copyright (c) 2007-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,8 +53,16 @@
 
 # ifdef HAVE_SMP
 #  define MEM_ORDER	"\tmb\n"
+#  define mb()	asm volatile("mb" ::: "memory")
+#  define rmb()	asm volatile("mb" ::: "memory")
+#  define wmb()	asm volatile("wmb" ::: "memory")
+#  define read_barrier_depends()	asm volatile("mb" ::: "memory")
 # else
 #  define MEM_ORDER
+#  define mb()	mbarrier()
+#  define rmb()	mbarrier()
+#  define wmb()	mbarrier()
+#  define read_barrier_depends()	do { } while (0)
 # endif
 
 /*

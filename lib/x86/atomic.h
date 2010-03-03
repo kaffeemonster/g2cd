@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2008 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,11 +36,26 @@
 # define atomic_sread(x)	((x)->next)
 # define atomic_sset(x, y) ((x)->next = (y))
 
+/* x86 is quite strongly ordered, but still, even they sneak in some OOO */
 # ifdef HAVE_SMP
 #  define LOCK "lock\n"
+#  ifdef __i386__
+/* we could also use the fence stuff on 32 bit, but it needs SSE2... */
+#   define mb()  asm volatile("lock; addl $0,0(%%esp)" ::: "memory")
+#   define rmb() asm volatile("lock; addl $0,0(%%esp)" ::: "memory")
+#   define wmb() asm volatile("lock; addl $0,0(%%esp)" ::: "memory")
+#  else
+#   define mb()  asm volatile("mfence" ::: "memory")
+#   define rmb() asm volatile("lfence" ::: "memory")
+#   define wmb() asm volatile("sfence" ::: "memory")
+#  endif
 # else
 #  define LOCK
+#  define mb()  mbarrier()
+#  define rmb() mbarrier()
+#  define wmb() mbarrier()
 # endif
+# define read_barrier_depends() do { } while (0)
 
 /*
  * Make sure to avoid asm operant size suffixes, this is

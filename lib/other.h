@@ -298,9 +298,11 @@ typedef void (*sighandler_t)(int);
 /* compiler LART */
 #ifdef __GNUC__
 # define barrier()	asm volatile ("")
+# define mbarrier()	asm volatile ("" ::: "memory")
 # define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
 #else
 # define barrier()	do {} while (0)
+# define mbarrier(x)	do {} while (0)
 # define mem_barrier(x)	do {} while (0)
 #endif
 

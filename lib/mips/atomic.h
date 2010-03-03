@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2007-2009 Jan Seiffert
+ * Copyright (c) 2007-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -54,6 +54,17 @@
 
 # ifdef HAVE_SMP
 #  define MEM_ORDER	"\tsync\n"
+/*
+ * looks like you get your mips in weakly ordered and strong
+ * ordered.  And they even can come without a sync.
+ * I hate those synthesize-sourself-a-risc chips. The same
+ * shit with ppc, arm, you name it.
+ * You know what: kiss my shiny metal ass. We sync, better
+ * safe than sorry.
+ */
+#  define mb()	asm volatile("sync" ::: "memory")
+#  define rmb()	asm volatile("sync" ::: "memory")
+#  define wmb()	asm volatile("sync" ::: "memory")
 # else
 // TODO: Maybe a nop needed here to fill branch slot
 /*
@@ -69,7 +80,11 @@
  * manual inspection what gets generated (binary).
  */
 #  define MEM_ORDER
+#  define mb()	mbarrier()
+#  define rmb()	mbarrier()
+#  define wmb()	mbarrier()
 # endif
+# define read_barrier_depends()	do { } while(0)
 
 static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {

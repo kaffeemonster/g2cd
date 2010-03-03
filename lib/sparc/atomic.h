@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -128,17 +128,43 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 }
 
 #  if !defined(__sparcv9) && !defined(__sparc_v9__) && !defined(HAVE_REAL_V9)
+    /* stbar any one? Also avail on v8  */
+#   define wmb()	asm volatile("stbar" ::: "memory")
 #   undef LIB_IMPL_ATOMIC_H
 #   include "../generic/atomic.h"
 #  else
 #   ifdef HAVE_SMP
 #    define MEMBAR_1	"membar #StoreLoad | #LoadLoad\n\t"
 #    define MEMBAR_2	"membar #StoreLoad | #StoreStore"
-    /* stbar any one? Also avail on v8  */
+/*
+ * work around spitfire erratum:
+ * The chip locks up itself till the next trap (interrupt) when a membar
+ * is executed shortly after a misprediced branch.
+ * Prevent that by putting the membar into the delay slot of a branch always
+ */
+#   define sparc_membar_safe(type) \
+do {	asm volatile("ba,pt	%%xcc, 1f\n\t" \
+		     " membar	" type "\n" \
+		     "1:\n" \
+		     ::: "memory"); \
+} while (0)
+/*
+ * Sparcs are mostly used in TSO, so they would not need membars.
+ * But there are the evil twins RMO and PSO. If you do not have some
+ * membars for breakfast they will kick you in the nuts.
+ * At least some doc said somewhere that in TSO membars are nops...
+ */
+#    define mb()	membar_safe("#StoreLoad|#LoadStore|#StoreStore|#LoadLoad")
+#    define rmb()	membar_safe("#StoreLoad|#LoadLoad")
+#    define wmb()	membar_safe("#LoadStore|#StoreStore")
 #   else
 #    define MEMBAR_1
 #    define MEMBAR_2
+#    define mb()	mbarrier()
+#    define rmb()	mbarrier()
+#    define wmb()	mbarrier()
 #   endif
+#   define read_barrier_depends()	do { } while(0)
 
 static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 {

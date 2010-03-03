@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -65,10 +65,27 @@
 # define atomic_read(x)	((x)->d)
 # define atomic_pread(x)	((x)->d)
 # define atomic_sread(x)	((x)->next)
-//TODO: hmmm, we need some of those?
-# ifndef smp_mb
-#  define smp_mb() do { } while(0)
+
+# ifdef HAVE_SMP
+#  if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
+      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+#   define dmb()	asm volatile("mcr p15, 0, %0, c7, c10, 5" :: "r" (0) : "memory")
+#  elif defined(__ARM_ARCH_7A__)
+#   define dmb()	asm volatile("dmb" ::: "memory")
+#  else
+#   define dmb()	mbarrier()
+#  endif
+#  define mb()	dmb()
+#  define rmb()	dmb()
+#  define wmb()	dmb()
+#  define arm_mb_after() dmb()
+# else
+#  define mb()	mbarrier()
+#  define rmb()	mbarrier()
+#  define wmb()	mbarrier()
+#  define arm_mb_after()	do { } while(0)
 # endif
+# define read_barrier_depends()	do { } while(0)
 
 static always_inline void atomic_set(atomic_t *ptr, int val)
 {
@@ -138,7 +155,7 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 		: /* %3 */ "Q" (atomic_pread(ptr)),
 		  /* %4 */ "r" (val)
 		: "cc");
-	smp_mb();
+	arm_mb_after();
 	return ret;
 }
 
@@ -159,7 +176,7 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 		: /* %3 */ "Q" (atomic_read(ptr)),
 		  /* %4 */ "r" (val)
 		: "cc");
-	smp_mb();
+	arm_mb_after();
 	return ret;
 }
 
@@ -183,7 +200,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 			  /* %5 */ "r" (nval)
 			: "cc");
 	} while(cmp);
-	smp_mb();
+	arm_mb_after();
 	return prev;
 }
 
@@ -207,7 +224,7 @@ static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr
 			  /* %5 */ "r" (nval)
 			: "cc");
 	} while(cmp);
-	smp_mb();
+	arm_mb_after();
 	return prev;
 }
 
@@ -247,7 +264,7 @@ static always_inline int atomic_add_return(int i, atomic_t *ptr)
 		: /* %3 */ "Q" (atomic_read(ptr)),
 		  /* %4 */ "Ir" (i)
 		: "cc");
-	smp_mb();
+	arm_mb_after();
 	return ret;
 }
 
@@ -288,7 +305,7 @@ static always_inline int atomic_sub_return(int i, atomic_t *ptr)
 		: /* %3 */ "Q" (atomic_read(ptr)),
 		  /* %4 */ "Ir" (i)
 		: "cc");
-	smp_mb();
+	arm_mb_after();
 	return ret;
 }
 

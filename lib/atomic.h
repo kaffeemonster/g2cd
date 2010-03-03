@@ -35,20 +35,23 @@
 #  include <inttypes.h>
 # endif
 
-/* __alpha__ 16 */
-/* __powerpc__ implimentation defined ... sigh ... doc say some 2**4 */
-# define ARCH_NEEDED_APAD 1
+/* powerpc is implimentation defined ... sigh ... doc say some 2**4 */
+# if defined(__alpha__) || defined(__powerpc__) || defined(__powerpc64__)
+#  define ARCH_NEEDED_APAD 16
+# else
+#  define ARCH_NEEDED_APAD 1
+# endif
 
 # define ATOMIC_INIT(x) {(x)}
 
 
 /*
- * smp_mb()  - order loads and stores
- * smp_rmb() - order loads
- * smp_wmb() - order stores
- * smp_read_barrier_depends() - order subsequent ops that depend on prev ops., alpha only
- *
+ * mb()  - order loads and stores
+ * rmb() - order loads
+ * wmb() - order stores
+ * read_barrier_depends() - order subsequent ops that depend on prev ops.
  */
+
 /* warm beer and cheap tricks... */
 # define deatomic(x) ((void *)(intptr_t)(x))
 
@@ -128,6 +131,9 @@ typedef union xxxxxx4
 #    define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #    define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
 #    define atomic_dec_test(ptr) (!__sync_sub_and_fetch(&(ptr)->d, 1))
+#    define mb() __sync_synchronize()
+#    define rmb() __sync_synchronize()
+#    define wmb() __sync_synchronize()
 #   endif
 #   include "generic/atomic.h"
 #  endif
@@ -139,6 +145,9 @@ typedef union xxxxxx4
 #   define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
 #   define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
 #   define atomic_dec_test(ptr) (!__sync_sub_and_fetch(&(ptr)->d, 1))
+#   define mb() __sync_synchronize()
+#   define rmb() __sync_synchronize()
+#   define wmb() __sync_synchronize()
 #  endif
 #  include "generic/atomic.h"
 # endif

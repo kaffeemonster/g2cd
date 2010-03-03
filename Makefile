@@ -34,9 +34,9 @@
 #
 
 # Target endianess
-# little endian
-#TARGET_ENDIAN = big
 # big endian
+#TARGET_ENDIAN = big
+# little endian
 TARGET_ENDIAN = little
 
 #

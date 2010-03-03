@@ -37,6 +37,25 @@
 # define atomic_sset(x, y)	((x)->next = (y))
 
 # ifdef __INTEL_COMPILER
+#  include <ia64intrin.h>
+#  define ia64_mf	__mf
+# else
+#  define ia64_mf()	asm volatile ("mf" ::: "memory")
+# endif
+
+# ifdef HAVE_SMP
+#  define mb()	ia64_mf()
+#  define rmb()	ia64_mf()
+#  define wmb()	ia64_mf()
+#  define read_barrier_depends()	do { } while(0)
+# else
+#  define smp_mb()	mbarrier()
+#  define smp_rmb()	mbarrier()
+#  define smp_wmb()	mbarrier()
+#  define smp_read_barrier_depends()	do { } while(0)
+# endif
+
+# ifdef __INTEL_COMPILER
 #  define atomic_px_32(val, ptr) _InterlockedExchange(&atomic_pread(ptr), val)
 #  define atomic_px_64(val, ptr) _InterlockedExchange64(&atomic_pread(ptr), val)
 # else

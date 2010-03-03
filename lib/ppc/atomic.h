@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,6 +36,7 @@
 # define atomic_sread(x)	((x)->next)
 # define atomic_sset(x, y) ((x)->next = (y))
 
+// TODO: is lwsync only supported on ppc64 and the e500MC
 # ifdef HAVE_SMP
 #  define EIEIO	"eieio\n"
 /*
@@ -43,16 +44,28 @@
  * alike, until someone directly maps networkhw buffers to userspace...
  * so a simple lightwight sync should suffice
  */
+/* read and write membar */
+#  define mb()	asm volatile("sync" ::: "memory")
 #  ifndef __NO_LWSYNC__
+// TODO: do we need a full membar on atomic ops or can a lwsync be used?
 #   define SYNC	"\n\tlwsync"
+#   define rmb()	asm volatile("lwsync" ::: "memory")
+#   define wmb()	asm volatile("lwsync" ::: "memory")
 #  else
 /* ppc really sucks, return -E2MANYIMPL: e500 cores do not have lwsync */
 #   define SYNC	"\n\tsync"
+#   define rmb()	asm volatile("sync"  ::: "memory")
+/* arch which do not have lwsync one would fall back to sync, which is heavier than eioio (???) */
+#   define wmb()	asm volatile("eioio" ::: "memory")
 #  endif
 # else
 #  define EIEIO
 #  define SYNC
+#  define mb()	mbarrier()
+#  define rmb()	mbarrier()
+#  define wmb()	mbarrier()
 # endif
+# define read_barrier_depends()	do { } while(0)
 
 # ifdef __PPC405__
 #  define PPC405_ERR77(op)	"dcbt	"str_it(op)"\n\t"

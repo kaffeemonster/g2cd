@@ -4,7 +4,7 @@
  *
  * Thanks Linux Kernel
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -77,6 +77,20 @@
 # endif
 # ifndef atomic_cmppx
 #  define atomic_cmppx(x, y, z)	gen_atomic_cmppx((x), (y), (z))
+# endif
+
+/* if your arch is weakly ordered and smp, this will blow up */
+# ifndef mb
+#  define mb()	mbarrier()
+# endif
+# ifndef rmb
+#  define rmb()	mbarrier()
+# endif
+# ifndef wmb
+#  define wmb()	mbarrier()
+# endif
+# ifndef read_barrier_depends
+#  define read_barrier_depends()	do { } while(0)
 # endif
 
 extern void gen_atomic_inc(atomic_t *);
