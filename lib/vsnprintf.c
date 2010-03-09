@@ -1723,11 +1723,26 @@ static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
-	int *n = va_arg(spec->ap, int *);
-	*n = (int) spec->len;
+	void *n = va_arg(spec->ap, void *);
+	switch(spec->mod)
+	{
+	case MOD_LONG:       *(long *)     n =      (long)spec->len; break;
+	case MOD_QUAD:
+	case MOD_LONGLONG:   *(long long *)n = (long long)spec->len; break;
+	case MOD_INTMAX_T:   *(intmax_t *) n =  (intmax_t)spec->len; break;
+	case MOD_SIZE_T:     *(size_t *)   n =    (size_t)spec->len; break;
+	case MOD_SHORT:      *(short *)    n =     (short)spec->len; break;
+	case MOD_CHAR:       *(char *)     n =      (char)spec->len; break;
+	case MOD_NONE:
+	case MOD_LONGDOUBLE:
+	case MOD_PTRDIFF_T:
+	case MOD_DECIMAL32:
+	case MOD_DECIMAL64:
+	case MOD_DECIMAL128:
+	case MOD_MAX_NUM:    *(int  *)     n =       (int)spec->len; break;
+	}
 	return end_format(buf, fmt, spec);
 }
-
 /*
  * Jump table
  *

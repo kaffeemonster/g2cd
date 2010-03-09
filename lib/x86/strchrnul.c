@@ -246,11 +246,11 @@ static char *strchrnul_SSE2(const char *s, int c)
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t)
 #ifdef __i386__
-		: /* %4 */ "m" (s),
-		  /* %5 */ "m" (c)
+		: /* %3 */ "m" (s),
+		  /* %4 */ "m" (c)
 #else
-		: /* %4 */ "r" (s),
-		  /* %5 */ "r" (c)
+		: /* %3 */ "r" (s),
+		  /* %4 */ "r" (c)
 #endif
 #ifdef __SSE2__
 		: "xmm0", "xmm1", "xmm2", "xmm3"
