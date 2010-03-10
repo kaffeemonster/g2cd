@@ -219,8 +219,13 @@ void hzp_ref(enum hzps key, void *new_ref)
 		return;
 	}
 
+	/*
+	 * MB:
+	 * User has to provide a full memory barrier, to
+	 * prevent the read of the new_ref missing updates and
+	 * the write of the ref getting reodered
+	 */
 	t_hzp->ptr[key] = new_ref;
-//TODO: some mem barrier needed here
 }
 
 /*
@@ -236,6 +241,7 @@ void hzp_ref(enum hzps key, void *new_ref)
  */
 void hzp_unref(enum hzps key)
 {
+	wmb();
 	hzp_ref(key, NULL);
 }
 #endif
@@ -335,7 +341,7 @@ int hzp_scan(int threshold)
 		struct hzp *entry = container_of(deatomic(atomic_sread(whead)), struct hzp, lst);
 		if(entry->flags.used)
 		{
-//TODO: some mem barrier needed here
+			rmb();
 			for(i = 0; i < HZP_MAX; i++) {
 				if(deatomic(entry->ptr[i]))
 					hzp_fs_push(&uhead_st, alloca(sizeof(uhead_st)), deatomic(entry->ptr[i]));

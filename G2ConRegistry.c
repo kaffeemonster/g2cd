@@ -386,6 +386,10 @@ void g2_conreg_mark_dirty(g2_connection_t *connec)
 		return;
 
 	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
+	/*
+	 * MB:
+	 * the lock should build a barrier here
+	 */
 	pthread_rwlock_rdlock(&c->lock);
 	c->dirty = true;
 	pthread_rwlock_unlock(&c->lock);
@@ -677,6 +681,7 @@ static noinline void do_global_search_chain(struct qht_search_walk *qsw, struct 
 	 */
 	hlist_for_each_entry(connec, n, &c->list, registry)
 	{
+		read_barrier_depends();
 		/* no qht? Busy... */
 		if(!connec->qht)
 			continue;
@@ -707,7 +712,7 @@ static void do_global_search(struct qht_search_walk *qsw, struct g2_ht_bucket *b
 			if(!b->d.b[i]->qht)
 				continue;
 			do {
-				mem_barrier(b->d.b[i]->qht);
+				mb();
 				hzp_ref(HZP_QHT, t = b->d.b[i]->qht);
 			} while(t != b->d.b[i]->qht);
 		}
@@ -716,7 +721,7 @@ static void do_global_search(struct qht_search_walk *qsw, struct g2_ht_bucket *b
 			if(!b->d.c[i]->qht)
 				continue;
 			do {
-				mem_barrier(b->d.c[i]->qht);
+				mb();
 				hzp_ref(HZP_QHT, t = b->d.c[i]->qht);
 			} while(t != b->d.c[i]->qht);
 		}
@@ -826,9 +831,9 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 		b->dirty = false;
 		for(i = 0; i < LEVEL_SIZE; i++) {
 			if(level < (LEVEL_COUNT-1))
-					do_global_update(new_sub, b->d.b[i], level + 1);
+				do_global_update(new_sub, b->d.b[i], level + 1);
 			else
-					do_global_update_chain(new_sub, b->d.c[i]);
+				do_global_update_chain(new_sub, b->d.c[i]);
 		}
 
 		if(!new_master && new_sub->flags.reset_needed) {
@@ -865,7 +870,9 @@ void g2_qht_global_update(void)
 	tdiff = local_time_now - last_update;
 	tdiff = tdiff >= 0 ? tdiff : -tdiff;
 	if(tdiff >= UPDATE_INTERVAL) {
+		rmb(); /* catch the dirty marks to this point */
 		do_global_update(NULL, &ht_root, 0);
+		wmb(); /* put all qht writes into "place" */
 		last_update = local_time_now;
 // TODO: When the QHT gets updated, push change activly to other hubs
 	}
@@ -884,7 +891,7 @@ struct qhtable *g2_qht_global_get(void)
 	struct qhtable *ret_val;
 
 retry:
-	mem_barrier(&ht_root.qht);
+	rmb();
 	ret_val = ht_root.qht;
 	if(unlikely(0 == atomic_inc_return(&ret_val->refcnt))) {
 		/* yikes, we zombied a qht which died some µs ago...  */
@@ -900,7 +907,7 @@ struct qhtable *g2_qht_global_get_hzp(void)
 	struct qhtable *ret_val;
 
 	do {
-		mem_barrier(&ht_root.qht);
+		mb();
 		hzp_ref(HZP_QHT, ret_val = ht_root.qht);
 	} while(ret_val != ht_root.qht);
 

@@ -66,15 +66,21 @@ struct hzp
 
 # ifdef HAVE___THREAD
 LIB_HZP_EXTRNVAR(__thread struct hzp local_hzp);
+/*
+ * MB:
+ * User has to provide a full memory barrier, to
+ * prevent the read of the new_ref missing updates and
+ * the write of the ref getting reodered
+ */
 static inline void hzp_ref(enum hzps key, void *new_ref)
 {
 	if(key < HZP_MAX) {
 		local_hzp.ptr[key] = new_ref;
-//TODO: some mem barrier needed here
 	}
 }
 static inline void hzp_unref(enum hzps key)
 {
+	wmb();
 	hzp_ref(key, NULL);
 }
 # else

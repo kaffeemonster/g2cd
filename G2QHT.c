@@ -1463,7 +1463,7 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 	struct qht_data *qd;
 
 	do {
-		mem_barrier(con->qht);
+		mb();
 		hzp_ref(HZP_QHT, table = con->qht);
 	} while(table != con->qht);
 
@@ -1474,7 +1474,7 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 		goto out;
 
 	do {
-		mem_barrier(container_of(table->data, struct qht_data, data));
+		mb();
 		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));
 	} while(qd != container_of(table->data, struct qht_data, data));
 
@@ -1521,7 +1521,7 @@ void g2_qht_global_search_chain(struct qht_search_walk *qsw, void *arg)
 	size_t entries;
 
 	do {
-		mem_barrier(con->qht);
+		mb();
 		hzp_ref(HZP_QHT, table = con->qht);
 	} while(table != con->qht);
 
@@ -1533,7 +1533,7 @@ void g2_qht_global_search_chain(struct qht_search_walk *qsw, void *arg)
 
 	entries = table->entries;
 	do {
-		mem_barrier(container_of(table->data, struct qht_data, data));
+		mb();
 		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));
 	} while(qd != container_of(table->data, struct qht_data, data));
 
@@ -1578,11 +1578,11 @@ bool g2_qht_global_search_bucket(struct qht_search_walk *qsw, struct qhtable *t)
 
 	entries = t->entries;
 	do {
-		mem_barrier(container_of(t->data, struct qht_data, data));
+		mb();
 		hzp_ref(HZP_QHTDAT, qd = container_of(t->data, struct qht_data, data));
 	} while(qd != container_of(t->data, struct qht_data, data));
 
-	mem_barrier(&t->data);
+	rmb();
 	if(!t->data || COMP_RLE == t->compressed || t->flags.reset_needed)
 		goto out_unref;
 
@@ -1632,7 +1632,7 @@ void g2_qht_match_leafs(uint32_t hashes[], size_t num, void *data)
 
 	entries = master_qht->entries;
 	do {
-		mem_barrier(container_of(master_qht->data, struct qht_data, data));
+		mb();
 		hzp_ref(HZP_QHTDAT, qd = container_of(master_qht->data, struct qht_data, data));
 	} while(qd != container_of(master_qht->data, struct qht_data, data));
 
@@ -1828,13 +1828,17 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 	}
 
 	table->time_stamp = local_time_now;
+	wmb();
 
 	return ret_val;
 }
 
 void g2_qht_aggregate(struct qhtable *to, struct qhtable *from)
 {
-	size_t qht_size = DIV_ROUNDUP(to->entries, BITS_PER_CHAR);
+	size_t qht_size;
+
+	rmb();
+	qht_size = DIV_ROUNDUP(to->entries, BITS_PER_CHAR);
 
 	qht_size = qht_size <= DIV_ROUNDUP(from->entries, BITS_PER_CHAR) ? qht_size :
 	           DIV_ROUNDUP(from->entries, BITS_PER_CHAR);
@@ -2109,7 +2113,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 	 */
 	tmp_table = *ttable;
 	*ttable = NULL;
-	barrier();
+	wmb();
 	if(!tmp_table)
 	{
 		tmp_table = malloc(sizeof(*tmp_table));
@@ -2125,7 +2129,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 // TODO: new data is not initialised
 	/* try with this early reset_needed. membar? */
 	tmp_table->flags.reset_needed = true;
-	barrier();
+	wmb();
 	if(!try_compress)
 	{
 		if(tmp_table->data_length < w_size)
@@ -2138,7 +2142,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 			ttable_data = g2_qht_data_alloc(w_size);
 			if(ttable_data) {
 				uint8_t *ptr = tmp_table->data;
-				barrier();
+				rmb();
 				tmp_table->data = ttable_data->data;
 				tmp_table->data_length = w_size;
 				g2_qht_data_free(ptr);
@@ -2150,7 +2154,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 		}
 	} else if(tmp_table->data) {
 		void *ptr  = tmp_table->data;
-		barrier();
+		rmb();
 		tmp_table->data = NULL;
 		tmp_table->data_length = 0;
 		g2_qht_data_free(ptr);
@@ -2161,6 +2165,7 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 	tmp_table->bits = bits;
 	tmp_table->time_stamp = local_time_now;
 	/* bring back the table */
+	wmb();
 	*ttable = tmp_table;
 	return false;
 }

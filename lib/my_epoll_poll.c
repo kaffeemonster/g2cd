@@ -261,7 +261,7 @@ retry:
 	wptr = events;
 	/* acquire a reference on the data array */
 	do {
-		mem_barrier(fds);
+		mb();
 		hzp_ref(HZP_EPOLL, (loc_data = fds));
 	} while(loc_data != fds);
 

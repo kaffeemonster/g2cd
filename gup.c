@@ -474,6 +474,12 @@ void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)
 
 	p_entry.data.ptr = con;
 
+	/*
+	 * MB:
+	 * This spinlock does not only protect the list,
+	 * it also barriers our packet creation before another
+	 * cpu reads the packets to write them to the socket
+	 */
 	shortlock_t_lock(&con->pts_lock);
 
 	list_add_tail(&p->list, &con->packets_to_send);

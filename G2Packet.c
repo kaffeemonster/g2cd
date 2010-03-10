@@ -948,6 +948,10 @@ static intptr_t forward_lit_callback_ignore(g2_connection_t *con, void *carg)
 		}
 	}
 	t->is_literal = true;
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(t, con);
 
 	return 0;
@@ -992,6 +996,10 @@ static intptr_t forward_lit_callback_found(g2_connection_t *con, void *carg)
 		}
 	}
 	t->is_literal = true;
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(t, con);
 
 	return 1;
@@ -1887,6 +1895,10 @@ static intptr_t PI_callback(g2_connection_t *con, void *carg)
 	pi->type = PT_PI;
 	pi->big_endian = HOST_IS_BIGENDIAN;
 
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(pi, con);
 	return 0;
 
@@ -2079,6 +2091,10 @@ intptr_t g2_packet_leaf_qht_match(g2_connection_t *con, void *data)
 		}
 	}
 	t->is_literal = true;
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(t, con);
 	return 0;
 }
@@ -2120,6 +2136,10 @@ intptr_t g2_packet_hub_qht_match(g2_connection_t *con, void *data)
 		}
 	}
 	t->is_literal = true;
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(t, con);
 out:
 	return g2_packet_hub_qht_done(con, data);
@@ -3359,6 +3379,10 @@ static intptr_t QKA_SNA_callback(g2_connection_t *con, void *carg)
 	qka->type = PT_QKA;
 	qka->big_endian = HOST_IS_BIGENDIAN;
 
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(qka, con);
 	return 0;
 
@@ -3642,6 +3666,10 @@ intptr_t send_HAW_callback(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARA
 		buffer_clear(v->data_trunk);
 		list_add_tail(&v->list, &haw->children);
 	}
+	/*
+	 * MB:
+	 * the spinlock in con_mark_write should barrier our doings
+	 */
 	g2_handler_con_mark_write(haw, con);
 
 	return 0;

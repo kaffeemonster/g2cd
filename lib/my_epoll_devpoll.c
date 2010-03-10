@@ -306,7 +306,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	default:
 		/* acquire a reference on the data array */
 		do {
-			mem_barrier(fds);
+			mb();
 			hzp_ref(HZP_EPOLL, (loc_data = fds));
 		} while(loc_data != fds);
 

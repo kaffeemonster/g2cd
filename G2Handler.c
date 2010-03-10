@@ -138,6 +138,11 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 		if(buffer_remaining(*d_target) < 10)
 			goto no_pfill_before_write;
 
+		/*
+		 * MB:
+		 * This spinlock protects the list, but also
+		 * barriers the packet creation from our reading
+		 */
 		shortlock_t_lock(&w_entry->pts_lock);
 		if(!list_empty(&w_entry->packets_to_send))
 		{
