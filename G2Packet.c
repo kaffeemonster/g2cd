@@ -4069,7 +4069,7 @@ static noinline g2_packet_t *g2_packet_alloc_system(void)
 	return t;
 }
 
-#ifndef VALGRIND_ME
+#ifndef DEBUG_PACKET_ALLOC
 struct lpacket_buffer
 {
 	unsigned num;
@@ -4252,12 +4252,10 @@ g2_packet_t *g2_packet_init(g2_packet_t *p)
 }
 
 
-g2_packet_t *g2_packet_alloc(void)
+static g2_packet_t *g2_packet_alloc(void)
 {
-#ifndef VALGRIND_ME
+#ifndef DEBUG_PACKET_ALLOC
 	struct lpacket_buffer *lpb;
-	struct list_head *pos, *n;
-	g2_packet_t *t;
 
 	lpb = g2_packet_csetup();
 	if(!lpb)
@@ -4266,15 +4264,13 @@ g2_packet_t *g2_packet_alloc(void)
 	if(!lpb->num)
 		return g2_packet_alloc_boosted();
 
-	list_for_each_safe(pos, n, &lpb->packets) {
-		list_del_init(pos);
-		break;
-	}
-	if(pos)
+	if(!list_empty(&lpb->packets))
 	{
+		g2_packet_t *t;
+		struct list_head *pos = lpb->packets.next;
+		list_del(pos);
 		t = list_entry(pos, g2_packet_t, list);
 		lpb->num--;
-		t->is_freeable = true;
 		return t;
 	}
 #endif
@@ -4283,7 +4279,7 @@ g2_packet_t *g2_packet_alloc(void)
 
 void g2_packet_local_alloc_init_min(void)
 {
-#ifndef VALGRIND_ME
+#ifndef DEBUG_PACKET_ALLOC
 	struct lpacket_buffer *lpb;
 
 	lpb = g2_packet_csetup();
@@ -4297,7 +4293,7 @@ void g2_packet_local_alloc_init_min(void)
 
 void g2_packet_local_alloc_init(void)
 {
-#ifndef VALGRIND_ME
+#ifndef DEBUG_PACKET_ALLOC
 	struct lpacket_buffer *lpb;
 	size_t i;
 
@@ -4312,9 +4308,7 @@ void g2_packet_local_alloc_init(void)
 		g2_packet_t *t = g2_packet_alloc_system();
 		if(!t)
 			break;
-		g2_packet_init(t);
-		INIT_PBUF(&t->data_trunk);
-		t->is_freeable = true;
+		INIT_LIST_HEAD(&t->list);
 		list_add(&t->list, &lpb->packets);
 		lpb->num++;
 	}
@@ -4323,9 +4317,7 @@ void g2_packet_local_alloc_init(void)
 		g2_packet_t *t = g2_packet_alloc_boosted();
 		if(!t)
 			break;
-		g2_packet_init(t);
-		INIT_PBUF(&t->data_trunk);
-		t->is_freeable = true;
+		INIT_LIST_HEAD(&t->list);
 		list_add(&t->list, &lpb->packets);
 		lpb->num++;
 	}
@@ -4334,7 +4326,7 @@ void g2_packet_local_alloc_init(void)
 
 void g2_packet_local_refill(void)
 {
-#ifndef VALGRIND_ME
+#ifndef DEBUG_PACKET_ALLOC
 	struct lpacket_buffer *lpb;
 	size_t i;
 
@@ -4350,7 +4342,7 @@ void g2_packet_local_refill(void)
 		list_for_each_prev_safe(e, n, &lpb->packets)
 		{
 			g2_packet_t *t = list_entry(e, g2_packet_t, list);
-			list_del_init(e);
+			list_del(e);
 			lpb->num--;
 			g2_packet_free_boosted(t);
 			if(!--i)
@@ -4364,10 +4356,9 @@ void g2_packet_local_refill(void)
 			g2_packet_t *t = g2_packet_alloc_boosted();
 			if(!t)
 				break;
-			g2_packet_init(t);
-			INIT_PBUF(&t->data_trunk);
-			t->is_freeable = true;
-			list_add(&t->list, &lpb->packets);
+			INIT_LIST_HEAD(&t->list);
+			/* when free list is empty, append to end */
+			list_add_tail(&t->list, &lpb->packets);
 			lpb->num++;
 		}
 	}
@@ -4423,12 +4414,12 @@ void noinline g2_packet_free(g2_packet_t *to_free)
 
 	if(likely(to_free->is_freeable))
 	{
-#ifndef VALGRIND_ME
-		INIT_LIST_HEAD(&to_free->list);
+#ifndef DEBUG_PACKET_ALLOC
 		struct lpacket_buffer *lpb = g2_packet_csetup();
 		if(lpb)
 		{
-			/* add to front */
+			INIT_LIST_HEAD(&to_free->list);
+			/* fresh packet, add to front */
 			list_add(&to_free->list, &lpb->packets);
 			lpb->num++;
 		}
@@ -4460,12 +4451,8 @@ void noinline g2_packet_free_glob(g2_packet_t *to_free)
 			free(pds);
 	}
 
-	if(likely(to_free->is_freeable)) {
-#ifndef VALGRIND_ME
-		INIT_LIST_HEAD(&to_free->list);
-#endif
+	if(likely(to_free->is_freeable))
 		g2_packet_free_boosted(to_free);
-	}
 }
 
 void g2_packet_clean(g2_packet_t *to_clean)
@@ -4547,15 +4534,23 @@ must_malloc:
 	return true;
 }
 
-
-static unsigned packet_type_stats[PT_MAXIMUM];
+#ifdef PACKET_STATS
+static atomic_t packet_type_stats[PT_MAXIMUM];
 static void g2_packet_stat_print(void) GCC_ATTR_DESTRUCT;
 static void g2_packet_stat_print(void)
 {
 	unsigned i;
 	for(i = 0; i < PT_MAXIMUM; i++)
-		logg(LOGF_DEVEL, "%s\tcount: %u\n", g2_ptype_names[i], packet_type_stats[i]);
+		logg(LOGF_DEVEL, "%s\tcount: %u\n", g2_ptype_names[i], atomic_read(&packet_type_stats[i]));
 }
+
+static void packet_stats_inc(enum g2_ptype type)
+{
+	atomic_inc(&packet_type_stats[type]);
+}
+#else
+# define packet_stats_inc(x) do { } while(0)
+#endif
 
 static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_action_func const *work_type)
 {
@@ -4566,7 +4561,7 @@ static bool g2_packet_decide_spec_int(struct ptype_action_args *parg, g2_ptype_a
 		return false;
 	}
 
-	packet_type_stats[packs->type]++;
+	packet_stats_inc(packs->type);
 
 	if(work_type[packs->type])
 	{

@@ -415,6 +415,8 @@ CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DUDP_DUMP
 #CFLAGS += -DHELGRIND_ME
 CFLAGS += -DVALGRIND_ME
+#CFLAGS += -DPACKET_STATS
+#CFLAGS += -DDEBUG_PACKET_ALLOC
 CFLAGS += -DHAVE_BINUTILS=218
 #	on recent glibc-system to avoid implicit-warnings
 #	for strnlen

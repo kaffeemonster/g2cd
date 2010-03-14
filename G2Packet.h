@@ -240,7 +240,6 @@ typedef struct g2_packet
 	} while(0)
 
 _G2PACK_EXTRN(g2_packet_t *g2_packet_init(g2_packet_t *));
-_G2PACK_EXTRN(g2_packet_t *g2_packet_alloc(void) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(g2_packet_t *g2_packet_clone(g2_packet_t *) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(void g2_packet_local_alloc_init(void));
