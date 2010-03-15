@@ -124,6 +124,7 @@
  * writer situation. (many search request (read) and many UDP
  * packets (read), but modest fluctuation on connected nodes
  * (write) and modest to high updates to the QHTs (write)).
+ *
  * To make things more uneasy, the IP as the key will degrade your
  * tree to something fucked up if you do not apply any rebalancing,
  * (the QHT as a key is unusable and the IP does not have this
@@ -220,6 +221,7 @@
 #define LEVEL_SHIFT 2
 #define LEVEL_SIZE (1 << LEVEL_SHIFT)
 #define LEVEL_MASK (LEVEL_SIZE - 1)
+#define CHAIN_FILL_FACTOR 8
 #define TOTAL_SIZE (1 << (LEVEL_SHIFT * LEVEL_COUNT))
 #define UPDATE_INTERVAL (60)
 
@@ -249,11 +251,6 @@ static struct g2_ht_chain *raw_chain_storage;
 static struct list_head neighbour_hubs;
 static pthread_rwlock_t neighbour_hubs_lock;
 static uint32_t ht_seed;
-
-/* Protos */
-	/* you better not kill this proto, or it will not work */
-static void g2_conreg_init(void) GCC_ATTR_CONSTRUCT;
-static void g2_conreg_deinit(void) GCC_ATTR_DESTRUCT;
 
 /* Funcs */
 static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct g2_ht_bucket *from, struct g2_ht_chain **from_c, unsigned level)
@@ -288,23 +285,44 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 	return from;
 }
 
-static void g2_conreg_init(void)
+void g2_conreg_init(void)
 {
 	size_t count_b = 0, count_c = 0, i = 0;
 	struct g2_ht_chain *tc;
+
+	count_c = server.settings.max_connection_sum / CHAIN_FILL_FACTOR;
+	count_c += count_c == 0; /* at least one */
+	/* round up to a power of two */
+	count_c--;
+	count_c |= count_c >> 1;
+	count_c |= count_c >> 2;
+	count_c |= count_c >> 4;
+	count_c |= count_c >> 8;
+	count_c |= count_c >> 16;
+	count_c++;
+	/* take the int sqrt */
+	count_c  = flsst(count_c) - 1;
+/*	count_c  = DIV_ROUNDUP(count_c, LEVEL_SHIFT); */
+	count_c  = (count_c / LEVEL_SHIFT) + (count_c % LEVEL_SHIFT >= LEVEL_SHIFT / 2);
+	count_c += count_c == 0; /* at least one level */
+	/* make sure our hash has enough bits */
+	if(count_c * LEVEL_SHIFT > sizeof(uint32_t) * BITS_PER_CHAR)
+		count_c = (sizeof(uint32_t) * BITS_PER_CHAR) / LEVEL_SHIFT;
+	g2_conreg_level_count = count_c;
 
 	INIT_LIST_HEAD(&neighbour_hubs);
 	pthread_rwlock_init(&neighbour_hubs_lock, NULL);
 
 	for(; i < (LEVEL_COUNT-1); i++)
 		count_b += 1 << (LEVEL_SHIFT * (i + 1));
-	count_c = 1 << (LEVEL_SHIFT * LEVEL_COUNT);
+	count_c = TOTAL_SIZE;
 	raw_bucket_storage = malloc(count_b * sizeof(struct g2_ht_bucket));
 	raw_chain_storage = malloc(count_c * sizeof(struct g2_ht_chain));
 	if(!(raw_bucket_storage && raw_chain_storage))
-		diedie("allocating connection registry bucket mem");
+		diedie("allocating connection registry bucket&chain mem");
 
-	logg_develd_old("Buckets: %zu\tChains: %zu\n", count_b, count_c);
+	logg(LOGF_INFO, "G2ConRegistry: Will use %zu Levels, %zu Buckets, %zu Chains, for %i Connections, approx. %zu kib QHT mem\n",
+	     g2_conreg_level_count, count_b, count_c, server.settings.max_connection_sum, (count_b + count_c) * 128);
 	tc = raw_chain_storage;
 	init_alloc_bucket(&ht_root, raw_bucket_storage, &tc, 0);
 	ht_seed = (uint32_t) time(NULL);
@@ -661,6 +679,7 @@ void g2_conreg_cleanup(void)
 	atomic_set(&ht_root.qht->refcnt, 1);
 	g2_qht_put(ht_root.qht);
 	ht_root.qht = NULL;
+	g2_conreg_deinit();
 }
 
 /*

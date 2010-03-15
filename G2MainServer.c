@@ -167,6 +167,10 @@ int main(int argc, char **args)
 	 */
 	init_prng();
 
+	/* allocate needed working resources */
+	setup_resources();
+
+	g2_conreg_init();
 	g2_qk_init();
 	/* init khl system */
 	if(!g2_khl_init())
@@ -187,9 +191,6 @@ int main(int argc, char **args)
 /* ANYTHING what need any priviledges should be done before */
 	/* Drop priviledges */
 	change_the_user();
-
-	/* allocate needed working resources */
-	setup_resources();
 
 	/* fire up threads */
 	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][IN])) {
