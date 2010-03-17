@@ -546,6 +546,16 @@ noinline void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len)
 	shb->hashes[shb->num++] = g2_qht_search_number_word(s, start, len);
 }
 
+void g2_qht_search_add_hash(uint32_t h)
+{
+	struct search_hash_buffer *shb =
+		(struct search_hash_buffer *)qht_get_scratch1(QHT_DEFAULT_BYTES);
+
+	if(!shb || shb->num >= shb->size)
+		return;
+	shb->hashes[shb->num++] = g2_qht_hnumber(h, QHT_DEFAULT_BITS);
+}
+
 static noinline void g2_qht_search_add_word_luc(const unsigned char *s, size_t len)
 {
 	struct search_hash_buffer *shb =

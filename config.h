@@ -52,6 +52,7 @@
 #define HAVE_INET_NTOP
 #define HAVE_INET_PTON
 #define HAVE_IPV6_V6ONLY
+#define HAVE_TCP_CORK
 
 /* need epoll compat? */
 //#define NEED_EPOLL_COMPAT

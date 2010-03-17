@@ -128,6 +128,7 @@
 	ENUM_CMD( SZR    ,  7530362 ), /* Q2 */ \
 	ENUM_CMD( UDP    , 11359940 ), /* Q2 PI */ \
 	ENUM_CMD( G1     ,     4285 ), /* Q2 */ \
+	ENUM_CMD( SV     ,        1 ), /* Q2 */ \
 	ENUM_CMD( G1PP   ,        0 ), /* QH2 */ \
 	ENUM_CMD( NOG1   ,      561 ), /* Q2 */ \
 	ENUM_CMD( D      ,    56182 ), /* QA */ \

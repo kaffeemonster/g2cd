@@ -59,9 +59,9 @@
 /* minutes to seconds */
 #define PI_TIMEOUT     (   30)
 #define LNI_TIMEOUT    ( 1*60)
+#define QHT_TIMEOUT    ( 1*60)
 #define KHL_TIMEOUT    ( 2*60)
 #define CRAWLR_TIMEOUT ( 3*60)
-#define QHT_TIMEOUT    ( 5*60)
 #define UPROC_TIMEOUT  (15*60)
 #define G2CDC_TIMEOUT  (30*60)
 
@@ -108,6 +108,8 @@ static bool handle_Q2_QKY(struct ptype_action_args *);
 static bool handle_Q2_URN(struct ptype_action_args *);
 static bool handle_Q2_DN(struct ptype_action_args *);
 static bool handle_Q2_MD(struct ptype_action_args *);
+static bool handle_Q2_HURN(struct ptype_action_args *);
+static bool handle_Q2_HKEY(struct ptype_action_args *);
 static bool handle_QA(struct ptype_action_args *);
 static bool handle_QA_TS(struct ptype_action_args *);
 static bool handle_QA_D(struct ptype_action_args *);
@@ -273,10 +275,11 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_I   ] = empty_action_p,
 	[PT_dna ] = empty_action_p, /* don't know */
 	[PT_NAT ] = empty_action_p, /* ??? needs to be handled */
-	[PT_HKEY] = empty_action_p, /* ?? */
-	[PT_HURN] = empty_action_p, /* ?? */
+	[PT_HKEY] = handle_Q2_HKEY,
+	[PT_HURN] = handle_Q2_HURN,
 	[PT_G1  ] = empty_action_p, /* ?? */
 	[PT_NOG1] = empty_action_p, /* ?? */
+	[PT_SV  ] = empty_action_p, /* needs to be processes? because there is no GUID... */
 };
 
 /* QH2-childs */
@@ -1631,6 +1634,12 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	{
 		/* demote connection from hub mode */
 		connec->flags.upeer = false;
+		/*
+		 * if the connection isn't a hub any more, but has a
+		 * compressed link, kick it, to prevent recource stealing
+		 */
+		if(connec->encoding_in != ENC_NONE || connec->encoding_out != ENC_NONE)
+			connec->flags.dismissed = true;
 		g2_conreg_demote_hub(connec);
 		/* connection is no hub anymore, add to QHTs */
 		g2_conreg_mark_dirty(connec);
@@ -2050,6 +2059,7 @@ struct Q2_data
 	uint8_t *s_guid;
 	g2_packet_t *qa;
 	bool had_urn;
+	bool had_hurn;
 	bool udp_na_valid;
 	bool qk_valid;
 };
@@ -2493,6 +2503,8 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	size_t remaining = buffer_remaining(source->data_trunk);
 	size_t len;
 
+	if(rdata->had_hurn)
+		return false;
 	/*
 	 * even if we had an urn we do not understand, no
 	 * dn && md processing
@@ -2582,6 +2594,66 @@ static bool handle_Q2_MD(struct ptype_action_args *parg)
 
 	rdata->metadata_len = buffer_remaining(source->data_trunk);
 	rdata->metadata     = buffer_start(source->data_trunk);
+	return false;
+}
+
+static bool handle_Q2_HURN(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+	char *hptr;
+	size_t len;
+	uint32_t hurn;
+
+	/*
+	 * a hashed URN, the client already has done the "hash
+	 * the hash" dance for us, we can add this directly to
+	 * our list
+	 */
+	/*
+	 * even if we had an urn we do not understand, no
+	 * dn && md processing
+	 */
+	rdata->had_urn = true;
+	if(unlikely(!skip_unexpected_child(source, "/Q2/HURN")))
+		return false;
+	len = buffer_remaining(source->data_trunk);
+	if(!(len / 4))
+		return false;
+	rdata->had_hurn = true; /* prevent URNs from being processed */
+	hptr = buffer_start(source->data_trunk);
+	for(len /= 4; len; len--, hptr += 4) {
+		get_unaligned_endian(hurn, (uint32_t *)hptr, source->big_endian);
+		g2_qht_search_add_hash(hurn);
+	}
+	return false;
+}
+
+static bool handle_Q2_HKEY(struct ptype_action_args *parg)
+{
+	struct Q2_data *rdata = parg->opaque;
+	g2_packet_t *source = parg->source;
+	char *hptr;
+	size_t len;
+	uint32_t hkey;
+
+	/*
+	 * hashed keywords, the client already has done the "hash
+	 * the search text" dance for us, we can add this directly
+	 * to our list
+	 */
+	if(unlikely(!skip_unexpected_child(source, "/Q2/HKEY")))
+		return false;
+	len = buffer_remaining(source->data_trunk);
+	if(!(len / 4))
+		return false;
+	/* with this we prevent processing of DN & MD */
+	rdata->had_urn = true;
+	hptr = buffer_start(source->data_trunk);
+	for(len /= 4; len; len--, hptr += 4) {
+		get_unaligned_endian(hkey, (uint32_t *)hptr, source->big_endian);
+		g2_qht_search_add_hash(hkey);
+	}
 	return false;
 }
 

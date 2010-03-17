@@ -288,7 +288,6 @@ retry_unpack:
 			d_source = w_entry->recv_u;
 			if(buffer_remaining(*w_entry->recv))
 			{
-		/*if(ENC_DEFLATE == (*w_entry)->encoding_in)*/
 				w_entry->z_decoder->next_in = (Bytef *)buffer_start(*w_entry->recv);
 				w_entry->z_decoder->avail_in = buffer_remaining(*w_entry->recv);
 				w_entry->z_decoder->next_out = (Bytef *)buffer_start(*d_source);
@@ -446,10 +445,14 @@ retry_unpack:
 		if(ENC_NONE != w_entry->encoding_in)
 		{
 // TODO: loop till zlib says more data
-			if(buffer_remaining(*w_entry->recv))
+			if(buffer_remaining(*w_entry->recv)) {
+				if(save_build_packet && build_packet == &tmp_packet)
+					w_entry->build_packet = build_packet; /* reinject packet */
 				goto retry_unpack;
+			}
 			if(compact_cbuff)
 				buffer_compact(*w_entry->recv);
+			logg_develd_old("---- cbytes: %u\n", buffer_remaining(*w_entry->recv));
 		}
 
 		if(w_entry->flags.last_data_active) {

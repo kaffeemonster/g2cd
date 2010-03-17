@@ -41,6 +41,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 /* other */
@@ -204,7 +205,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	g2_connection_t *work_entry = wke_ptr;
 	socklen_t sin_size = sizeof(work_entry->remote_host); /* what to do with this info??? */
 	int tmp_fd;
-	int fd_flags;
+	int fd_flags, yes;
 
 	do {
 		tmp_fd = accept(sg->fd, casa(&work_entry->remote_host), &sin_size);
@@ -256,6 +257,11 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		logg_errno(LOGF_NOTICE, "setting socket non-blocking");
 		goto err_out_after_add;
 	}
+
+	yes = 1;
+#ifdef HAVE_TCP_CORK
+	setsockopt(work_entry->com_socket, SOL_TCP, TCP_CORK, &yes, sizeof(yes));
+#endif
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
 	tmp_eevent.events = work_entry->poll_interrests = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLONESHOT);
@@ -728,11 +734,10 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				if(to_con->encoding_out !=
 				   (to_con->flags.upeer ? server.settings.hub_out_encoding : server.settings.default_out_encoding))
 					to_con->encoding_out = ENC_NONE;
-				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u))
-				{
+				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u)) {
 					to_con->send_u = recv_buff_alloc();
 					if(!to_con->send_u)
-						return abort_g2_500(to_con);
+						to_con->encoding_out = ENC_NONE;
 				}
 
 				if(ENC_DEFLATE == to_con->encoding_out)
@@ -964,7 +969,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				return false;
 			}
 
-			if(likely((str_size(X_TRY_HUB_KEY) + 4 + 2 +
+			if(to_con->flags.dismissed /* only give try hubs if we have to send him away */ &&
+			   likely((str_size(X_TRY_HUB_KEY) + 4 + 2 +
 			          (INET6_ADDRSTRLEN + 2 + 4 + 5 + str_size("2007-01-10T23:59Z")) * 2) <=
 			         buffer_remaining(*to_con->send)))
 			{
@@ -1143,7 +1149,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			else
 			{
 				/* abort, if we could not agree about it */
-				if(to_con->encoding_in != server.settings.default_in_encoding)
+				if(to_con->encoding_in != ENC_NONE &&
+				   (to_con->encoding_in !=
+				    (to_con->flags.upeer ? server.settings.hub_in_encoding : server.settings.default_in_encoding)))
 					return abort_g2_400(to_con);
 
 				if((ENC_NONE != to_con->encoding_in) && (!to_con->recv_u)) {

@@ -76,7 +76,7 @@
 /*
  * UDP reassambly Cache
  */
-#define UDP_CACHE_SHIFT 12
+#define UDP_CACHE_SHIFT 13
 #define UDP_CACHE_SIZE (1 << UDP_CACHE_SHIFT)
 #define UDP_CACHE_HTSIZE (UDP_CACHE_SIZE/8)
 #define UDP_CACHE_HTMASK (UDP_CACHE_HTSIZE-1)

@@ -478,7 +478,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 					/* is there only this byte? */
 					else if(unlikely(1 == remaining_length))
 					{
-						/* 
+						/*
 						 * Whoa! thats wrong, one byte cannot be a child,
 						 * but no '\0' is also wrong
 						 */

@@ -550,7 +550,7 @@ static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 		/* found!! */
 			to_con->encoding_out = i;
 			to_con->u.accept.flags.enc_out_ok = true;
-			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
+			logg_develd_old("found for Encoding out:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_out);
 			return false;
 		}
 	}
@@ -576,7 +576,7 @@ static bool c_encoding_what(g2_connection_t *to_con, size_t distance)
 		/* found!! */
 			to_con->encoding_in = i;
 			to_con->u.accept.flags.enc_in_ok = true;
-			logg_develd_old("found for Encoding:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
+			logg_develd_old("found for Encoding in:\t\"%.*s\" %i\n", KNOWN_ENCODINGS[i]->length, buffer_start(*to_con->recv), to_con->encoding_in);
 			return false;
 		}
 	}
