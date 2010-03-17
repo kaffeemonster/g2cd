@@ -1805,8 +1805,12 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 	{
 		m = strchrnul(fmt, '%');
 		diff = m - fmt;
-		if(likely(diff))
-			buf = my_mempcpy(buf, fmt, cur_fmt.len + diff < cur_fmt.maxlen ? diff : cur_fmt.maxlen - cur_fmt.len);
+		if(likely(diff)) {
+			if(likely(cur_fmt.len + diff < cur_fmt.maxlen))
+				buf = my_mempcpy(buf, fmt, diff);
+			else
+				buf = my_mempcpy(buf, fmt, cur_fmt.len >= cur_fmt.maxlen ? 0 : cur_fmt.maxlen - cur_fmt.len);
+		}
 		cur_fmt.len += diff;
 		fmt = m;
 

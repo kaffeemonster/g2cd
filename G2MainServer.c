@@ -766,8 +766,8 @@ static inline void change_the_user(void)
 
 static inline void setup_resources(void)
 {
-	size_t i;
 	struct rlimit our_limit;
+	size_t i;
 
 	/* check and raise our open-file limit */
 /*
@@ -864,6 +864,35 @@ static inline void setup_resources(void)
 		sock_poll[i].fd = sock_com[i][OUT];
 		sock_poll[i].events = POLLIN;
 	}
+
+#ifdef __linux__
+	{
+	char buf[64];
+	int fd = open("/proc/sys/net/ipv4/tcp_retries2", O_RDONLY|O_NOCTTY);
+	if(0 > fd)
+		return;
+
+	memset(buf, 0, sizeof(buf));
+	if(read(fd, buf, sizeof(buf) - 1) > 0)
+	{
+		int num = atoi(buf);
+		unsigned bt = 1, bt1 = 1, bt2 = 1;
+		for(i = num - 1; i; i--) {
+			bt *= 2;
+			bt1 += bt > 60 ? 60 : bt;
+			bt2 += bt;
+		}
+		bt1 = DIV_ROUNDUP(bt1, 60);
+		bt2 /= 60;
+		if(num > 7)
+			logg(LOGF_WARN, "Warning: Your \"/proc/sys/net/ipv4/tcp_retries2\" is high (%i), this can lead to a lot of stuck\n"
+			                "         dead connection due to long timeouts (approx. %u minutes, up to %u minutes). Please refer\n"
+			                "         to the README, section 2.1.2 what this is about!\n", num, bt1, bt2
+			);
+	}
+	close(fd);
+	}
+#endif
 }
 
 static void init_prng(void)

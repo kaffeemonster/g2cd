@@ -17,9 +17,9 @@
 	along with g2cd; if not, write to the Free Software
 	Foundation, Inc., 59 Temple Place, Suite 330, Boston,
 	MA  02111-1307 USA
-	
+
 0. Introduction
----------------
+===============
 	This is a server-only implementation for the Gnutella 2 P2P-protocol
 	(g2.trillinux.org).
 
@@ -33,7 +33,7 @@
 	hopefully be able to improve the overall Gnutella 2 performance.
 
 1. Status
----------
+=========
 	This isn't even pre-alpha, this is more like nothing.
 
 	It is able to:
@@ -44,15 +44,21 @@
 	* answer some packets
 	but there is still a lot to do...
 
-2. Installation
----------------
+2. Setup
+========
+
+2.1 Installation
+----------------
+
 	 This is just called "Intallation" for convenience, there is just nothing
 	to install, this is more a description how to compile and run it.
 
 	What you need:
 	* A typical UNIX® system (as in IEEE Std 1003.1 (POSIX), ISO/IEC 9945)
-	* GCC as your compiler (A C99 capable C-Compiler is the minimum,
-	  but some GCC extensions are unfortunately very handy)
+	  actually Linux®, *BSD, Solaris® recommended (the poll-based network
+	  event notification is just for prototyping, prop. broken)
+	* GCC as your compiler (A C99 capable C-Compiler and runtime system
+	  is the minimum, but some GCC extensions are unfortunately very handy)
 	* gmake (GNU-make)
 		[note: it also works with a prehistoric solaris make without any
 		       fancy extensions, I'm pretty sure it should work with a
@@ -74,7 +80,7 @@
 	* Programming skills
 	* Using-the-system skills
 	* Brain 1.0
-	
+
 	What to do:
 	 First of all unpack the .tar.bz2 to some place. The first thing you can
 	try is to simply make it, you know ... or in long terms:
@@ -104,7 +110,7 @@
 	   Makefile ;).
 	    Oh, just before i forget about it, the only macro (the "-D"-things)
 	   needed by my source is "-DHAVE_CONFIG_H", all the other are to lower
-	   warnings and other magic.
+	   warnings and to ease the system headers.
 	b)  If the Makefile did not do the trick for you, you now really should
 	   have some programming experience, the ability to understand
 	   compiler-error-msg. (hahaha) and the "config.h" opened in your editor.
@@ -115,17 +121,13 @@
 	   "config.h". Don't forget to diff and send it to me. Oh, and i like my
 	   diffs in "-u".
 
-	 If you had success compiling it, you are nearly ready to start. What you
-	need next is a file called "guid.txt" in the same directory as the
-	executable.
-	 To create it, there is a shell-script called "gen_guid.sh" (side note:
-	only runs with bash, anyone?). But, if you are suspicious about my shell-
-	scripting skills (a thing you should), you could just create "guid.txt"
-	with your editor.
-	 Generate 16 byte-sized hex-values, separated by colon and drop it in the
-	"guid.txt". Afterwards it should look like:
-
-	01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef
+	 If you had success compiling it, you are nearly ready to start. You can
+	go to the config file "g2cd.conf" to look at/change the configuration.
+	 It is recommended you configure a guid and some profile things for your
+	hub to make it unique. Refer to the config file how to do so. If you do
+	not want to generate a guid by hand, you can simply start g2cd the first
+	time without a guid, it will generate one and print it. Then you can c&p
+	this guid into your config
 
 	Fine, ok, whats next? Oh, sure, start it. (You know -> "./g2cd")
 
@@ -136,8 +138,9 @@
 	Warning! This software listens on port 5000 on all interfaces in your
 	machine. Your development machine isn't directly connected to the
 	Internet?). I personally use Shareaza with Wine. If you connect, you
-	should see some debug-text. To stop it, use CTRL-C, you should see it
-	going down.
+	should see some debug-text (Edit: no, you will not see anything, this
+	gets noisy with lots of connections...).
+	To stop it, use CTRL-C, you should see it going down.
 
 	OK, not impressed?
 	 Look at the Version number... now it's your turn. Again, fire up your
@@ -145,24 +148,209 @@
 	needed functionality, send the "diff -u" to me. That's how it looks
 	like at time.
 
+	N.B.:
+	 If you think this is all to complicated and hard, please note that this
+	software is only narrowly tested. So there are enough problems down the
+	road to make you life miserable.
+	 And to make matters worse, i was to clever for my own good, and build
+	in a lot of performance hacks.
+	 So it is even very likely the software will simply crash on you or
+	create broken output (if it survives that...).
+	 Plus you can run into compiler nasty problems, the Intel Compiler
+	Version i tried simply crashed on the code, the Sun Compiler generated
+	brocken code in several places (yes, after disabling a lot of cleverness
+	even with -O0), clang/llvm being the only shining example by working
+	sometimes, often it also generates some broken code around inline asm,
+	if not crashing.
+	 I can not vouch for all versions of GCC, but at least with all versions
+	i tested it didn't let me down. The last test with 2.x is looong ago.
+	3.2.2 and 3.4.3 see a little test ride on Solaris/SPARC from time to time,
+	but i can only do a simple "does it start" test. 4.2.x and 4.3.4 get
+	tested on my system and my collection of cross compiler (x86_64, ia64,
+	powerpc, powerpc64, arm, alpha).
+	 Apropros other archs: I can only test x86 (and give SPARC a smoke test),
+	and that only on older systems. <irony>So i deliberatly deposited some
+	broken code for other archs and those guys with their new x86 (SSE4.2)
+	to trip over.</irony>
+	 You can disable most of this brokenness and activate some workarounds
+	in config.h, but not all of it...
+
+2.1 Misc Install
+----------------
+
+	 G2CD does not bootstrap itself into the G2 network ATM. Besides that
+	the code needs to be written, this allows testing on a single computer
+	without disturbing the network "out there".
+	 You can bootstrap "by hand" with a http client and the URL of a
+	Gnutella Web Cache. This way you will attract leaves and sooner or
+	later other hubs.
+	 An example how to do that with wget:
+		wget -v -S -U G2CD -O - "<some_gwc_url>?update=1&ip=<your_ip>:<your_port>&x_leaves=0&net=gnutella2&client=G2CD&version=0.0.0.11&ping=1"
+	 Because this is "good enough" for the moment there is not much
+	presure to write bootstrap code and giving up control over the
+	bootstrap.
+
+	 For real test runs (and/or real usage), there're maybe things which
+	have to be configured on the system you want to use G2CD on.
+
+	 There are two important regions where maybe manual intervention by
+	YOU is needed and which needs to be checked by YOU.
+
+2.1.1 Resources
+---------------
+
+	 The first issue are system rescources:
+	a)  You have to make sure your internet connection has enough
+	   bandwidth to sustain the traffic generated by a G2 hub.
+	b)  Also make sure you are not firewalled, P2P-hampered by your
+	   ISP and are not running behind a NAT.
+
+		G2CD WILL NOT WORK BEHIND A NAT.
+
+	c)  Your CPU should be beefy enough but ESPECIALLY you should
+	   have enough RAM, the state of all the leave connections wants
+	   to be handeld.
+	    Swap and you are dead...
+	d)  Another critical point are file handles. We need a file
+	   handle for every TCP connection + several other. Normally
+	   there is a hard limit on open file handles for normal users
+	   enforced by the kernel to prevent system DoS, This limit is
+	   system dependend but mostly 1024 on Linux®. You have to raise
+	   it if you want to use more than say 990 connections. Please
+	   refer to your system skills how to do so. (hint: /etc/limits).
+
+	 But don't get fooled by this file handle number! There may be
+	mechanisms which still limit the number of open files. Old Linux®
+	Kernel didn't allow more than these 1024, even if you raised the
+	hard limit, it was simply a NOP.
+	 On one test system, which was a vserver, i could not open more
+	than 290 connections, prop. because the underlying host OS
+	prevented more (DoS prevention?). This sucked big time, because
+	it kicked me out of my ssh session, the system was basically
+	behaving like in a swap storm at that point, file handles got
+	serviced very flaky (this vserver connection limiting seems to
+	be ... not very intelligent).
+	 Luckily this dropped a lot of leave connections, so i managed
+	to relogin and stop G2CD and restarted with a lower connection
+	count.
+	 And still you can get bitten by other foo:
+	 15 minutes later the same system crashed hard (drop dead from
+	one moment to the next. You could not ping it or something else,
+	hard reset from the management console needed...). After a little
+	fore and back and more hard lockups it seems G2CD was hammering
+	a locking primitive to hard (it was a 3 way SMP, actually the
+	hammering was lite, there was no great congestion, but this one
+	primitive seems to be seldomly used...). I could prevent that
+	problem by changing the locking of G2CD in the network region
+	a little bit (basically moving the lock from user space to
+	kernel space).
+	 Outdated, patched to death systems, yummie!
+
+	 Please refer to the config file for some more comments about
+	resources.
+
+2.1.2 TCP/IP woes
+------------------
+
+	 The second issue is the internet "at large":
+	 This problem surfaces esp. with Linux®, but other systems are not
+	immune to these effects. You maybe have to change some basic system
+	settings concerning the TCP/IP stack to make it "fly".
+
+	 G2CD, by it's very purpose, accumulates a lot of TCP connections.
+	Since packet loss is expected and transparently rectified by TCP,
+	TCP/IP stacks try, in accordance to the standard, to resend _all_
+	lost (un-ACK-ed) TCP segments.
+
+	 But there is a problem: DUN.
+	 Our connections are mostly to hosts with an unstable link on dail
+	up networks. Unstable does not only mean the classic "Who yanked the
+	cable?"/"link got hung up", but the more prevailing plagues of the
+	modern internet:
+	 - bad router/equipment (cheapo CPE, WiFi and other stuff)
+	 - network mumbo jumbo (braindead ISPs, l337 transparent proxys
+	   and enhancers)
+	 - blackholes
+	 - (p2p overwhelmed) NAT (no comment...)
+	 - flodded links (asymmetric, no QOS, badly configured, zombie)
+	 - broken/misconfigured (personal) firewalls (example WinXP SP2 FW:
+	   unclean close (WinAPI fudge, lost RST (see flodded links...)),
+	   still it goes silent, and thats the default on LOTS of systems)
+	 It's unbelivable how many broken broken systems are out there on
+	the internet.
+
+	 These plagues, besides of other pain they inflict, tend to
+	_silently_ kill TCP connections. You start to accumulate dead
+	connections, and do not recognise it because the other end does
+	not even tell you you have a dead connection on TCP retries
+	("ICMP, that's a super bad hacker protocol!" *facepalm*).
+
+	 But i get's worse: TCP shutdown also involves a handshake like on
+	connect, which means it needs a packet round trip. If one of those
+	plagues loses track of the TCP connection to early ("Hey, there was
+	a RST, drop all recources associated with this connection"), which
+	is _very_ likely, TCP shutdown is stuck.
+	 Linux® does _not_ handle this very gracefully (google for "linux
+	FIN_WAIT2 stuck", and no, it's not the half closed problem, there
+	is no half close in G2CD, it's the FIN/ACK lost problem, you are
+	more likely to hit it the more connections to DUN hosts you have,
+	can also hit mailservers under zombie fire etc.).
+
+	 Due to exponential backoff on retries and absolutly no answer from
+	the other side, connections in this state tend to linger around for
+	a _very_ long time, eating kernel resources (fd/socket limit, tcp
+	cache, timers etc.), G2CD resources, and even bandwidth with all the
+	retries and traffic we still try to send to these connection because
+	we do not get an RST/ACK/ICMP port closed. (see netstat for connections
+	with a large send-q or in state FIN_WAIT2)
+	 Note that the problem does not lie in the "tcp_fin_timeout".
+
+	 In essence you want to get a "connection reset by peer". There
+	are days where you wish you can still laugh about this joke: "I
+	want to find this peer, and then i will reset his connection".
+	 If "peer" only would reset our connections...
+
+	 The 15 retries configured by default on Linux® (and/or other
+	systems) may be standard conformant and were needed/good in the
+	70's, but means these connections will linger around for approx.
+	11 minutes. Maybe longer, up to 546 minutes (9 days...), depending
+	on the backoff strategy.
+
+	 Unfortunatly G2CD can do nothing about that, there is no per
+	connection setting we can frob. On Linux® YOU have to configure the
+	system wide retry count in "/proc/sys/net/ipv4/tcp_retries2".
+	 A number of 6 or 7 retries is recommended and successfully tested
+	on the authors machines with no other adverse effect. You can make
+	this setting permanent by editing /etc/sysctl.conf.
+	 But beware: This is a system wide setting affecting all network
+	programms affecting all TCP retries. There are reports this causes
+	problems with backup solutions/rsync which seem to go unresponsive
+	for a long time due to disc IO.
+	 There were patches to split the normal retries from the FIN retries,
+	but they "didn't made it". Also they just helped with "stuck in
+	FIN_WAIT2", not with dead connections in general.
+
+	 As you can see: The only thing that helps you in both regions
+	is testing. "Hammering" a system like G2CD does (lots of rescource
+	usage, "massive" (lol) multithreading) turns up a lot of "hidden
+	limits" & problems, unfortunatly...
+
 3. Bugs / TODO
---------------
+==============
 	Main Bug: Program not finished
 	Second Bug: Hard to build/install
 	Other Bugs: to be filled in
 
 	TODO:
 	- complete packet-handling
-	- timeout-handling
+	- more timeout-handling
 	- autoconf?
+	- bootstrap
 	- lots of other things
 	- test the BSD-kqueue wrapper (some BSD'ler around?)
 	- test Solaris-/dev/poll & event port wrapper
 	- portability issues of the build (make, compiler, shell)
 	- lots of other stuff
-	- lot's of broken systems on the i-net (FW, blackholes),
-	  so sockets get stuck in the kernel, tuning
-	  (echo 6 > /proc/sys/net/ipv4/tcp_retries2)? or options?
 
 	What's needed?
 	 Programming wizards, the tooth fairy and santa claus would be nice ;)
@@ -171,14 +359,16 @@
 	autoconf expert).
 	 People with different systems, different linux-distri's/unices on
 	different arch'es, to test the build and function.
-	 Some portability-gurus, checking the *code* for portability-problems.
-	 Some security-gurus checking for security concerns.
+	--Some portability-gurus, checking the *code* for portability-problems.--
+	--Some security-gurus checking for security concerns.--
+	 Scratch those last two points, some of it is deliberate, i don't need
+	evangelization, i need _solutions_ to _real_ problems.
 
 4. Coding-Style
----------------
+===============
 	 OK, maybe I'm not a talented programmer and it's presumptuous to come
 	around with such a thing, I surely have to be happy if someone decides to
-	write just a simple line of code for this, but... at sometime you come to
+	write just a simple line of code for this, but... at some time you come to
 	a point where you don't want to mess with ugly code anymore, at least for
 	your own project...
 	So, lets get started:
@@ -322,7 +512,8 @@
 	  so should you (see the fall-back-thing below). But to be honest, I surely
 	  make a lot of mistakes doing so, sometimes even deliberately ^^.
 	  Until now I could think of at least three places. Thats why I also cry
-	  out loud for a portability-guru...
+	  out loud for a portability-guru which can give some real world advise
+	  and not "don't do that"...
 	* Don't make any presumptions about data-types, especially about the basic
 	  types (most beloved: int). Become familiar with the type system according
 	  to the C standard. Use the appropriate data-type for the task, there are
@@ -349,7 +540,7 @@
 	  simply write it in the first round.
 
 Z. Legal
---------
+========
 	Trademark Legend:
 
 	UNIX is a registered trademark of The Open Group in the USA and other countries.
