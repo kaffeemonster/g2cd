@@ -5,10 +5,10 @@ COMMENTC -----------------------------------------------
 COMMENTC Example config file for g2cd
 COMMENTC -----------------------------------------------
 COMMENTC In here you will find config options for g2cd, with a little
-COMMENTC explanetion what they are good for and what is their default.
+COMMENTC explanation what they are good for and what is their default.
 COMMENTC The default is normaly written behind the option, but sometimes
 COMMENTC a more complex mechanism defines the default. Please refer
-COMMENTC to the explanetion of the option in such cases.
+COMMENTC to the explanation of the option in such cases.
 COMMENTC
 
 COMMENTC -----------------------------------------------
@@ -57,7 +57,7 @@ COMMENT our_guid = <random>
 COMMENTC
 COMMENTC How many connections do we want to accept?
 COMMENTC -----------------------------------------------
-COMMENTC NOTE:
+COMMENTC WARNING:
 COMMENTC Please make sure your enviroment (ulimits, RAM, connection
 COMMENTC bandwith, kernel, CPU) can sustain such a number of
 COMMENTC connections.
@@ -91,19 +91,20 @@ COMMENT nick_name = <hostname>
 
 COMMENTC
 COMMENTC Do we want to answer profile requests?
-COMMENTC Not to run into comp. trouble, we send something.
+COMMENTC To not run into compatibility trouble, we send something.
 COMMENTC
 COMMENT profile_want_2_send = DEFAULT_SEND_PROFILE
 
 COMMENTC
 COMMENTC The latitude/longitude put into the profile.
 COMMENTC This gives your position on the world so it
-COMMENTC can be decide if you are near to someone and
+COMMENTC can be decided if you are near to someone and
 COMMENTC the crawler can draw nice maps.
 COMMENTC The coordinates are in WGS84 (aka GPS) in shorthand
 COMMENTC decimal notation (aka Decimal degrees with negative
 COMMENTC numbers for South and West)
-COMMENTC See maps.google or Wikipedia for coordinates.
+COMMENTC See maps.google or Wikipedia for coordinates of
+COMMENTC your position.
 COMMENTC
 COMMENT profile_latitude = DEFAULT_PROFILE_LAT
 COMMENT profile_longitude = DEFAULT_PROFILE_LONG
@@ -198,6 +199,124 @@ COMMENTC
 COMMENT log_time_date_format = DEFAULT_LOG_TIME_FORMAT
 
 COMMENTC -----------------------------------------------
+COMMENTC Connection compression
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC The G2 protocol demands the availability of the deflate
+COMMENTC compression algorithm from zlib.
+COMMENTC It can be used on several items:
+COMMENTC  - compressing QHT patches when send on the wire
+COMMENTC  - UDP traffic
+COMMENTC  - TCP connections
+COMMENTC The first use is a big win. Also the first and second usage
+COMMENTC cannot be influenced by us when receiving.
+COMMENTC
+COMMENTC But the third use can and should...
+COMMENTC
+COMMENTC Connection compresison yields around 20% to 40% compression.
+COMMENTC This is nice (for low bandwidth), but comes at a price:
+COMMENTC  - CPU usage
+COMMENTC  - RAM usage
+COMMENTC While most people think of CPU usage when they hear compression,
+COMMENTC actually the RAM usage is our concern.
+COMMENTC
+COMMENTC On the other occassions (UDP, QHT), we do not need to carry any
+COMMENTC compression state across invocations, so we can use one static
+COMMENTC deflater & inflater. This means the RAM-usage is fixed (actually
+COMMENTC by the number of threads, every thread has one, but i do not
+COMMENTC think you own an SGI Altix with 1024 CPUs...). No problem.
+COMMENTC
+COMMENTC To the contrary on connection compresison, we need to keep the
+COMMENTC compression state between received/send packets for every single
+COMMENTC compressed connection.
+COMMENTC This scales with the number of connections!!
+COMMENTC
+COMMENTC For most applications this state is small, because they only have
+COMMENTC one or two compression streams. For us, as a hub, with lots of
+COMMENTC connections, that state size is lethal. On Intel 32Bit:
+COMMENTC  - inbound compression needs around 77kib
+COMMENTC  - outbound compression needs around 266kib
+COMMENTC So for 300 connections you need:
+COMMENTC  300 * (77 + 266) = 100.4 Mib
+COMMENTC plus overhead, plus CPU...
+COMMENTC
+COMMENTC That outbound compression is that expensive hurts the most,
+COMMENTC because with that much connections our outbound bandwidth is
+COMMENTC very stressed. Compression would be good. Also the default
+COMMENTC setting for inbound compression on the clients (which is our
+COMMENTC outbound bandwidth) is mostly off, instead clients have
+COMMENTC outbound compression enabled (our inbound) to save bandwidth
+COMMENTC on the client side. But if a client can not afford 3 _outgoing_
+COMMENTC hub connections (which uses as much outgoing bandwidth as the
+COMMENTC _client_ is active, doing searches etc., compared to the client
+COMMENTC inbond, which gets packets shoved down the pipe involuntarily
+COMMENTC on search hits by us), he maybe should not connect to the
+COMMENTC network at all. It is all kind of the wrong way round (hub
+COMMENTC outbound needed but to expensive, hub inbound unnecessary
+COMMENTC so also to expensive), but the best we have...
+COMMENTC Ban asymmetric connections...
+COMMENTC
+COMMENTC The only lucky thing is: Compression on TCP connections is
+COMMENTC handshaked, both sides have to agree on the outbound and
+COMMENTC inbound compression method separately.
+COMMENTC This way we can at least force no compression to save our
+COMMENTC recources (ok, besides bandwidth).
+COMMENTC
+COMMENTC This handshake is known as encoding handshake.
+COMMENTC The next two settings let you configure what encoding should
+COMMENTC be advertised by default on any tcp connection.
+COMMENTC Possible values are:
+COMMENTC  ENC_NONE    - no encoding
+COMMENTC  ENC_DEFLATE - zlib compression
+COMMENTC
+COMMENTC -----------------------------------------------
+COMMENTC Note:
+COMMENTC This is the value that gets _advertised_, one can not force
+COMMENTC an encoding besided ENC_NONE. The handshake will not fail
+COMMENTC (most the time), instead no encoding will be used. So do
+COMMENTC not calculate with a fixed bandwidth saving.
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENTC -----------------------------------------------
+COMMENTC WARNING:
+COMMENTC The default is to turn compression off, for "good reasons".
+COMMENTC Outbound compression is rare, and you should have enough
+COMMENTC bandwidth to sustain hub use anyway, because hubs are in
+COMMENTC general multiplying traffic. Before you enable compression,
+COMMENTC make _SURE_ you have enough RAM (esp. with respect to
+COMMENTC other programms) and CPU to handle compression for the
+COMMENTC number of configured connections.
+COMMENTC If you will go into swap, you are toast.
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENT encoding_default_in  = DEFAULT_ENC_IN
+COMMENT encoding_default_out = DEFAULT_ENC_OUT
+
+COMMENTC
+COMMENTC While all the above sounds quite gloomy, there is a bright side:
+COMMENTC Connections to other hubs.
+COMMENTC You (should) only have a hand full of hub connections,
+COMMENTC and a good portion of your traffic goes to other hubs.
+COMMENTC Hubs are normaly configured to handshake compression on
+COMMENTC connections to other hubs, in- and outbound.
+COMMENTC "And there was great rejoice"
+COMMENTC Spending the RAM/CPU on hub connections is sustainable and
+COMMENTC a clear win, so compression is advertised by default.
+COMMENTC
+COMMENTC If you are thin on RAM/CPU but have spare bandwidth, you
+COMMENTC can disable compression to other hubs.
+COMMENTC
+COMMENTC -----------------------------------------------
+COMMENTC Note:
+COMMENTC The other end connected to you may _not_ have spare
+COMMENTC bandwidth, if you disable this, you are hurting the
+COMMENTC hubs connected to you.
+COMMENTC -----------------------------------------------
+COMMENTC
+COMMENT encoding_hub_in  = DEFAULT_HUB_ENC_IN
+COMMENT encoding_hub_out = DEFAULT_HUB_ENC_OUT
+
+COMMENTC -----------------------------------------------
 COMMENTC More misc stuff
 COMMENTC -----------------------------------------------
 COMMENTC
@@ -212,12 +331,14 @@ COMMENTC
 COMMENTC Should we compress our internal QHTs?
 COMMENTC This will use more CPU, but saves a lot of RAM so you
 COMMENTC should say yes here.
+COMMENTC Do not confuse this compression with the zlib compression
+COMMENTC from above.
 COMMENTC
 COMMENT qht_compress_internal = DEFAULT_QHT_COMPRESS_INTERNAL
 
 COMMENTC
 COMMENTC What is the maximal accepted packet size?
-COMMENTC You you never raise this value, dragons be there...
+COMMENTC You should _NEVER_ raise this value, dragons be there...
 COMMENTC
 COMMENT max_g2_packet_length = DEFAULT_PCK_LEN_MAX
 

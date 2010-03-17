@@ -506,6 +506,7 @@ $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/inet_ntop.o: $(MPL)/combo_addr.h $(MPL)/itoa.h
 $(MPL)/inet_pton.o: $(MPL)/combo_addr.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
+$(MPL)/config_parser.o: $(MPL)/config_parser.h $(MPL)/log_facility.h G2Connection.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)
 $(MPL)/my_bitops.h: $(MPL)/other.h

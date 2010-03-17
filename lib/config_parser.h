@@ -78,4 +78,5 @@ LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_int(struct list_head *, void *
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_string(struct list_head *, void *));
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_bool(struct list_head *, void *));
 LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_guid(struct list_head *, void *));
+LIB_CONFIG_PARSER_EXTRN(bool config_parser_handle_encoding(struct list_head *, void *));
 #endif /* LIB_CONFIG_PARSER_H */

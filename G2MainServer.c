@@ -571,6 +571,10 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("qht_compress_internal",&server.settings.qht.compress_internal,    config_parser_handle_bool),
 	CONF_ITEM("be_daemon",            &be_daemon,                                config_parser_handle_bool),
 	CONF_ITEM("our_guid",             server.settings.our_guid,                  config_parser_handle_guid),
+	CONF_ITEM("encoding_default_in",  &server.settings.default_in_encoding,      config_parser_handle_encoding),
+	CONF_ITEM("encoding_default_out", &server.settings.default_out_encoding,     config_parser_handle_encoding),
+	CONF_ITEM("encoding_hub_in",      &server.settings.hub_in_encoding,          config_parser_handle_encoding),
+	CONF_ITEM("encoding_hub_out",     &server.settings.hub_out_encoding,         config_parser_handle_encoding),
 };
 
 static noinline void handle_config(void)

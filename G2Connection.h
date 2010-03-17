@@ -58,12 +58,17 @@ enum g2_connection_states
 	G2CONNECTED
 } GCC_ATTR_PACKED;
 
+#define G2_CONNECTION_ENCODINGS \
+	ENUM_CMD(ENC_NONE   ), \
+	ENUM_CMD(ENC_DEFLATE), \
+	ENUM_CMD(ENC_LZO    )
+
+#define ENUM_CMD(x) x
 enum g2_connection_encodings
 {
-	ENC_NONE,
-	ENC_DEFLATE,
-	ENC_LZO,
+	G2_CONNECTION_ENCODINGS
 } GCC_ATTR_PACKED;
+#undef ENUM_CMD
 
 # include "G2Packet.h"
 # include "G2QHT.h"

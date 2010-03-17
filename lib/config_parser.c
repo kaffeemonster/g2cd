@@ -30,6 +30,7 @@
 
 #include "config_parser.h"
 #include "log_facility.h"
+#include "../G2Connection.h"
 
 #define STR_BUFF_SIZE 80
 #define TF(x) ((x) ? 't' : 'f')
@@ -217,6 +218,45 @@ bool config_parser_handle_guid(struct list_head *head, void *data)
 	} else {
 		for(i = 0; i < 16; i++)
 			target[i] = (unsigned char)tmp_id[i];
+	}
+	if(!list_is_last(&t->list, head))
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+	return true;
+}
+
+bool config_parser_handle_encoding(struct list_head *head, void *data)
+{
+#define ENUM_CMD(x) {str_it(x)}
+	static const char enc_vals[][11] =
+	{
+		G2_CONNECTION_ENCODINGS
+	};
+#undef ENUM_CMD
+	struct ptoken *t, *first;
+	enum g2_connection_encodings *target = data;
+	bool found;
+	unsigned i;
+
+	first = list_entry(head->next, struct ptoken, list);
+	t = config_token_after_equal(head);
+	if(!t) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Option \"%s\" wants a value assigned, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+	for(i = 0, found = false; i < anum(enc_vals); i++)
+	{
+		if(0 == strcmp(enc_vals[i], t->d.t)) {
+			*target = i;
+			found = true;
+			break;
+		}
+	}
+	if(!found) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: I don't understand \"%s\"  for an encoding value, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+		return true;
 	}
 	if(!list_is_last(&t->list, head))
 		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
