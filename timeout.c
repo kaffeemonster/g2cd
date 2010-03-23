@@ -187,21 +187,26 @@ static bool timeout_rb_insert(struct timeout *t)
  */
 bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 {
+	struct timespec now;
 	bool ret_val;
 
-	if(!RB_EMPTY_NODE(&new_timeout->rb))
-		return false;
-
-	timespec_fill_local(&new_timeout->t);
-	timespec_add(&new_timeout->t, timeout);
+	timespec_fill_local(&now);
+	timespec_add(&now, timeout);
 
 	barrier();
 	pthread_mutex_lock(&wakeup.mutex);
+	pthread_mutex_lock(&new_timeout->lock);
 
-	ret_val = timeout_rb_insert(new_timeout);
-	if(ret_val && !timespec_after(&new_timeout->t, &wakeup.time))
-		pthread_cond_broadcast(&wakeup.cond);
+	if(RB_EMPTY_NODE(&new_timeout->rb))
+	{
+		new_timeout->t = now;
+		ret_val = timeout_rb_insert(new_timeout);
+		if(ret_val && !timespec_after(&new_timeout->t, &wakeup.time))
+			pthread_cond_broadcast(&wakeup.cond);
+	} else
+		ret_val = false;
 
+	pthread_mutex_unlock(&new_timeout->lock);
 	pthread_mutex_unlock(&wakeup.mutex);
 
 	return ret_val;
@@ -249,6 +254,7 @@ bool timeout_cancel(struct timeout *who_to_cancel)
 retry:
 	pthread_mutex_lock(&wakeup.mutex);
 	pthread_mutex_lock(&who_to_cancel->lock);
+	rmb();
 	if(who_to_cancel->rearm_in_progress)
 	{
 		pthread_mutex_unlock(&who_to_cancel->lock);
@@ -345,6 +351,7 @@ static int kick_timeouts(void)
 			 * so we get a chance to sneak in.
 			 */
 			t->rearm_in_progress = true;
+			wmb();
 		}
 
 		/*
@@ -364,6 +371,7 @@ static int kick_timeouts(void)
 			timeout_rb_insert(t);
 			barrier();
 			t->rearm_in_progress = false;
+			wmb();
 		}
 	}
 	/* save last time for calculating next sleep */

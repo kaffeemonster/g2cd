@@ -200,6 +200,13 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			break;
 		}
 # elif defined HAVE_IP_RECVDSTADDR
+// TODO: May not work with Solaris?
+		/*
+		 * (old? 2.6 (kernel? System?)) Solaris does not seem to use
+		 * the control msg to return the to-address, but msg_accrights?
+		 */
+// TODO: does RECVDSTADDR return a port?
+		/* Or only on old Solaris? */
 		if(IPPROTO_IP     == cmsg->cmsg_level &&
 		   IP_RECVDSTADDR == cmsg->cmsg_type)
 		{

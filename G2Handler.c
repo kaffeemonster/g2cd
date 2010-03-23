@@ -412,7 +412,7 @@ retry_unpack:
 					if(build_packet->is_freeable)
 						logg_devel_old("freeing durable packet\n");
 					else if(build_packet->data_trunk_is_freeable)
-						logg_devel("datatrunk freed\n");
+						logg_devel_old("datatrunk freed\n");
 
 					if(w_entry->build_packet &&
 					   w_entry->build_packet != build_packet)
