@@ -117,6 +117,7 @@ static bool handle_QA_S(struct ptype_action_args *);
 static bool handle_QH2(struct ptype_action_args *);
 static bool handle_QH2_GU(struct ptype_action_args *);
 static bool handle_QH2_NA(struct ptype_action_args *);
+static bool handle_QH1(struct ptype_action_args *);
 static bool handle_QHT(struct ptype_action_args *);
 static bool handle_QKR(struct ptype_action_args *);
 static bool handle_QKR_RNA(struct ptype_action_args *parg);
@@ -160,8 +161,8 @@ const g2_ptype_action_func g2_packet_dict[PT_MAXIMUM] GCC_ATTR_VIS("hidden") =
 	[PT_QKA   ] = handle_QKA,
 	[PT_UPROC ] = handle_UPROC,
 	[PT_UPROD ] = handle_UPROD,
-	[PT_dna   ] = empty_action_p, /* don't know */
-	[PT_QH1   ] = empty_action_p, /* ?? */
+	[PT_dna   ] = empty_action_p, /* marker the packet came from a GnucDNA client */
+	[PT_QH1   ] = handle_QH1,
 	[PT_CLOSE ] = empty_action_p, /* do we want to also close or what? */
 };
 
@@ -182,8 +183,8 @@ const g2_ptype_action_func g2_packet_dict_udp[PT_MAXIMUM] GCC_ATTR_VIS("hidden")
 	[PT_QKR   ] = handle_QKR,
 	[PT_QKA   ] = handle_QKA,
 	[PT_PUSH  ] = empty_action_p, /* we do not push */
-	[PT_QH1   ] = empty_action_p, /* ?? */
-	[PT_dna   ] = empty_action_p, /* don't know */
+	[PT_QH1   ] = handle_QH1,
+	[PT_dna   ] = empty_action_p, /* see tcp */
 };
 
 /* PI-childs */
@@ -193,7 +194,7 @@ static const g2_ptype_action_func PI_packet_dict[PT_MAXIMUM] =
 	[PT_UDP   ] = handle_PI_UDP,
 	[PT_RELAY ] = handle_PI_RELAY,
 	[PT_CR    ] = empty_action_p, /* we connect to no one */
-	[PT_TFW   ] = empty_action_p, /* firewalled?? */
+	[PT_TFW   ] = empty_action_p, /* test firewall, ??? */
 	[PT_IDENT ] = empty_action_p, /* no, i don't give my ident */
 };
 
@@ -208,13 +209,13 @@ static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 	[PT_RTR   ] = handle_LNI_RTR,
 	[PT_NA    ] = handle_LNI_NA,
 	[PT_QK    ] = handle_LNI_QK,
-	[PT_UP    ] = empty_action_p,
+	[PT_UP    ] = empty_action_p, /* uptime */
 	[PT_HA    ] = handle_LNI_HA,
 	[PT_V     ] = handle_LNI_V,
 	[PT_IDENT ] = empty_action_p,
-	[PT_NBW   ] = empty_action_p,
-	[PT_CM    ] = empty_action_p,
-	[PT_GPS   ] = empty_action_p,
+	[PT_NBW   ] = empty_action_p, /* bandwidth */
+	[PT_CM    ] = empty_action_p, /* cpu & mem */
+	[PT_GPS   ] = empty_action_p, /* coords */
 	[PT_NFW   ] = empty_action_p, /* ?? */
 	[PT_TCPNFW] = empty_action_p, /* ?? */
 	[PT_UDPNFW] = empty_action_p, /* ?? */
@@ -241,7 +242,7 @@ static const g2_ptype_action_func KHL_packet_dict[PT_MAXIMUM] =
 	[PT_TS    ] = handle_KHL_TS,
 	[PT_NH    ] = handle_KHL_NH,
 	[PT_CH    ] = handle_KHL_CH,
-	[PT_YOURIP] = empty_action_p,
+	[PT_YOURIP] = empty_action_p, /* yeah, my IP, thanks for the tip */
 };
 
 /* KHL/NH-childs */
@@ -273,12 +274,12 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
 	[PT_MD  ] = handle_Q2_MD,
 	[PT_SZR ] = empty_action_p,
 	[PT_I   ] = empty_action_p,
-	[PT_dna ] = empty_action_p, /* don't know */
+	[PT_dna ] = empty_action_p, /* marker it came from a GnucDNA client */
 	[PT_NAT ] = empty_action_p, /* ??? needs to be handled */
 	[PT_HKEY] = handle_Q2_HKEY,
 	[PT_HURN] = handle_Q2_HURN,
-	[PT_G1  ] = empty_action_p, /* ?? */
-	[PT_NOG1] = empty_action_p, /* ?? */
+	[PT_G1  ] = empty_action_p, /* after Q1 is deprecated, this is it? */
+	[PT_NOG1] = empty_action_p, /* ??? */
 	[PT_SV  ] = empty_action_p, /* needs to be processes? because there is no GUID... */
 };
 
@@ -292,7 +293,7 @@ static const g2_ptype_action_func Q2_packet_dict[PT_MAXIMUM] =
  * maybe both at the same time.
  *
  * The NA is useless, if we do not intend to know every client there is
- * (but we have to to provide routing...)
+ * (but we have to, to provide routing...)
  * we could look at the other packets to guess if the node is firewalled,
  * the NH are only interresting as a route back to the client
  * (taking them as khl is to dangerous...)
@@ -342,7 +343,7 @@ static const g2_ptype_action_func QA_packet_dict[PT_MAXIMUM] =
 	[PT_D ] = handle_QA_D,
 	[PT_S ] = handle_QA_S,
 	[PT_RA] = empty_action_p,
-	[PT_FR] = unimpl_action_p,
+	[PT_FR] = unimpl_action_p, /* check if there is one to: Remove? Substitude? */
 };
 
 
@@ -354,7 +355,7 @@ static const g2_ptype_action_func QKR_packet_dict[PT_MAXIMUM] =
 	[PT_QNA] = handle_QKR_QNA,
 	[PT_SNA] = handle_QKR_SNA,
 	[PT_REF] = handle_QKR_REF,
-	[PT_dna] = empty_action_p, /* don't know */
+	[PT_dna] = empty_action_p, /* marker it comes from a GnucDNA client  */
 };
 
 /* QKA-childs */
@@ -2728,6 +2729,8 @@ static bool handle_QA(struct ptype_action_args *parg)
 	if(parg->connec)
 		parg->connec->flags.last_data_active = true;
 
+// TODO: if this came from UDP (&&/|| TCP), we have to add an FR (from?)
+
 	/* either target is connected or nothing */
 	return (!!g2_conreg_for_addr(&dest, forward_lit_callback_ignore, parg)) | ret_val;
 }
@@ -3008,6 +3011,63 @@ static bool handle_QH2_NA(struct ptype_action_args *parg)
 
 	rdata->na_valid =
 		read_na_from_packet(parg->source, &rdata->na, "/QH2/NA");
+	return false;
+}
+
+static bool handle_QH1(struct ptype_action_args *parg)
+{
+	/* a G1 query hit wrapped in a G2 packet */
+	union combo_addr dest;
+	g2_packet_t *source = parg->source;
+	uint8_t *hop_count, *ttl, *g1_type, *guid;
+	size_t rem;
+	uint32_t g1_len;
+
+	rem = buffer_remaining(source->data_trunk);
+	/* a G1 packet is at least 23 bytes long */
+	if(rem < 23)
+		return false;
+
+	guid = (uint8_t *)buffer_start(source->data_trunk);
+	g1_type = guid + GUID_SIZE;
+	ttl = g1_type + 1;
+	hop_count = ttl + 1;
+	/* is there a G1 Query Hit inside? */
+	if(*g1_type != 0x81)
+		return false;
+	if(0 == *ttl || 1 == *ttl)
+		return false;
+	/* packets with ttl + hop > 15 should be dropped */
+	if((*ttl + *hop_count) > 15)
+		return false;
+	*ttl = *ttl - 1;
+	*hop_count = *hop_count + 1;
+	/* most g1 fields (besides IPs?) are little endian */
+	g1_len = get_unaligned_le32(hop_count + 1);
+	/* g1 packets are only allow up to 4kb */
+	if(g1_len > 4096)
+		return false;
+	/* make sure there is enough data in this packet */
+	if(rem < g1_len + 23)
+		return false;
+
+	/* lets see if we know a query by this guid */
+	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
+		return false;
+
+	/*
+	 * We could try to tear apart the rest of the G1 Packet
+	 * to check the address and so on.
+	 * But see the comment on QH2, exp. this is unknown
+	 * territory, G1.
+	 */
+	if(parg->connec)
+		parg->connec->flags.last_data_active = true;
+
+	/* forward it */
+	g2_conreg_for_addr(&dest, forward_lit_callback_found, parg);
+	/* but not over UDP */
+
 	return false;
 }
 
