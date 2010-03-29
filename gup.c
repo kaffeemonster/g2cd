@@ -460,8 +460,9 @@ int handler_z_flush_timeout(void *arg)
 	g2_connection_t *con = arg;
 
 	p_entry.data.ptr = con;
-	shortlock_t_lock(&con->pts_lock);
 	con->u.handler.z_flush = true;
+	wmb();
+	shortlock_t_lock(&con->pts_lock);
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
 	shortlock_t_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);

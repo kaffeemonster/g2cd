@@ -318,7 +318,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 					"shr	$2, %0\n\t"
 					"jz	1f\n\t"
 					"mov	%0, %3\n\t"
-					"repe scasl\n\t" /* (0x0051D59A) execution */
+					"repe scasl\n\t" /* (0x042329E3) execution */
 					"sub	$4, %1\n\t"
 					"inc	%0\n\t"
 					"sub	%0, %3\n\t"

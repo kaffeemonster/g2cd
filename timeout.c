@@ -197,7 +197,7 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 	pthread_mutex_lock(&wakeup.mutex);
 	pthread_mutex_lock(&new_timeout->lock);
 
-	if(RB_EMPTY_NODE(&new_timeout->rb))
+	if(RB_EMPTY_NODE(&new_timeout->rb) && !new_timeout->rearm_in_progress)
 	{
 		new_timeout->t = now;
 		ret_val = timeout_rb_insert(new_timeout);
@@ -360,7 +360,7 @@ static int kick_timeouts(void)
 		 */
 		pthread_mutex_unlock(&t->lock);
 		pthread_mutex_lock(&wakeup.mutex);
-		if(ret)
+		if(ret && RB_EMPTY_NODE(&t->rb))
 		{
 			/*
 			 * and now we can add it, maybe that someone

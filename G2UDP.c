@@ -692,7 +692,7 @@ static noinline void reas_knots_optimize(struct reas_knot *x, struct norm_buff *
 	{
 		struct norm_buff *b = knot2buff(x);
 		buffer_compact(*b);
-		b->limit -= sizeof(struct reas_knot);
+		b->limit -= sizeof(struct reas_knot); /* undo limit change by compact */
 		if(buffer_remaining(*b) &&
 		   (x->end + 1 == x->next->nr || x->end == x->next->nr))
 		{
@@ -907,6 +907,7 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 		logg_develd("small buffer!: %zu\n", (*d_hold_sp)->capacity);
 		warned++;
 	}
+// TODO: poke the new 2.6.33 recvmmsg through the stack
 	if(!handle_udp_sock(ev, *d_hold_sp, &from, &to, sg->fd)) {
 		/* bad things */ ;
 // TODO: handle bad things

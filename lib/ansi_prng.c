@@ -220,19 +220,28 @@ void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 #endif
 	ctx.bytes_used = RAND_BLOCK_BYTE;
 
+	/* create a random key */
 	aes_encrypt_key128(&ctx.actx, data);
 
+	/* set the initial vector state to some random value */
+	memcpy(&ctx.V, data + RAND_BLOCK_BYTE, RAND_BLOCK_BYTE);
+
+	/*
+	 * set the counter to some random start value
+	 * as long as we do have a random key and vector,
+	 * this is not that important
+	 */
 	t = getpid() | (getppid() << 16);
 	ctx.DT.u[3] = t;
-
-	memcpy(&ctx.V, data + RAND_BLOCK_BYTE, RAND_BLOCK_BYTE);
-/*	unsigned i;
+/*	old way to create initial vector
+	unsigned i;
 	for(i = 0; i < anum(ctx.V.u); i++) {
 		ctx.V.u[i] = t;
 		t = ((t >> 13) ^ (t << 7)) + 65521;
 	}*/
 
 	gettimeofday(&now, 0);
+	/* if gtod fails, we deliberatly pick up stack garbage as fallback */
 	memcpy(ctx.DT.c, &now.tv_usec, sizeof(now.tv_usec));
 	memcpy(ctx.DT.c + sizeof(now.tv_usec), &now.tv_sec, sizeof(now.tv_sec));
 

@@ -119,6 +119,7 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 		return w_entry;
 	}
 	if(!manage_buffer_before(&w_entry->send, lsend_buff)) {
+		manage_buffer_after(&w_entry->recv, lrecv_buff);
 		w_entry->flags.dismissed = true;
 		return w_entry;
 	}
@@ -128,7 +129,7 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 	if(p_entry->events & (uint32_t)EPOLLOUT)
 	{
 		struct norm_buff *d_target = NULL;
-		bool compact_ubuff = false, old_flush = false;
+		bool compact_ubuff = false, old_flush = false, genuie_buf_full = false;
 
 		if(ENC_DEFLATE == w_entry->encoding_out)
 			d_target = w_entry->send_u;
@@ -186,25 +187,33 @@ more_packet_encode:
 no_pfill_before_write:
 		if(ENC_DEFLATE == w_entry->encoding_out)
 		{
-			if(buffer_remaining(*w_entry->send))
+			if(buffer_remaining(*w_entry->send) > 6)
 			{
 				buffer_flip(*w_entry->send_u);
 retry_pack:
-				logg_develd_old("++++ cbytes: %zu\n", buffer_remaining(*w_entry->send));
-				logg_develd_old("**** space: %zu\n", buffer_remaining(*w_entry->send_u));
+				logg_develd_old("++++ cbytes:\t%zu\n", buffer_remaining(*w_entry->send));
+				logg_develd_old("**** space:\t%zu\n", buffer_remaining(*w_entry->send_u));
 				w_entry->z_encoder->next_in = (Bytef *)buffer_start(*w_entry->send_u);
 				w_entry->z_encoder->avail_in = buffer_remaining(*w_entry->send_u);
 				w_entry->z_encoder->next_out = (Bytef *)buffer_start(*w_entry->send);
 				w_entry->z_encoder->avail_out = buffer_remaining(*w_entry->send);
 
 				old_flush = w_entry->u.handler.z_flush;
-				barrier();
-				logg_develd_old("z_flush: %c\n", old_flush ? 't' : 'f');
+				w_entry->u.handler.z_flush = false;
+				mb();
+				logg_develd_old("z_flush:\t%c\n", old_flush ? 't' : 'f');
 				switch(deflate(w_entry->z_encoder, old_flush ?  Z_SYNC_FLUSH : Z_NO_FLUSH))
 				{
+				case Z_BUF_ERROR:
+					logg_devel("Z_BUF_ERROR\n");
 				case Z_OK:
 					w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->z_encoder->avail_in);
 					w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->z_encoder->avail_out);
+					if(0 == w_entry->z_encoder->avail_out) {
+						genuie_buf_full = true;
+						 /* if we filled the buffer, make sure we reuse the same flush setting */
+						w_entry->u.handler.z_flush = old_flush;
+					}
 					break;
 				case Z_STREAM_END:
 					logg_devel("Z_STREAM_END\n");
@@ -221,17 +230,14 @@ retry_pack:
 				case Z_MEM_ERROR:
 					logg_devel("Z_MEM_ERROR\n");
 					return w_entry;
-				case Z_BUF_ERROR:
-					logg_devel("Z_BUF_ERROR\n");
-					break;
 				default:
 					logg_devel("deflate was not Z_OK\n");
 					return w_entry;
 				}
 				compact_ubuff = true;
 			}
-			logg_develd_old("++++ cbytes: %zu\n", w_entry->send->pos);
-			logg_develd_old("**** space: %zu\n", buffer_remaining(*w_entry->send_u));
+			logg_develd_old("++++ cpos:\t%zu\n", w_entry->send->pos);
+			logg_develd_old("**** space:\t%zu\n", buffer_remaining(*w_entry->send_u));
 		}
 
 		if(!do_write(p_entry, epoll_fd))
@@ -240,8 +246,13 @@ retry_pack:
 		if(ENC_NONE != w_entry->encoding_out)
 		{
 // TODO: loop till zlib says more data
-			if(buffer_remaining(*w_entry->send) && buffer_remaining(*w_entry->send_u))
-				goto retry_pack;
+			logg_develd_old("++++ cbytes:\t%zu\n", buffer_remaining(*w_entry->send));
+			if(buffer_remaining(*w_entry->send) > 6) {
+				if(compact_ubuff && buffer_remaining(*w_entry->send_u))
+					goto retry_pack;
+				if(!compact_ubuff && !buffer_cempty(*w_entry->send_u))
+					goto no_pfill_before_write;
+			}
 			if(compact_ubuff)
 				buffer_compact(*w_entry->send_u);
 			if(buffer_remaining(*w_entry->send_u) > 10)
@@ -251,11 +262,15 @@ retry_pack:
 						goto more_packet_encode;
 				shortlock_t_unlock(&w_entry->pts_lock);
 			}
+			/*
+			 * when the o-buffer is full (avail_out == 0) we have to
+			 * re-call deflate with the same flush value
+			 */
 			if(!old_flush) {
 				w_entry->u.handler.z_flush_to.data = w_entry;
 				w_entry->u.handler.z_flush_to.fun  = handler_z_flush_timeout;
 				timeout_add(&w_entry->u.handler.z_flush_to, 20);
-			} else
+			} else if(!genuie_buf_full)
 				w_entry->u.handler.z_flush = false;
 		}
 	}
@@ -298,6 +313,8 @@ retry_unpack:
 
 				switch(inflate(w_entry->z_decoder, Z_SYNC_FLUSH))
 				{
+				case Z_BUF_ERROR:
+					logg_devel("Z_BUF_ERROR\n");
 				case Z_OK:
 					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder->avail_in);
 					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder->avail_out);
@@ -317,9 +334,6 @@ retry_unpack:
 				case Z_MEM_ERROR:
 					logg_devel("Z_MEM_ERROR\n");
 					return w_entry;
-				case Z_BUF_ERROR:
-					logg_devel("Z_BUF_ERROR\n");
-					break;
 				default:
 					logg_devel("inflate was not Z_OK\n");
 					return w_entry;

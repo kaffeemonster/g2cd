@@ -224,9 +224,11 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 			DESTROY_TIMEOUT(&work_entry->u.handler.z_flush_to);
 		}
 
+		g2_conreg_remove(work_entry);
 		if(work_entry->z_decoder)
 		{
-			if(Z_OK != inflateEnd(work_entry->z_decoder)) {
+			int res = inflateEnd(work_entry->z_decoder);
+			if(Z_OK != res && Z_DATA_ERROR != res) {
 				if(work_entry->z_decoder->msg)
 					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder->msg);
 			}
@@ -234,13 +236,13 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 		}
 		if(work_entry->z_encoder)
 		{
-			if(Z_OK != deflateEnd(work_entry->z_encoder)) {
+			int res = deflateEnd(work_entry->z_encoder);
+			if(Z_OK != res && Z_DATA_ERROR != res) {
 				if(work_entry->z_encoder->msg)
 					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder->msg);
 			}
 			free(work_entry->z_encoder);
 		}
-		g2_conreg_remove(work_entry);
 	}
 	/*
 	 * wipe everything which is small, has many fields, of which only

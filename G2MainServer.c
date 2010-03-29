@@ -897,8 +897,14 @@ static inline void setup_resources(void)
 
 static void init_prng(void)
 {
-	char rd[RAND_BLOCK_BYTE * 2];
+	unsigned rd[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
 	FILE *fin;
+	bool have_entropy = false;
+
+	/*
+	 * Warning, even if the compiler cries and valgrind screems:
+	 * Do NOT memset/init rd!
+	 */
 
 	fin = fopen(server.settings.entropy_source, "rb");
 	if(!fin) {
@@ -907,21 +913,45 @@ static void init_prng(void)
 	} else if(1 != fread(rd, sizeof(rd), 1, fin)) {
 		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
 		            server.settings.entropy_source);
-	}
+	} else
+		have_entropy = true;
 	fclose(fin);
 
-// TODO: warn more prominent when we can not gather entropy
-// TODO: install some bogus sheme to set up the buffer with entropy
+	if(!have_entropy)
+	{
+		struct timeval now;
+		unsigned i, t;
 
-	/*
-	 * Even if we could not get entropy, feed rd into the prng
-	 * if everything failes, its "random" stack data, undefined
-	 * behaivior for the rescue...
-	 */
-	logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
-	     server.settings.entropy_source);
+		logg(LOGF_CRIT, "WARNING: We could not gather high quality entropy!\n"
+		                "         Will try to rectify, but this may impact the\n"
+		                "         SECURITY of this G2 Hub. Please examine the\n"
+		                "         situation and configure a proper entropy source!\n");
+		gettimeofday(&now, 0);
+		t  = getpid() | (getppid() << 16);
+		t ^= now.tv_usec << 11;
+		t  = ((t >> 13) ^ (t << 7)) + 65521;
+		t ^= now.tv_sec << 3;
+		t  = ((t >> 13) ^ (t << 7)) + 65521;
+// TODO: more entropy sources for the mix?
+		/* something from the filesystem? the kernel?
+		 * AUX_VECTOR? Enviroment? some random read
+		 * from our .text section?
+		 */
+		for(i = 0; i < anum(rd); i++) {
+			rd[i] ^= t;
+			t = ((t >> 13) ^ (t << 7)) + 65521;
+		}
+		/*
+		 * Even if we could not get entropy, feed rd into the prng.
+		 * If everything failes, its "random" stack data, undefined
+		 * behaivior for the rescue...
+		 */
+	}
+	else
+		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
+		     server.settings.entropy_source);
 
-	random_bytes_init(rd);
+	random_bytes_init((char *)rd);
 }
 
 static void read_uprofile(void)
@@ -1009,7 +1039,8 @@ static inline void clean_up_m(void)
 	free((void*)(intptr_t)server.settings.profile.xml);
 
 	fclose(stdin);
-//	fclose(stdout); // get a sync if we output to a file
+	fclose(stdout); /* get a sync if we output to a file */
+	fflush(stderr);
 //	fclose(stderr);
 }
 
