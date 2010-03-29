@@ -232,13 +232,12 @@ bool timeout_advance(struct timeout *timeout, unsigned int advancement)
 	}
 	rb_erase(&timeout->rb, &wakeup.tree);
 
-	pthread_mutex_unlock(&timeout->lock);
-
 	timeout->t = now;
 
 	ret_val = timeout_rb_insert(timeout);
 
-	if(ret_val && !timespec_after(&timeout->t, &wakeup.time))
+	pthread_mutex_unlock(&timeout->lock);
+	if(ret_val && !timespec_after(&now, &wakeup.time))
 		pthread_cond_broadcast(&wakeup.cond);
 
 out_unlock:
@@ -345,9 +344,10 @@ static int kick_timeouts(void)
 			 * But when we do this, someone canceling
 			 * the timeout may be happilly continue to
 			 * prop. free the timeout, and we make a
-			 * use after free even if only to find out.
+			 * use after free even if only to find out
+			 * it's canceled.
 			 *
-			 * So make the cancelee spinn on the locks
+			 * So make the cancelee spin on the locks
 			 * so we get a chance to sneak in.
 			 */
 			t->rearm_in_progress = true;
@@ -360,18 +360,23 @@ static int kick_timeouts(void)
 		 */
 		pthread_mutex_unlock(&t->lock);
 		pthread_mutex_lock(&wakeup.mutex);
-		if(ret && RB_EMPTY_NODE(&t->rb))
+		if(ret)
 		{
-			/*
-			 * and now we can add it, maybe that someone
-			 * removes it imitiadly again.
-			 */
-			timespec_fill_local(&t->t);
-			timespec_add(&t->t, ret);
-			timeout_rb_insert(t);
-			barrier();
+			pthread_mutex_lock(&t->lock);
+			if(RB_EMPTY_NODE(&t->rb))
+			{
+				/*
+				 * and now we can add it, maybe that someone
+				 * removes it imitiadly again.
+				 */
+				timespec_fill_local(&t->t);
+				timespec_add(&t->t, ret);
+				timeout_rb_insert(t);
+				barrier();
+			}
 			t->rearm_in_progress = false;
 			wmb();
+			pthread_mutex_unlock(&t->lock);
 		}
 	}
 	/* save last time for calculating next sleep */
