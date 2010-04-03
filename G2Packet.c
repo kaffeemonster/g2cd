@@ -2260,7 +2260,28 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 		g2_qht_match_hubs(hashes, num, data);
 	g2_qht_match_leafs(hashes, num, data);
 
-// TODO: add some search hubs
+	{
+		struct khl_entry khle[6];
+		size_t res;
+
+		/* start by adding a truck load of KHL */
+		res = g2_khl_fill_p(khle, anum(khle), parg->connec ?
+		                    parg->connec->remote_host.s_fam : parg->src_addr->s_fam);
+		while(res--)
+		{
+			g2_packet_t *s = g2_packet_calloc();
+
+			if(!s)
+				break;
+			s->type = PT_S;
+			if(!write_nats_to_packet(s, &khle[res].na, khle[res].when)) {
+				g2_packet_free(s);
+				break;
+			}
+			list_add_tail(&s->list, &qa->children);
+		}
+// TODO: add some cluster hubs
+	}
 
 	/* if our source had a buffer, remove it now */
 	if(source->data_trunk_is_freeable) {
