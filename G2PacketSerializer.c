@@ -134,16 +134,15 @@ static inline int check_control_byte_p(struct pointer_buff *source, g2_packet_t 
 
 static inline int check_control_byte(struct norm_buff *source, g2_packet_t *target)
 {
-	struct pointer_buff tmp_buf =
-		{.pos = source->pos,
+	struct pointer_buff tmp_buf = {
+		.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; /* refer to sec_buffer.h why this is needed */
-	int ret_val                 = check_control_byte_p(&tmp_buf, target);
-
-	source->pos                 = tmp_buf.pos;
-	source->limit               = tmp_buf.limit;
-	
+		.data = source->data
+	}; /* refer to sec_buffer.h why this is needed */
+	int ret_val   = check_control_byte_p(&tmp_buf, target);
+	source->pos   = tmp_buf.pos;
+	source->limit = tmp_buf.limit;
 	return ret_val;
 }
 
@@ -182,23 +181,22 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
  */
 	if(unlikely(!target->length))
 		target->is_compound = false;
-	
+
 	target->packet_decode++;
 	return 1;
 }
 
 static inline int read_length(struct norm_buff *source, g2_packet_t *target, size_t max_len)
 {
-	struct pointer_buff tmp_buf =
-		{.pos = source->pos,
+	struct pointer_buff tmp_buf = {
+		.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; /* refer to sec_buffer.h why this is needed */
-	int ret_val                 = read_length_p(&tmp_buf, target, max_len);
-
-	source->pos                 = tmp_buf.pos;
-	source->limit               = tmp_buf.limit;
-	
+		.data = source->data
+	}; /* refer to sec_buffer.h why this is needed */
+	int ret_val   = read_length_p(&tmp_buf, target, max_len);
+	source->pos   = tmp_buf.pos;
+	source->limit = tmp_buf.limit;
 	return ret_val;
 }
 
@@ -264,16 +262,15 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 
 static inline int read_type(struct norm_buff *source, g2_packet_t *target)
 {
-	struct pointer_buff tmp_buf =
-		{.pos = source->pos,
+	struct pointer_buff tmp_buf = {
+		.pos = source->pos,
 		.limit = source->limit,
 		.capacity = source->capacity,
-		.data = source->data}; /* refer to sec_buffer.h why this is needed */
-	int ret_val                 = read_type_p(&tmp_buf, target);
-
-	source->pos                 = tmp_buf.pos;
-	source->limit               = tmp_buf.limit;
-	
+		.data = source->data
+	}; /* refer to sec_buffer.h why this is needed */
+	int ret_val   = read_type_p(&tmp_buf, target);
+	source->pos   = tmp_buf.pos;
+	source->limit = tmp_buf.limit;
 	return ret_val;
 }
 
@@ -981,7 +978,7 @@ static uint8_t create_control_byte(g2_packet_t *p)
 			} \
 			source->packet_encode++; \
 
-bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
+bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *target)
 {
 	bool ret_val = true, need_zero = false;
 
@@ -1101,7 +1098,7 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 				{
 					g2_packet_t *child = list_entry(e, g2_packet_t, list);
 					if(likely(ENCODE_FINISHED != child->packet_encode))
-						ret_val = g2_packet_serialize_to_buff(child, target);
+						ret_val = g2_packet_serialize_to_buff_p(child, target);
 					if(unlikely(ENCODE_FINISHED != child->packet_encode)) {
 						source->more_bytes_needed = child->more_bytes_needed;
 						break;
@@ -1167,6 +1164,20 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
 	return ret_val;
 }
 #undef SERIALIZE_TYPE_ON_NUM
+
+bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
+{
+	struct pointer_buff tmp_buf = {
+		.pos = target->pos,
+		.limit = target->limit,
+		.capacity = target->capacity,
+		.data = target->data
+	}; /* refer to sec_buffer.h why this is needed */
+	bool ret_val  = g2_packet_serialize_to_buff_p(source, &tmp_buf);
+	target->pos   = tmp_buf.pos;
+	target->limit = tmp_buf.limit;
+	return ret_val;
+}
 
 /*
  * Implementaion of g2_packet_serialize_prep{min}

@@ -760,7 +760,7 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 			goto out_free_e; /* free and out here */
 		}
 		if(e->e.part_count != p->count) {
-			logg_devel("udp packet changed part count?\n");
+			logg_devel_old("udp packet changed part count?\n");
 			goto out_free_e; /* free and out here */
 		}
 	}
@@ -1229,7 +1229,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 
 	/* is it long enough to be a GNutella Datagram? */
 	if(UDP_RELIABLE_LENGTH > buffer_remaining(*d_hold)) {
-		logg_devel("really short packet recieved\n");
+		logg_devel_old("really short packet recieved\n");
 		return true;
 	}
 
@@ -1340,7 +1340,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 		goto out;
 
 	if(tmp_packet.count < tmp_packet.part) {
-		logg_devel("broken UDP packet part nr. > part count \n");
+		logg_devel_old("broken UDP packet part nr. > part count \n");
 		goto out;
 	}
 

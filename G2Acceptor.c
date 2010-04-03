@@ -1195,6 +1195,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				g2_conreg_mark_dirty(to_con);
 			}
 			handle_accept_give_msg(to_con, LOGF_DEVEL_OLD, "accepted");
+// TODO: send off a first round of LNI/KHL
+			/* and UPROC? I don't want their profile, i don't care about the content,
+			 * it's xml, but broken SH 2.5.0.0 does not deliver GUID */
 			more_bytes_needed = true;
 			break;
 		case G2CONNECTED:

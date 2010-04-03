@@ -111,6 +111,7 @@ static bool handle_Q2_MD(struct ptype_action_args *);
 static bool handle_Q2_HURN(struct ptype_action_args *);
 static bool handle_Q2_HKEY(struct ptype_action_args *);
 static bool handle_QA(struct ptype_action_args *);
+static bool handle_QA_FR(struct ptype_action_args *parg);
 static bool handle_QA_TS(struct ptype_action_args *);
 static bool handle_QA_D(struct ptype_action_args *);
 static bool handle_QA_S(struct ptype_action_args *);
@@ -343,7 +344,7 @@ static const g2_ptype_action_func QA_packet_dict[PT_MAXIMUM] =
 	[PT_D ] = handle_QA_D,
 	[PT_S ] = handle_QA_S,
 	[PT_RA] = empty_action_p,
-	[PT_FR] = unimpl_action_p, /* check if there is one to: Remove? Substitude? */
+	[PT_FR] = handle_QA_FR, /* check if there is one to: Remove? Substitude? */
 };
 
 
@@ -2660,9 +2661,111 @@ static bool handle_Q2_HKEY(struct ptype_action_args *parg)
 
 struct QA_data
 {
+	struct ptype_action_args *parg;
 	long td;
 	bool td_valid;
+	bool had_from;
 };
+
+static intptr_t forward_inject_fr(g2_connection_t *con, void *carg)
+{
+	struct QA_data *rdata = carg;
+	struct ptype_action_args *parg = rdata->parg;
+	g2_packet_t fr, *source = parg->source;
+	struct pointer_buff o_buf;
+	size_t len, o_pos, o_limit;
+	ssize_t result;
+
+	/*
+	 * Till now i didn't see a QA with a from, but if it's there, it may be
+	 * some grand sheme of packet routing/NATed bullshit going on.
+	 * This means that the FR may be bogus, but we can do nothing about it.
+	 * And changing it makes things for ligit use horrible.
+	 * Simply keep it.
+	 */
+	if(unlikely(rdata->had_from))
+		return forward_lit_callback_ignore(con, rdata->parg);
+
+	/*
+	 * Now we have a problem, we have to inject an additional packet
+	 * into an already existing packet for forwarding.
+	 * This is a nightmare for g2cd, since we do not take apart all
+	 * packets and childs and subchilds and etc., if we don't know
+	 * or need them.
+	 * This is by purpose!
+	 * And we do not tmp. store packets in a general "all"-parsed state.
+	 * This is also by purpose!
+	 * Packets which should be replicated simply get "reinjected". We
+	 * reconstruct the outer most packet (which we had to touch anyway
+	 * to wade through the packet stream) from our info, the rest
+	 * (childs, payload) is literate data.
+	 *
+	 * So dirty hacks, here we go...
+	 * In the case of an QA, we know it has childs, we can simply
+	 * encode another packet in front of the binary blob of QA data.
+	 */
+	g2_packet_init_on_stack(&fr);
+	if(parg->connec) /* did it come from TCP? */
+		link_sna_to_packet(&fr, &parg->connec->remote_host);
+	else { /* if we couldn't get the space, forward anyway */
+		if(!write_sna_to_packet(&fr, parg->src_addr)) /* use write to set port */
+			return forward_lit_callback_ignore(con, rdata->parg);
+	}
+	fr.type = PT_FR;
+	result = g2_packet_serialize_prep_min(&fr);
+	if(-1 == result)
+		goto out;
+
+	/* now it gets hairy, we have to take the orig data and add our fr */
+	len = buffer_remaining(source->data_trunk);
+	/*
+	 * we already made sure there is a child packet, no need to inject a
+	 * child seperator by hand or set is_compound
+	 */
+	len += result;
+	/* copy the original buffer stuff */
+	o_buf = source->data_trunk;
+	if(unlikely(source->data_trunk_is_freeable)) /* is it an allocated buffer? */
+	{
+		struct packet_data_store *pds =
+			container_of(o_buf.data, struct packet_data_store, data);
+
+		if(!g2_packet_steal_data_space(source, len))
+			goto out;
+
+		my_memcpy(buffer_start(source->data_trunk) + result, buffer_start(o_buf),
+		          buffer_remaining(o_buf));
+		if(atomic_dec_test(&pds->refcnt))
+			free(pds);
+	}
+	else
+	{
+		/* would the new data fit in the packet buffer and is the old data already there? Adjust */
+		if(unlikely(len <= sizeof(source->pd.out) &&
+		            source->data_trunk.data >= source->pd.out &&
+		            source->data_trunk.data < &source->pd.out[sizeof(source->pd.out)])) {
+			if(!g2_packet_steal_data_space(source, len))
+				goto out;
+			my_memmove(buffer_start(source->data_trunk) + result, buffer_start(o_buf),
+			           buffer_remaining(o_buf));
+		} else { /* data still lingers in the recv buff, we have to copy it */
+			if(!g2_packet_steal_data_space(source, len))
+				goto out;
+			my_memcpy(buffer_start(source->data_trunk) + result, buffer_start(o_buf),
+			          buffer_remaining(o_buf));
+		}
+	}
+	o_pos = source->data_trunk.pos;
+	o_limit = source->data_trunk.limit;
+	source->data_trunk.limit = source->data_trunk.pos + result;
+	/* we have made room for the fr, now we can put it there */
+	g2_packet_serialize_to_buff_p(&fr, &source->data_trunk);
+	source->data_trunk.pos = o_pos;
+	source->data_trunk.limit = o_limit;
+out:
+	g2_packet_free(&fr);
+	return forward_lit_callback_ignore(con, parg);
+}
 
 static bool handle_QA(struct ptype_action_args *parg)
 {
@@ -2684,7 +2787,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 	 * we want to parse the packet and trust its content.
 	 */
 	/* guid + 0 byte + shortest packet */
-	if(16 + 1 + 3 > buffer_remaining(source->data_trunk)) {
+	if(GUID_SIZE + 1 + 3 > buffer_remaining(source->data_trunk)) {
 		logg_packet(STDLF, "/QA", "to short");
 		return ret_val;
 	}
@@ -2695,6 +2798,7 @@ static bool handle_QA(struct ptype_action_args *parg)
 
 	old_pos = source->data_trunk.pos;
 	rdata.td_valid = false;
+	rdata.had_from = false;
 	cparg = *parg;
 	cparg.father = source;
 	cparg.opaque = &rdata;
@@ -2729,10 +2833,18 @@ static bool handle_QA(struct ptype_action_args *parg)
 	if(parg->connec)
 		parg->connec->flags.last_data_active = true;
 
-// TODO: if this came from UDP (&&/|| TCP), we have to add an FR (from?)
-
+	rdata.parg = parg;
 	/* either target is connected or nothing */
-	return (!!g2_conreg_for_addr(&dest, forward_lit_callback_ignore, parg)) | ret_val;
+	return (!!g2_conreg_for_addr(&dest, forward_inject_fr, &rdata)) | ret_val;
+}
+
+static bool handle_QA_FR(struct ptype_action_args *parg)
+{
+	struct QA_data *rdata = parg->opaque;
+
+// TODO: check for length/private address? and drop complete QA if invalid
+	rdata->had_from = true;
+	return false;
 }
 
 static bool handle_QA_TS(struct ptype_action_args *parg)

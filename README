@@ -238,7 +238,7 @@
 	one moment to the next. You could not ping it or something else,
 	hard reset from the management console needed...). After a little
 	fore and back and more hard lockups it seems G2CD was hammering
-	a locking primitive to hard (it was a 3 way SMP, actually the
+	a locking primitive to hard (it was a 4 way SMP, actually the
 	hammering was lite, there was no great congestion, but this one
 	primitive seems to be seldomly used...). I could prevent that
 	problem by changing the locking of G2CD in the network region
@@ -339,7 +339,13 @@
 ==============
 	Main Bug: Program not finished
 	Second Bug: Hard to build/install
-	Other Bugs: to be filled in
+	Other Bugs: - nasty livelock in timeout handling (rb-tree
+	              corruption -> infinite loop unter lock) timeout
+	              handling sucks, it's inherent racy...
+	            - seems not 100% SMP safe...
+	            - seldom crashes (after 60h Uptime) if not hung in
+	              timeout handling
+	            - to be filled in
 
 	TODO:
 	- complete packet-handling
