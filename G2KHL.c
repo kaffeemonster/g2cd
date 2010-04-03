@@ -1363,6 +1363,38 @@ out_unlock:
 		diedie("gnarf, KHL cache lock stuck, bye!");
 }
 
+size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
+{
+	struct khl_cache_entry *e;
+	struct rb_node *n;
+	size_t res, wrap_arounds;
+
+	if(unlikely(pthread_mutex_lock(&cache.lock)))
+		return 0;
+
+	for(res = 0, n = rb_first(&cache.tree), wrap_arounds = 0;
+	    res < len; n = rb_next(n))
+	{
+		if(!n) {
+			if(unlikely(wrap_arounds++))
+				break;
+			n = rb_first(&cache.tree);
+			if(unlikely(!n))
+				break;
+		}
+		e = rb_entry(n, struct khl_cache_entry, rb);
+// TODO: filter neighbours
+		/* we want hubs in our cluster, but not our direct neigbours */
+		if(likely(e->e.na.s_fam == s_fam) && e->cluster)
+			memcpy(&p[res++], &e->e, sizeof(p[0]));
+	}
+
+	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+		diedie("gnarf, KHL cache lock stuck, bye!");
+
+	return res;
+}
+
 size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 {
 	struct khl_cache_entry *e;
