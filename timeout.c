@@ -226,11 +226,12 @@ bool timeout_advance(struct timeout *timeout, unsigned int advancement)
 	if(0 != pthread_mutex_trylock(&timeout->lock))
 		goto out_unlock;
 
-	if(RB_EMPTY_NODE(&timeout->rb)) {
+	if(RB_EMPTY_NODE(&timeout->rb) || timeout->rearm_in_progress) {
 		pthread_mutex_unlock(&timeout->lock);
 		goto out_unlock;
 	}
 	rb_erase(&timeout->rb, &wakeup.tree);
+	RB_CLEAR_NODE(&timeout->rb);
 
 	timeout->t = now;
 
