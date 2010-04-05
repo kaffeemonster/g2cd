@@ -1472,6 +1472,10 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 	struct qhtable *table;
 	struct qht_data *qd;
 
+	/* no point in touching dead connections */
+	if(unlikely(con->flags.dismissed))
+		return 0;
+
 	do {
 		mb();
 		hzp_ref(HZP_QHT, table = con->qht);
@@ -1529,6 +1533,10 @@ void g2_qht_global_search_chain(struct qht_search_walk *qsw, void *arg)
 	struct qhtable *table;
 	struct qht_data *qd;
 	size_t entries;
+
+	/* no point in touching dead connections */
+	if(unlikely(con->flags.dismissed))
+		return;
 
 	do {
 		mb();

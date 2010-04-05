@@ -425,7 +425,8 @@ int main(int argc, char **args)
 
 static intptr_t dump_a_hub(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
 {
-	logg(LOGF_INFO, "\t%p#I\t-> %p#G %s l:%u\t\"%s\"\n", &con->remote_host, con->guid, con->vendor_code, con->u.handler.leaf_count, con->uagent);
+	logg(LOGF_INFO, "\t%p#I\t-> %p#G %s d:%c l:%u\t\"%s\"\n", &con->remote_host, con->guid, con->vendor_code,
+	     con->flags.dismissed ? 't' : 'f', con->u.handler.leaf_count, con->uagent);
 	return 0;
 }
 

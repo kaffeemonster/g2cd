@@ -205,7 +205,7 @@ retry_pack:
 				switch(deflate(w_entry->z_encoder, old_flush ?  Z_SYNC_FLUSH : Z_NO_FLUSH))
 				{
 				case Z_BUF_ERROR:
-					logg_devel("Z_BUF_ERROR\n");
+					logg_devel_old("Z_BUF_ERROR\n");
 				case Z_OK:
 					w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->z_encoder->avail_in);
 					w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->z_encoder->avail_out);
