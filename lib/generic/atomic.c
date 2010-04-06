@@ -27,7 +27,7 @@
  */
 
 #include <stdlib.h>
-#include <pthread.h>
+#include "../my_pthread.h"
 
 #define NEED_GENERIC
 #include "../atomic.h"

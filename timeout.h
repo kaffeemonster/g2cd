@@ -2,7 +2,7 @@
  * timeout.h
  * header-file for timeout.c
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,7 +27,7 @@
 # define _TIMEOUT_H
 
 # include <sys/time.h>
-# include <pthread.h>
+# include "lib/my_pthread.h"
 # include "lib/rbtree.h"
 
 struct timeout

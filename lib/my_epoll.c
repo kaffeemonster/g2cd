@@ -33,7 +33,7 @@
 #  include <stdlib.h>
 #  include <string.h>
 #  include <unistd.h>
-#  include <pthread.h>
+#  include "my_pthread.h"
 #  include <errno.h>
 #  include <sys/types.h>
 /* Own Includes */

@@ -34,14 +34,19 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/poll.h>
+#ifdef WIN32
+# include <windows.h>
+# include <wincrypt.h>
+#else
+# include <sys/stat.h>
+# include <sys/wait.h>
+# include <sys/poll.h>
+# include <sys/resource.h>
+# include <pwd.h>
+#endif
 #include <sys/time.h>
-#include <sys/resource.h>
 #include <fcntl.h>
-#include <pthread.h>
-#include <pwd.h>
+#include "lib/my_pthread.h"
 #include <unistd.h>
 /* Own Includes */
 #define _G2MAINSERVER_C
@@ -193,7 +198,7 @@ int main(int argc, char **args)
 	change_the_user();
 
 	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][IN])) {
+	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN])) {
 		logg_errno(LOGF_CRIT, "pthread_create gup");
 		clean_up_m();
 		return EXIT_FAILURE;
@@ -343,7 +348,7 @@ int main(int argc, char **args)
 	timeout_timer_task_abort();
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
-		if(0 > send(sock_com[i][OUT], "All lost", sizeof("All lost"), 0))
+		if(0 > send(sock_com[i][DIR_OUT], "All lost", sizeof("All lost"), 0))
 			logg_errno(LOGF_WARN, "initiating stop");
 	}
 
@@ -462,9 +467,11 @@ static inline void parse_cmdl_args(int argc, char **args)
 				logg(LOGF_NOTICE, "Help?\n");
 				exit(EXIT_FAILURE);
 		case 'l':
+#ifndef WIN32
 				logg(LOGF_INFO, "will log to: %s\n", optarg);
 				if(-1 == (log_to_fd = open(optarg, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)))
 					diedie("opening logfile");
+#endif
 				break;
 		case '?':
 				logg_develd_old("unknown OptChar: %c\n", (char)optopt);
@@ -481,6 +488,9 @@ static inline void parse_cmdl_args(int argc, char **args)
 
 static inline void fork_to_background(void)
 {
+#ifdef WIN32
+	/* Windows can not fork. do something else */
+#else
 	pid_t child;
 	int ch_status = 0;
 	int tmp_fd = -1;
@@ -540,6 +550,7 @@ static inline void fork_to_background(void)
 		waitpid(child, &ch_status, 0);
 		exit(WEXITSTATUS(ch_status));
 	}
+#endif
 }
 
 static const struct config_item conf_opts[] =
@@ -700,7 +711,14 @@ static noinline void handle_config(void)
 
 static inline void change_the_user(void)
 {
-#ifndef __CYGWIN__
+#ifdef WIN32
+	/*
+	 * do something clever with "OpenProcessToken" & "GetTokenInformation"
+	 * And yes, windows can change the user, i was wrong, but it is a pain
+	 * in the ass...
+	 * so, read the cygwin info
+	 */
+#elif !defined(__CYGWIN__)
 	struct passwd *nameinfo;
 	errno = 0;
 	if(!(nameinfo = getpwnam(user_name)))
@@ -767,9 +785,9 @@ static inline void change_the_user(void)
 
 static inline void setup_resources(void)
 {
-	struct rlimit our_limit;
 	size_t i;
 
+#ifndef WIN32
 	/* check and raise our open-file limit */
 /*
  * WARNING:
@@ -782,6 +800,7 @@ static inline void setup_resources(void)
  * could still fail.
  */
 #define FD_RESSERVE 40UL
+	struct rlimit our_limit;
 	if(likely(!getrlimit(RLIMIT_NOFILE, &our_limit)))
 	{
 		logg_posd(LOGF_DEBUG,
@@ -817,6 +836,7 @@ static inline void setup_resources(void)
 	}
 	else
 		logg_errno(LOGF_WARN, "getting FD-limit");
+#endif
 
 	if(pthread_attr_init(&server.settings.t_def_attr)) {
 		logg_errno(LOGF_CRIT, "initialising pthread_attr");
@@ -862,7 +882,7 @@ static inline void setup_resources(void)
 
 	/* adding socket-fd's to a poll-structure */
 	for(i = 0; i < THREAD_SUM_COM; i++) {
-		sock_poll[i].fd = sock_com[i][OUT];
+		sock_poll[i].fd = sock_com[i][DIR_OUT];
 		sock_poll[i].events = POLLIN;
 	}
 
@@ -899,6 +919,7 @@ static inline void setup_resources(void)
 static void init_prng(void)
 {
 	unsigned rd[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+#ifndef WIN32
 	FILE *fin;
 	bool have_entropy = false;
 
@@ -951,6 +972,13 @@ static void init_prng(void)
 	else
 		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
 		     server.settings.entropy_source);
+#else
+	HCRYPTPROV cprovider_h;
+	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, 0)) {
+		CryptGenRandom(cprovider_h, sizeof(rd), (BYTE *)rd);
+		CryptReleaseContext(cprovider_h, 0);
+	}
+#endif
 
 	random_bytes_init((char *)rd);
 }

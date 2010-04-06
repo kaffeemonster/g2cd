@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-#include <pthread.h>
+#include "my_pthread.h"
 #include "other.h"
 #include "guid.h"
 #include "aes.h"

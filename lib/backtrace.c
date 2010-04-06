@@ -77,7 +77,7 @@ void backtrace_init(void)
 # include <sys/stat.h>
 # include <fcntl.h>
 # include <unistd.h>
-# include <pthread.h>
+# include "my_pthread.h"
 # include <signal.h>
 # include <setjmp.h>
 # include <ucontext.h>

@@ -35,7 +35,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 /* debug file */
 #include <unistd.h>
 #include <sys/types.h>

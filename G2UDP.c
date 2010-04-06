@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 #include <errno.h>
 #include <unistd.h>
 /* System net-includes */

@@ -31,6 +31,14 @@
 # include <sys/socket.h>
 # include <netinet/in.h>
 # include <arpa/inet.h>
+# ifdef WIN32
+#  ifdef HAVE_WS2VISTA
+#   include <Wsk.h>
+#  else
+#   include <winsock2.h>
+#   include <ws2tcpip.h>
+#  endif
+# endif
 # include "other.h"
 # include "hthash.h"
 
@@ -51,6 +59,9 @@ typedef unsigned short sa_family_t;
 # endif
 # ifndef HAVE_IN_PORT_T
 typedef uint16_t in_port_t;
+# endif
+# ifndef HAVE_IN_ADDR_T
+typedef uint32_t in_addr_t;
 # endif
 # ifndef HAVE_SOCKLEN_T
 typedef uint32_t socklen_t;
@@ -143,7 +154,7 @@ struct sockaddr_in6
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
 # endif
 # ifndef HAVE_INET_PTON
-int inet_pton(int af, const char *src, void *dst)
+int inet_pton(int af, const char *src, void *dst);
 # endif
 char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt) GCC_ATTR_VIS("hidden");
 

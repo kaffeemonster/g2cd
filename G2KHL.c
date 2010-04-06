@@ -40,7 +40,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 #ifdef HAVE_DB
 # define DB_DBM_HSEARCH 1
 # include <db.h>

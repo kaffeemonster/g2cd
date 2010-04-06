@@ -61,10 +61,8 @@ LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *my_memcpy(void *restrict dst, const void *restrict src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *memcpy_big(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_FASTCALL);
 # undef mempcpy
-# ifndef HAVE_MEMPCPY
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_mempcpy");
-;
-#  define MEMPCPY_DEFINED
+# if !defined(HAVE_MEMPCPY) && !defined(MEMPCPY_DEFINED)
+void *mempcpy(void *restrict dst, const void *restrict src, size_t len);
 # endif
 LIB_MY_BITOPS_EXTRN(void *my_mempcpy(void *restrict dst, const void *restrict src, size_t len));
 # undef memmove

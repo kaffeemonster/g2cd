@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 #include <unistd.h>
 /* own */
 #define _G2CONREGISTRY_C

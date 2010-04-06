@@ -35,9 +35,12 @@
  * We simply always provide one.
  */
 
-#define IN_STRWHATEVER
+#define MEMPCPY_DEFINED
 #include "../config.h"
 #include "other.h"
+#undef mempcpy
+void *mempcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_mempcpy");
+#define IN_STRWHATEVER
 
 #include "my_bitops.h"
 #include "my_bitopsm.h"
@@ -51,10 +54,5 @@
 # endif
 #else
 # include "generic/mempcpy.c"
-#endif
-
-#undef mempcpy
-#ifndef MEMPCPY_DEFINED
-void *mempcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_mempcpy");
 #endif
 /* EOF */

@@ -34,7 +34,7 @@
 # include <alloca.h>
 #endif
 #include <errno.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

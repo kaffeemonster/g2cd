@@ -46,6 +46,7 @@
 /* do we have IPv6 and other net stuff */
 #define HAVE_SA_FAMILY_T
 #define HAVE_IN_PORT_T
+#define HAVE_IN_ADDR_T
 #define HAVE_SOCKLEN_T
 #define HAVE_IPV6
 #define HAVE_INET6_ADDRSTRLEN

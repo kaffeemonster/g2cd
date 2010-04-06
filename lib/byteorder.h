@@ -20,6 +20,15 @@
 #  else
 #   error "Oh solaris, your header are ..."
 #  endif
+# elif defined(WIN32)
+/*
+ * maybe the NT kernel can be ported to big endian,
+ * but i think we will never see a "Windows" which
+ * runs on big endian...
+ */
+#  define __LITTLE_ENDIAN 1234
+#  define __BIG_ENDIAN    4321
+#  define __BYTE_ORDER __LITTLE_ENDIAN
 # endif
 
 /* maybe we picked it up by accident, otherwise give up */

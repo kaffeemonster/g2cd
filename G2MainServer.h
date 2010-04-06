@@ -27,13 +27,11 @@
 # define _G2MAINSERVER_H
 
 /* Includes if included */
-# include <pthread.h>
+# include "lib/my_pthread.h"
 # include <stdbool.h>
 # include <stdio.h>
 # include <time.h>
 # include <sys/types.h>
-# include <sys/poll.h>
-# include <netinet/in.h>
 # include <errno.h>
 
 /* Own */
@@ -53,8 +51,8 @@ static always_inline enum loglevel get_act_loglevel(void);
 # define THREAD_SUM_COM     1
 # define THREAD_SUM         2
 
-# define OUT   0
-# define IN    1
+# define DIR_OUT   0
+# define DIR_IN    1
 
 # define EVENT_SPACE   16
 
@@ -64,13 +62,6 @@ static always_inline enum loglevel get_act_loglevel(void);
 # define FB_TRESHOLD   EVENT_SPACE
 
 # define PD_START_CAPACITY      128
-
-struct poll_info
-{
-	size_t limit;
-	size_t capacity;
-	struct pollfd data[DYN_ARRAY_LEN];
-};
 
 # ifndef _G2MAINSERVER_C
 #  define _G2MAIN_EXTRN(x) extern x GCC_ATTR_VIS("hidden")

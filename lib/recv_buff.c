@@ -24,7 +24,7 @@
  */
 
 #include <stdlib.h>
-#include <pthread.h>
+#include "my_pthread.h"
 
 #include "log_facility.h"
 #include "recv_buff.h"

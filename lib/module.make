@@ -51,6 +51,7 @@ LIBHEADS = \
 	$(MPL)/my_bitops.h \
 	$(MPL)/my_bitopsm.h \
 	$(MPL)/my_epoll.h \
+	$(MPL)/my_pthread.h \
 	$(MPL)/tchar.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
@@ -328,6 +329,7 @@ LIBSRCS = \
 	$(MPL)/memchr.c \
 	$(MPL)/mem_searchrn.c \
 	$(MPL)/my_epoll.c \
+	$(MPL)/my_pthread.c \
 	$(MPL)/my_bitops.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/recv_buff.c \
@@ -404,6 +406,7 @@ LIBOBJS = \
 	$(MPL)/inet_pton.o \
 	$(MPL)/log_facility.o \
 	$(MPL)/my_epoll.o \
+	$(MPL)/my_pthread.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \

@@ -26,7 +26,7 @@
 #include "other.h"
 #include <stdlib.h>
 #include <stdbool.h>
-#include <pthread.h>
+#include "my_pthread.h"
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #endif

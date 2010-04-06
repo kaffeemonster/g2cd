@@ -230,14 +230,6 @@ static inline int isblank(int c)
 # define GCC_CONSTANT_P(x) (0)
 #endif
 
-#if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
-/*
- * According to man-page a GNU-Extension, mumbel mumbel...
- * They are right, not on 5.7 Solaris
- */
-# include "my_bitops.h"
-#endif /* HAVE_STRNLEN || HAVE_MEMPCPY */
-
 #ifdef GOT_GOT
 # define SECTION_GOT GCC_ATTR_SECTION(".got")
 #else
@@ -319,6 +311,14 @@ typedef void (*sighandler_t)(int);
 # else
 #  define cpu_relax() barrier();
 # endif
+
+#if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
+/*
+ * According to man-page a GNU-Extension, mumbel mumbel...
+ * They are right, not on 5.7 Solaris
+ */
+# include "my_bitops.h"
+#endif /* HAVE_STRNLEN || HAVE_MEMPCPY */
 
 # include "byteorder.h"
 # include "unaligned.h"

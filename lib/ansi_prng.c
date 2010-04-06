@@ -40,7 +40,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <pthread.h>
+#include "my_pthread.h"
 #include <sys/mman.h>
 #include "my_bitopsm.h"
 #include "other.h"

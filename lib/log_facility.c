@@ -31,7 +31,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <errno.h>
-#include <pthread.h>
+#include "my_pthread.h"
 #include <syslog.h>
 #include <unistd.h>
 /* other */

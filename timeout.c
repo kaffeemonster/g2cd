@@ -31,7 +31,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <sys/time.h>
-#include <pthread.h>
+#include "lib/my_pthread.h"
 #include <errno.h>
 #include <unistd.h>
 #ifdef _POSIX_PRIORITY_SCHEDULING
