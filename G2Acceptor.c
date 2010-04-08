@@ -828,7 +828,8 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					}
 				}
 				else if(atomic_read(&server.status.act_connection_sum) >=
-					     (server.settings.max_connection_sum - server.settings.max_hub_sum)) {
+					     (server.settings.max_connection_sum -
+					      (server.settings.max_hub_sum - atomic_read(&server.status.act_hub_sum)))) {
 					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLC);
 					to_con->send->pos += str_size(HED_2_PART_1_FULLC);
 					to_con->flags.dismissed = true;
