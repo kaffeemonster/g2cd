@@ -37,7 +37,11 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 	size_t k;
 
 	asm(
+#ifdef __ELF__
 			".subsection 2\n\t"
+#else
+			"jmp	1f\n\t"
+#endif
 			".align 16\n"
 			"key_expansion_128:\n\t"
 			"movaps	%%xmm1, %%xmm4\n\t"
@@ -52,7 +56,11 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	$0x10, %0\n\t"
 			"ret\n\t"
+#ifdef __ELF__
 			".previous\n\t"
+#else
+			"1:\n\t"
+#endif
 			"movups	(%2), %%xmm0\n\t"	/* user key (first 16 bytes) */
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	0x10, %0\n\t"	/* key addr */

@@ -42,8 +42,6 @@
 #ifdef HAVE_SYS_UIO_H
 # include <sys/uio.h>
 #endif
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>

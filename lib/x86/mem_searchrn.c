@@ -249,13 +249,16 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 		"bsf	%0, %0\n\t" /* find index */
 		"cmovz	%0, %1\n" /* no match, set p to zero */
 		"7:\n\t"
-		"add	%1, %0\n" /* add match index to p */
-		"9:\n\t"
+		"add	%1, %0\n\t" /* add match index to p */
 		/*
 		 * done!
 		 * out
 		 */
+#ifdef __ELF__
 		".subsection 2\n\t"
+#else
+		"jmp	9f\n\t"
+#endif
 		".p2align 2\n"
 		"4:\n\t"
 		"neg	%4\n\t" /* correct k's sign ;) */
@@ -270,7 +273,10 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 		"shl	%b2, %w0\n\t" /* cut mask upper bits */
 		"shr	%b2, %w0\n\t"
 		"jmp 2b\n\t"/* back to generate result */
-		".previous"
+#ifdef __ELF__
+		".previous\n"
+#endif
+		"9:"
 	: /*  %0 */ "=a" (p),
 	  /*  %1 */ "=r" (f),
 	  /*  %2 */ "=c" (rr),
@@ -362,13 +368,16 @@ static void *mem_searchrn_SSE(void *s, size_t len)
 		"bsf	%0, %0\n\t" /* find index */
 		"cmovz	%0, %1\n" /* no match, set p to zero */
 		"7:\n\t"
-		"add	%1, %0\n" /* add match index to p */
-		"9:\n\t"
+		"add	%1, %0\n\t" /* add match index to p */
 		/*
 		 * done!
 		 * out
 		 */
+#ifdef __ELF__
 		".subsection 2\n\t"
+#else
+		"jmp	9f\n\t"
+#endif
 		".p2align 2\n"
 		"4:\n\t"
 		"neg	%4\n\t" /* correct k's sign ;) */
@@ -383,7 +392,10 @@ static void *mem_searchrn_SSE(void *s, size_t len)
 		"shl	%b2, %w0\n\t" /* cut mask upper bits */
 		"shr	%b2, %w0\n\t"
 		"jmp 2b\n\t"/* back to generate result */
-		".previous"
+#ifdef __ELF__
+		".previous\n"
+#endif
+		"9:"
 	: /*  %0 */ "=a" (p),
 	  /*  %1 */ "=r" (f),
 	  /*  %2 */ "=c" (rr),

@@ -34,12 +34,8 @@
 #include <strings.h>
 #include <errno.h>
 #include <unistd.h>
-/* System net-includes */
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#ifdef HAVE_SYS_UIO_H
+#if 0 && defined(HAVE_SYS_UIO_H)
 # include <sys/uio.h>
 #endif
 /* other */
@@ -50,6 +46,7 @@
 #include "G2MainServer.h"
 #include "G2Connection.h"
 #include "G2ConRegistry.h"
+#include "lib/combo_addr.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/recv_buff.h"
@@ -138,6 +135,7 @@ bool do_read(struct epoll_event *p_entry)
 	return ret_val;
 }
 
+#if 0
 static size_t iovec_len(const struct iovec vec[], size_t cnt)
 {
 	size_t i, len;
@@ -238,6 +236,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 	}
 	return result;
 }
+#endif
 
 bool do_write(struct epoll_event *p_entry, int epoll_fd)
 {

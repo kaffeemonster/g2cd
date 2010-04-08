@@ -24,17 +24,20 @@
  */
 
 #ifdef WIN32
+# define _WIN32_WINNT 0x0500
 # include <windows.h>
 # include <errno.h>
 # include "other.h"
 # include "my_pthread.h"
+
+#define NINETHY70_OFF (0x19db1ded53e8000ULL)
 
 /*
  * Mutexes
  * Since we only need the simple binary lock, no bells and wistles,
  * recursion, foo, whatever, we can map to the simple CriticalSection
  */
-int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *restrict attr)
+int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
 	if(!mutex) {
 		errno = EINVAL;
@@ -77,30 +80,124 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
 		errno = EPERM;
 		return -1;
 	}
-	RtlLeaveCriticalSection(mutex);
+	LeaveCriticalSection(mutex);
+	return 0;
 }
 
 /*
  * RW locks
+ * Thanks go out to the apache project for a peek into their apr rwlocks
  */
-int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr)
+int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
+	if(!rwlock) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	rwlock->readers = 0;
+	rwlock->read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if(!rwlock->read_event) {
+		errno = ENOMEM;
+		return -1;
+	}
+	rwlock->write_mutex = CreateMutex(NULL, FALSE, NULL);
+	if(!rwlock->write_mutex) {
+		CloseHandle(rwlock->read_event);
+		errno = ENOMEM;
+		return -1;
+	}
+	return 0;
 }
 
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
+	BOOL res = TRUE;
+	if(!rwlock) {
+		errno = EINVAL;
+		return -1;
+	}
+	res = res && CloseHandle(rwlock->read_event);
+	res = res && CloseHandle(rwlock->write_mutex);
+	if(res)
+		return 0;
+	errno = EACCES;
+	return -1;
 }
 
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
 {
+	DWORD res;
+
+	/* for a trylock, change the wait time to 0 */
+	res = WaitForSingleObject(rwlock->write_mutex, INFINITE);
+
+	if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
+		errno = EAGAIN;
+		return -1;
+	}
+
+	InterlockedIncrement(&rwlock->readers);
+	if(!ResetEvent(rwlock->read_event)) {
+		ReleaseMutex(rwlock->write_mutex);
+		errno = EAGAIN;
+		return -1;
+	}
+
+	if(!ReleaseMutex(rwlock->write_mutex)) {
+		errno = EACCES;
+		return -1;
+	}
+
+	return 0;
 }
 
 int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 {
+	DWORD res;
+
+	/* for a trylock, change the wait time  to 0 */
+	res = WaitForSingleObject(rwlock->write_mutex, INFINITE);
+
+	if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
+		errno = EAGAIN;
+		return -1;
+	}
+
+	/* wait for the readers to leave the section */
+	if(rwlock->readers)
+	{
+		res = WaitForSingleObject(rwlock->read_event, INFINITE);
+
+		if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
+			ReleaseMutex(rwlock->write_mutex);
+			errno = EAGAIN;
+			return -1;
+		}
+	}
+
+	return 0;
 }
 
 int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
 {
+	DWORD res = 0;
+
+	/* do we own the write lock? */
+	if(!ReleaseMutex(rwlock->write_mutex))
+		res = GetLastError();
+
+	if(res == ERROR_NOT_OWNER)
+	{
+		/* Nope, we must have a read lock */
+		if(rwlock->readers &&
+		   !InterlockedDecrement(&rwlock->readers) &&
+		   !SetEvent(rwlock->read_event)) {
+			errno = EAGAIN;
+			return -1;
+		}
+	}
+	return 0;
 }
 
 /*
@@ -142,13 +239,18 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	return 0;
 }
 
+void pthread_exit(void *retval)
+{
+	ExitThread((DWORD)retval);
+}
+
 int pthread_join(pthread_t thread, void **retval)
 {
 	int ret_st = 0;
 	HANDLE thread_h = OpenThread(THREAD_ALL_ACCESS, FALSE, (DWORD)thread);
 
 	WaitForSingleObject(thread_h, INFINITE);
-	if(!GetExitCodeThread(thread_t, (LPDWORD)retval)) {
+	if(!GetExitCodeThread(thread_h, (LPDWORD)retval)) {
 		errno = EINVAL;
 		ret_st = -1;
 	}
@@ -202,8 +304,8 @@ int pthread_attr_getstacksize(pthread_attr_t *attr, size_t *stacksize)
 		 * The default stack size is taken from the program header and
 		 * can be set on linking.
 		 * Since we do not mess with it, we assume the default, which
-		 * is 1 MB. It would be nice to query the system, but since
-		 * i don't know how...
+		 * is 1 MB. It would be nice to query the system at runtime,
+		 * but since i don't know how...
 		 */
 		*stacksize = 1 * 1024 * 1024;
 	}
@@ -218,7 +320,7 @@ int pthread_attr_getstacksize(pthread_attr_t *attr, size_t *stacksize)
  * conditionals are complicated...
  * We would not need all the features, since we only have one waiter.
  */
-int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr);
+int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
 	if(!cond) {
 		errno = EINVAL;
@@ -249,6 +351,7 @@ int pthread_cond_destroy(pthread_cond_t *cond)
 	CloseHandle(cond->event);
 	cond->event = NULL;
 	DeleteCriticalSection(&cond->waiters_count_lock);
+	return 0;
 }
 
 int pthread_cond_broadcast(pthread_cond_t *cond)
@@ -259,7 +362,8 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 		cond->release_count = cond->waiters_count; /* Start a new generation. */
 		cond->wait_generation_count++;
 	}
-	LeaveCriticalSection (&cond->waiters_count_lock_);
+	LeaveCriticalSection (&cond->waiters_count_lock);
+	return 0;
 }
 
 int pthread_cond_signal(pthread_cond_t *cond)
@@ -271,22 +375,18 @@ int pthread_cond_signal(pthread_cond_t *cond)
 		cond->wait_generation_count++;
 	}
 	LeaveCriticalSection (&cond->waiters_count_lock);
+	return 0;
 }
 
 
-int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict mutex, const struct timespec *restrict abstime)
+int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime)
 {
 	int my_generation;
-	bool last_waiter, release = true;
+	BOOL last_waiter, release = TRUE;
 	DWORD ms;
 
-// TODO: insert a wonder here...
-	/*
-	 * Make the dance to convert the system time (1601) into a timespec aka 1970
-	 */
-
 	/* Avoid race conditions. */
-	EnterCriticalSection(&ccond->waiters_count_lock);
+	EnterCriticalSection(&cond->waiters_count_lock);
 	/* Increment count of waiters. */
 	cond->waiters_count++;
 	/* Store current generation in our activation record. */
@@ -294,23 +394,55 @@ int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthreat_mutex_t *restr
 	LeaveCriticalSection(&cond->waiters_count_lock);
 	LeaveCriticalSection(mutex);
 
-	while(true)
+	while(TRUE)
 	{
-		bool wait_done;
+		BOOL wait_done;
 		DWORD res;
+
+		if(abstime)
+		{
+			union {
+				FILETIME ft;
+				ULARGE_INTEGER ui;
+			} u;
+			struct timespec ts;
+			/*
+			 * Make the dance to convert the system time (since 1601) into
+			 * a timespec (aka since 1970)
+			 */
+			GetSystemTimeAsFileTime(&u.ft);
+			u.ui.QuadPart -= NINETHY70_OFF;
+			ts.tv_sec  =  u.ui.QuadPart / 10000000;
+			ts.tv_nsec = (u.ui.QuadPart % 10000000) * 100;
+			if(abstime->tv_sec >= ts.tv_sec && abstime->tv_nsec > ts.tv_nsec)
+			{
+				long nsec = (long)abstime->tv_nsec - (long)ts.tv_nsec;
+				ms   = (abstime->tv_sec - ts.tv_sec) * 1000;
+				ms  += nsec / 1000;
+				/*
+				 * we could substract some kind of overhead but pfff,
+				 * thats good enough
+				 */
+			}
+			/* the absolute time already passed, only do a once off test */
+			else
+				ms = 0;
+		}
+		else
+			ms = INFINITE;
 
 		/* Wait until the event is signaled. */
 		res = WaitForSingleObject(cond->event, ms);
 
 		if(res == WAIT_FAILED) {
 			errno = EACCES;
-			release = false;
+			release = FALSE;
 			break;
 		}
 		if(res == WAIT_TIMEOUT) {
 // TODO: if we do not have a TLS errno, this will crash and burn...
-			errno = EBUSY;
-			release = false;
+			errno = ETIMEDOUT;
+			release = FALSE;
 			break;
 		}
 		EnterCriticalSection(&cond->waiters_count_lock);
@@ -331,20 +463,20 @@ int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthreat_mutex_t *restr
 	cond->waiters_count--;
 	if(release)
 		cond->release_count--;
-	last_waiter = cv->release_count == 0;
+	last_waiter = cond->release_count == 0;
 	LeaveCriticalSection(&cond->waiters_count_lock);
 	if(last_waiter) /* We're the last waiter to be notified, so reset the manual event. */
 		ResetEvent(cond->event);
 	return 0;
 }
 
-int pthread_cond_wait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict mutex)
+int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex)
 {
 	int my_generation;
-	bool last_waiter;
+	BOOL last_waiter;
 
 	/* Avoid race conditions. */
-	EnterCriticalSection(&ccond->waiters_count_lock);
+	EnterCriticalSection(&cond->waiters_count_lock);
 	/* Increment count of waiters. */
 	cond->waiters_count++;
 	/* Store current generation in our activation record. */
@@ -352,9 +484,9 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict m
 	LeaveCriticalSection(&cond->waiters_count_lock);
 	LeaveCriticalSection(mutex);
 
-	while(true)
+	while(TRUE)
 	{
-		bool wait_done;
+		BOOL wait_done;
 
 		/* Wait until the event is signaled. */
 		WaitForSingleObject(cond->event, INFINITE);
@@ -376,10 +508,11 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict m
 	EnterCriticalSection(&cond->waiters_count_lock);
 	cond->waiters_count--;
 	cond->release_count--;
-	last_waiter = cv->release_count == 0;
+	last_waiter = cond->release_count == 0;
 	LeaveCriticalSection(&cond->waiters_count_lock);
 	if(last_waiter) /* We're the last waiter to be notified, so reset the manual event. */
 		ResetEvent(cond->event);
+	return 0;
 }
 
 /*
@@ -387,7 +520,11 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict m
  */
 int pthread_key_create(pthread_key_t *key, void (*destructor)(void*))
 {
-	pthread_key_t key = TlsAlloc();
+	if(!key) {
+		errno = EINVAL;
+		return -1;
+	}
+	*key = TlsAlloc();
 	if(destructor)
 	{
 		/*
@@ -400,7 +537,12 @@ int pthread_key_create(pthread_key_t *key, void (*destructor)(void*))
 		 * end, no fancy "create a thread for a work item".
 		 */
 	}
-	return key;
+	return 0;
+}
+
+int pthread_key_delete(pthread_key_t key)
+{
+	return TlsFree(key) ? 0 : -1;
 }
 
 /*
@@ -449,6 +591,8 @@ int getpriority(int which, int who)
 		return 0;
 	case REALTIME_PRIORITY_CLASS:
 		return -20;
+	default:
+		return 0;
 	}
 }
 
@@ -485,6 +629,70 @@ int setpriority(int which, int who, int prio)
 		return -1;
 	}
 	return 0;
+}
+
+#if 0
+/* mingw suplies one... */
+int gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+	union {
+		FILETIME ft;
+		ULARGE_INTEGER ui;
+	} u;
+
+	if(unlikely(!tv)) {
+		errno = EACCES;
+		return -1;
+	}
+	if(unlikey(tz)) {
+		errno = ENOSYS;
+		return -1;
+	}
+	/* for our case, we simply ignore the timezone */
+	GetSystemTimeAsFileTime(&u.ft);
+	u.ui.QuadPart -= NINETHY70_OFF;
+	tv->tv_sec = u.ui.QuadPart / 10000000;
+	tv->tv_usec = (u.ui.QuadPart % 10000000) / 10;
+	/*
+	 * this function is NOT precise, SystemTime is in UTC,
+	 * we want unix epoch, which is off by the leap seconds.
+	 * But it's good enough for us, and fast.
+	 */
+	return 0;
+}
+#endif
+
+struct tm *gmtime_r(const time_t *timep, struct tm *result)
+{
+	union {
+		FILETIME ft;
+		ULARGE_INTEGER ui;
+	} u;
+	SYSTEMTIME st;
+
+	if(!timep || !result) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	u.ui.QuadPart = (long long)*timep * 10000000;
+	u.ui.QuadPart += NINETHY70_OFF;
+	if(!FileTimeToSystemTime(&u.ft, &st)) {
+		errno = ERANGE;
+		return NULL;
+	}
+	result->tm_sec   = st.wSecond;
+	result->tm_min   = st.wMinute;
+	result->tm_hour  = st.wHour;
+	result->tm_mday  = st.wDay;
+	result->tm_mon   = st.wMonth - 1;
+	result->tm_year  = st.wYear - 1900;
+	result->tm_wday  = st.wDayOfWeek;
+// TODO: Do we need to calc this? can we get that from from api?
+	/* day in the year */
+	result->tm_yday  = 0;
+	result->tm_isdst = 0;
+	return result;
 }
 
 /*@unused@*/

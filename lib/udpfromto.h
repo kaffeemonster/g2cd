@@ -36,7 +36,7 @@
 #ifndef UDPFROMTO_H
 # define UDPFROMTO_H
 
-# include <sys/socket.h>
+# include "combo_addr.h"
 # include "other.h"
 
 int udpfromto_init(int s, int fam) GCC_ATTR_VIS("hidden");

@@ -118,7 +118,7 @@ static inline int isblank(int c)
 #endif /* _GNUC_PREREQ (3,1) */
 
 /* Cygwin (since it generates PE-files) doens't know about visibility */
-#if _GNUC_PREREQ (3,3) && !__CYGWIN__
+#if _GNUC_PREREQ (3,3) && !(defined(__CYGWIN__) || defined(WIN32))
 # define GCC_ATTR_VIS(x) GCC_ATTRIB(__visibility__ (x))
 #else
 # define GCC_ATTR_VIS(x)
@@ -130,7 +130,7 @@ static inline int isblank(int c)
 # define GCC_ATTR_MALLOC
 #endif
 
-#if _GNUC_PREREQ (2,3)
+#if _GNUC_PREREQ (2,3) && !defined(WIN32)
 # define GCC_ATTR_PRINTF(str_ind, to_check) GCC_ATTRIB(format (__printf__ , (str_ind), (to_check)))
 #else
 # define GCC_ATTR_PRINTF(str_ind, to_check)

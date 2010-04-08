@@ -29,6 +29,7 @@
 # ifndef WIN32
 #  include <pthread.h>
 # else
+#  define _WIN32_WINNT 0x0500
 #  include <time.h>
 #  include <windows.h>
 #  include "other.h"
@@ -48,6 +49,9 @@ typedef struct {
 } pthread_mutexattr_t;
 
 typedef struct {
+	HANDLE	write_mutex;
+	HANDLE	read_event;
+	LONG	readers;
 } pthread_rwlock_t;
 
 typedef struct {
@@ -92,6 +96,7 @@ LIB_MY_PTHREAD_EXTRN(int pthread_rwlock_unlock(pthread_rwlock_t *rwlock));
 
 /* threads */
 LIB_MY_PTHREAD_EXTRN(int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg));
+LIB_MY_PTHREAD_EXTRN(void pthread_exit(void *retval));
 LIB_MY_PTHREAD_EXTRN(int pthread_join(pthread_t thread, void **retval));
 
 /* thread attributes */
@@ -106,10 +111,11 @@ LIB_MY_PTHREAD_EXTRN(int pthread_cond_destroy(pthread_cond_t *cond));
 LIB_MY_PTHREAD_EXTRN(int pthread_cond_broadcast(pthread_cond_t *cond));
 LIB_MY_PTHREAD_EXTRN(int pthread_cond_signal(pthread_cond_t *cond));
 LIB_MY_PTHREAD_EXTRN(int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime));
-LIB_MY_PTHREAD_EXTRN(int pthread_cond_wait(pthread_cond_t *restrict cond, pthreat_mutex_t *restrict mutex));
+LIB_MY_PTHREAD_EXTRN(int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex));
 
 /* thread local storage */
 LIB_MY_PTHREAD_EXTRN(int pthread_key_create(pthread_key_t *key, void (*destructor)(void*)));
+LIB_MY_PTHREAD_EXTRN(int pthread_key_delete(pthread_key_t key));
 #  define pthread_getspecific(key)	TlsGetValue((key))
 #  define pthread_setspecific(key, val)	TlsSetValue((key), (val))
 
@@ -130,6 +136,10 @@ LIB_MY_PTHREAD_EXTRN(int getpagesize(void));
 #define PRIO_PROCESS 0
 LIB_MY_PTHREAD_EXTRN(int getpriority(int which, int who));
 LIB_MY_PTHREAD_EXTRN(int setpriority(int which, int who, int prio));
+LIB_MY_PTHREAD_EXTRN(struct tm *gmtime_r(const time_t *timep, struct tm *result));
+
+#  define ETIMEDOUT 7954
+#  define ENOBUFS 7956
 
 # endif
 #endif

@@ -33,10 +33,12 @@
 #include <ctype.h>
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
+#elif defined(HAVE_MALLOC_H)
+# include <malloc.h>
 #endif
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/socket.h>
+#include "lib/combo_addr.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -54,7 +56,6 @@
 #include "G2KHL.h"
 #include "G2MainServer.h"
 #include "lib/log_facility.h"
-#include "lib/combo_addr.h"
 #include "lib/hlist.h"
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"

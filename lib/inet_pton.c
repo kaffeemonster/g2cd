@@ -3,7 +3,7 @@
  *
  * read IPv4 or IPv6 addresses
  *
- * Copyright (c) 2008 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -40,9 +40,6 @@
  */
 
 #include "../config.h"
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <errno.h>
 #include "other.h"
 #include "combo_addr.h"

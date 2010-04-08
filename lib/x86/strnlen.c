@@ -112,9 +112,12 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"ja	2b\n\t"
 		"cmovnc	%2, %3\n\t"
 		"lea	(%3, %1), %0\n\t"
-		"sub	%5, %0\n"
-		"5:\n\t"
-		".subsection 2\n"
+		"sub	%5, %0\n\t"
+#ifdef __ELF__
+		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
 		".p2align 2\n"
 		"1:\n\t"
 		"xchg	%2, %3\n\t"
@@ -124,8 +127,11 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-		"jmp	5b\n"
-		".previous"
+#ifdef __ELF__
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&d" (t),
@@ -191,8 +197,11 @@ static size_t strnlen_SSE2(const char *s, size_t maxlen)
 		"cmovz	%2, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n"
-		"5:\n\t"
-		".subsection 2\n"
+#ifdef __ELF__
+		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
 		".p2align 2\n"
 		"1:\n\t"
 		"xchg	%2, %3\n\t"
@@ -202,8 +211,11 @@ static size_t strnlen_SSE2(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-		"jmp	5b\n\t"
-		".previous"
+#ifdef __ELF__
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
@@ -268,8 +280,11 @@ static size_t strnlen_SSE(const char *s, size_t maxlen)
 		"cmovz	%2, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n"
-		"5:\n\t"
+#ifdef __ELF__
 		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
 		".p2align 2\n"
 		"1:\n\t"
 		"xchg	%2, %3\n\t"
@@ -279,8 +294,11 @@ static size_t strnlen_SSE(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-		"jmp	5b\n"
-		".previous"
+#ifdef __ELF__
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=r" (p),
 	  /* %2 */ "=&r" (t),

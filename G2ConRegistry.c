@@ -876,14 +876,21 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 	}
 }
 
+static pthread_mutex_t global_update_lock;
+
+GCC_ATTR_CONSTRUCT static void init_global_update_lock(void)
+{
+	if(pthread_mutex_init(&global_update_lock, NULL))
+		diedie("couldn't init global update lock");
+}
+
 void g2_qht_global_update(void)
 {
-	static pthread_mutex_t update_lock = PTHREAD_MUTEX_INITIALIZER;
 	static time_t last_update;
 	long tdiff;
 
 	/* only one updater at a time */
-	if(unlikely(pthread_mutex_lock(&update_lock)))
+	if(unlikely(pthread_mutex_lock(&global_update_lock)))
 		return;
 
 	tdiff = local_time_now - last_update;
@@ -896,7 +903,7 @@ void g2_qht_global_update(void)
 // TODO: When the QHT gets updated, push change activly to other hubs
 	}
 
-	if(unlikely(pthread_mutex_unlock(&update_lock)))
+	if(unlikely(pthread_mutex_unlock(&global_update_lock)))
 		diedie("Huuarg, ConReg update lock stuck, bye!");
 }
 

@@ -41,7 +41,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "my_pthread.h"
-#include <sys/mman.h>
+#ifndef WIN32
+# include <sys/mman.h>
+#endif
 #include "my_bitopsm.h"
 #include "other.h"
 #include "aes.h"

@@ -30,6 +30,9 @@
 # include "../config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifndef WIN32
+# include <sys/poll.h>
+#endif
 /* no compat needed? simply map the calls */
 #ifndef NEED_EPOLL_COMPAT
 # include <sys/epoll.h>
@@ -86,10 +89,27 @@ _MY_E_EXTRN(int my_epoll_wait(int epfd, struct epoll_event *events, int maxevent
 _MY_E_EXTRN(int my_epoll_create(int size));
 _MY_E_EXTRN(int my_epoll_close(int epfd));
 
+# ifdef WIN32
+#  define POLLIN	(1<<0)
+#  define POLLPRI	(1<<1)
+#  define POLLOUT	(1<<2)
+#  define POLLERR	(1<<3)
+#  define POLLHUP	(1<<4)
+#  define POLLNVAL	(1<<5)
+#  define POLLRDNORM	(1<<6)
+#  define POLLRDBAND	(1<<7)
+#  define POLLWRNORM	(1<<8)
+#  define POLLWRBAND	(1<<9)
+#  define POLLMSG	(1<<10)
+struct pollfd {
+	int	fd;      /* file descriptor */
+	short	events;  /* requested events */
+	short	revents; /* returned events */
+};
+# endif
 /* now do the things special to the compat-layer */
 # if defined(HAVE_POLL) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)
 /* Solaris /dev/poll also wraps to some poll things */
-#  include <sys/poll.h>
 /* Basics */
 #  define EPOLLIN	POLLIN
 #  define EPOLLPRI	POLLPRI
@@ -104,7 +124,7 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 #  define EPOLLRDBAND	POLLRDBAND
 #  define EPOLLWRNORM	POLLWRNORM
 #  define EPOLLWRBAND	POLLWRBAND
-#	define EPOLLMSG	POLLMSG
+#  define EPOLLMSG	POLLMSG
 /* EPoll specials, must see, if i could emulate them */
 	/* One-Shot */
 #  define EPOLLONESHOT (1 << 30)

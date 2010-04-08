@@ -35,12 +35,12 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #ifdef WIN32
+# define _WIN32_WINNT 0x0500
 # include <windows.h>
 # include <wincrypt.h>
 #else
 # include <sys/stat.h>
 # include <sys/wait.h>
-# include <sys/poll.h>
 # include <sys/resource.h>
 # include <pwd.h>
 #endif
@@ -62,6 +62,7 @@
 #include "G2KHL.h"
 #include "G2GUIDCache.h"
 #include "G2QueryKey.h"
+#include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
 #include "lib/hzp.h"
@@ -1096,7 +1097,7 @@ void g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
  * while saying splint thats ok that they are unused
  */
 /*@unused@*/
-static char const ownid[] GCC_ATTR_USED_VAR = "$Own: " DIST " built on " __DATE__ " " __TIME__ " at \"" SYSTEM_INFO "\" with \"" COMPILER_INFO "\" $";
+static char const ownid[] GCC_ATTR_USED_VAR = "$Own: " DIST " built on " __DATE__ " " __TIME__ " at \"" OUR_SYSTEM_INFO "\" with \"" COMPILER_INFO "\" $";
 /*@unused@*/
 static char const rcsid_m[] GCC_ATTR_USED_VAR = "$Id: G2MainServer.c,v 1.25 2005/11/05 18:02:45 redbully Exp redbully $";
 /* EOF */

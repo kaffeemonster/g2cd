@@ -36,10 +36,8 @@
 #include <zlib.h>
 /* System net-includes */
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/poll.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "lib/my_epoll.h"
+#include "lib/combo_addr.h"
 #include <fcntl.h>
 /* other */
 #include "lib/other.h"

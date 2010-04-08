@@ -32,7 +32,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <time.h>
-#ifdef HAVE_DLOPEN
+#if defined(HAVE_DLOPEN) && !defined(WIN32)
 # include <dlfcn.h>
 #endif
 /* other */
@@ -4070,24 +4070,30 @@ out_free:
 	return 0;
 }
 
+static pthread_mutex_t crawl_s_lock;
+GCC_ATTR_CONSTRUCT static void init_crawl_lock(void)
+{
+	if(pthread_mutex_init(&crawl_s_lock, NULL))
+		diedie("could not init crawl lock");
+}
+
 static bool handle_CRAWLR(struct ptype_action_args *parg)
 {
-	static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
 	static time_t last_send;
 	struct CRAWLR_data rdata;
 	g2_packet_t *source;
 	g2_packet_t *crawla, *self, *na, *hs, *hub;
 	bool ret_val = false;
 
-	if(unlikely(pthread_mutex_lock(&s_lock)))
+	if(unlikely(pthread_mutex_lock(&crawl_s_lock)))
 		return false;
 
 	if(local_time_now < (last_send + CRAWLR_TIMEOUT))
 		goto out_unlock;
 	last_send = local_time_now;
 
-	if(unlikely(pthread_mutex_unlock(&s_lock)))
-		diedie("s_lock stuck, bye!");
+	if(unlikely(pthread_mutex_unlock(&crawl_s_lock)))
+		diedie("crawl_s_lock stuck, bye!");
 
 	memset(&rdata, 0, sizeof(rdata));
 	source = parg->source;
@@ -4231,8 +4237,8 @@ out_free:
 	return ret_val;
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&s_lock)))
-		diedie("s_lock stuck, bye!");
+	if(unlikely(pthread_mutex_unlock(&crawl_s_lock)))
+		diedie("crawl_s_lock stuck, bye!");
 	return ret_val;
 }
 
@@ -4267,7 +4273,7 @@ static bool handle_CRAWLR_RLEAF(struct ptype_action_args *parg)
 static bool handle_G2CDC(struct ptype_action_args *parg)
 {
 	bool ret_val = false;
-#ifdef HAVE_DLOPEN
+#if defined(HAVE_DLOPEN) && !defined(WIN32)
 	static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
 	static void *handle;
 	static time_t last_send;

@@ -36,10 +36,8 @@
 /* System net-includes */
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/poll.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "lib/my_epoll.h"
+#include "lib/combo_addr.h"
 #include <fcntl.h>
 /* other */
 #include "lib/other.h"
@@ -50,7 +48,6 @@
 #include "G2Acceptor.h"
 #include "G2Handler.h"
 #include "G2UDP.h"
-#include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
 #include "lib/recv_buff.h"
 #include "lib/log_facility.h"

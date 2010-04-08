@@ -29,6 +29,8 @@
 #include "my_pthread.h"
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
+#elif defined(HAVE_MALLOC_H)
+# include <malloc.h>
 #endif
 
 #define LIB_HZP_C
@@ -58,16 +60,22 @@ bool hzp_alloc(void)
 	return true;
 }
 
+static pthread_mutex_t hzp_free_lock;
+GCC_ATTR_CONSTRUCT static void init_hzp_free_lock(void)
+{
+	if(pthread_mutex_init(&hzp_free_lock, NULL))
+		diedie("couldn't init hzp free lock");
+}
+
 /*
  * hzp_free_int - remove TLS from list
  */
 void hzp_free(void)
 {
-	static pthread_mutex_t free_lock = PTHREAD_MUTEX_INITIALIZER;
 	atomicst_t *whead;
 
 	local_hzp.flags.used = false;
-	if(unlikely(pthread_mutex_lock(&free_lock)))
+	if(unlikely(pthread_mutex_lock(&hzp_free_lock)))
 		return;
 
 	/* travers list of threads */
@@ -84,7 +92,7 @@ void hzp_free(void)
 		}
 	}
 
-	pthread_mutex_unlock(&free_lock);
+	pthread_mutex_unlock(&hzp_free_lock);
 }
 #else
 static pthread_key_t key2hzp;

@@ -29,13 +29,12 @@
 /* Includes if included */
 # include <stdbool.h>
 # include <time.h>
-# include <arpa/inet.h>
-# include <sys/socket.h>
 # include <sys/types.h>
 # include <zlib.h>
 
 /* Own */
 # include "lib/other.h"
+# include "lib/combo_addr.h"
 
 enum g2_connection_states
 {

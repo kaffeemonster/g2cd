@@ -124,7 +124,6 @@
 #endif
 
 /* this is a call for trouble, but helpfull */
-//TODO: backtrace a little bit broken ATM
 #define WANT_BACKTRACES
 
 /*

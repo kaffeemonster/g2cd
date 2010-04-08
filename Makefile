@@ -873,7 +873,7 @@ version.h: Makefile
 	$(PORT_PR)	"#define OUR_PROC\t\"$(MAIN)\"\n" >> $@; \
 	$(PORT_PR)	"#define OUR_UA\t\"$(LONGNAME)\"\n" >> $@; \
 	$(PORT_PR)	"#define OUR_VERSION\t\"$(VERSION)\"\n" >> $@; \
-	$(PORT_PR)	"#define SYSTEM_INFO\t\"" >> $@; \
+	$(PORT_PR)	"#define OUR_SYSTEM_INFO\t\"" >> $@; \
 	uname -a | tr -d "\n" >> $@; \
 	$(PORT_PR)	"\"\n" >> $@; \
 	$(PORT_PR)	"#ifdef __VERSION__\n" >> $@; \

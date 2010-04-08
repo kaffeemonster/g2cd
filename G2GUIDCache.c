@@ -32,6 +32,8 @@
 #include <string.h>
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
+#elif defined(HAVE_MALLOC_H)
+# include <malloc.h>
 #endif
 #include <errno.h>
 #include "lib/my_pthread.h"

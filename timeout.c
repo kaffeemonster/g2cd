@@ -62,10 +62,16 @@ static struct
 	struct rb_root tree;
 	struct timespec time;
 	bool	abort;
-} wakeup = {
-	.cond   = PTHREAD_COND_INITIALIZER,
-	.mutex  = PTHREAD_MUTEX_INITIALIZER,
-};
+} wakeup;
+
+
+GCC_ATTR_CONSTRUCT static void init_timeout_system(void)
+{
+	if(pthread_mutex_init(&wakeup.mutex, NULL))
+		diedie("failed to setup timeout mutex");
+	if(pthread_cond_init(&wakeup.cond, NULL))
+		diedie("failed to setup timeout conditional");
+}
 
 /*
  * helper funcs
