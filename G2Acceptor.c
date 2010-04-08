@@ -39,7 +39,9 @@
 /* System net-includes */
 #include <sys/types.h>
 #include "lib/my_epoll.h"
-#include <netinet/tcp.h>
+#ifndef WIN32
+# include <netinet/tcp.h>
+#endif
 #include "lib/combo_addr.h"
 #include <fcntl.h>
 /* other */

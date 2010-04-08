@@ -67,7 +67,7 @@ static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 	char *wptr;
 	int i;
 
-	if(unlikely(sizeof"1.1.1.1" > cnt)) {
+	if(unlikely(sizeof("1.1.1.1") > (size_t)cnt)) {
 		errno = ENOSPC;
 		return NULL;
 	}
@@ -99,13 +99,13 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 	char tbuf[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")];
 	int i;
 
-	if(unlikely((str_size("::1")) > cnt)) {
+	if(unlikely((str_size("::1")) > (size_t)cnt)) {
 		errno = ENOSPC;
 		return NULL;
 	}
 
 	if(unlikely(IN6_IS_ADDR_V4MAPPED(src))) {
-		if(unlikely((str_size("::ffff:1.1.1.1")) > cnt)) {
+		if(unlikely((str_size("::ffff:1.1.1.1")) > (size_t)cnt)) {
 			errno = ENOSPC;
 			return NULL;
 		}

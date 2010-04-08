@@ -32,7 +32,9 @@
 #include <time.h>
 #include <errno.h>
 #include "my_pthread.h"
-#include <syslog.h>
+#ifndef WIN32
+# include <syslog.h>
+#endif
 #include <unistd.h>
 /* other */
 #include "other.h"
@@ -178,7 +180,7 @@ static void logg_ret_buf(struct big_buff *ret_buf)
 
 static inline int do_vlogging(const enum loglevel level, const char *fmt, va_list args)
 {
-	FILE *log_where = level >= LOG_NOTICE ? stdout : stderr;
+	FILE *log_where = level >= LOGF_NOTICE ? stdout : stderr;
 
 // TODO: properly distribute logmsg to all logging services.
 	return vfprintf(log_where, fmt, args);
@@ -186,7 +188,7 @@ static inline int do_vlogging(const enum loglevel level, const char *fmt, va_lis
 
 static inline int do_logging(const enum loglevel level, const char *string, size_t len)
 {
-	int log_where = level >= LOG_NOTICE ? STDOUT_FILENO : STDERR_FILENO;
+	int log_where = level >= LOGF_NOTICE ? STDOUT_FILENO : STDERR_FILENO;
 
 // TODO: properly distribute logmsg to all logging services.
 	return write(log_where, string, len);

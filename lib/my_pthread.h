@@ -29,17 +29,32 @@
 # ifndef WIN32
 #  include <pthread.h>
 # else
-#  define _WIN32_WINNT 0x0500
+#  ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0501
+#  endif
 #  include <time.h>
 #  include <windows.h>
+#  include <io.h>
 #  include "other.h"
 #  define LIB_MY_PTHREAD_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
-// TODO: write this stuff...
+// TODO: totaly untested...
 
 struct timespec {
 	time_t	tv_sec;	/* seconds */
 	long	tv_nsec;	/* nanoseconds */
+};
+
+typedef struct {
+	/* dirty emul, no content */
+} siginfo_t;
+
+struct sigaction {
+	void	(*sa_handler)(int);
+	void	(*sa_sigaction)(int, siginfo_t *, void *);
+	sigset_t	sa_mask;
+	int	sa_flags;
+	void	(*sa_restorer)(void);
 };
 
 typedef CRITICAL_SECTION pthread_mutex_t;
@@ -126,17 +141,27 @@ typedef int pid_t;
 typedef int gid_t;
 
 /* small fixes */
-#  define getpid  _getpid
+#  define getpid   _getpid
 #  define getppid() (4) /* choosen by a fair dice roll... */
+#  define pipe(x)  _pipe((x), 64 * 1024, _O_BINARY)
 #  define srandom  srand
 #  define random   rand
 #  define sleep(t) Sleep(t * 1000)
+#  define SHUT_WR  SD_SEND
+#  define SHUT_RD  SD_RECEIVE
+#  define SHUT_RDWR SD_BOTH
 /* wrapper */
 LIB_MY_PTHREAD_EXTRN(int getpagesize(void));
 #define PRIO_PROCESS 0
 LIB_MY_PTHREAD_EXTRN(int getpriority(int which, int who));
 LIB_MY_PTHREAD_EXTRN(int setpriority(int which, int who, int prio));
 LIB_MY_PTHREAD_EXTRN(struct tm *gmtime_r(const time_t *timep, struct tm *result));
+LIB_MY_PTHREAD_EXTRN(struct tm *localtime_r(const time_t *timep, struct tm *result));
+#  define F_GETFL 0
+#  define F_SETFL 1
+#  define O_NONBLOCK (1<<0)
+LIB_MY_PTHREAD_EXTRN(int fcntl(int fd, int cmd, ...));
+#  define SA_SIGINFO (1<<0)
 
 #  define ETIMEDOUT 7954
 #  define ENOBUFS 7956

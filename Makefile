@@ -124,6 +124,7 @@ CTAGS = ctags
 CSCOPE = cscope
 RM = rm -f
 #BIN2O_OPTS = -d sun -l 8
+#BIN2O_OPTS = -d coff
 
 # split up host and target CFLAGS
 #	solaris is so anal... can someone please wake them with a 2 by 4?
@@ -330,6 +331,8 @@ LDLIBS_BASE += -ldl #-lm
 #LDLIBS_BASE += -lrt
 #	a lib providing dbm_*, berkleydb will fit, prop. also anything else
 LDLIBS_BASE += -ldb
+#	and for win32
+#LDLIBS_BASE += -lws2_32
 #	on old solaris it's in the dbm lib, part of system
 #LDLIBS_BASE += -ldbm
 LDLIBS_Z = -lz $(LDLIBS_BASE)

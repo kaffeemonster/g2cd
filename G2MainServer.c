@@ -35,7 +35,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #ifdef WIN32
-# define _WIN32_WINNT 0x0500
+# define _WIN32_WINNT 0x0501
 # include <windows.h>
 # include <wincrypt.h>
 #else
@@ -110,7 +110,9 @@ static void init_prng(void);
 static noinline void read_uprofile(void);
 static void adjust_our_niceness(int);
 static void sig_stop_func(int signr, siginfo_t *, void *);
+#ifndef WIN32
 static void sig_dump_func(int signr, siginfo_t *, void *);
+#endif
 static intptr_t dump_a_hub(g2_connection_t *con, void *carg);
 
 int main(int argc, char **args)
@@ -128,6 +130,16 @@ int main(int argc, char **args)
 
 	/* first and foremost, before something can go wrong */
 	backtrace_init();
+
+#ifdef WIN32
+	{
+		WORD version_req = MAKEWORD(2, 2);
+		WSADATA wsa_data;
+		int err = WSAStartup(version_req, &wsa_data);
+		if(err)
+			diedie("WSAStartup failed");
+	}
+#endif
 
 	parse_cmdl_args(argc, args);
 
@@ -244,6 +256,7 @@ int main(int argc, char **args)
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
 
+#ifndef WIN32
 		memset(&new_sas, 0, sizeof(new_sas));
 		new_sas.sa_sigaction = sig_dump_func;
 		sigemptyset(&new_sas.sa_mask);
@@ -256,6 +269,7 @@ int main(int argc, char **args)
 		new_sas.sa_flags = SA_SIGINFO;
 		if(sigaction(SIGUSR2, &new_sas, NULL))
 			logg_pos(LOGF_WARN, "Error registering conreg dump handler\n");
+#endif
 	}
 
 	/* make our hzp ready */
@@ -374,7 +388,9 @@ int main(int argc, char **args)
 			break;
 		else if(9 == i) {
 			logg_pos(LOGF_ERR, "not all gone down! Aborting!\n");
+#ifndef WIN32
 			fsync(STDOUT_FILENO);
+#endif
 			g2_khl_end(); /* frantic writeout! */
 			return EXIT_FAILURE;
 		}
@@ -425,7 +441,9 @@ int main(int argc, char **args)
 	hzp_scan(0);
 
 	clean_up_m();
+#ifndef WIN32
 	fsync(STDOUT_FILENO);
+#endif
 	return EXIT_SUCCESS;
 }
 
@@ -438,10 +456,15 @@ static intptr_t dump_a_hub(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARA
 
 static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
-	if(SIGINT == signr || SIGHUP == signr)
+	if(SIGINT == signr
+#ifndef WIN32
+	   || SIGHUP == signr
+#endif
+	)
 		server_running = false;
 }
 
+#ifndef WIN32
 static void sig_dump_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGUSR1 == signr)
@@ -449,6 +472,7 @@ static void sig_dump_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *
 	if(SIGUSR2 == signr)
 		dump_conreg = true;
 }
+#endif
 
 static inline void parse_cmdl_args(int argc, char **args)
 {

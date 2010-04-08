@@ -49,7 +49,14 @@
 #else
 # include <ndbm.h>
 #endif
-#include <netdb.h>
+#ifndef WIN32
+# include <netdb.h>
+#else
+# ifndef _WIN32_WINNT
+#  define _WIN32_WINNT 0x0501
+# endif
+# include <ws2tcpip.h>
+#endif
 /* Own */
 #define _G2KHL_C
 #include "lib/other.h"

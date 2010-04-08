@@ -24,7 +24,7 @@
  */
 
 #ifdef WIN32
-# define _WIN32_WINNT 0x0500
+# define _WIN32_WINNT 0x0501
 # include <windows.h>
 # include <errno.h>
 # include "other.h"
@@ -693,6 +693,68 @@ struct tm *gmtime_r(const time_t *timep, struct tm *result)
 	result->tm_yday  = 0;
 	result->tm_isdst = 0;
 	return result;
+}
+
+struct tm *localtime_r(const time_t *timep, struct tm *result)
+{
+	union {
+		FILETIME ft;
+		ULARGE_INTEGER ui;
+	} u;
+	FILETIME lft;
+	SYSTEMTIME st;
+
+	if(!timep || !result) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	u.ui.QuadPart = (long long)*timep * 10000000;
+	u.ui.QuadPart += NINETHY70_OFF;
+	if(!FileTimeToLocalFileTime(&u.ft, &lft)) {
+		errno = ERANGE;
+		return NULL;
+	}
+	if(!FileTimeToSystemTime(&lft, &st)) {
+		errno = ERANGE;
+		return NULL;
+	}
+	result->tm_sec   = st.wSecond;
+	result->tm_min   = st.wMinute;
+	result->tm_hour  = st.wHour;
+	result->tm_mday  = st.wDay;
+	result->tm_mon   = st.wMonth - 1;
+	result->tm_year  = st.wYear - 1900;
+	result->tm_wday  = st.wDayOfWeek;
+// TODO: Do we need to calc this? can we get that from from api?
+	/* day in the year */
+	result->tm_yday  = 0;
+	result->tm_isdst = 0;
+	return result;
+}
+
+int fcntl(int fd, int cmd, ...)
+{
+	va_list args;
+	int ret_val = 0;
+	u_long arg;
+
+	va_start(args, cmd);
+	switch(cmd)
+	{
+	case F_GETFL:
+		break;
+	case F_SETFL:
+		arg = va_arg(args, int);
+		arg = arg & O_NONBLOCK ? 1 : 0;
+		ioctlsocket(fd, FIONBIO, &arg);
+		break;
+	default:
+		errno = ENOSYS;
+		ret_val = -1;
+	}
+	va_end(args);
+	return ret_val;
 }
 
 /*@unused@*/

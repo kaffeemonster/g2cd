@@ -1,7 +1,7 @@
 /* bin2o.c
  * little helper to make a .o from (data)files
  *
- * Copytight (c) 2006 - 2009 Jan Seiffert
+ * Copytight (c) 2006 - 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -51,6 +51,7 @@ enum as_dialect
 {
 	GAS,
 	SUN,
+	COFF
 };
 
 struct xf_buf
@@ -127,6 +128,8 @@ int main(int argc, char **argv)
 								as_dia = GAS;
 							else if('s' == argv[i][0] || 'S' == argv[i][0])
 								as_dia = SUN;
+							else if('c' == argv[i][0] || 'C' == argv[i][0])
+								as_dia = COFF;
 							else
 								fprintf(stderr, "'%s' is an unknown assembler dialect!\n", argv[i]);
 						}
@@ -200,11 +203,18 @@ int main(int argc, char **argv)
 		if(!writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
 			goto out;
 	}
-	else
+	else if(SUN == as_dia)
 	{
 		if(verbose)
 			(void)writestr(STDOUT_FILENO, "\t.section \".rodata\"\n");
 		if(!writestr(as_fd, "\t.section \".rodata\"\n"))
+			goto out;
+	}
+	else if(COFF == as_dia)
+	{
+		if(verbose)
+			(void)writestr(STDOUT_FILENO, "\t.section .rdata,\"dr\"\n");
+		if(!writestr(as_fd, "\t.section .rdata,\"dr\"\n"))
 			goto out;
 	}
 
@@ -304,12 +314,18 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		opt_pack = NULL;
 	}
 
+	/* add a leading underscore if coff */
+	if(COFF == as_dia) {
+		memmove(buf->name + 1, buf->name, strlen(buf->name) + 1);
+		buf->name[0] = '_';
+	}
+
 	if(export_base_data) {
 		if(GAS == as_dia)
 			w_ptr += sprintf(w_ptr, "\t.hidden %s_base_data\n", buf->name);
 		w_ptr += sprintf(w_ptr, ".globl %s_base_data\n", buf->name);
 	}
-	w_ptr += sprintf(w_ptr, "\t.type %s_base_data,%cobject\n%s_base_data:\n", buf->name, GAS == as_dia ? '@' : '#', buf->name);
+	w_ptr += sprintf(w_ptr, "%s_base_data:\n", buf->name);
 	for(pos = 0; (pos + 16) < buf->len; pos += 16)
 	{
 		if(w_ptr > (pbuf + PBUF_SIZE - 240))
@@ -331,13 +347,27 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 	}
 	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
 		return false;
-	w_ptr = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
+	if(COFF == as_dia) {
+		w_ptr  = pbuf + sprintf(pbuf, "\t.def %s_base_data\n\t\t.size . - %s_base_data\n", buf->name, buf->name);
+		w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");
+		w_ptr += sprintf(w_ptr, "\t\t.type 60\n\t.endef\n");
+	} else {
+		w_ptr  = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
+		w_ptr += sprintf(w_ptr, "\t.type %s_base_data, %cobject\n", buf->name, GAS == as_dia ? '@' : '#');
+	}
 	if(GAS == as_dia)
 		w_ptr += sprintf(w_ptr, "\t.hidden %s\n", buf->name);
 	w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
-	w_ptr += sprintf(w_ptr, "\t.type %s,%cobject\n%s:\n", buf->name, GAS == as_dia ? '@' : '#', buf->name);
+	w_ptr += sprintf(w_ptr, "%s:\n", buf->name);
 	w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
-	w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n\n", buf->name, buf->name);
+	if(COFF == as_dia) {
+		w_ptr += sprintf(w_ptr, "\t.def %s\n\t\t.size . - %s\n", buf->name, buf->name);
+		w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");
+		w_ptr += sprintf(w_ptr, "\t\t.type 63\n\t.endef\n\n");
+	} else {
+		w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n", buf->name, buf->name);
+		w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? '@' : '#');
+	}
 	if(verbose) {
 		if(w_ptr - pbuf != write(STDOUT_FILENO, pbuf, w_ptr - pbuf)) {
 		}
@@ -512,7 +542,7 @@ static int invokation(char *prg_name)
 {
 	fprintf(stderr, "%s [-v] [-a as] [-d gas|sun] [-o outfile] file file file ...\n", prg_name);
 	fputs("\t-a as\t- assembler-bin to use\t(d: as)\n",stderr);
-	fputs("\t-d [gas|sun]\t- assembler dialekt\t(d: gas)\n", stderr);
+	fputs("\t-d [gas|sun|coff]\t- assembler dialekt\t(d: gas)\n", stderr);
 	fputs("\t-o outfile\t- output filename\t(d: what as takes)\n", stderr);
 	fputs("\t-e\t- also export the base data as symbol\n", stderr);
 	fputs("\t-v\t- dump text written to assambler\n", stderr);

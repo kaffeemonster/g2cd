@@ -29,7 +29,9 @@
 # include <stdbool.h>
 # include <string.h>
 # ifdef WIN32
-#  define _WIN32_WINNT 0x0500
+#  ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0501
+#  endif
 #  ifdef HAVE_WS2VISTA
 #   include <Wsk.h>
 #  else

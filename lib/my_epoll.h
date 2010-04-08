@@ -90,6 +90,7 @@ _MY_E_EXTRN(int my_epoll_create(int size));
 _MY_E_EXTRN(int my_epoll_close(int epfd));
 
 # ifdef WIN32
+/* vista and greater know WSApoll, guess what... */
 #  define POLLIN	(1<<0)
 #  define POLLPRI	(1<<1)
 #  define POLLOUT	(1<<2)
