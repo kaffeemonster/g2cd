@@ -812,9 +812,10 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* could we place it all in our sendbuffer? */
 			if(likely(str_size(HED_2_PART_1_FULLC) < buffer_remaining(*to_con->send)))
 			{
+				int act_hub_sum = atomic_read(&server.status.act_hub_sum);
 				if(to_con->flags.upeer)
 				{
-					if(atomic_read(&server.status.act_hub_sum) >= server.settings.max_hub_sum) {
+					if(act_hub_sum >= server.settings.max_hub_sum) {
 						strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLH);
 						to_con->send->pos += str_size(HED_2_PART_1_FULLH);
 						to_con->flags.dismissed = true;
@@ -829,7 +830,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				}
 				else if(atomic_read(&server.status.act_connection_sum) >=
 					     (server.settings.max_connection_sum -
-					      (server.settings.max_hub_sum - atomic_read(&server.status.act_hub_sum)))) {
+					      (act_hub_sum > server.settings.max_hub_sum ? 0 : server.settings.max_hub_sum - act_hub_sum))) {
 					strlitcpy(buffer_start(*to_con->send), HED_2_PART_1_FULLC);
 					to_con->send->pos += str_size(HED_2_PART_1_FULLC);
 					to_con->flags.dismissed = true;
