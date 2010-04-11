@@ -369,6 +369,92 @@
 	--Some security-gurus checking for security concerns.--
 	 Scratch those last two points, some of it is deliberate, i don't need
 	evangelization, i need _solutions_ to _real_ problems.
+
+3.1 What do my eyes see? WIN32, WTF???
+--------------------------------------
+	 You may find some #ifdef WIN32 troughout the codebase. Does that mean
+	G2CD runs on Windows or is a port planed or what?
+
+	 The simple answer is: NO.
+
+	 The longer answer is:
+	 Because i'm a nice guy and it was a typical rainy april day, i sat down
+	and litteratly bulldozered down the five pages of errors from _every_
+	source file to only some "small" errors (often the reason for pages and
+	pages of compiler blurp is a simple error).
+	 I did this because i know where the problems are and _maybe_ the best
+	way to fix them, and i wanted to cross check my suspicions. Not because
+	i really wanted to port the code.
+	 This is just a little work to get it through the compiler. So if
+	someone really feels the urge to port it (loco?), he does not have to
+	start at square one.
+	 It still does not link, and even with that fixed, it will _NOT_ run.
+
+	 Some blurb from the top of my head:
+	- Do not try to use VC, it will not work. This is C99 code (yes, with
+	  GNU extentions...), VC will not eat it. And it is no C++ code, so
+	  do not try VC++. Get yourself mingw.
+	- The build system will not work on win, so you better cross compile.
+	- The mingw header export some functions in their stdlib.h (as the orig.
+	  windows header?), which collide with my functions, namely itoa, ltoa,
+	  ulltoa etc. You could get rid of them by defining a slew of
+	  _NO_OLDNAMES, __NO_INLINE__, etc., but this will remove other functions
+	  we need. Simply #if 0 them in the mingw headers. (Yes, modify the
+	  system supplied header).
+	- Get zlib and Berkley DB for mingw, they are available out there.
+	- config.h is your friend, when you comment out nearly everything, it
+	  will "work". (Hint: some of the commented out stuff needs to be
+	  written/emulated...)
+
+	 Which brings us to the real win problems:
+	- G2CD expects a _working_ and thread local errno. win likes to use
+	  (WSA)GetLastError, have fun...
+	- Networking is esp. broken, because of this. And don't forget to
+	  redefine all the errno values from WSAWHATEVER to the normal ones.
+	- G2CD uses pthreads. I added a small wrapper, but it is:
+	   * prop. broken
+	   * uses errno, which will not work on win
+	- I dumped some more compat stuff in my_pthread.h/.c, which is prop.
+	  also broken.
+	- There is some more functionality needed which needs to be emulated
+	  (udpfromto, socketpair, sigaction, errno (an always working strerror)).
+	- Did i mention the million of other bugs?
+	- Which brings us to the major road block:
+	   * poll
+	   * epoll
+	   poll is normaly only needed in "small" quantities, so it could be
+	  emulated with select or WaitForMutlibleObject/WSAAsyncSelect. But
+	  the problem is: if you then would try to emulate epoll with poll
+	  (which is also not really working...), you would ran into the issue
+	  that win only allows 64 sockets to be monitored by these APIs.
+	  Vista and higher (Server 2008, Win7, etc.) finally have a WSAPoll,
+	  which is the real poll (what took you so long?), only with another
+	  name. You have to remove/adapt my own POLLIN/POLLOUT etc. defines
+	  to the real ones.
+	   For epoll, i don't know how to "fix" that. Emulation by poll would
+	  only work on Vista and higher, and is not recommended. There seems
+	  to be no other nice API, which only leaves us with completion ports.
+	   Completion ports are nice and dandy, only there is a little problem,
+	  they mix three things (to achive async io):
+	   1) async transport to/from userland buffer
+	   2) large scale event notification by
+	   3) managing a worker poll churning along all those events
+	  Point 2 is whats needed, because i build 3 myself. Using the NT
+	  Kernel supplied goodness would be nice and an option, but point
+	  1 really ruins our party.
+	   Async transport is a nice idea, and surely gives a nice boost for
+	  most apps which churn out a lot of data, but G2CD is incompatible
+	  from the ground up with this, because we do not churn much data.
+	   We have lots and lots of connections, but they are mostly idle.
+	  Every few seconds a connection gets some data. The sum of connections
+	  creates the traffic. For that reason, connections do not have a
+	  fixed recvieve buffer. When connections are ready, they temporaly
+	  get a buffer, data is read, and then we try to consume all the data
+	  in that buffer, which works most of the time. This way we can handle
+	  thousands of conneciton with a handful of buffer. For async transport
+	  some core logic in G2CD has to be rewritten to stick a fixed buffer
+	  on every connection.
+
 
 4. Coding-Style
 ===============
@@ -492,7 +578,13 @@
 	   writing it in the classic C90 way (at the beginning of a block). Since
 	   this cannot be fixed with a sed -> make it so. It also helps a little
 	   bit with the "how much variables are in here" question.
-	q) There are maybe places, where something differs from the normal layout.
+	q) I didn't mention whitespace till now... Upsie...
+	   That's also a hard one, so only some quick notes. Keywords and function
+	   calls do not get any whitespace before the (. Otherwise expressions are
+	   made lighter with whitepspace, i don't like super dense a+c*6?g*i:g%9.
+	   Whitespace is used generously to align the code (like putting = on the
+	   same column over several lines) to give the code a uniform look.
+	r) There are maybe places, where something differs from the normal layout.
 	   This is maybe an accident, i changed my mind how such a thing has to
 	   look and i didn't looked over it again, or it was my intention, since
 	   it was OK for this situation. -> ups, deadlock ;) (did i mention that

@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2009 Jan Seiffert
+ * Copyright (c) 2004 - 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -123,6 +123,14 @@ static inline int isblank(int c)
 #else
 # define GCC_ATTR_VIS(x)
 #endif /* _GNUC_PREREQ (3,3) && !__CYGWIN__ */
+
+#if _GNUC_PREREQ (2,8) && (defined(__CYGWIN__) || defined(WIN32))
+# define GCC_ATTR_DLLEXPORT __declspec(dllexport)
+# define GCC_ATTR_STDCALL GCC_ATTRIB(__stdcall__)
+#else
+# define GCC_ATTR_DLLEXPORT
+# define GCC_ATTR_STDCALL
+#endif
 
 #if _GNUC_PREREQ (3,0)
 # define GCC_ATTR_MALLOC GCC_ATTRIB(__malloc__)

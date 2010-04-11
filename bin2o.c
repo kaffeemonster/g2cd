@@ -557,7 +557,7 @@ static char *xstrdup(const char *str)
 	if(!str)
 		return NULL;
 
-	if(!(new_str = malloc(strlen(str) + 1)))
+	if(!(new_str = malloc(strlen(str) + 1 + 1)))
 	{
 		perror(__FILE__ ", " mkstr(__LINE__) ", strdup malloc()");
 		exit(EXIT_FAILURE);

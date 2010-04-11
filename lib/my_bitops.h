@@ -35,7 +35,7 @@
 
 # define LIB_MY_BITOPS_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # ifdef ADLER32_C
-uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len);
+GCC_ATTR_DLLEXPORT uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len);
 # endif
 LIB_MY_BITOPS_EXTRN(size_t popcountst(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL);
 LIB_MY_BITOPS_EXTRN(size_t flsst(size_t find) GCC_ATTR_CONST GCC_ATTR_FASTCALL);

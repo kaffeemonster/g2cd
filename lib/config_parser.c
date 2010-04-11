@@ -194,7 +194,12 @@ bool config_parser_handle_guid(struct list_head *head, void *data)
 	                tmp_id+6, tmp_id+7, tmp_id+8, tmp_id+9, tmp_id+10,
 	                tmp_id+11, tmp_id+12, tmp_id+13, tmp_id+14, tmp_id+15)) {
 		if(5 != sscanf(t->d.t,
-		              "%08X-%04X-%04X-%04X-%012llX",
+		              "%08X-%04X-%04X-%04X-%012"
+#ifndef WIN32
+		                                       "llX",
+#else
+		                                       "I64X",
+#endif
 		              x.s.f, x.s.f+1, x.s.f+2, x.s.f+3, &x.s.l)) {
 			logg(LOGF_NOTICE, "Parsing config file %s@%zu: \"%s\" does not seem to be a valid guid, will ignore\n",
 			     first->ctx->in_filename, first->ctx->line_num, t->d.t);
