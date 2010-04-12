@@ -759,7 +759,7 @@ dist: $(TARED_FILES)
 	@for da_file in $(TARED_FILES) ; do ln $$da_file `cat .fname`/$$da_file ; done
 	@$(PORT_PR) "\tTAR[$(DISTNAME)]\n"
 	@tar chf `cat .fname`.tar `cat .fname`
-	@-(($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || ($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
+	@-(($(PORT_PR) "\tLZMA[$(DISTNAME).tar]\n"; lzma -ef9 `cat .fname`.tar) || ($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || ($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
 	@$(PORT_PR) "please check if packet is correct!\n\n"
 	@-$(RM) -rf `cat .fname` .fname
 

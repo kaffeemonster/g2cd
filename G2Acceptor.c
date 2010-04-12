@@ -1199,6 +1199,11 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 // TODO: send off a first round of LNI/KHL
 			/* and UPROC? I don't want their profile, i don't care about the content,
 			 * it's xml, but broken SH 2.5.0.0 does not deliver GUID */
+			if(g2_packet_add_LNI(to_con)) {
+				shortlock_t_lock(&to_con->pts_lock);
+				to_con->poll_interrests |= (uint32_t) EPOLLOUT;
+				shortlock_t_unlock(&to_con->pts_lock);
+			}
 			more_bytes_needed = true;
 			break;
 		case G2CONNECTED:

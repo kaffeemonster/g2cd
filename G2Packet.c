@@ -1602,13 +1602,86 @@ struct LNI_data
 	bool had_LNI_GU;
 };
 
-static bool handle_LNI(struct ptype_action_args *parg)
+noinline bool g2_packet_add_LNI(g2_connection_t *connec)
 {
 	union combo_addr local_addr;
-	struct ptype_action_args cparg;
 	g2_packet_t *lni, *na, *gu, *v, *hs, *qk;
-	g2_connection_t *connec = parg->connec;
 	socklen_t sin_size = sizeof(local_addr);
+
+	lni = g2_packet_calloc();
+	na  = g2_packet_calloc();
+	gu  = g2_packet_calloc();
+	v   = g2_packet_calloc();
+	hs  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
+	qk  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
+
+	if(!(lni && na))
+		goto out_fail;
+
+	lni->type = PT_LNI;
+	na->type = PT_NA;
+
+	if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
+		goto out_fail;
+	if(!write_na_to_packet(na, &local_addr))
+		goto out_fail;
+	list_add_tail(&na->list, &lni->children);
+
+	if(v)
+	{
+		v->type = PT_V;
+		v->data_trunk.data     = (void *)(intptr_t)OWN_VENDOR_CODE;
+		v->data_trunk.capacity = str_size(OWN_VENDOR_CODE);
+		buffer_clear(v->data_trunk);
+		list_add_tail(&v->list, &lni->children);
+	}
+	if(gu)
+	{
+		gu->type = PT_GU;
+		gu->data_trunk.data     = (char *)server.settings.our_guid;
+		gu->data_trunk.capacity = sizeof(server.settings.our_guid);
+		buffer_clear(gu->data_trunk);
+		list_add_tail(&gu->list, &lni->children);
+	}
+	if(hs)
+	{
+		hs->type = PT_HS;
+		if(g2_packet_steal_data_space(hs, 4))
+		{
+			uint16_t cons     = (uint16_t)atomic_read(&server.status.act_connection_sum);
+			uint16_t max_cons = server.settings.max_connection_sum;
+			put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
+			put_unaligned(max_cons, (uint16_t *)(buffer_start(hs->data_trunk)+2));
+			hs->big_endian = HOST_IS_BIGENDIAN;
+			list_add_tail(&hs->list, &lni->children);
+		}
+		else
+			g2_packet_free(hs);
+	}
+	if(qk) {
+		qk->type = PT_QK;
+		list_add_tail(&qk->list, &lni->children);
+	}
+	lni->big_endian = HOST_IS_BIGENDIAN;
+
+	g2_packet_add2target(lni, &connec->packets_to_send, &connec->pts_lock);
+	connec->u.handler.send_stamps.LNI = local_time_now;
+
+	return true;
+out_fail:
+	g2_packet_free(lni);
+	g2_packet_free(na);
+	g2_packet_free(gu);
+	g2_packet_free(v);
+	g2_packet_free(hs);
+	g2_packet_free(qk);
+	return false;
+}
+
+static bool handle_LNI(struct ptype_action_args *parg)
+{
+	struct ptype_action_args cparg;
+	g2_connection_t *connec = parg->connec;
 	bool ret_val = false, keep_decoding;
 	struct LNI_data rdata;
 
@@ -1673,75 +1746,7 @@ static bool handle_LNI(struct ptype_action_args *parg)
 	if(unlikely(local_time_now < (connec->u.handler.send_stamps.LNI + (LNI_TIMEOUT))))
 		return ret_val;
 
-	/* build package */
-	lni = g2_packet_calloc();
-	na  = g2_packet_calloc();
-	gu  = g2_packet_calloc();
-	v   = g2_packet_calloc();
-	hs  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
-	qk  = likely(server.status.our_server_upeer) ? g2_packet_calloc() : NULL;
-
-	if(!(lni && na))
-		goto out_fail;
-
-	lni->type = PT_LNI;
-	na->type = PT_NA;
-
-	if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
-		goto out_fail;
-	if(!write_na_to_packet(na, &local_addr))
-		goto out_fail;
-	list_add_tail(&na->list, &lni->children);
-
-	if(v)
-	{
-		v->type = PT_V;
-		v->data_trunk.data     = (void *)(intptr_t)OWN_VENDOR_CODE;
-		v->data_trunk.capacity = str_size(OWN_VENDOR_CODE);
-		buffer_clear(v->data_trunk);
-		list_add_tail(&v->list, &lni->children);
-	}
-	if(gu)
-	{
-		gu->type = PT_GU;
-		gu->data_trunk.data     = (char *)server.settings.our_guid;
-		gu->data_trunk.capacity = sizeof(server.settings.our_guid);
-		buffer_clear(gu->data_trunk);
-		list_add_tail(&gu->list, &lni->children);
-	}
-	if(hs)
-	{
-		hs->type = PT_HS;
-		if(g2_packet_steal_data_space(hs, 4))
-		{
-			uint16_t cons     = (uint16_t)atomic_read(&server.status.act_connection_sum);
-			uint16_t max_cons = server.settings.max_connection_sum;
-			put_unaligned(cons, (uint16_t *)buffer_start(hs->data_trunk));
-			put_unaligned(max_cons, (uint16_t *)(buffer_start(hs->data_trunk)+2));
-			hs->big_endian = HOST_IS_BIGENDIAN;
-			list_add_tail(&hs->list, &lni->children);
-		}
-		else
-			g2_packet_free(hs);
-	}
-	if(qk) {
-		qk->type = PT_QK;
-		list_add_tail(&qk->list, &lni->children);
-	}
-	lni->big_endian = HOST_IS_BIGENDIAN;
-
-	g2_packet_add2target(lni, parg->target, parg->target_lock);
-	parg->connec->u.handler.send_stamps.LNI = local_time_now;
-
-	return true;
-out_fail:
-	g2_packet_free(lni);
-	g2_packet_free(na);
-	g2_packet_free(gu);
-	g2_packet_free(v);
-	g2_packet_free(hs);
-	g2_packet_free(qk);
-	return false;
+	return g2_packet_add_LNI(parg->connec);
 }
 
 static bool handle_LNI_HS(struct ptype_action_args *parg)
@@ -3322,7 +3327,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 		logg_packet(STDLF, "/QHT", "with unknown command");
 
 	connec->flags.last_data_active = true;
-	return ret_val;
+//	return ret_val;
 	if(unlikely(ret_val) || !connec->flags.upeer || local_time_now < (connec->u.handler.send_stamps.QHT + (QHT_TIMEOUT)))
 		return ret_val;
 

@@ -273,6 +273,7 @@ _G2CON_EXTRN(void g2_con_helgrind_transfer(g2_connection_t *) GCC_ATTR_FASTCALL)
 # else
 #  define g2_con_helgrind_transfer(x)
 # endif
+_G2CON_EXTRN(bool g2_packet_add_LNI(g2_connection_t *connec));
 
 #endif /* _G2CONNECTION_H */
 /* EOF */
