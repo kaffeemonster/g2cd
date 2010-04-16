@@ -232,6 +232,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		return false;
 	}
 
+	work_entry->connect_time = local_time_now;
 	/* ip already connected? */
 	if(unlikely(g2_conreg_have_ip(&work_entry->remote_host))) {
 		/* have already counted it, so remove it from count */

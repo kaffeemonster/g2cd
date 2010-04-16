@@ -57,6 +57,8 @@
 #include "lib/guid.h"
 
 /* minutes to seconds */
+#define Q2_T_TIMEOUT   (    1)
+#define Q2_U_TIMEOUT   (    5)
 #define PI_TIMEOUT     (   30)
 #define LNI_TIMEOUT    ( 1*60)
 #define QHT_TIMEOUT    ( 1*60)
@@ -2352,6 +2354,28 @@ static bool handle_Q2(struct ptype_action_args *parg)
 	if(!parg->source->is_compound)
 		return ret_val;
 
+	if(parg->connec)
+	{
+		time_t old_stamp = parg->connec->u.handler.recv_stamps.Q2;
+		parg->connec->u.handler.recv_stamps.Q2 = local_time_now;
+		/* query limit non ultrapeers */
+		if(!parg->connec->flags.upeer)
+		{
+			/*
+			 * this timeout should be _very_ short, we are OK with
+			 * beeing queried, but we do not want to get flooded.
+			 * 1 query per second is still a lot, but prevents to pump
+			 * queries at full line speed
+			 */
+			if(old_stamp >= (local_time_now - Q2_T_TIMEOUT))
+				return ret_val;
+		}
+		else
+		{
+			/* maybe not more than 100 queries per second? */
+		}
+	}
+
 	if(!g2_qht_search_prepare())
 		return ret_val;
 
@@ -2385,7 +2409,6 @@ static bool handle_Q2(struct ptype_action_args *parg)
 	if(parg->connec)
 	{
 		parg->connec->flags.last_data_active = true;
-// TODO: query limit one connection
 
 		if(!parg->connec->flags.upeer && rdata.udp_na_valid &&
 		   !combo_addr_eq_ip(&parg->connec->remote_host, &rdata.udp_na))
@@ -2410,9 +2433,23 @@ static bool handle_Q2(struct ptype_action_args *parg)
 			return ret_val;
 
 		if(!g2_qk_check(&rdata.udp_na, rdata.qk)) {
+// TODO: prevent UDP query flooding from single IP
 			g2_packet_send_qka(&rdata.udp_na, parg->src_addr);
 			return ret_val;
 		}
+// TODO: prevent UDP query flooding from single IP
+		/*
+		 * To prevent getting flooded and flood other, we need to
+		 * filter to many queries from the same IP by UDP.
+		 * The problem is: G2CD is better off with processing them
+		 * then building some expensive, unbounded, lock contended
+		 * filter.
+		 * This is UDP, everyone with a valid querykey can query us.
+		 * So the filter has scale with the whole IP space.
+		 *
+		 * And in the end this is all mood, some idiot with a botnet
+		 * could still run amok...
+		 */
 
 		if(g2_guid_add(rdata.s_guid, &rdata.udp_na, local_time_now, GT_QUERY))
 		{
