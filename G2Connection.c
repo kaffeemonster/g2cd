@@ -119,13 +119,14 @@ static const action_string h_as30 = {empty_action_c, str_size(X_AUTH_CH_KEY),   
 static const action_string h_as31 = {crawler_what,   str_size(CRAWLER_KEY),      CRAWLER_KEY};
 static const action_string h_as32 = {empty_action_c, str_size(BYE_PKT_KEY),      BYE_PKT_KEY};
 static const action_string h_as33 = {empty_action_c, str_size(X_PROBE_Q_KEY),    X_PROBE_Q_KEY};
+static const action_string h_as34 = {empty_action_c, str_size(X_LEAF_MAX_KEY),   X_LEAF_MAX_KEY}; /* maybe use? */
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
 	&h_as00, &h_as01, &h_as02, &h_as03, &h_as04, &h_as05, &h_as06, &h_as07, &h_as08,
 	&h_as09, &h_as10, &h_as11, &h_as12, &h_as13, &h_as14, &h_as15, &h_as16, &h_as17,
 	&h_as18, &h_as19, &h_as20, &h_as21, &h_as22, &h_as23, &h_as24, &h_as25, &h_as26,
-	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33
+	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33, &h_as34,
 };
 
 /*
