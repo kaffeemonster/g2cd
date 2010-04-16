@@ -738,7 +738,7 @@ static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 	target->big_endian = HOST_IS_BIGENDIAN;
 }
 
-static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
+static bool write_sna_to_packet_endian(g2_packet_t *target, union combo_addr *source, bool b_endian)
 {
 	size_t len;
 	uint16_t port = 0, *p_ptr;
@@ -765,12 +765,18 @@ static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 		p_ptr = (uint16_t *)(buffer_start(target->data_trunk) + INET6_ADDRLEN);
 	}
 	if(port) {
-		port = ntohs(port);
+		if(!b_endian)
+			port = __fswab16(port);
 		put_unaligned(port, p_ptr);
 	}
 
-	target->big_endian = HOST_IS_BIGENDIAN;
+	target->big_endian = b_endian;
 	return true;
+}
+
+static bool write_sna_to_packet(g2_packet_t *target, union combo_addr *source)
+{
+	return write_sna_to_packet_endian(target, source, HOST_IS_BIGENDIAN);
 }
 
 static bool fill_d_packet(g2_packet_t *d, union combo_addr *taddr, uint16_t leafs)
@@ -2733,9 +2739,10 @@ static intptr_t forward_inject_fr(g2_connection_t *con, void *carg)
 	g2_packet_init_on_stack(&fr);
 	if(parg->connec) /* did it come from TCP? */
 		link_sna_to_packet(&fr, &parg->connec->remote_host);
-	else { /* if we couldn't get the space, forward anyway */
-		if(!write_sna_to_packet(&fr, parg->src_addr)) /* use write to set port */
-			return forward_lit_callback_ignore(con, rdata->parg);
+	else { /* use write to set port */
+		/* make sure we use the source packets endianess, Shareaza only uses the root packets bit */
+		if(!write_sna_to_packet_endian(&fr, parg->src_addr, source->big_endian))
+			return forward_lit_callback_ignore(con, rdata->parg); /* if we couldn't get the space, forward anyway */
 	}
 	fr.type = PT_FR;
 	result = g2_packet_serialize_prep_min(&fr);
