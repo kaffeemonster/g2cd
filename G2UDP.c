@@ -651,6 +651,14 @@ out_free:
 out_zfree:
 	if(next)
 	{
+		/*
+		 * Since we may have data left lingering in the buffer
+		 * if the whole packet fit's into the buffer, we have to
+		 * make sure we do not free the wrong buffer (src_r).
+		 * Depending on the where abouts we either have the data
+		 * in the lbuffer (after inflate) or we didn't use the
+		 * d_hold, so exchange d_hold for src_r.
+		 */
 		struct norm_buff *src_r = knot2buff(next);
 		if(*d_hold)
 		{
@@ -674,16 +682,16 @@ out_free_e:
 static noinline void reas_knots_optimize(struct reas_knot *x, struct norm_buff **d_hold)
 {
 	/*
-	 * we want to copy buffers togther, but that is fsck
+	 * we want to copy buffers together, but that is fsck
 	 * complicated.
 	 * This way we can free recv buffers much earlier,
 	 * we can cram up to 8 1/2 parts into one buffer.
 	 * Nearby we linearize uncompressed packets so we can
 	 * go back to the "packet data stays in recv buffer"
 	 * scheme for decode.
-	 * Linerazing even two buffers hopefull helps zlib
+	 * Linerazing even two buffers hopefully helps zlib
 	 * to not stop inflating and twiddle around with the
-	 * window
+	 * window (allocs, extra copies).
 	 */
 	for(; x && x->next; x = x->next)
 	{

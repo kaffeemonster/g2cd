@@ -589,8 +589,8 @@ bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target
 				/* we do not seem to have a trunk, try to attach the read buffer */
 	/*
 	 * We are playing with fire here!
-	 * data < pos is seen as free, but we linked it to this packet
-	 * as long as we do not compact this buffer, data < pos
+	 * data < pos is seen as free, but we linked it to this packet.
+	 * As long as we do not compact this buffer, data < pos
 	 * will stay were it is.
 	 *
 	 * We are assuming, that a packet with PACKET_EXTRACTION_COMPLETE
