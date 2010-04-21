@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t, x86 implementation
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,14 +23,50 @@
  * $Id: $
  */
 
-/*
- * Make sure to avoid asm operant size suffixes, this is
- * used in 32Bit & 64Bit
- */
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
-	size_t t;
 	size_t found;
+#ifdef defined(__x86_64__)
+	/*
+	 * Ahhh, nice to see someone still going down on low level
+	 * bit fruggle things. News from the kernel, they at least have
+	 * the connections to get info like this:
+	 *
+	 * The AMD AMD64 handbook says BSF/BSR won't clobber the dest reg if
+	 * find==0;
+	 * The Intel handbooks fall back to the moderate tone inheriated from
+	 * x86_32, the dest reg is undefined if find==0.
+	 *
+	 * But their CPU architect says its value is written to set it to the
+	 * same as before (in the 32 Bit case the top bits would be cleared).
+	 * And they are "unlikely to get away with changing the behaviour.",
+	 * their words...
+	 * The x86_64 decision is to lock out all the old 32 Bit clones, which
+	 * maybe _really_ did something funny because it's undefined.
+	 */
+	__asm__ __volatile__(
+		"or	$-1, %0\n\t"
+		"bsr	%1, %0\n\t"
+		"inc	%0\n"
+		: /* %0 */ "=&r" (found),
+		: /* %1 */ "rm" (find)
+		: "cc"
+	);
+#else
+	size_t t;
+// TODO: did i really wanted to dump everything < P-II and < Via C3-2 (Nehemiah)
+	/*
+	 * a.k.a < i686
+	 * I think so, because all that stuff is old! Earlier than 2004 (?)
+	 * for Via and 1999 (when P1 prod. stopped) for the rest, which then
+	 * raises the question if these machines are beefy enough in general
+	 * to run G2CD.
+	 * (either RAM, or MHz, or both, < P-II prop. fails in both, the Via
+	 * stuff prop. at RAM, because being low-cost also often means getting
+	 * low-ram (or what you get for low money), and if that is < 256 Mb,
+	 * i see problems with servicing 300 connections (the official G2
+	 * default, needs ~50Mb) + headroom + System)
+	 */
 	__asm__ __volatile__(
 		"or	$-1, %1\n\t"
 		"bsr	%2, %0\n\t"
@@ -42,6 +78,7 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 		: /* %2 */ "mr" (find)
 		: "cc"
 	);
+#endif
 	return found;
 }
 
