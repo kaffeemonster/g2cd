@@ -315,14 +315,14 @@ static int logg_internal(const enum loglevel level,
 			sptr = rstart;
 			*sptr++ = ':';
 			*sptr++ = ' ';
-			logg_buff->pos = sptr - stmp;
+			logg_buff->pos += sptr - stmp;
 			break;
 realloc:
 			/* now we are in a slow path, no need to hurry */
 			{
 				struct big_buff *tmp_buff;
-				size_t len = strlen(file) + strlen(func) + 6 + 30 + strlen(fmt) * 2;
-				len = (((len * 2) + 2047) & ~((size_t) 2047)) + logg_buff->capacity;
+				size_t len = strlen(file) + strlen(func) + 6 + 30 + strlen(fmt) * 3;
+				len = ROUND_ALIGN(len * 2, 2048) + logg_buff->capacity;
 				tmp_buff = realloc(logg_buff, sizeof(*logg_buff) + len);
 				if(tmp_buff) {
 					logg_buff = tmp_buff;
@@ -349,7 +349,7 @@ realloc:
 			}
 		}
 		else if((size_t)ret_val > buffer_remaining(*logg_buff))
-			len = (((size_t)ret_val * 2) + 1023) & ~((size_t)1023); /* align to a k */
+			len = ROUND_ALIGN((size_t)ret_val * 2, 1024); /* align to a k */
 		if(unlikely(len != logg_buff->capacity))
 		{
 			struct big_buff *tmp_buf = realloc(logg_buff, sizeof(*logg_buff) + len);
@@ -434,7 +434,7 @@ realloc:
 #endif
 		}
 		*buffer_start(*logg_buff) = '\n'; logg_buff->pos++;
-		*buffer_start(*logg_buff) = '\0'; logg_buff->pos++;
+		*buffer_start(*logg_buff) = '\0';
 	}
 no_errno:
 
