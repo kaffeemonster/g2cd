@@ -189,7 +189,7 @@ typedef struct
 } action_string;
 
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
-# define KNOWN_HEADER_FIELDS_SUM  35
+# define KNOWN_HEADER_FIELDS_SUM  36
 
 /* Stringconstants */
 /* var */
@@ -235,7 +235,8 @@ typedef struct
 # define X_MAX_TTL_KEY     "X-Max-TTL"
 # define X_GUESS_KEY       "X-Guess"
 # define X_REQUERIES_KEY   "X-Requeries"
-# define X_LOC_PREF_KEY    "X-Locale-Pref"
+# define X_LOC1_PREF_KEY   "X-Locale-Pref"
+# define X_LOC2_PREF_KEY   "X-Local-Pref"
 # define X_Q_ROUT_KEY      "X-Query-Routing"
 # define X_UQ_ROUT_KEY     "X-Ultrapeer-Query-Routing"
 # define X_DYN_Q_KEY       "X-Dynamic-Querying"

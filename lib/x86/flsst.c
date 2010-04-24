@@ -26,7 +26,7 @@
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
 	size_t found;
-#ifdef defined(__x86_64__)
+#ifdef __x86_64__
 	/*
 	 * Ahhh, nice to see someone still going down on low level
 	 * bit fruggle things. News from the kernel, they at least have

@@ -106,27 +106,28 @@ static const action_string h_as17 = {empty_action_c, str_size(GGEP_KEY),        
 static const action_string h_as18 = {empty_action_c, str_size(PONG_C_KEY),       PONG_C_KEY};
 static const action_string h_as19 = {empty_action_c, str_size(UPTIME_KEY),       UPTIME_KEY};
 static const action_string h_as20 = {empty_action_c, str_size(VEND_MSG_KEY),     VEND_MSG_KEY};
-static const action_string h_as21 = {empty_action_c, str_size(X_LOC_PREF_KEY),   X_LOC_PREF_KEY};
-static const action_string h_as22 = {empty_action_c, str_size(X_MAX_TTL_KEY),    X_MAX_TTL_KEY};
-static const action_string h_as23 = {empty_action_c, str_size(X_GUESS_KEY),      X_GUESS_KEY};
-static const action_string h_as24 = {empty_action_c, str_size(X_REQUERIES_KEY),  X_REQUERIES_KEY};
-static const action_string h_as25 = {empty_action_c, str_size(X_Q_ROUT_KEY),     X_Q_ROUT_KEY};
-static const action_string h_as26 = {empty_action_c, str_size(X_UQ_ROUT_KEY),    X_UQ_ROUT_KEY};
-static const action_string h_as27 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
-static const action_string h_as28 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
-static const action_string h_as29 = {empty_action_c, str_size(X_DEGREE_KEY),     X_DEGREE_KEY};
-static const action_string h_as30 = {empty_action_c, str_size(X_AUTH_CH_KEY),    X_AUTH_CH_KEY};
-static const action_string h_as31 = {crawler_what,   str_size(CRAWLER_KEY),      CRAWLER_KEY};
-static const action_string h_as32 = {empty_action_c, str_size(BYE_PKT_KEY),      BYE_PKT_KEY};
-static const action_string h_as33 = {empty_action_c, str_size(X_PROBE_Q_KEY),    X_PROBE_Q_KEY};
-static const action_string h_as34 = {empty_action_c, str_size(X_LEAF_MAX_KEY),   X_LEAF_MAX_KEY}; /* maybe use? */
+static const action_string h_as21 = {empty_action_c, str_size(X_LOC1_PREF_KEY),  X_LOC1_PREF_KEY};
+static const action_string h_as22 = {empty_action_c, str_size(X_LOC2_PREF_KEY),  X_LOC2_PREF_KEY};
+static const action_string h_as23 = {empty_action_c, str_size(X_MAX_TTL_KEY),    X_MAX_TTL_KEY};
+static const action_string h_as24 = {empty_action_c, str_size(X_GUESS_KEY),      X_GUESS_KEY};
+static const action_string h_as25 = {empty_action_c, str_size(X_REQUERIES_KEY),  X_REQUERIES_KEY};
+static const action_string h_as26 = {empty_action_c, str_size(X_Q_ROUT_KEY),     X_Q_ROUT_KEY};
+static const action_string h_as27 = {empty_action_c, str_size(X_UQ_ROUT_KEY),    X_UQ_ROUT_KEY};
+static const action_string h_as28 = {empty_action_c, str_size(X_DYN_Q_KEY),      X_DYN_Q_KEY};
+static const action_string h_as29 = {empty_action_c, str_size(X_EXT_PROBES_KEY), X_EXT_PROBES_KEY};
+static const action_string h_as30 = {empty_action_c, str_size(X_DEGREE_KEY),     X_DEGREE_KEY};
+static const action_string h_as31 = {empty_action_c, str_size(X_AUTH_CH_KEY),    X_AUTH_CH_KEY};
+static const action_string h_as32 = {crawler_what,   str_size(CRAWLER_KEY),      CRAWLER_KEY};
+static const action_string h_as33 = {empty_action_c, str_size(BYE_PKT_KEY),      BYE_PKT_KEY};
+static const action_string h_as34 = {empty_action_c, str_size(X_PROBE_Q_KEY),    X_PROBE_Q_KEY};
+static const action_string h_as35 = {empty_action_c, str_size(X_LEAF_MAX_KEY),   X_LEAF_MAX_KEY}; /* maybe use? */
 
 const action_string *KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS("hidden") =
 {
 	&h_as00, &h_as01, &h_as02, &h_as03, &h_as04, &h_as05, &h_as06, &h_as07, &h_as08,
 	&h_as09, &h_as10, &h_as11, &h_as12, &h_as13, &h_as14, &h_as15, &h_as16, &h_as17,
 	&h_as18, &h_as19, &h_as20, &h_as21, &h_as22, &h_as23, &h_as24, &h_as25, &h_as26,
-	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33, &h_as34,
+	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33, &h_as34, &h_as35,
 };
 
 /*
