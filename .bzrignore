@@ -1,3 +1,4 @@
+*.lzma
 *.bz2
 *.bin
 *.diff
@@ -8,6 +9,9 @@ ccdrv
 arflock
 bin2o
 G2PacketTyperGenerator
+G2PacketTyper.h
+G2HeaderFieldsSort
+G2HeaderFields.h
 G2PacketTyper.h
 khl.dump
 guid.dump

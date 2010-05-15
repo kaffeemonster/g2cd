@@ -498,6 +498,7 @@ HEADS = \
 	G2Acceptor.h \
 	G2Handler.h \
 	G2UDP.h \
+	G2HeaderStrings.h \
 	G2Connection.h \
 	G2ConHelper.h \
 	G2ConRegistry.h \
@@ -535,6 +536,7 @@ MSRCS = \
 SRCS = \
 	$(MSRCS) \
 	G2PacketTyperGenerator.c \
+	G2HeaderFieldsSort.c \
 	ccdrv.c \
 	arflock.c \
 	bin2o.c \
@@ -734,7 +736,7 @@ strip: .$(MAIN).dbg
 eclean: libclean zlibclean
 	-$(RM) $(OBJS) $(RTL_DUMPS) sbox.bin sbox.bin.tmp ccdrv.o arflock.o bin2o.o
 clean: eclean
-	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o G2PacketTyperGenerator calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
+	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o G2PacketTyperGenerator G2HeaderFieldsSort calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
 	-$(RM) version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 edistclean: distclean
@@ -843,6 +845,11 @@ bin2o: bin2o.c ccdrv Makefile
 G2PacketTyperGenerator: G2PacketTyperGenerator.c ccdrv Makefile G2Packet.h lib/list.h
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) G2PacketTyperGenerator.c -o $@
 
+G2HeaderFieldsSort: G2HeaderFieldsSort.c ccdrv Makefile G2HeaderStrings.h
+	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) G2HeaderFieldsSort.c -o $@
+
+
+
 .INTERMEDIATE: sbox.bin
 sbox.bin: $(TARED_FILES)
 	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -c9 - > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
@@ -865,6 +872,9 @@ print_pretty: $(TARED_FILES)
 #
 G2PacketTyper.h: G2PacketTyperGenerator ccdrv
 	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator $@
+
+G2HeaderFields.h: G2HeaderFieldsSort ccdrv
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./G2HeaderFieldsSort $@ > $@"
 
 #	Batch-creation of version-info
 version.h: Makefile
@@ -899,7 +909,7 @@ G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
-G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h lib/recv_buff.h lib/atomic.h lib/hzp.h
+G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h G2HeaderFields.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h lib/guid.h
@@ -912,7 +922,7 @@ timeout.o: timeout.h
 gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h  lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
-G2Connection.h: G2Packet.h G2QHT.h timeout.h lib/hzp.h lib/combo_addr.h lib/list.h lib/hlist.h version.h
+G2Connection.h: G2Packet.h G2QHT.h G2HeaderStrings.h timeout.h lib/hzp.h lib/combo_addr.h lib/list.h lib/hlist.h version.h
 G2ConHelper.h: G2Connection.h lib/sec_buffer.h lib/my_epoll.h
 G2ConRegistry.h: G2Connection.h lib/combo_addr.h
 G2QueryKey.h: lib/combo_addr.h

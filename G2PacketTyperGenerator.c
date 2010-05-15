@@ -1,6 +1,6 @@
 /*
  * G2PacketTyperGenerator.c
- * Automaic generator for the G2-Packet typer tables
+ * Automatic generator for the G2-Packet typer tables
  *
  * Copyright (c) 2008-2010 Jan Seiffert
  *

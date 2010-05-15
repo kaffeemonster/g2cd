@@ -524,10 +524,10 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 
 	for(i = 0, f_found = false; i < KNOWN_HEADER_FIELDS_SUM; i++)
 	{
-		if((size_t)f_dist != KNOWN_HEADER_FIELDS[i]->length)
+		if((size_t)f_dist != KNOWN_HEADER_FIELDS[i].length)
 			continue;
-		if(!strncasecmp_a(f_start, KNOWN_HEADER_FIELDS[i]->txt,
-		                  KNOWN_HEADER_FIELDS[i]->length)) {
+		if(!strncasecmp_a(f_start, KNOWN_HEADER_FIELDS[i].txt,
+		                  KNOWN_HEADER_FIELDS[i].length)) {
 			f_num = i;
 			f_found = true;
 			break;
@@ -538,7 +538,7 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 		logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
 		            (int) (ret_val - line), line);
 	} else {
-		if(unlikely(NULL == KNOWN_HEADER_FIELDS[f_num]->action)) {
+		if(unlikely(NULL == KNOWN_HEADER_FIELDS[f_num].action)) {
 			logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
 			            (int) f_dist, f_start);
 		} else {
@@ -561,9 +561,9 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	/* now call the associated action for this field */
 	if(likely(c_dist > 0))
 	{
-		if(f_found && NULL != KNOWN_HEADER_FIELDS[f_num]->action) {
+		if(f_found && NULL != KNOWN_HEADER_FIELDS[f_num].action) {
 			logg_develd_old("\"%.*s\"\n", (int) c_dist, c_start);
-			KNOWN_HEADER_FIELDS[f_num]->action(to_con, c_dist);
+			KNOWN_HEADER_FIELDS[f_num].action(to_con, c_dist);
 		} else {
 			logg_develd("\"%.*s\"\n", (int) c_dist, c_start);
 		}
