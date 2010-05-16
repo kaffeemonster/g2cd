@@ -87,9 +87,7 @@ const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 
 	/* headerfields */
 /*
- * These header fields are now sorted, we could use bsearch. Which opens
- * the question if bsearch with it's overhead is justified for 36 fields...
- * First we apply a simple shorter then, same len, longer break sheme
+ * These header fields are now sorted, so we can use bsearch.
  */
 #include "G2HeaderFields.h"
 

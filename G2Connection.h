@@ -183,9 +183,9 @@ typedef struct g2_connection
 
 typedef struct
 {
-	bool         (*action) (g2_connection_t *, size_t);
-	const size_t length;
-	const char   *txt;
+	bool       (*action) (g2_connection_t *, size_t);
+	size_t       length;
+	const char  *txt;
 } action_string;
 
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)

@@ -85,13 +85,29 @@ static action_string const *hdr_fields[] =
 	&h_as27, &h_as28, &h_as29, &h_as30, &h_as31, &h_as32, &h_as33, &h_as34, &h_as35,
 };
 
+static int strncasecmp_a(const char *a, const char *b, size_t len)
+{
+	unsigned c1, c2;
+
+	for(; len; len--)
+	{
+		c1  = (unsigned) *a++;
+		c2  = (unsigned) *b++;
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c2 && c1 == c2))
+			return (int)c1 - (int)c2;
+	}
+	return 0;
+}
+
 static int acstr_cmp(const void *a, const void *b)
 {
 	action_string *const *a_s = a, *const *b_s = b;
 	size_t a_len = strlen((*a_s)->txt), b_len = strlen((*b_s)->txt);
 	if(a_len - b_len)
 		return a_len - b_len;
-	return strcmp((*a_s)->txt, (*b_s)->txt);
+	return strncasecmp_a((*a_s)->txt, (*b_s)->txt, b_len);
 }
 
 int main(int argc, char *argv[])

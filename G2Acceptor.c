@@ -494,13 +494,23 @@ static inline bool abort_g2_400(g2_connection_t *to_con)
 	return true;
 }
 
+static int act_str_cmp(const void *a, const void *b)
+{
+	const action_string *key = a, *ent = b;
+	logg_develd_old("%zu, \"%.*s\", %zu, \"%s\"\n", key->length, key->length,
+	                key->txt, ent->length, ent->txt);
+	if(key->length - ent->length)
+		return key->length - ent->length;
+	return strncasecmp_a(key->txt, ent->txt, ent->length);
+}
+
 static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 {
 	char *line;
 	char *ret_val, *f_start, *f_end, *c_start;
-	size_t i, f_num = 0, old_pos;
+	size_t old_pos;
 	ssize_t f_dist, c_dist;
-	bool f_found;
+	action_string *f_found, f_key;
 
 	line = buffer_start(*to_con->recv);
 	ret_val = my_memchr(line, ':', len);
@@ -522,23 +532,16 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	if(unlikely(1 > f_dist)) /* something left? */
 		goto out_fixup;
 
-	for(i = 0, f_found = false; i < KNOWN_HEADER_FIELDS_SUM; i++)
-	{
-		if((size_t)f_dist != KNOWN_HEADER_FIELDS[i].length)
-			continue;
-		if(!strncasecmp_a(f_start, KNOWN_HEADER_FIELDS[i].txt,
-		                  KNOWN_HEADER_FIELDS[i].length)) {
-			f_num = i;
-			f_found = true;
-			break;
-		}
-	}
+	f_key.length = (size_t)f_dist;
+	f_key.txt    = f_start;
+	f_found = bsearch(&f_key, KNOWN_HEADER_FIELDS, KNOWN_HEADER_FIELDS_SUM,
+	                  sizeof(KNOWN_HEADER_FIELDS[0]), act_str_cmp);
 
 	if(unlikely(!f_found)) {
 		logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",
 		            (int) (ret_val - line), line);
 	} else {
-		if(unlikely(NULL == KNOWN_HEADER_FIELDS[f_num].action)) {
+		if(unlikely(NULL == f_found->action)) {
 			logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
 			            (int) f_dist, f_start);
 		} else {
@@ -561,9 +564,9 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	/* now call the associated action for this field */
 	if(likely(c_dist > 0))
 	{
-		if(f_found && NULL != KNOWN_HEADER_FIELDS[f_num].action) {
+		if(f_found && NULL != f_found->action) {
 			logg_develd_old("\"%.*s\"\n", (int) c_dist, c_start);
-			KNOWN_HEADER_FIELDS[f_num].action(to_con, c_dist);
+			f_found->action(to_con, c_dist);
 		} else {
 			logg_develd("\"%.*s\"\n", (int) c_dist, c_start);
 		}
