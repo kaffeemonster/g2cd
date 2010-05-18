@@ -80,6 +80,21 @@
  */
 size_t print_ts(char *buf, size_t n, const time_t *t);
 
+/*
+ * print_lts: print a timestamp to a buffer in the format
+ *            "%Y-%m-%dT%H:%M:%SZ"
+ *
+ * buf: the target buffer
+ * n: the target buffer size
+ * t: the timestamp
+ *
+ * return value: the number of chars printed without trailing 0
+ *               or 0
+ *
+ * WARNING: does not obey n ATM
+ */
+size_t print_lts(char *buf, size_t n, const time_t *t);
+
 #define SECONDS_PER_MIN  (60)
 #define SECONDS_PER_HOUR (SECONDS_PER_MIN * 60)
 #define SECONDS_PER_DAY  (SECONDS_PER_HOUR * 24)
@@ -117,14 +132,17 @@ static long leaps_thru_end_of(long year)
 	return div(year, 4) - div(year, 100) + div(year, 400);
 }
 
-size_t print_ts(char *buf, size_t n, const time_t *t)
+struct dfields
 {
-	unsigned long f_year;
-	long tdays,year;
+	unsigned long year;
+	unsigned short month, day, hour, minute, seconds;
+};
+
+static noinline int calc_dfields(struct dfields *f, const time_t *t)
+{
+	long tdays, year;
 	unsigned rem;
-	unsigned short month, day, hour, minute;
 	const unsigned short *s, *e;
-	char *wptr;
 
 	/*
 	 * We are dealing with timestamps.
@@ -136,15 +154,16 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 	 * situation.
 	 * And needs an overhaul if years turn 5 digits
 	 */
-	if(unlikely(!buf || n < 18 || *t < 0 || *t / SECONDS_PER_DAY > LONG_MAX))
+	if(unlikely(*t < 0 || *t / SECONDS_PER_DAY > LONG_MAX))
 		return 0;
 
-	tdays  =  *t / SECONDS_PER_DAY;
-	rem    =  *t % SECONDS_PER_DAY;
-	hour   = rem / SECONDS_PER_HOUR;
-	rem    = rem % SECONDS_PER_HOUR;
-	minute = rem / SECONDS_PER_MIN;
-	year   = 1970; /* the POSIX epoch started 1970 */
+	tdays      =  *t / SECONDS_PER_DAY;
+	rem        =  *t % SECONDS_PER_DAY;
+	f->hour    = rem / SECONDS_PER_HOUR;
+	rem        = rem % SECONDS_PER_HOUR;
+	f->minute  = rem / SECONDS_PER_MIN;
+	f->seconds = rem % SECONDS_PER_MIN;
+	year       = 1970; /* the POSIX epoch started 1970 */
 
 	while(tdays < 0 || tdays >= (is_leap_year(year) ? 366 : 365))
 	{
@@ -155,28 +174,63 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 		         leaps_thru_end_of(year_guessed - 1) - leaps_thru_end_of(year - 1));
 		year = year_guessed;
 	}
-	f_year = year;
+	f->year = year;
 
-	s = days_in_year_till_month[is_leap_year(f_year)];
+	s = days_in_year_till_month[is_leap_year(f->year)];
 	e = s + (tdays / 31) + 1;
 	while(e >= s)
 		if(tdays < *e)
 			e--;
 		else
 			break;
-	tdays -= *e;
-	month  = (e - s) + 1;
-	day    = tdays + 1;
+	tdays    -= *e;
+	f->month  = (e - s) + 1;
+	f->day    = tdays + 1;
 
-	wptr = ultoa(buf, f_year);
+	return 1;
+}
+
+size_t print_ts(char *buf, size_t n, const time_t *t)
+{
+	struct dfields f;
+	char *wptr;
+
+	if(unlikely(!buf || n < 18 || !calc_dfields(&f, t)))
+		return 0;
+
+	wptr = ultoa(buf, f.year);
 	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, month, 2);
+	wptr = ustoa_0fix(wptr, f.month, 2);
 	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, day, 2);
+	wptr = ustoa_0fix(wptr, f.day, 2);
 	*wptr++ = 'T';
-	wptr = ustoa_0fix(wptr, hour, 2);
+	wptr = ustoa_0fix(wptr, f.hour, 2);
 	*wptr++ = ':';
-	wptr = ustoa_0fix(wptr, minute, 2);
+	wptr = ustoa_0fix(wptr, f.minute, 2);
+	*wptr++ = 'Z';
+	*wptr = '\0';
+	return wptr - buf;
+}
+
+size_t print_lts(char *buf, size_t n, const time_t *t)
+{
+	struct dfields f;
+	char *wptr;
+
+	if(unlikely(!buf || n < 21 || !calc_dfields(&f, t)))
+		return 0;
+
+	wptr = ultoa(buf, f.year);
+	*wptr++ = '-';
+	wptr = ustoa_0fix(wptr, f.month, 2);
+	*wptr++ = '-';
+	wptr = ustoa_0fix(wptr, f.day, 2);
+	*wptr++ = 'T';
+	wptr = ustoa_0fix(wptr, f.hour, 2);
+	*wptr++ = ':';
+	wptr = ustoa_0fix(wptr, f.minute, 2);
+	*wptr++ = ':';
+	wptr = ustoa_0fix(wptr, f.seconds, 2);
 	*wptr++ = 'Z';
 	*wptr = '\0';
 	return wptr - buf;

@@ -2,7 +2,7 @@
  * log_facility.h
  * header-file for log_facility.c, the logging logic/magic
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -98,5 +98,6 @@ _LOGF_EXTRN(int logg_more_ent(const enum loglevel, const char *, const char *, c
 _LOGF_EXTRN(int my_snprintf(char *buf, size_t maxlen, const char *fmt, ...)) GCC_ATTR_PRINTF(3,4);
 _LOGF_EXTRN(int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap));
 _LOGF_EXTRN(size_t print_ts(char *buf, size_t n, const time_t *t));
+_LOGF_EXTRN(size_t print_lts(char *buf, size_t n, const time_t *t));
 
 #endif /* LIB_LOG_FACILITY_H */

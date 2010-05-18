@@ -194,7 +194,16 @@ COMMENT log_add_date_time = DEFAULT_LOG_ADD_TIME
 
 COMMENTC
 COMMENTC Which format to use for our timestamps?
-COMMENTC (see "man strftime")
+COMMENTC
+COMMENTC If you leave this field unset (NULL), we will use
+COMMENTC our fast time stamp printer (avoiding some conversions
+COMMENTC and overhead), which will output something like
+COMMENTC "%Y-%m-%dT%H:%M:%SZ" or "2010-05-23T23:56:21Z" in "UNIX"
+COMMENTC time (which is some seconds near UTC).
+COMMENTC
+COMMENTC If you set the format, output will be in localtime, see
+COMMENTC "man strftime" for details how to format the output.
+COMMENTC A typical format often used by logger is "%b %d %H:%M:%S"
 COMMENTC
 COMMENT log_time_date_format = DEFAULT_LOG_TIME_FORMAT
 

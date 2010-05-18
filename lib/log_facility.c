@@ -205,23 +205,26 @@ static inline int do_logging_int(const enum loglevel level, const char *fmt, ...
 	return ret_val;
 }
 
-static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max_len)
+static noinline size_t add_dyn_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max_len)
 {
-	const char *tfmt;
 	struct tm time_now;
 	time_t time_now_val = time(NULL);
-	buffer[0] = '\0';
 
+	buffer[0] = '\0';
 	if(!localtime_r(&time_now_val, &time_now)) {
 		strlitcpy(buffer, "<Error breaking down time> ");
 		return str_size("<Error breaking down time> ");
 	}
 
-	tfmt = server.settings.logging.time_date_format ?
-	       server.settings.logging.time_date_format :
-	       "%b %d %H:%M:%S ";
-	if(strftime(buffer, max_len, tfmt, &time_now))
-		return strnlen(buffer, max_len);
+	if(likely(strftime(buffer, max_len, server.settings.logging.time_date_format, &time_now)))
+	{
+		size_t len = strnlen(buffer, max_len);
+		if(likely(len < max_len)) {
+			buffer[len] = ' ';
+			len++;
+		}
+		return len;
+	}
 
 	/*
 	 * now we have a problem, there could be an error or there
@@ -235,6 +238,29 @@ static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max
 	}
 
 	return 0;
+}
+
+static noinline size_t add_fix_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max_len)
+{
+	time_t time_now_val = time(NULL);
+	size_t len;
+
+	len = print_lts(buffer, max_len, &time_now_val);
+	if(likely(len < max_len)) {
+		buffer[len] = ' ';
+		len++;
+	}
+	return len;
+}
+
+static inline size_t add_time_to_buffer(char buffer[LOG_TIME_MAXLEN], size_t max_len)
+{
+// TODO: maybe use local_time_now?
+	/* problem is if timeout thread has died... */
+	if(likely(!server.settings.logging.time_date_format))
+		return add_fix_time_to_buffer(buffer, max_len);
+	else
+		return add_dyn_time_to_buffer(buffer, max_len);
 }
 
 /*

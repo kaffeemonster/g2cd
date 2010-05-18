@@ -507,7 +507,7 @@ static int act_str_cmp(const void *a, const void *b)
 static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 {
 	char *line;
-	char *ret_val, *f_start, *f_end, *c_start;
+	char *ret_val, *f_end, *c_start;
 	size_t old_pos;
 	ssize_t f_dist, c_dist;
 	action_string *f_found, f_key;
@@ -520,20 +520,19 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 		goto out_fixup;
 
 	/* filter leading garbage */
-	for(f_start = line; f_start < ret_val && !isalnum((int)*f_start);)
-		f_start++;
-	if(unlikely(1 >= ret_val - f_start)) /* nothing left? */
+	for(f_key.txt = line; f_key.txt < ret_val && !isalnum((int)*f_key.txt);)
+		f_key.txt++;
+	if(unlikely(1 >= ret_val - f_key.txt)) /* nothing left? */
 		goto out_fixup;
 
 	/* filter trailing garbage */
-	for(f_end = ret_val - 1; f_end >= f_start && !isgraph((int)*f_end);)
+	for(f_end = ret_val - 1; f_end >= f_key.txt && !isgraph((int)*f_end);)
 		f_end--;
-	f_dist = (f_end + 1) - f_start;
+	f_dist = (f_end + 1) - f_key.txt;
 	if(unlikely(1 > f_dist)) /* something left? */
 		goto out_fixup;
 
 	f_key.length = (size_t)f_dist;
-	f_key.txt    = f_start;
 	f_found = bsearch(&f_key, KNOWN_HEADER_FIELDS, KNOWN_HEADER_FIELDS_SUM,
 	                  sizeof(KNOWN_HEADER_FIELDS[0]), act_str_cmp);
 
@@ -543,10 +542,10 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	} else {
 		if(unlikely(NULL == f_found->action)) {
 			logg_develd("no action field:\t\"%.*s\"\tcontent:\n",
-			            (int) f_dist, f_start);
+			            (int)f_key.length, f_key.txt);
 		} else {
 			logg_develd_old("  known field:\t\"%.*s\"\tcontent:\n",
-			            (int) f_dist, f_start);
+			            (int)f_key.length, f_key.txt);
 		}
 	}
 
