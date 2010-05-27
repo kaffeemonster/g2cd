@@ -321,7 +321,7 @@ void g2_conreg_init(void)
 	if(!(raw_bucket_storage && raw_chain_storage))
 		diedie("allocating connection registry bucket&chain mem");
 
-	logg(LOGF_INFO, "G2ConRegistry: Will use %zu Levels, %zu Buckets, %zu Chains, for %i Connections, approx. %zu kib QHT mem\n",
+	logg(LOGF_INFO, "G2ConRegistry: Will use %u Levels, %zu Buckets, %zu Chains, for %i Connections, approx. %zu kib QHT mem\n",
 	     g2_conreg_level_count, count_b, count_c, server.settings.max_connection_sum, (count_b + count_c) * 128);
 	tc = raw_chain_storage;
 	init_alloc_bucket(&ht_root, raw_bucket_storage, &tc, 0);

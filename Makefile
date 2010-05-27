@@ -42,7 +42,7 @@ TARGET_ENDIAN = little
 #
 # Name of your Programs
 
-#	compiler
+#	system compiler
 HOSTCC = gcc
 #
 # use host
@@ -200,7 +200,7 @@ ARCH = athlon64-sse3
 ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)
 # mtune on newer gcc
-ARCH_FLAGS += -mtune=$(ARCH)
+#ARCH_FLAGS += -mtune=$(ARCH)
 # testest
 #ARCH_FLAGS += -mfpu=neon -mfloat-abi=softfp
 # 64 Bit?
@@ -715,7 +715,7 @@ finalwithzlib: .finalwithzlib
 	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
 g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
-	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P - < g2cd.conf.in > $@"
+	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P -I. - < g2cd.conf.in > $@"
 
 #	someday we need this, dependend on all or $(MAIN)
 install:

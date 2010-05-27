@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, sparc/sparc64 implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -38,74 +38,127 @@ size_t mempopcnt(const void *s, size_t len)
 		{0x0001010201020203ULL, 0x0102020302030304ULL};
 	unsigned long long m0 = m[0], m1 = m[1], v0 = fzero();
 	unsigned long long sum = v0;
-	const uint32_t *p;
-	uint32_t r;
-	unsigned shift = ALIGN_DOWN_DIFF(s, SO32);
+	const size_t *p;
+	size_t r;
+	unsigned shift = ALIGN_DOWN_DIFF(s, SOST);
 	prefetch(s);
 
-	p = (const uint32_t *)ALIGN_DOWN(s, SO32);
+	p = (const size_t *)ALIGN_DOWN(s, SOST);
 	r = *p;
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift * BITS_PER_CHAR;
 	else
 		r <<= shift * BITS_PER_CHAR;
-	if(len >= SO32 || len + shift >= SO32)
+	if(len >= SOST || len + shift >= SOST)
 	{
 		p++;
-		len -= SO32 - shift;
+		len -= SOST - shift;
 		write_bmask1(r);
 		sum = pdist(bshuffle(m0, m1), v0, sum);
+		if(SOST > SO32) {
+			write_bmask1(r >> 32);
+			sum = pdist(bshuffle(m0, m1), v0, sum);
+		}
 
-		while(len >= SO32 * 4)
+		if(len >= 8 * SOST)
+		{
+			size_t ones, twos, fours, eights;
+			unsigned long long sum_t;
+
+			sum_t = v0;
+			fours = twos = ones = 0;
+			while(len >= 8 * SO32)
+			{
+				unsigned long long sumb = v0;
+
+				r    = len / (8 * SOST);
+// TODO: 31 rounds till sumb overflows is a guess...
+				r    = r > 31 ? 31 : r;
+				len -= r * 8 * SOST;
+				for(; r; r--, p += 8)
+				{
+					size_t twos_l, twos_h, fours_l, fours_h;
+					unsigned long long w;
+
+#define CSA(h,l, a,b,c) \
+	{size_t u = a ^ b; size_t v = c; \
+	 h = (a & b) | (u & v); l = u ^ v;}
+					CSA(twos_l, ones, ones, p[0], p[1])
+					CSA(twos_h, ones, ones, p[2], p[3])
+					CSA(fours_l, twos, twos, twos_l, twos_h)
+					CSA(twos_l, ones, ones, p[4], p[5])
+					CSA(twos_h, ones, ones, p[6], p[7])
+					CSA(fours_h, twos, twos, twos_l, twos_h)
+					CSA(eights, fours, fours, fours_l, fours_h)
+#undef CSA
+
+					write_bmask1(eights);
+					w = bshuffle(m0, m1);
+					if(SOST > SO32) {
+						write_bmask1(eights >> 32);
+						w = fpadd32(w, bshuffle(m0, m1));
+					}
+					sumb = fpadd32(w, sumb);
+				}
+				sum_t = pdist(sumb, v0, sum_t);
+			}
+			sum += 8 * sum_t;
+			{
+				unsigned long long u, w, v;
+
+				write_bmask1(ones);
+				u = bshuffle(m0, m1);
+
+				write_bmask1(twos);
+				v = bshuffle(m0, m1);
+				v = fpadd32(v, v); /* * 2 */
+
+				write_bmask1(fours);
+				w = bshuffle(m0, m1);
+				w = fpadd32(w, w); /* * 2 */
+				w = fpadd32(w, w); /* * 2 */
+
+				sum = pdist(u, v0, sum);
+				sum = pdist(v, v0, sum);
+				sum = pdist(w, v0, sum);
+			}
+		}
+
+		if(len >= SOST)
 		{
 			unsigned long long sumb = v0;
-			size_t i;
 
-			i    = len / (SO32 * 4);
-			i    = i > 7 ? 7 : i;
-			len -= i * SO32 * 4;
-			for(; i; i--, p += 4) {
-				uint32_t a = p[0], b = p[1], c = p[2], d = p[3];
-				unsigned long long w, x, y, z;
-				write_bmask1(a);
-				w = bshuffle(m0, m1);
-				write_bmask1(b);
-				x = bshuffle(m0, m1);
-				w = fpadd32(w, x);
+			r    = len / SOST; /* len is now at most 64 byte, ok for sumb */
+			len %= SOST;
+			for(; r; r--, p++)
+			{
+				unsigned long long w;
+				size_t c = p[0];
+
 				write_bmask1(c);
-				y = bshuffle(m0, m1);
+				w = bshuffle(m0, m1);
+				if(SOST > SO32) {
+					write_bmask1(c >> 32);
+					w = fpadd32(w, bshuffle(m0, m1));
+				}
 				sumb = fpadd32(w, sumb);
-				write_bmask1(d);
-				z = bshuffle(m0, m1);
-				y = fpadd32(y, z);
-				sumb = fpadd32(y, sumb);
 			}
 			sum = pdist(sumb, v0, sum);
-		}
-		if(len >= SO32 * 2) {
-			write_bmask1(p[0]);
-			sum = pdist(bshuffle(m0, m1), v0, sum);
-			write_bmask1(p[1]);
-			sum = pdist(bshuffle(m0, m1), v0, sum);
-			p += 2;
-			len -= SO32 * 2;
-		}
-		if(len >= SO32) {
-			write_bmask1(p[0]);
-			sum = pdist(bshuffle(m0, m1), v0, sum);
-			p++;
-			len -= SO32;
 		}
 		if(len)
 			r =*p;
 	}
 	if(len) {
 		if(!HOST_IS_BIGENDIAN)
-			r <<= (SO32 - len) * BITS_PER_CHAR;
+			r <<= (SOST - len) * BITS_PER_CHAR;
 		else
-			r >>= (SO32 - len) * BITS_PER_CHAR;
+			r >>= (SOST - len) * BITS_PER_CHAR;
 		write_bmask1(r);
 		sum = pdist(bshuffle(m0, m1), v0, sum);
+		if(SOST > SO32) {
+			write_bmask1(r >> 32);
+			sum = pdist(bshuffle(m0, m1), v0, sum);
+		}
 	}
 	return sum;
 }
@@ -113,8 +166,18 @@ size_t mempopcnt(const void *s, size_t len)
 #  if 0
 /* =================================================================
  * do NOT use these sparc instructions, they are glacialy slow, only
- * for reference. Generic is 50 times faster.
+ * for reference. Generic is 50 times faster (and now +33%).
  * =================================================================
+ *
+ * Really, no kidding, the problem is NOT that they are NOT in
+ * hardware, they seem to use the most DUMB way to popcnt (it's sooo
+ * slow, that's the only way to explain it, it must be some word size
+ * times [shift + test bit -> inc popcnt]).
+ * Since they are in microcode, they would be fixable (at least in my book),
+ * but there is no indication of that, (not that i know of, maybe it's
+ * like "it has an instruction, don't bother, it MUST be fast", and
+ * none ever mesured it (maybe there is some new microcode in the
+ * package for the NSA...)).
  *
  * Fujitsu promised for the new UltraSPARC IIIfx that popcount will
  * be in hardware, we will see...

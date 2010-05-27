@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, generic implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -133,10 +133,54 @@ F_NAME(size_t, mempopcnt, _generic)(const void *s, size_t len)
 		len -= SOST - shift;
 		sum += popcountst_int1(r);
 
-		r = len / (SOST * 4);
-		len %= SOST * 4;
-		for(; r; r--, p += 4)
+		if(len >= SOST * 8)
+		{
+			size_t ones, twos, fours, eights, sum_t;
+
+			r     = len / (SOST * 8);
+			len  %= SOST * 8;
+			sum_t = 0;
+			fours = twos = ones = 0;
+			/*
+			 * popcnt instructions, even if nice, are seldomly the fasted
+			 * instructions. And when you have to do it by "sideways"
+			 * addition, you are screwed (lots of stalls, even if we try to
+			 * leverage this by taking several at once, but this needs regs).
+			 *
+			 * There is another nice trick: compression (Harley's Method).
+			 * We shove several words (8) into one word and count that (its
+			 * like counting the carry of that). With some simple bin ops and
+			 * a few regs you can get a lot better (+33%) then our "unrolled"
+			 * approuch. (this is even a win on x86, with too few register
+			 * and no 3 operand asm).
+			 */
+			for(; r; r--, p += 8)
+			{
+				size_t twos_l, twos_h, fours_l, fours_h;
+
+#define CSA(h,l, a,b,c) \
+	{size_t u = a ^ b; size_t v = c; \
+	 h = (a & b) | (u & v); l = u ^ v;}
+				CSA(twos_l, ones, ones, p[0], p[1])
+				CSA(twos_h, ones, ones, p[2], p[3])
+				CSA(fours_l, twos, twos, twos_l, twos_h)
+				CSA(twos_l, ones, ones, p[4], p[5])
+				CSA(twos_h, ones, ones, p[6], p[7])
+				CSA(fours_h, twos, twos, twos_l, twos_h)
+				CSA(eights, fours, fours, fours_l, fours_h)
+#undef CSA
+// TODO: only do the popcntb?
+				/* split this up like on ppc64 or arm? */
+				sum_t += popcountst_int1(eights);
+			}
+			sum += 8 * sum_t + 4 * popcountst_int1(fours) +
+			       2 * popcountst_int1(twos) + popcountst_int1(ones);
+		}
+		if(len >= SOST * 4) {
 			sum += popcountst_int4(p[0], p[1], p[2], p[3]);
+			p += 4;
+			len -= SOST * 4;
+		}
 		if(len >= SOST * 2) {
 			sum += popcountst_int2(p[0], p[1]);
 			p += 2;

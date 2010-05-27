@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, arm implementation
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -62,6 +62,11 @@ size_t mempopcnt(const void *s, size_t len)
 			r    = len / (SOVUCQ * 2);
 			r    = r > 15 ? 15 : r;
 			len -= r * SOVUCQ * 2;
+			/*
+			 * NEON has a vector popcnt instruction, so no compression.
+			 * We trust the speed given in the handbook (adding more
+			 * instructions would not make it faster), 1-2 cycles.
+			 */
 			for(; r; r--, p += SOVUCQ * 2) {
 				c      = *(const uint8x16_t *)p;
 				v_sumb = vaddq_u8(v_sumb, vcntq_u8(c));
@@ -157,20 +162,58 @@ size_t mempopcnt(const void *s, size_t len)
 		len -= SOST - shift;
 		sum += popcountst_int1(r);
 
-		while(len >= SOST * 4)
+		if(len >= SOST * 8)
 		{
-			size_t sumb = 0;
+			size_t ones, twos, fours, eights, sum_t;
 
-			r    = len / (SOST * 4);
-			r    = r > 7 ? 7 : r;
-			len -= r * SOST * 4;
-			for(; r; r--, p += 4) {
-				sumb += popcntb(p[0]);
-				sumb += popcntb(p[1]);
-				sumb += popcntb(p[2]);
-				sumb += popcntb(p[3]);
+			sum_t = fours = twos = ones = 0;
+			while(len >= SOST * 8)
+			{
+				size_t sumb = 0;
+
+				r    = len / (SOST * 8);
+// TODO: 31 rounds till sumb overflows is a guess...
+				r    = r > 31 ? 31 : r;
+				len -= r * SOST * 8;
+				/*
+				 * Less sideway addition, more tricks: compression (Harley's Method).
+				 * We shove several words (8) into one word and count that (its
+				 * like counting the carry of that). With some simple bin ops and
+				 * a few regs you can get a lot better (+33%) then our "unrolled"
+				 * approuch (not mesured on arm, but should be good).
+				 * This way we can also stay longer in the loop again.
+				 */
+				for(; r; r--, p += 8)
+				{
+					size_t twos_l, twos_h, fours_l, fours_h;
+
+#define CSA(h,l, a,b,c) \
+	{size_t u = a ^ b; size_t v = c; \
+	 h = (a & b) | (u & v); l = u ^ v;}
+					CSA(twos_l, ones, ones, p[0], p[1])
+					CSA(twos_h, ones, ones, p[2], p[3])
+					CSA(fours_l, twos, twos, twos_l, twos_h)
+					CSA(twos_l, ones, ones, p[4], p[5])
+					CSA(twos_h, ones, ones, p[6], p[7])
+					CSA(fours_h, twos, twos, twos_l, twos_h)
+					CSA(eights, fours, fours, fours_l, fours_h)
+#undef CSA
+					sumb += popcntb(eights);
+				}
+				asm("usada8	%0, %1, %2, %3" : "=r" (sum_t) : "r" (sumb), "r" (0), "r" (sum_t));
 			}
+			sum += 8 * sum_t + 4 * popcountst_int1(fours) +
+			       2 * popcountst_int1(twos) + popcountst_int1(ones);
+		}
+		if(len >= SOST * 4) {
+			size_t sumb = 0;
+			sumb += popcntb(p[0]);
+			sumb += popcntb(p[1]);
+			sumb += popcntb(p[2]);
+			sumb += popcntb(p[3]);
 			asm("usada8	%0, %1, %2, %3" : "=r" (sum) : "r" (sumb), "r" (0), "r" (sum));
+			p += 4;
+			len -= SOST * 4;
 		}
 		if(len >= SOST * 2) {
 			sum += popcountst_int2(p[0], p[1]);

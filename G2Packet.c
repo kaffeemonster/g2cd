@@ -639,7 +639,7 @@ static bool read_ts_from_packet(g2_packet_t *source, time_t *tio, const char *na
 		/*
 		 * Lets try too cludge it together, if we also have a 64-bit OS,
 		 * everything will be fine, if not, we hopefully get the lower 32 bit,
-		 * and if we don't test at the moment of overflow in 2013 (or when ever)
+		 * and if we don't test at the moment of overflow in 2032 (or when ever)
 		 * it should work
 		 */
 		get_unaligned_endian(t, (uint64_t *)buffer_start(source->data_trunk),
@@ -678,7 +678,7 @@ static bool write_na_to_packet(g2_packet_t *target, union combo_addr *source)
 		target->data_trunk.pos += INET6_ADDRLEN;
 	}
 
-	/*  and use host byte order for the port */
+	/* and use host byte order for the port */
 	port = combo_addr_port(source);
 	port = ntohs(port);
 	put_unaligned(port, (uint16_t *)(buffer_start(target->data_trunk)));
@@ -711,7 +711,7 @@ static bool write_nats_to_packet(g2_packet_t *target, union combo_addr *source, 
 		target->data_trunk.pos += INET6_ADDRLEN;
 	}
 
-	/*  and use host byte order for the port */
+	/* and use host byte order for the port */
 	port = combo_addr_port(source);
 	port = ntohs(port);
 	put_unaligned(port, (uint16_t *)(buffer_start(target->data_trunk)));
@@ -1030,7 +1030,7 @@ static bool empty_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 	return false;
 }
 
-static bool unimpl_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
+static inline bool unimpl_action_p(struct ptype_action_args *parg GCC_ATTR_UNUSED_PARAM)
 {
 	/* packet should be handled,  */
 	logg_packet("%s/%s\tC: %s -> unimplemented\n", parg->father ? g2_ptype_names[parg->father->type] : "", g2_ptype_names[parg->source->type], parg->source->is_compound ? "true" : "false");
@@ -2574,6 +2574,7 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	size_t remaining = buffer_remaining(source->data_trunk);
 	size_t len;
 
+	/* disregard if we already had a hashed urn */
 	if(rdata->had_hurn)
 		return false;
 	/*
@@ -2581,6 +2582,11 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	 * dn && md processing
 	 */
 	rdata->had_urn = true;
+
+	/*
+	 * We have a zero terminated string which describes the URN type
+	 * and the binary data representing the urn, split it.
+	 */
 	len = strnlen(urn, remaining);
 	if(unlikely(len < 2 || len + 1 >= remaining))
 		return false;
@@ -2596,21 +2602,48 @@ static bool handle_Q2_URN(struct ptype_action_args *parg)
 	hash = (unsigned char *)buffer_start(source->data_trunk);
 	if(likely(len <= 4))
 	{
+		/*
+		 * All the short URN type names are wastefull to test with
+		 * a chain of strcmp's, do a little magic.
+		 */
 		uint32_t type = 0;
+
+		/*
+		 * Now it gets tricky...
+		 * We create the URN type strings with a macro to
+		 * get a 32 Bit number. This way we can compare full
+		 * 4 bytes at a time. We already switch to native
+		 * endianess. This should create a nice compile
+		 * time constant.
+		 */
 #define MAKE_TYPE(a, b, c, d) \
 	ntohl((((uint32_t)(a)) << 24) | \
 	      (((uint32_t)(b)) << 16) | \
 	      (((uint32_t)(c)) <<  8) | \
 	      (((uint32_t)(d)) <<  0))
+		/*
+		 * The test is a little "freaky"...
+		 * We first check that our type-to-test does
+		 * not introduce additional bits, then we test
+		 * that if we use our type-to-test as mask, we
+		 * do not have bits missing.
+		 * This should give equallity, while masking out
+		 * excess info (check only for 2 or 3 bytes matching
+		 * in 4 bytes, thanks to 0 in the MAKE_TYPE).
+		 * These should be all simple opertions with constants.
+		 */
 #define MAKE_TEST(a, b, c, d, t) \
 	(((MAKE_TYPE(a, b, c, d) | t) == t) && ((MAKE_TYPE(a, b, c, d) & t) == MAKE_TYPE(a, b, c, d)))
 
+		/* Get complete 4 bytes at the beginning */
 		type = get_unaligned((uint32_t *)urn);
+		/* Mask out any info behind the type */
 		if(HOST_IS_BIGENDIAN)
 			type &= (uint32_t)0xFFFFFFFF << ((4 - len) * 8);
 		else
 			type &= (uint32_t)0xFFFFFFFF >> ((4 - len) * 8);
 
+		/* if type and total length matches, add it */
 		if(MAKE_TEST('s', 'h', 'a', '1', type) && 20 == remaining)
 			g2_qht_search_add_sha1(hash);
 		else if(MAKE_TEST('b', 'p',  0 ,  0 , type) && 44 == remaining)
@@ -2632,6 +2665,7 @@ handle_bitprint:
 	}
 	else
 	{
+		/* the long names are few and simply tested */
 		if(44 == remaining && !strlitcmp(urn, "bitprint"))
 			goto handle_bitprint;
 		else if(24 == remaining && !strlitcmp(urn, "tree:tiger/"))
@@ -2862,9 +2896,10 @@ static bool handle_QA(struct ptype_action_args *parg)
 		return ret_val;
 	}
 
-	guid = (uint8_t *)buffer_start(source->data_trunk) + (buffer_remaining(source->data_trunk) - 16);
+	guid = (uint8_t *)buffer_start(source->data_trunk) + (buffer_remaining(source->data_trunk) - GUID_SIZE);
 	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return ret_val;
+	/* now we have established the packet is legit (with a high prop.) */
 
 	old_pos = source->data_trunk.pos;
 	rdata.td_valid = false;
@@ -3059,15 +3094,16 @@ static bool handle_QH2(struct ptype_action_args *parg)
 	 * behind any childs, so we can match it to our cache, see if
 	 * we want to parse the packet and trust its content.
 	 */
-	/* guid & hopcnt + 0 byte + GU */
-	if(17 + 1 + 4 + 16 > buffer_remaining(source->data_trunk)) {
+	/* hopcnt & guid + 0 byte + GU */
+	if(1 + GUID_SIZE + 1 + 4 + 16 > buffer_remaining(source->data_trunk)) {
 		logg_packet(STDLF, "/QH2", "to short");
 		return ret_val;
 	}
 
-	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - 16;
+	guid = (uint8_t *)buffer_start(source->data_trunk) + buffer_remaining(source->data_trunk) - GUID_SIZE;
 	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return ret_val;
+	/* now we have established the packet is legit (with a high prop.) */
 
 	old_pos = source->data_trunk.pos;
 	rdata.guid = NULL;

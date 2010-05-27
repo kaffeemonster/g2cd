@@ -48,7 +48,7 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 		"or	$-1, %0\n\t"
 		"bsr	%1, %0\n\t"
 		"inc	%0\n"
-		: /* %0 */ "=&r" (found),
+		: /* %0 */ "=&r" (found)
 		: /* %1 */ "rm" (find)
 		: "cc"
 	);
