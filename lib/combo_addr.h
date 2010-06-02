@@ -267,6 +267,12 @@ static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 # define SLASH24 htonl(0xFFFFFF00)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
+# define IN6_IS_ADDR_DOCU(a) \
+	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
+# define IN6_IS_ADDR_UNIQUELOCAL_A(a) \
+	(((const uint8_t *)(a))[0] == 0xfc)
+# define IN6_IS_ADDR_UNIQUELOCAL_B(a) \
+	(((const uint8_t *)(a))[0] == 0xfd)
 static inline bool combo_addr_is_public(const union combo_addr *addr)
 {
 	in_addr_t a;
@@ -284,6 +290,12 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 		if(unlikely(IN6_IS_ADDR_LINKLOCAL(a6)))
 			return false;
 		if(unlikely(IN6_IS_ADDR_SITELOCAL(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_UNIQUELOCAL_A(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_UNIQUELOCAL_B(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return false;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
@@ -322,7 +334,7 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 	   Future protocol assignments */
 	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
 		return false;
-	if(IP_CMP(a, 0xC0586300, SLASH16)) /* 192.088.099.000/24  6to4 relays anycast */
+	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
 		return false; /* only sinks, not source */
 	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
 		return false;
@@ -355,6 +367,8 @@ static inline bool combo_addr_is_forbidden(const union combo_addr *addr)
 		if(unlikely(IN6_IS_ADDR_LOOPBACK(a6)))
 			return true;
 		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
+			return true;
+		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return true;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
