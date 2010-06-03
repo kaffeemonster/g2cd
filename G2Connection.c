@@ -695,7 +695,6 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 	w_ptr[distance] = '\0';
 
 	/* init stuff */
-	gmtime_r(&local_time_now, &when_tm);
 	memset(&where, 0, sizeof(where));
 
 	for(c = 0xff; c; w_ptr = x)

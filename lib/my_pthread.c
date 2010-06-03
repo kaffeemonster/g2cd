@@ -662,39 +662,6 @@ int gettimeofday(struct timeval *tv, struct timezone *tz)
 }
 #endif
 
-struct tm *gmtime_r(const time_t *timep, struct tm *result)
-{
-	union {
-		FILETIME ft;
-		ULARGE_INTEGER ui;
-	} u;
-	SYSTEMTIME st;
-
-	if(!timep || !result) {
-		errno = EINVAL;
-		return NULL;
-	}
-
-	u.ui.QuadPart = (long long)*timep * 10000000;
-	u.ui.QuadPart += NINETHY70_OFF;
-	if(!FileTimeToSystemTime(&u.ft, &st)) {
-		errno = ERANGE;
-		return NULL;
-	}
-	result->tm_sec   = st.wSecond;
-	result->tm_min   = st.wMinute;
-	result->tm_hour  = st.wHour;
-	result->tm_mday  = st.wDay;
-	result->tm_mon   = st.wMonth - 1;
-	result->tm_year  = st.wYear - 1900;
-	result->tm_wday  = st.wDayOfWeek;
-// TODO: Do we need to calc this? can we get that from from api?
-	/* day in the year */
-	result->tm_yday  = 0;
-	result->tm_isdst = 0;
-	return result;
-}
-
 struct tm *localtime_r(const time_t *timep, struct tm *result)
 {
 	union {

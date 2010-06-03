@@ -155,7 +155,6 @@ LIB_MY_PTHREAD_EXTRN(int getpagesize(void));
 #define PRIO_PROCESS 0
 LIB_MY_PTHREAD_EXTRN(int getpriority(int which, int who));
 LIB_MY_PTHREAD_EXTRN(int setpriority(int which, int who, int prio));
-LIB_MY_PTHREAD_EXTRN(struct tm *gmtime_r(const time_t *timep, struct tm *result));
 LIB_MY_PTHREAD_EXTRN(struct tm *localtime_r(const time_t *timep, struct tm *result));
 #  define F_GETFL 0
 #  define F_SETFL 1
