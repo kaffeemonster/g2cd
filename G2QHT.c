@@ -1549,6 +1549,10 @@ void g2_qht_global_search_chain(struct qht_search_walk *qsw, void *arg)
 	if(table->flags.reset_needed)
 		goto out;
 
+	/* ignore to full QHTs */
+	if(table->used >= server.settings.qht.max_promille)
+		goto out;
+
 	entries = table->entries;
 	do {
 		mb();
