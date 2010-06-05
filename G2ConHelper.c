@@ -393,6 +393,37 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 	return true;
 }
 
+void teardown_con(g2_connection_t *w_entry, int epoll_fd)
+{
+	struct epoll_event tmp_eevent;
+	int ret_val;
+
+	/* remove from conreg */
+	g2_conreg_remove(w_entry);
+
+	tmp_eevent.events = 0;
+	tmp_eevent.data.u64 = 0;
+	/* remove from EPoll */
+	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent)) {
+		if(ENOENT != errno)
+			logg_errno(LOGF_ERR, "removing bad socket from EPoll");
+	}
+
+	/* free the fd */
+	do {
+		ret_val = close(w_entry->com_socket);
+	} while(ret_val && EINTR == errno);
+	if(ret_val)
+		logg_errno(LOGF_DEBUG, "closing bad socket");
+	w_entry->com_socket = -1;
+
+	/* after the fs is free we can take another one */
+	atomic_dec(&server.status.act_connection_sum);
+
+	/* to avoid deadlocks with timer, defer final free */
+	hzp_deferfree(&w_entry->hzp, w_entry, (void (*)(void *))g2_con_free_glob);
+}
+
 bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff)
 {
 	if(unlikely(*con_buff))

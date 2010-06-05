@@ -301,7 +301,7 @@ OPT_FLAGS += -fbranch-target-load-optimize
 #	icc has looots of options, but those are the simple ones...
 #OPT_FLAGS = -O2 -fomit-frame-pointer
 #	minimum while debugging, or asm gets unreadable
-OPT_FLAGS = -foptimize-sibling-calls
+#OPT_FLAGS = -foptimize-sibling-calls
 CFLAGS += $(OPT_FLAGS)
 # switch between profile-generation and final build
 #	this whole profile stuff is ugly, espec. they changed the
@@ -919,7 +919,7 @@ G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_b
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h lib/guid.h
 timeout.o: timeout.h
-gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h  lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
+gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h
 G2Connection.h: G2Packet.h G2QHT.h G2HeaderStrings.h timeout.h lib/hzp.h lib/combo_addr.h lib/list.h lib/hlist.h version.h

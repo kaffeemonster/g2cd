@@ -48,6 +48,7 @@
 #include "G2Acceptor.h"
 #include "G2Handler.h"
 #include "G2UDP.h"
+#include "G2ConHelper.h"
 #include "lib/sec_buffer.h"
 #include "lib/recv_buff.h"
 #include "lib/log_facility.h"
@@ -411,6 +412,8 @@ int accept_timeout(void *arg)
 	p_entry.data.ptr = con;
 	shortlock_t_lock(&con->pts_lock);
 	con->flags.dismissed = true;
+// TODO: also try to teardown?
+	/* recheck with rsp. to the conreg & locking on accept */
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
 	shortlock_t_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
@@ -427,12 +430,28 @@ int handler_active_timeout(void *arg)
 	                con, time(NULL) - con->last_active, con->last_active);
 
 	p_entry.data.ptr = con;
-	if(local_time_now > (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
+	if(local_time_now >= (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
 	{
-		shortlock_t_lock(&con->pts_lock);
-		con->flags.dismissed = true;
-		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-		shortlock_t_unlock(&con->pts_lock);
+		if(EBUSY == pthread_mutex_trylock(&con->lock))
+		{
+			/*
+			 * the connection is already locked, we can not tear it down,
+			 * or we would face a deadlock vs. timer handling, retry in a second
+			 */
+			ret_val = 10;
+			shortlock_t_lock(&con->pts_lock);
+			con->flags.dismissed = true;
+			p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+			shortlock_t_unlock(&con->pts_lock);
+		}
+		else
+		{
+			/* we have the con, tear it down */
+			teardown_con(con, worker.epollfd);
+			/* we hold the hzp ref on it */
+			pthread_mutex_unlock(&con->lock);
+			return 0;
+		}
 	}
 	else
 	{

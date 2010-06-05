@@ -329,6 +329,7 @@ static int kick_timeouts(void)
 			pthread_mutex_unlock(&t->lock);
 			continue;
 		}
+		hzp_ref(HZP_EPOLL, t->data);
 		/* release the tree lock */
 		pthread_mutex_unlock(&wakeup.mutex);
 
@@ -385,6 +386,7 @@ static int kick_timeouts(void)
 			wmb();
 			pthread_mutex_unlock(&t->lock);
 		}
+		hzp_unref(HZP_EPOLL);
 	}
 	/* save last time for calculating next sleep */
 	wakeup.time = now;
