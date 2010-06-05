@@ -911,7 +911,7 @@ G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h G2HeaderFields.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
-G2ConRegistry.o: G2ConRegistry.h G2Connection.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
+G2ConRegistry.o: G2ConRegistry.h G2Connection.h G2QHT.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h lib/guid.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h lib/tchar.h

@@ -78,6 +78,7 @@ struct qhtable
 	size_t   data_length;
 /* ----- Everything below this gets simply wiped ----- */
 	size_t   entries;
+	size_t   used;
 	size_t   bits;
 	time_t   time_stamp;
 	struct qht_fragment *fragments;

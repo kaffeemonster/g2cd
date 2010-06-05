@@ -1813,6 +1813,9 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 				memneg(target_ptr, tmp_ptr, qht_size);
 			else
 				memxor(target_ptr, tmp_ptr, qht_size);
+			table->used = table->entries - mempopcnt(target_ptr, qht_size);
+			logg_develd_old("QHT e: %zu\tu: %zu\tp: %zu\n", table->entries, table->used, (table->used * 1000) / table->entries);
+			table->used = (table->used * 1000) / table->entries;
 			qht_dump(target_ptr, tmp_ptr, qht_size);
 			if(server.settings.qht.compress_internal &&
 			   (COMP_RLE == table->compressed || table->flags.reset_needed))
@@ -1834,6 +1837,9 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 			pos += frag->length;
 		}
 
+		table->used = table->entries - mempopcnt(target_ptr, qht_size);
+		logg_develd_old("QHT e: %zu\tu: %zu\tp: %zu\n", table->entries, table->used, (table->used * 1000) / table->entries);
+		table->used = (table->used * 1000) / table->entries;
 		if(server.settings.qht.compress_internal &&
 		   (COMP_RLE == table->compressed || table->flags.reset_needed))
 			if(!qht_compress_table(table, target_ptr, qht_size))

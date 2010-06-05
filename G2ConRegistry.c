@@ -805,7 +805,10 @@ static noinline void do_global_update_chain(struct qhtable *new_master, struct g
 
 			/* keep empty qht out of master qht */
 			/* keep other hubs out of master qht */
-			if(!connec->qht->flags.reset_needed && !connec->flags.upeer)
+			/* keep too full qhts out of master qht */
+			if(!connec->qht->flags.reset_needed &&
+			   !connec->flags.upeer &&
+			    connec->qht->used < server.settings.qht.max_promille)
 				g2_qht_aggregate(new_sub, connec->qht);
 		}
 		old_sub = c->qht;

@@ -130,6 +130,7 @@ _G2MAIN_EXTRNVAR(struct
 			{
 				enum g2_qht_comp compression;
 				bool compress_internal;
+				size_t max_promille;
 			} qht;
 		} settings;
 		struct

@@ -608,6 +608,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("nice_adjust",          &server.settings.nice_adjust,              config_parser_handle_int),
 	CONF_ITEM("num_threads",          &server.settings.num_threads,              config_parser_handle_int),
 	CONF_ITEM("max_g2_packet_length", &server.settings.max_g2_packet_length,     config_parser_handle_int),
+	CONF_ITEM("qht_max_promille",     &server.settings.qht.max_promille,         config_parser_handle_int),
 	CONF_ITEM("data_root_dir",        &server.settings.data_root_dir,            config_parser_handle_string),
 	CONF_ITEM("entropy_source",       &server.settings.entropy_source,           config_parser_handle_string),
 	CONF_ITEM("nick_name",            &server.settings.nick.name,                config_parser_handle_string),
@@ -683,6 +684,7 @@ static noinline void handle_config(void)
 	server.settings.guid.dump_fname              = DEFAULT_GUID_DUMP;
 	server.settings.qht.compression              = DEFAULT_QHT_COMPRESSION;
 	server.settings.qht.compress_internal        = DEFAULT_QHT_COMPRESS_INTERNAL;
+	server.settings.qht.max_promille             = DEFAULT_QHT_MAX_PROMILLE;
 	server.settings.nick.send_clients            = DEFAULT_NICK_SEND_CLIENTS;
 	server.settings.nick.send_gps                = DEFAULT_NICK_SEND_GPS;
 
