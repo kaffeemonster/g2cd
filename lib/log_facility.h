@@ -99,5 +99,6 @@ _LOGF_EXTRN(int my_snprintf(char *buf, size_t maxlen, const char *fmt, ...)) GCC
 _LOGF_EXTRN(int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap));
 _LOGF_EXTRN(size_t print_ts(char *buf, size_t n, const time_t *t));
 _LOGF_EXTRN(size_t print_lts(char *buf, size_t n, const time_t *t));
+_LOGF_EXTRN(int read_ts(const char *buf, time_t *t));
 
 #endif /* LIB_LOG_FACILITY_H */

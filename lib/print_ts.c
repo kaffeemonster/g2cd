@@ -62,6 +62,8 @@
 #include <time.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <errno.h>
 
 #include "itoa.h"
 
@@ -95,6 +97,17 @@ size_t print_ts(char *buf, size_t n, const time_t *t);
  */
 size_t print_lts(char *buf, size_t n, const time_t *t);
 
+/*
+ * read_ts: reads a timestamp from a buffer in the format
+ *          "%Y-%m-%dT%H:%M"
+ *
+ * buf: the source buffer
+ * t: the target timestamp
+ *
+ * return value: 1 conversion succesfull, 0 error
+ */
+int read_ts(const char *buf, time_t *t);
+
 #define SECONDS_PER_MIN  (60)
 #define SECONDS_PER_HOUR (SECONDS_PER_MIN * 60)
 #define SECONDS_PER_DAY  (SECONDS_PER_HOUR * 24)
@@ -122,14 +135,14 @@ static bool is_leap_year(unsigned long year)
 	return false;
 }
 
-static long div(long a, long b)
+static long mod_div(long a, long b)
 {
 	return a / b - (a % b < 0);
 }
 
 static long leaps_thru_end_of(long year)
 {
-	return div(year, 4) - div(year, 100) + div(year, 400);
+	return mod_div(year, 4) - mod_div(year, 100) + mod_div(year, 400);
 }
 
 struct dfields
@@ -138,7 +151,7 @@ struct dfields
 	unsigned short month, day, hour, minute, seconds;
 };
 
-static noinline int calc_dfields(struct dfields *f, const time_t *t)
+static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 {
 	long tdays, year;
 	unsigned rem;
@@ -150,12 +163,12 @@ static noinline int calc_dfields(struct dfields *f, const time_t *t)
 	 * Anybody claming he has something older than
 	 * 1970...
 	 *
-	 * But beware, 2031 we have to revaluate the
+	 * But beware, 2038 we have to revaluate the
 	 * situation.
 	 * And needs an overhaul if years turn 5 digits
 	 */
 	if(unlikely(*t < 0 || *t / SECONDS_PER_DAY > LONG_MAX))
-		return 0;
+		return false;
 
 	tdays      =  *t / SECONDS_PER_DAY;
 	rem        =  *t % SECONDS_PER_DAY;
@@ -187,7 +200,38 @@ static noinline int calc_dfields(struct dfields *f, const time_t *t)
 	f->month  = (e - s) + 1;
 	f->day    = tdays + 1;
 
-	return 1;
+	return true;
+}
+
+static noinline bool dfields_calc(time_t *t, const struct dfields *f)
+{
+	unsigned long tsecs;
+
+	tsecs  = f->year - 1970;
+	tsecs *= 365;
+	tsecs += leaps_thru_end_of(f->year - 1) -  leaps_thru_end_of(1970);
+	tsecs += days_in_year_till_month[is_leap_year(f->year)][f->month - 1];
+// TODO: check day for correct value
+	/* or let it wrap, to correct... */
+	tsecs += f->day - 1;
+	tsecs *= 24;
+// TODO: why -1
+	/*
+	 * we are one hour off into the future without it (compared to mktime)
+	 * but this is fishy... the 0 hour is the 0 hour, esp. on 1.1.1970 00:00:00
+	 */
+	tsecs += f->hour - 1;
+	tsecs *= 60;
+	tsecs += f->minute;
+	/* somewhere here we are bound for overflow in 2038 */
+	tsecs *= 60;
+	tsecs += f->seconds;
+
+	if(sizeof(time_t) == 4)
+		*t = (time_t)(tsecs & 0x7fffffff); /* time_t should be signed, don't wrap */
+	else
+		*t = (time_t)tsecs;
+	return true;
 }
 
 size_t print_ts(char *buf, size_t n, const time_t *t)
@@ -234,6 +278,52 @@ size_t print_lts(char *buf, size_t n, const time_t *t)
 	*wptr++ = 'Z';
 	*wptr = '\0';
 	return wptr - buf;
+}
+
+int read_ts(const char *buf, time_t *t)
+{
+	struct dfields f;
+	char *e;
+	unsigned long x;
+
+	errno = 0;
+	x = strtoul(buf, &e, 10);
+	if(unlikely((ULONG_MAX == x && ERANGE == errno) || buf == e || x < 1970))
+		return 0;
+	f.year = x;
+	if(unlikely('-' != *e))
+		return 0;
+	buf = e + 1;
+	x = strtoul(buf, &e, 10);
+	if(unlikely((ULONG_MAX == x && ERANGE == errno) || buf == e || (x < 1 || x > 12)))
+		return 0;
+	f.month = x;
+	if(unlikely('-' != *e))
+		return 0;
+	buf = e + 1;
+	x = strtoul(buf, &e, 10);
+	if(unlikely((ULONG_MAX == x && ERANGE == errno) || buf == e || (x < 1 || x > 31)))
+		return 0;
+	f.day = x;
+	if(unlikely('T' != *e))
+		return 0;
+	buf = e + 1;
+	x = strtoul(buf, &e, 10);
+	if(unlikely((ULONG_MAX == x && ERANGE == errno) || buf == e || x > 23))
+		return 0;
+	f.hour = x;
+	if(unlikely(':' != *e))
+		return 0;
+	buf = e + 1;
+	x = strtoul(buf, &e, 10);
+	if(unlikely((ULONG_MAX == x && ERANGE == errno) || buf == e || x > 59))
+		return 0;
+	f.minute = x;
+//	if(unlikely('Z' != *e && '\0' != *e))
+//		return 0;
+	f.seconds = 0;
+
+	return dfields_calc(t, &f);
 }
 
 /*@unused@*/

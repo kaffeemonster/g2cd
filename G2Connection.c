@@ -681,7 +681,6 @@ static bool listen_what(g2_connection_t *to_con, size_t distance)
 static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 {
 	union combo_addr where;
-	struct tm when_tm;
 	time_t when;
 	char *w_ptr = buffer_start(*to_con->recv);
 	char *x;
@@ -729,14 +728,10 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 			continue;
 
 		/* time stamp */
-		z = strptime(t_str, "%Y-%m-%dT%H:%M", &when_tm);
-		if(!z) {
-			logg_develd("couldn't read time stamp \"%s\"\n", z);
+		if(!read_ts(t_str, &when)) {
+			logg_develd("couldn't read time stamp \"%s\"\n", t_str);
 			continue;
 		}
-		if('\0' != *z || 'Z' != *z)
-			logg_develd("funny stuff behind time stamp \"%s\"\n", z);
-		when = mktime(&when_tm);
 
 		g2_khl_add(&where, when, false);
 	}
