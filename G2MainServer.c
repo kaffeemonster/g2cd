@@ -113,6 +113,7 @@ static void sig_stop_func(int signr, siginfo_t *, void *);
 #ifndef WIN32
 static void sig_dump_func(int signr, siginfo_t *, void *);
 #endif
+static intptr_t check_hub_health(g2_connection_t *con, void *carg);
 static intptr_t dump_a_hub(g2_connection_t *con, void *carg);
 
 int main(int argc, char **args)
@@ -330,6 +331,7 @@ int main(int argc, char **args)
 					g2_conreg_random_hub(NULL, send_HAW_callback, NULL);
 					last_HAW = local_time_now;
 				}
+				g2_conreg_all_hub(NULL, check_hub_health, NULL);
 			}
 			break;
 		/* Something bad happened */
@@ -445,6 +447,27 @@ int main(int argc, char **args)
 	fsync(STDOUT_FILENO);
 #endif
 	return EXIT_SUCCESS;
+}
+
+#define FIRST_GRACE_TIME (5 * 60)
+#define SECOND_GRACE_TIME (30 * 60)
+#define FIRST_MIN_LEAF 5
+#define SECOND_MIN_LEAF 50
+
+static intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
+{
+	unsigned min_leafs = FIRST_MIN_LEAF;
+
+	if(unlikely(con->connect_time > local_time_now - FIRST_GRACE_TIME))
+		return 0;
+	if(con->connect_time < local_time_now - SECOND_GRACE_TIME)
+		min_leafs = SECOND_MIN_LEAF;
+
+	if(con->u.handler.leaf_count < min_leafs) {
+		con->flags.dismissed = true;
+		gup_con_mark_write(con);
+	}
+	return 0;
 }
 
 static intptr_t dump_a_hub(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)

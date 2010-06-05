@@ -66,5 +66,6 @@ GUP_EXTRN(int accept_timeout(void *));
 GUP_EXTRN(int handler_active_timeout(void *arg));
 GUP_EXTRN(int handler_z_flush_timeout(void *arg));
 GUP_EXTRN(void g2_handler_con_mark_write(struct g2_packet *, struct g2_connection *));
+GUP_EXTRN(void gup_con_mark_write(struct g2_connection *));
 #endif /* GUP_H */
 /* EOF */

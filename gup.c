@@ -506,6 +506,26 @@ void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 }
 
+void gup_con_mark_write(struct g2_connection *con)
+{
+	struct epoll_event p_entry = {0,{0}};
+
+	p_entry.data.ptr = con;
+
+	/*
+	 * MB:
+	 * This spinlock does not only protect the list,
+	 * it also barriers our packet creation before another
+	 * cpu reads the packets to write them to the socket
+	 */
+	shortlock_t_lock(&con->pts_lock);
+
+	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
+
+	shortlock_t_unlock(&con->pts_lock);
+	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
+}
+
 /*
  * Utility
  */
