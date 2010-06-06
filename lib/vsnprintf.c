@@ -91,6 +91,7 @@
  * - Can barely print floating point
  * - the maxlen is not always obeyed...
  * - Very fancy modifier/conversion options are /broken/
+ * - positional argument do not work
  * - And surely not std. conform
  */
 
@@ -848,19 +849,19 @@ static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 	/* this eats stack big time! ~4k */
 	struct big_num Sbox[9], R, MP, MM;
 	big_digit f;
-	double v;
+	union dblou64 v;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	int sign, e, f_n, m_n, i, d, tc1, tc2;
 	int k, qr_shift, ruf, s_n, sl = 0, slr = 0, dig_i;
 	bool use_mp;
 
 	emit_emms();
-	v = va_arg(spec->ap, double);
+	v.d = va_arg(spec->ap, double);
 
 	/* decompose float into sign, mantissa & exponent */
-	sign = !!(((union dblou64 *)&v)->u & 0x8000000000000000ULL);
-	e    =   (((union dblou64 *)&v)->u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
-	f    =    ((union dblou64 *)&v)->u & 0x000FFFFFFFFFFFFFULL;
+	sign = !!(v.u & 0x8000000000000000ULL);
+	e    =   (v.u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
+	f    =    v.u & 0x000FFFFFFFFFFFFFULL;
 /*	printf("%i %i %llu\n", sign, e, f); */
 
 	if(e != 0) {
