@@ -8,6 +8,9 @@
  *
  * Thanks go to Ralph Unden for a paper about intro sort with
  * concrete java demonstration code.
+ *
+ * rewritten by me for uint32_t and C by me, so all errors are
+ * mine - Jan
  */
 
 #include "../config.h"

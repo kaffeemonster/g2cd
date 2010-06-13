@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
  */
@@ -38,25 +38,26 @@
  *
  * So cut the crap and get to the core part creating a
  * textual date and time.
- * This is blatantly ripped out of glibc which is:
+ *
+ * This is derived from glibc which is:
 
-   Copyright (C) 1991, 1993, 1997 Free Software Foundation, Inc.
+   Copyright (C) 1991, 1993, 1997, 1998, 2002 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
 
    The GNU C Library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Library General Public License as
-   published by the Free Software Foundation; either version 2 of the
-   License, or (at your option) any later version.
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
 
    The GNU C Library is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Library General Public License for more details.
+   Lesser General Public License for more details.
 
-   You should have received a copy of the GNU Library General Public
-   License along with the GNU C Library; see the file COPYING.LIB.  If not,
-   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.
+   You should have received a copy of the GNU Lesser General Public
+   License along with the GNU C Library; if not, write to the Free
+   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+   02111-1307 USA.
  */
 
 #include <time.h>

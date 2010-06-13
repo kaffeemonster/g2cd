@@ -8,8 +8,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,9 +18,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: G2MainServer.c,v 1.25 2005/11/05 18:02:45 redbully Exp redbully $
  */
@@ -55,6 +55,7 @@
 #include "gup.h"
 #include "G2UDP.h"
 #include "G2Connection.h"
+#include "G2Handler.h"
 #include "G2ConRegistry.h"
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
@@ -85,6 +86,7 @@ static volatile sig_atomic_t dump_conreg;
 static bool be_daemon;
 static int log_to_fd = -1;
 static time_t last_HAW;
+static time_t last_full_check;
 
 /* bulk data */
 static const char *user_name;
@@ -113,7 +115,7 @@ static void sig_stop_func(int signr, siginfo_t *, void *);
 #ifndef WIN32
 static void sig_dump_func(int signr, siginfo_t *, void *);
 #endif
-static intptr_t check_hub_health(g2_connection_t *con, void *carg);
+static intptr_t check_con_health(g2_connection_t *con, void *carg);
 static intptr_t dump_a_hub(g2_connection_t *con, void *carg);
 
 int main(int argc, char **args)
@@ -331,7 +333,10 @@ int main(int argc, char **args)
 					g2_conreg_random_hub(NULL, send_HAW_callback, NULL);
 					last_HAW = local_time_now;
 				}
-				g2_conreg_all_hub(NULL, check_hub_health, NULL);
+				if(last_full_check < local_time_now - (60)) {
+					g2_conreg_all_con(check_con_health, NULL);
+					last_full_check = local_time_now;
+				}
 			}
 			break;
 		/* Something bad happened */
@@ -454,7 +459,34 @@ int main(int argc, char **args)
 #define FIRST_MIN_LEAF 5
 #define SECOND_MIN_LEAF 50
 
-static intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
+struct bounce_to_timer
+{
+	struct hzp_free h;
+	struct timeout t;
+	g2_connection_t *con;
+};
+
+static int bounce_from_timer(void *data)
+{
+	struct bounce_to_timer *btt = data;
+
+	logg_devel("bounced teardown\n");
+	hzp_ref(HZP_QHT, btt->con);
+	/* we hold the connection lock, tear it down */
+	gup_teardown_con(btt->con);
+	/* we hold a hzp reference on it */
+	pthread_mutex_unlock(&btt->con->lock);
+	hzp_unref(HZP_QHT);
+	/*
+	 * to avoid use after free in timer code, defer
+	 * final free of this struct, we hold the hzp ref
+	 * on it
+	 */
+	hzp_deferfree(&btt->h, btt, (void (*)(void *))free);
+	return 0;
+}
+
+static noinline intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
 {
 	unsigned min_leafs = FIRST_MIN_LEAF;
 
@@ -467,6 +499,76 @@ static intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_ATTR_UNUSE
 		con->flags.dismissed = true;
 		gup_con_mark_write(con);
 	}
+	return 0;
+}
+
+static intptr_t check_con_health(g2_connection_t *con, void *carg)
+{
+	/* con is stuck sending or dead, kill it with fire */
+	/*
+	 * The worker threads should normally take down the
+	 * con, but to inject the event, we normally have to go
+	 * around and signal a "can write" (It is the only nice
+	 * way to push this through epoll, waking a thread for
+	 * THIS connection while atomically removing it from
+	 * epoll, epoll "eats" HUP events...).
+	 * When we can not write, because the other end is
+	 * "unresponsive", we are stuck. We have to rely on
+	 * the OS detecting this. Unfortunatly TCP-retries
+	 * and so on totally sink us here, we accumulate
+	 * dead stuff.
+	 * Try to rescue the day by forfully tering the con
+	 * down.
+	 * This is scary and propably racy, and whatnot...
+	 */
+	shortlock_t_lock(&con->pts_lock);
+	if(unlikely(con->flags.dismissed ||
+	  (!list_empty(&con->packets_to_send) &&
+	    local_time_now >= con->last_send + (3 * HANDLER_ACTIVE_TIMEOUT))))
+	{
+		struct bounce_to_timer *btt;
+
+		/*
+		 * Since we hold the con reg lock the connection can
+		 * not vanish, but we have to first bounce the con to
+		 * someone not holding the lock.
+		 * The worker do not seem to respond to this sucker,
+		 * so bounce it to the timer thread.
+		 */
+		shortlock_t_unlock(&con->pts_lock);
+		btt = malloc(sizeof(*btt));
+		/*
+		 * make sure we lock the conection to keep out the
+		 * worker threads.
+		 */
+		if(btt && !pthread_mutex_trylock(&con->lock))
+		{
+			/* we have the con, tear it down */
+			logg_devel("init bounced teardown\n");
+			INIT_TIMEOUT(&btt->t);
+			btt->t.data = btt;
+			btt->t.fun  = bounce_from_timer;
+			btt->con    = con;
+			timeout_add(&btt->t, 10);
+			/*
+			 * we can not and do not want to unlock the con
+			 * so it is not freed by someone else, maybe something
+			 * will whine that the locker and unlocker of the lock
+			 * are not the same thread, so what...
+			 */
+		}
+		else {
+			/* cowardly buck down, we will come back... */
+			free(btt);
+			con->flags.dismissed = true;
+			gup_con_mark_write(con);
+		}
+		return 0;
+	}
+	shortlock_t_unlock(&con->pts_lock);
+
+	if(con->flags.upeer)
+		return check_hub_health(con, carg);
 	return 0;
 }
 

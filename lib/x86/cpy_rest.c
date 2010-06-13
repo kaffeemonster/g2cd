@@ -2,13 +2,14 @@
  * cpy_rest.c
  * copy a byte trailer, x86 impl
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
  */
@@ -27,7 +27,7 @@
  * I confess, its slower than the generic version,
  * but a computet goto looks so nice in kcachegrind
  * (the sizzle sells the steak), esp on x86 which
- * makes this hard with it's variable length 
+ * makes this hard with it's variable length
  * instructions. Most compiler will NEVER
  * generate this.
  */
@@ -58,7 +58,7 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 * PIC must be the acronym for Pain In the Chest ;)
 	 * Hint: a compiler jump table does not look better,
 	 * target addresses also have to be loaded somewhere
-	 * from PIC-storeage. This code is not meant to be
+	 * from PIC-storage. This code is not meant to be
 	 * put into a .so, but to give no grief for those
 	 * compiling their executables with -fPIC let them
 	 * pay their bill...

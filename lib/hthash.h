@@ -19,6 +19,9 @@
  */
 
 /*
+ * This is a modified version of the MurmurHash2, so all erros are mine
+ * Jan
+ *
  * from a brief look at it:
  * This hash needs a fast multiplication, which gives good mixing
  * with a low instruction count. Fast multiplication is normaly true

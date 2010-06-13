@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
  */
@@ -230,7 +230,7 @@ static size_t tstrlen_x86(const tchar_t *s)
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
-		"add	%5, %1\n\t"
+		"add	%4, %1\n\t"
 		"mov	(%1), %2\n\t"
 #ifndef __x86_64__
 		"lea	-0x10001(%2),%0\n\t"

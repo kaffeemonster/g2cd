@@ -1,19 +1,19 @@
-/* 
+/*
  * calltree.c
  * generate gallgraphs in graphviz format from gcc RTL dumps
  *
  * Copyright (c) 2005, Jan Seiffert
- * 
+ *
  * a little bit limited, but does its job...
  *
  * Idea taken from the perl-script egypt (http://www.gson.org/egypt/)
  * wich states:
- * 
+ *
  * Copyright 1994-2004 Andreas Gustafsson
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the same terms as Perl itself.
- * 
+ *
  * $Id: calltree.c,v 1.5 2005/11/04 19:42:58 redbully Exp redbully $
  */
 

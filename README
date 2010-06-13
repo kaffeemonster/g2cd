@@ -5,18 +5,18 @@
 	This file is part of g2cd.
 
 	g2cd is free software; you can redistribute it and/or modify
-	it under the terms of the GNU General Public License version
-	2 as published by the Free Software Foundation.
+	it under the terms of the GNU General Public License as
+	published by the Free Software Foundation, either version 3
+	of the License, or (at your option) any later version.
 
 	g2cd is distributed in the hope that it will be useful, but
 	WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
-	along with g2cd; if not, write to the Free Software
-	Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-	MA  02111-1307 USA
+	You should have received a copy of the GNU General Public
+	License along with g2cd.
+	If not, see <http://www.gnu.org/licenses/>.
 
 0. Introduction
 ===============
@@ -41,7 +41,7 @@
 	* accept incoming connections
 	* handshake Gnutella 2 communication
 	* parse the packet-stream
-	* answer some packets
+	* answer packets, searches, etc
 	but there is still a lot to do...
 
 2. Setup
@@ -60,9 +60,9 @@
 	* GCC as your compiler (A C99 capable C-Compiler and runtime system
 	  is the minimum, but some GCC extensions are unfortunately very handy)
 	* gmake (GNU-make)
-		[note: it also works with a prehistoric solaris make without any
+		[note: it also works with a prehistoric Solaris make without any
 		       fancy extensions, I'm pretty sure it should work with a
-		       posix compliant make, but it does _not_ work with the FreeBSD
+		       POSIX compliant make, but it does _not_ work with the FreeBSD
 		       make wich sets $@ wrong for libraries (non-POSIX conforming),
 		       so i simply recomment gmake]
 	* Your systems header files (libc etc.)
@@ -71,7 +71,7 @@
 	  which provides dbm_* functions commonly available by ndbm.h)
 		[note: yes, the dbm_* interface is "obsolete", but it seems to
 		       be widely available. It suits my simple needs and i found
-		       it also provided on an old solaris as system lib, with AT&T
+		       it also provided on an old Solaris as system lib, with AT&T
 		       copyright in the header, last change 1996, probably to
 		       add 'extern "C"', so i would call it mature technology ;) ]
 
@@ -288,7 +288,7 @@
 	 But i get's worse: TCP shutdown also involves a handshake like on
 	connect, which means it needs a packet round trip. If one of those
 	plagues loses track of the TCP connection to early ("Hey, there was
-	a RST, drop all recources associated with this connection"), which
+	a FIN, drop all recources associated with this connection"), which
 	is _very_ likely, TCP shutdown is stuck.
 	 Linux® does _not_ handle this very gracefully (google for "linux
 	FIN_WAIT2 stuck", and no, it's not the half closed problem, there

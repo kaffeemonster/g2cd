@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: G2Packet.c,v 1.12 2004/12/18 18:06:13 redbully Exp redbully $
  */
@@ -4945,24 +4945,33 @@ static bool magic_route(struct ptype_action_args *parg, uint8_t *guid)
 {
 	union combo_addr na;
 
+	/* connected? */
 	if(parg->connec)
 	{
+		/* tcp */
 		if(parg->connec->flags.upeer) {
+			/* forward from connected hubs to our leafs only */
 			if(!g2_guid_lookup(guid, GT_LEAF, &na))
 				return false;
 		}
 		else
 		{
 			if(!g2_guid_lookup(guid, GT_LEAF, &na)) {
-				if(!g2_guid_lookup(guid, GT_NEIGHBOUR, &na)) {
-// TODO: udp forwards to "anything"
+				if(!g2_guid_lookup(guid, GT_NEIGHBOUR, &na))
 					return false;
+				else {
+// TODO: udp forwards to "anything"
+					/*
+					 * our leafes can forward to "anyone", by udp,
+					 * which is fucking broken, IMHO...
+					 */
 				}
 			}
 		}
 	}
 	else
 	{
+		/* udp, only forward to connected nodes, by falltrhough */
 		if(!g2_guid_lookup(guid, GT_LEAF, &na)) {
 			if(!g2_guid_lookup(guid, GT_NEIGHBOUR, &na))
 				return false;

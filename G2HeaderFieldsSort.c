@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
  */
@@ -143,8 +143,9 @@ int main(int argc, char *argv[])
 		" * This file is part of g2cd.\n"
 		" *\n"
 		" * g2cd is free software; you can redistribute it and/or modify\n"
-		" * it under the terms of the GNU General Public License version\n"
-		" * 2 as published by the Free Software Foundation.\n"
+		" * it under the terms of the GNU General Public License as\n"
+		" * published by the Free Software Foundation, either version 3\n"
+		" * of the License, or (at your option) any later version.\n"
 		" *\n"
 		" * g2cd is distributed in the hope that it will be useful, but\n"
 		" * WITHOUT ANY WARRANTY; without even the implied warranty of\n"
@@ -152,9 +153,8 @@ int main(int argc, char *argv[])
 		" * GNU General Public License for more details.\n"
 		" *\n"
 		" * You should have received a copy of the GNU General Public\n"
-		" * License along with g2cd; if not, write to the Free Software\n"
-		" * Foundation, Inc., 59 Temple Place, Suite 330, Boston,\n"
-		" * MA  02111-1307  USA\n"
+		" * License along with g2cd.\n"
+		" * If not, see <http://www.gnu.org/licenses/>.\n"
 		" *\n"
 		" */\n"
 		"\n",

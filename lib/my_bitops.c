@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id:$
  */
@@ -36,7 +36,7 @@
  * Unfortunatly reading the psr is a priviliged intruction.
  * IDIOTS!!!
  * (If my memory serves me right the same problem applies to ppc, to
- * detect the type: also in a register only reading in priviliged mode)
+ * detect the type: also in a register only readable in priviliged mode)
  * One has to ask the kernel.
  * On Solaris there is sys/processor.h and processor_info(id, struct *).
  * On Linux one has to parse /proc/cpuinfo?
@@ -45,7 +45,7 @@
  * would fail even if the instructions are not used, on Linux the user
  * of such archs hopefully compile more stuff themself (tell me a big
  * alpha or sparc distro...) with the aprop. -march=<your cpu>.
- * Ah, yes i forgot, -march an such archs sometimes does not set enough
+ * Ah, yes i forgot, -march on such archs sometimes does not set enough
  * preprocessor magic...
  */
 #  include "generic/my_bitops.c"

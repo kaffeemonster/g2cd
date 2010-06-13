@@ -55,7 +55,7 @@
 # define MOD4(a) a %= BASE
 #endif
 
-#ifdef __XOP__
+#if 0
 		/*
 		 * Will XOP processors have SSSE3/AVX??
 		 */

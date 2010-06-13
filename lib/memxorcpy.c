@@ -2,13 +2,14 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest
  *
- * Copyright (c) 2004-2009 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id:$
  */
@@ -39,18 +39,18 @@
  * The memory regions src1 and dst are /not/ allowed to overlap,
  *  but maybe the same.
  *
- * Note: This implementation does some overhaed to align the
+ * Note: This implementation does some overhead to align the
  * pointer, it is optimized for large chunks, as they normaly
  * apear in an G2 QHT (128k)
  *
  *
  * Sidenote: This function was a clear candidate for the new
  * "restrict" keyword, as the original version also didn't
- * allow overlaping reagions, to speed up the xor.
+ * allow overlaping regions, to speed up the xor.
  * Unfortunatly, with recent gcc's, the hand down written align
  * foo clashes with the magic the compiler is capable of. With
  * "restict" the compiler has exactly the same information we
- * have and does exactly the same magic. So evectivly it is
+ * have and does exactly the same magic. So effectivly it is
  * done twice.
  * So basicaly we could shrink down the funktion to:
  *

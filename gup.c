@@ -7,8 +7,9 @@
  * This file is part of g2cd.
  *
  * g2cd is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
+ * it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3
+ * of the License, or (at your option) any later version.
  *
  * g2cd is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,9 +17,8 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public
- * License along with g2cd; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA  02111-1307  USA
+ * License along with g2cd.
+ * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
  */
@@ -432,6 +432,7 @@ int handler_active_timeout(void *arg)
 	p_entry.data.ptr = con;
 	if(local_time_now >= (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
 	{
+		logg_develd("run into timeout for %p#I\n", &con->remote_host);
 		if(EBUSY == pthread_mutex_trylock(&con->lock))
 		{
 			/*
@@ -447,6 +448,7 @@ int handler_active_timeout(void *arg)
 		else
 		{
 			/* we have the con, tear it down */
+			logg_devel("direct teardown\n");
 			teardown_con(con, worker.epollfd);
 			/* we hold the hzp ref on it */
 			pthread_mutex_unlock(&con->lock);
@@ -504,6 +506,11 @@ void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)
 
 	shortlock_t_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
+}
+
+void gup_teardown_con(struct g2_connection *con)
+{
+	return teardown_con(con, worker.epollfd);
 }
 
 void gup_con_mark_write(struct g2_connection *con)
