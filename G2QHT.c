@@ -1487,6 +1487,10 @@ static intptr_t hub_match_callback(g2_connection_t *con, void *carg)
 	if(table->flags.reset_needed) /* table empty, no match possible */
 		goto out;
 
+	/* ignore to full QHTs */
+	if(table->used >= 1000)
+		goto out;
+
 	do {
 		mb();
 		hzp_ref(HZP_QHTDAT, qd = container_of(table->data, struct qht_data, data));

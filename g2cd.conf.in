@@ -358,7 +358,7 @@ COMMENTC grin and prop. overloading the network connection of the guy
 COMMENTC sharing to much.
 COMMENTC So we ignore QHTs which are filled more than qht_max_promille
 COMMENTC (divide by 10 and you have percent).
-COMMENTC Note: Values larger 1000 disable this filter
+COMMENTC Note: Values larger 1000 will cap to 1000
 COMMENTC
 COMMENT qht_max_promille = DEFAULT_QHT_MAX_PROMILLE
 

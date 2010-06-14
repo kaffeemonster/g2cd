@@ -813,6 +813,9 @@ static noinline void handle_config(void)
 		}
 	}
 
+	if(server.settings.qht.max_promille > 1000)
+		server.settings.qht.max_promille = 1000;
+
 	emit_emms();
 	errno = 0;
 	d_lat = strtod(profile.latitude, &endptr);
