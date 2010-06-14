@@ -1647,12 +1647,13 @@ static inline bool handle_udp_sock(struct epoll_event *udp_poll, struct norm_buf
 	case  0:
 		if(buffer_remaining(*d_hold))
 		{
-			if(EAGAIN != errno) {
+			if(EAGAIN != errno && 0 != errno) {
 				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
 				          "error reading?!", errno, from_fd, from);
 				return false;
-			} else
-				logg_devel("Nothing to read!\n");
+			} else {
+				logg_devel_old("Nothing to read!\n");
+			}
 		}
 		break;
 	case -1:
