@@ -1067,6 +1067,19 @@ static inline void setup_resources(void)
 			);
 	}
 	close(fd);
+
+	/*
+	 * when mem is tight, shoot us first, we are unimportant
+	 * and mem hungry...
+	 */
+	my_snprintf(buf, sizeof(buf), "/proc/%u/oom_adj", getpid());
+	fd = open(buf, O_WRONLY|O_NOCTTY);
+	if(0 > fd)
+		return;
+	if(sizeof("15\n") != write(fd, "15\n", sizeof("15\n"))) {
+		/* yeah, whatever... */
+	}
+	close(fd);
 	}
 #endif
 }
