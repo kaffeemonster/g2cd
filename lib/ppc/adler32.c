@@ -122,22 +122,28 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			buf += SOVUC;
 			k -= n;
 
-			if(likely(k >= SOVUC)) do
+			if(likely(k >= SOVUC))
 			{
-				/* add vs1 for this round (16 times) */
-				vs2 += vec_sl(vs1, vsh);
+				vector unsigned int vs1_r = v0_32;
+				do
+				{
+					/* add vs1 for this round */
+					vs1_r += vs1;
 
-				/* get input data */
-				in16 = vec_ldl(0, buf);
+					/* get input data */
+					in16 = vec_ldl(0, buf);
 
-				/* add 4 byte horizontal and add to old dword */
-				vs1 = vec_sum4s(in16, vs1);
-				/* apply order, add 4 byte horizontal and add to old dword */
-				vs2 = vec_msum(in16, vord, vs2);
+					/* add 4 byte horizontal and add to old dword */
+					vs1 = vec_sum4s(in16, vs1);
+					/* apply order, add 4 byte horizontal and add to old dword */
+					vs2 = vec_msum(in16, vord, vs2);
 
-				buf += SOVUC;
-				k -= SOVUC;
-			} while (k >= SOVUC);
+					buf += SOVUC;
+					k -= SOVUC;
+				} while (k >= SOVUC);
+				/* add all vs1 for 16 times */
+				vs2 += vec_sl(vs1_r, vsh);
+			}
 
 			if(likely(k))
 			{

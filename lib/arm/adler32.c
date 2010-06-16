@@ -142,6 +142,15 @@ restart_loop:
 			buf += SOVUCQ;
 			k -= n;
 
+// TODO: make work in inner loop more tight
+			/*
+			 * decompose partial sums, so we do less instructions and
+			 * build loops around it to do acc and so on only from time
+			 * to time.
+			 * This is hard with NEON, because the instruction are nice
+			 * we have the stuff in widening and with acc (practicaly
+			 * for free...)
+			 */
 			if(likely(k >= SOVUCQ)) do
 			{
 				/* add vs1 for this round (16 times) */
