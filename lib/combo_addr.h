@@ -131,10 +131,10 @@ struct sockaddr_in6
 	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
 # endif /* HAVE_IPV6 */
 
-# ifndef HAVE_INET6_ADDRSTRLEN
+# if HAVE_DECL_INET6_ADDRSTRLEN != 1
 /*
- * This buffersize is needed, but we don't have it everywere, even on Systems
- * that claim to be IPv6 capable...
+ * This buffersize is needed, but we don't have it everywere, even on
+ * Systems that claim to be IPv6 capable...
  */
 #  define INET6_ADDRSTRLEN 46
 # endif /* HAVE_INET6_ADDRSTRLEN */

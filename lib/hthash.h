@@ -308,7 +308,7 @@ static inline uint32_t hthash32_mod(const uint32_t *key, size_t len, uint32_t se
 /* The golden ration: an arbitrary value */
 #  define JHASH_GOLDEN_RATIO	0x9e3779b9
 
-static inline uint32_t __hthash32_u(uint32_t w[3], const uint32_t *key, size_t len)
+static inline void __hthash32_u(uint32_t w[3], const uint32_t *key, size_t len)
 {
 	while (len >= 3)
 	{
@@ -365,9 +365,9 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 		if(len >= SO32 * 3)
 		{
 			if(align)
-				h = __hthash32_u(w, key, len / SO32);
+				__hthash32_u(w, key, len / SO32);
 			else
-				h = __hthash32(w, key, len / SO32);
+				__hthash32(w, key, len / SO32);
 			data = &data[len & ~((SO32 * 3) - 1)];
 			len %= SO32 * 3;
 		}
@@ -376,9 +376,9 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 	{
 		while (len >= 12)
 		{
-			w[0] += get_unaligned((uint32_t *)&data[0]);
-			w[1] += get_unaligned((uint32_t *)&data[4]);
-			w[2] += get_unaligned((uint32_t *)&data[8]);
+			w[0] += get_unaligned((const uint32_t *)&data[0]);
+			w[1] += get_unaligned((const uint32_t *)&data[4]);
+			w[2] += get_unaligned((const uint32_t *)&data[8]);
 
 			__jhash_mix(w[0], w[1], w[2]);
 			data += 12;
@@ -386,7 +386,7 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 		}
 	}
 
-	w[3] += o_len;
+	w[2] += o_len;
 	switch (len)
 	{
 // TODO: bring into cpu endianess

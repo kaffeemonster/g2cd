@@ -34,7 +34,7 @@
 # define UNALIGNED_OK 0
 #endif
 
-#ifndef HAVE_C99
+#ifndef FLEXIBLE_ARRAY_MEMBER
 /* Non C99 compiler with no extensions don't know about the following keywords */
 # ifdef __GNUC__
 #  define DYN_ARRAY_LEN 0
@@ -43,11 +43,7 @@
 # endif	/* __GNUC__ */
 # define restrict
 #else
-# define DYN_ARRAY_LEN
-#endif /* HAVE_C99 */
-
-#ifndef HAVE_RESTRICT
-# define restrict
+# define DYN_ARRAY_LEN FLEXIBLE_ARRAY_MEMBER
 #endif
 
 #ifndef HAVE_ISBLANK

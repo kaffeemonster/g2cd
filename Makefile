@@ -401,7 +401,6 @@ CFLAGS += -Izlib
 #	shortcut for -D_REENTRANT and all other such things on
 #	some GCC's
 CFLAGS += -pthread
-#CFLAGS += -D_POSIX_PTHREAD_SEMANTICS
 #CFLAGS += -D_REENTRANT
 #	sun studio
 #CFLAGS += -mt
@@ -412,7 +411,6 @@ CFLAGS += -DDEBUG_DEVEL
 #CFLAGS += -DDEBUG_CON_ALLOC
 #CFLAGS += -DDEBUG_HZP_LANDMINE
 CFLAGS += -DHAVE_CONFIG_H
-CFLAGS += -DHAVE_DLOPEN
 #CFLAGS += -DASSERT_BUFFERS
 #CFLAGS += -DQHT_DUMP
 #CFLAGS += -DUDP_DUMP
@@ -421,9 +419,6 @@ CFLAGS += -DVALGRIND_ME
 #CFLAGS += -DPACKET_STATS
 #CFLAGS += -DDEBUG_PACKET_ALLOC
 CFLAGS += -DHAVE_BINUTILS=218
-#	on recent glibc-system to avoid implicit-warnings
-#	for strnlen
-CFLAGS += -D_GNU_SOURCE
 #	on glibc-system this brings performance at the cost
 #	of size if your compiler is not smart enough
 #CFLAGS += -D__USE_STRING_INLINES
@@ -434,7 +429,6 @@ CFLAGS += -D_GNU_SOURCE
 #CFLAGS += -D_XOPEN_SOURCE
 #CFLAGS += -D_XPG4_2
 #CFLAGS += -D_XPG6
-#CFLAGS += -D__EXTENSIONS__
 
 #
 #
@@ -489,7 +483,7 @@ MY_STD_DEPS_HEADS = \
 #
 #	together with this files
 #
-MY_STD_DEPS = $(MY_STD_DEPS_HEADS) lib/log_facility.h lib/sec_buffer.h Makefile ccdrv
+MY_STD_DEPS = $(MY_STD_DEPS_HEADS) config_auto.h lib/log_facility.h lib/sec_buffer.h Makefile ccdrv
 #
 #	All headerfiles
 #
@@ -552,13 +546,20 @@ AUX = \
 	g2cd.conf.in \
 	g2cd.conf \
 	COPYING \
-	README
+	README \
+	configure \
+	configure.ac \
+	config_auto.h.in \
+	config.guess \
+	config.sub \
+	install-sh \
+	m4/ax_check_zlib.m4
 #
 #	files to be included in a package
 #
 TARED_FILES = $(HEADS) $(SRCS) $(AUX)
 # normaly we would set it here, derived vom the mod-dirs, but..
-TARED_DIRS =
+TARED_DIRS = m4
 
 AUXS = \
 	g2cd.conf \
@@ -716,6 +717,19 @@ finalwithzlib: .finalwithzlib
 
 g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P -I. - < g2cd.conf.in > $@"
+
+configure: configure.ac install-sh config.guess config.sub
+	-@./ccdrv -s$(VERBOSE) "AUTOCONF[$@]" autoconf -f
+config_auto.h.in: configure.ac
+	-@./ccdrv -s$(VERBOSE) "AUTOHEADER[$@]" autoheader -f
+config_auto.h: config_auto.h.in configure
+	./configure
+config.guess:
+	-automake -c -f -a
+config.sub:
+	-automake -c -f -a
+install-sh:
+	-automake -c -f -a
 
 #	someday we need this, dependend on all or $(MAIN)
 install:

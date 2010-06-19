@@ -50,12 +50,12 @@
 #include "udpfromto.h"
 #include "combo_addr.h"
 
-#ifdef HAVE_IP_RECVDSTADDR
+#if HAVE_DECL_IP_RECVDSTADDR == 1
 # ifndef IPV6_RECVDSTADDR
 #  define IPV6_RECVDSTADDR IP_RECVDSTADDR
 # endif
 #endif
-#ifdef HAVE_IP_SENDSRCADDR
+#if HAVE_DECL_IP_SENDSRCADDR == 1
 # ifndef IPV6_SENDSRCADDR
 #  define IPV6_SENDSRCADDR IP_SENDSRCADDR
 # endif
@@ -104,7 +104,7 @@ int udpfromto_init(int s, int fam)
 		err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, &opt, sizeof(opt));
 # endif
 	}
-#elif defined(HAVE_IP_RECVDSTADDR)
+#elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
 	 * Set the IP_RECVDSTADDR option (BSD).
 	 * Note: IP_RECVDSTADDR == IP_SENDSRCADDR
@@ -114,7 +114,7 @@ int udpfromto_init(int s, int fam)
 	else
 		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
 // TODO: IPv6? Does someone has a bsd at hand?
-#elif defined(HAVE_IP_RECVIF)
+#elif HAVE_DECL_IP_RECVIF == 1
 	if(AF_INET == fam)
 		err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
 #else
@@ -129,7 +129,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
                    struct sockaddr *from, socklen_t *fromlen,
                    struct sockaddr *to, socklen_t *tolen)
 {
-#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR)
+#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
 	struct msghdr msgh;
 	struct iovec iov;
 	struct cmsghdr *cmsg;
@@ -146,7 +146,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	if(to && (err = getsockname(s, to, tolen)) < 0)
 		return err;
 
-#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR)
+#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
 	/* Set up iov and msgh structures. */
 	memset(&msgh, 0, sizeof(msgh));
 	iov.iov_base        = buf;
@@ -197,7 +197,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			*tolen = sizeof(*toi6);
 			break;
 		}
-# elif defined HAVE_IP_RECVDSTADDR
+# elif HAVE_DECL_IP_RECVDSTADDR == 1
 // TODO: May not work with Solaris?
 		/*
 		 * (old? 2.6 (kernel? System?)) Solaris does not seem to use
@@ -228,26 +228,31 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			*tolen = sizeof(*toi6);
 			break;
 		}
+// TODO: if all fails, one can use IP_RECVIF
+		/*
+		 * this should also work on IPv6 with solaris, but needs
+		 * a scan otver the interfaces to get an ip to the index...
+		 */
 # endif
 	}
 	return err;
 #else
 	/* fallback: call recvfrom */
 	return recvfrom(s, buf, len, flags, from, fromlen);
-#endif /* defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_RECVDSTADDR) */
+#endif /* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1 */
 }
 
 ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
                    struct sockaddr *to, socklen_t tolen,
                    struct sockaddr *from, socklen_t fromlen)
 {
-#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP_SENDSRCADDR)
+#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1
 	struct msghdr msgh;
 	struct cmsghdr *cmsg;
 	struct iovec iov;
 # ifdef HAVE_IP_PKTINFO
 	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))];
-# elif defined(HAVE_IP_SENDSRCADDR)
+# elif HAVE_DECL_IP_SENDSRCADDR == 1
 	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_addr))];
 # endif
 
@@ -294,7 +299,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 		/* interface 0 may not have the right source addr ... */
 		memcpy(&pi6_ptr->ipi6_addr, &from_sin6->sin6_addr, sizeof(pi6_ptr->ipi6_addr));
 	}
-# elif defined(HAVE_IP_SENDSRCADDR)
+# elif HAVE_DECL_IP_SENDSRCADDR == 1
 	if(AF_INET == from->sa_family)
 	{
 		struct sockaddr_in *from_sin = (struct sockaddr_in *)from;
@@ -321,7 +326,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 	from = from;
 	fromlen = fromlen;
 	return sendto(s, buf, len, flags, to, tolen);
-#endif	/* defined(HAVE_IP_PKTINFO) || defined (HAVE_IP_SENDSRCADDR) */
+#endif	/* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1 */
 }
 
 /*@unused@*/

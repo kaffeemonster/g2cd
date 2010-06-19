@@ -23,6 +23,7 @@
  * $Id: log_facility.c,v 1.7 2005/11/05 11:02:32 redbully Exp redbully $
  */
 
+#include "other.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -32,12 +33,11 @@
 #include <time.h>
 #include <errno.h>
 #include "my_pthread.h"
-#ifndef WIN32
+#ifdef HAVE_SYSLOG_H
 # include <syslog.h>
 #endif
 #include <unistd.h>
 /* other */
-#include "other.h"
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #endif
@@ -182,7 +182,9 @@ static inline int do_vlogging(const enum loglevel level, const char *fmt, va_lis
 {
 	FILE *log_where = level >= LOGF_NOTICE ? stdout : stderr;
 
+#ifdef HAVE_SYSLOG_H
 // TODO: properly distribute logmsg to all logging services.
+#endif
 	return vfprintf(log_where, fmt, args);
 }
 
@@ -190,7 +192,9 @@ static inline int do_logging(const enum loglevel level, const char *string, size
 {
 	int log_where = level >= LOGF_NOTICE ? STDOUT_FILENO : STDERR_FILENO;
 
+#ifdef HAVE_SYSLOG_H
 // TODO: properly distribute logmsg to all logging services.
+#endif
 	return write(log_where, string, len);
 }
 
@@ -410,9 +414,9 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-#if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR
 			size_t err_str_len;
-# ifdef HAVE_GNU_STRERROR_R
+# ifdef STRERROR_R_CHAR_P
 			/*
 			 * the f***ing GNU-Version of strerror_r wich returns
 			 * a char * to the buffer....

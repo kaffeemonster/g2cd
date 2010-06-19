@@ -1685,7 +1685,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
 		OUT_ERR("setsockopt reuse");
 
-#ifdef HAVE_IPV6_V6ONLY
+#if HAVE_DECL_IPV6_V6ONLY == 1
 	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");

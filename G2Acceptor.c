@@ -39,7 +39,7 @@
 /* System net-includes */
 #include <sys/types.h>
 #include "lib/my_epoll.h"
-#ifndef WIN32
+#ifdef HAVE_NETINET_TCP_H
 # include <netinet/tcp.h>
 #endif
 #include "lib/combo_addr.h"
@@ -156,7 +156,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	if(setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)))
 		OUT_ERR("setsockopt reuse");
 
-#ifdef HAVE_IPV6_V6ONLY
+#if HAVE_DECL_IPV6_V6ONLY == 1
 	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*accept_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
@@ -259,7 +259,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	}
 
 	yes = 1;
-#ifdef HAVE_TCP_CORK
+#if HAVE_DECL_TCP_CORK == 1
 	setsockopt(work_entry->com_socket, SOL_TCP, TCP_CORK, &yes, sizeof(yes));
 #endif
 

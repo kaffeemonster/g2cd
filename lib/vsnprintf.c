@@ -41,16 +41,16 @@
  * quite succefully ;-)
  */
 
+#include "other.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef WANT_WCHAR
-# include <wchar.h>
-#endif
 #include <ctype.h>
 #include <errno.h>
-#include "other.h"
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 #include "my_bitops.h"
 #include "itoa.h"
 #include "log_facility.h"
@@ -1249,8 +1249,8 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-#if defined HAVE_GNU_STRERROR_R || defined HAVE_MTSAFE_STRERROR
-# ifdef HAVE_GNU_STRERROR_R
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR
+# ifdef STRERROR_R_CHAR_P
 	/*
 	 * the f***ing GNU-Version of strerror_r wich returns
 	 * a char * to the buffer....
@@ -1318,7 +1318,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	if(unlikely(spec->precision))
 		maxlen = maxlen < spec->precision ? maxlen : spec->precision;
 
-#ifdef WANT_WCHAR
+#ifdef HAVE_WCHAR_H
 	if(likely(MOD_LONG != spec->mod) || !s)
 	{
 #else
@@ -1362,7 +1362,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 		}
 		buf += len;
 	}
-#ifdef WANT_WCHAR
+#ifdef HAVE_WCHAR_H
 	}
 	else
 	{
@@ -1417,7 +1417,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	else
 	{
-#ifndef WANT_WCHAR
+#ifndef HAVE_WCHAR_H
 // TODO: popping an int may be wrong
 		int x GCC_ATTRIB_UNUSED = va_arg(spec->ap, int);
 		if(sav)

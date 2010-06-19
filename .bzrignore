@@ -39,3 +39,12 @@ zlib/contrib
 lib/aes_tab_gen
 lib/five_tab_gen
 g2cd.conf
+config_auto.h.in
+configure
+config.log
+autom4te.cache
+config.status
+config_auto.h
+config.guess
+config.sub
+install-sh
