@@ -96,8 +96,8 @@ CFLAGS += $(WARN_FLAGS)
 # !! mashine-dependent !! non-x86 please see here
 #
 # choose your cpu
-ARCH = athlon64-sse3
-#ARCH = core2
+#ARCH = athlon64-sse3
+ARCH = core2
 #ARCH = athlon-xp
 #ARCH = pentium2
 #ARCH = pentium4
@@ -230,25 +230,8 @@ CFLAGS += $(OPT_FLAGS)
 #
 # Libs
 #
-# Libraries from the System (which will never be modules)
-#	Solaris...
-LDLIBS_BASE += -ldl #-lm
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
-# either you set this and the appropreate flags below, or you
-# use the -pthread shortcut on recent gcc systems
-#LDLIBS_BASE += -lpthread
-#	on solaris, there is a lot more we need
-#LDLIBS_BASE += -lresolv
-#LDLIBS_BASE += -lsocket
-#LDLIBS_BASE += -lnsl
-#LDLIBS_BASE += -lrt
-#	a lib providing dbm_*, berkleydb will fit, prop. also anything else
-LDLIBS_BASE += -ldb
-#	and for win32
-#LDLIBS_BASE += -lws2_32
-#	on old solaris it's in the dbm lib, part of system
-#LDLIBS_BASE += -ldbm
 LDLIBS_Z = -lz $(LDLIBS_BASE)
 #	All libs if we don't use modules
 LDLIBS = -lcommon $(LDLIBS_Z)
@@ -256,45 +239,9 @@ LDLIBS = -lcommon $(LDLIBS_Z)
 #
 #	Linking-Flags
 #
-#	Hopefully the linker knows somehting about this
-LDFLAGS = -g # -pg
-LDFLAGS += -Wl,-O1
-LDFLAGS += -Wl,--sort-common
-LDFLAGS += -Wl,--enable-new-dtags
-LDFLAGS += -Wl,--as-needed
-#LDFLAGS += -Wl,-M
-# maybe get patched into binutils, nope
-#LDFLAGS += -Wl,-hashvals
-#LDFLAGS += -Wl,-zdynsort
-# We now have this...
-#LDFLAGS += -Wl,--hash-style=both
-#	Some linker can also strip the bin. with this flag 
-#LDFLAGS += -s
-#	switch between profile-generation and final build
-#LDFLAGS += -fprofile-arcs
-# pthread shortcut or single Makros and the lib above
-LDFLAGS += -pthread
-#LDFLAGS += -D_POSIX_PTHREAD_SEMANTICS
-#LDFLAGS += -D_REENTRANT
-#	sun studio
-#LDFLAGS += -mt
-#LDFLAGS += -Bdynamic
-# on solaris we can do a little in respect to symbols
-#LDFLAGS += -Wl,-M,.mapfile
-# solaris Linker magic
-#LDFLAGS += -Wl,-B,direct
-#LDFLAGS += -L/usr/ucblib/
-# gnarf, on Linux only external Patch, and other syntax...
-#LDFLAGS += -Wl,-Bdirect
-# get some more symbols in the executable, so backtraces
-# look better
-LDFLAGS += -rdynamic
 
-#
 #	Lib Paths
 LDFLAGS += -L./lib/
-# (additional)
-#LDFLAGS += -L$(ZLIB_LPATH)/lib -Wl,R,$(ZLIB_LPATH)/lib
 
 #
 # Pull in some functions
@@ -467,6 +414,8 @@ AUX = \
 	config.guess \
 	config.sub \
 	install-sh \
+	m4/acx_pthread.m4 \
+	m4/ax_check_linker_flags.m4 \
 	m4/ax_check_zlib.m4
 #
 #	files to be included in a package
@@ -785,7 +734,7 @@ sbox.bin: $(TARED_FILES)
 	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -c9 - > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
 
 calltree: calltree.c Makefile ccdrv
-	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@ $(LDFLAGS)
+	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@
 
 hardcopy: $(TARED_FILES)
 	for file in $(TARED_FILES) ; do expand -t 3 $$file | fold -s | lpr ; done;

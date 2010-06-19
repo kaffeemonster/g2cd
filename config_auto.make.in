@@ -22,6 +22,12 @@ OBJCOPY = @OBJCOPY@
 STRIP = @STRIP@
 
 ################################
+# libs
+################################
+LDLIBS_BASE += @LIBS@
+LDFLAGS += @LDFLAGS@
+
+################################
 # Target endianess
 ################################
 TARGET_ENDIAN = @TARGET_ENDIAN@

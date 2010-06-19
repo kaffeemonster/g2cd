@@ -38,6 +38,7 @@ disable_asm=no
 disable_v9=no
 disable_vis=no
 disable_vis2=no
+use_mapfiles=no
 
 case "$host" in
 	*powerpc-*)
@@ -69,7 +70,10 @@ esac
 case "$host" in
 	*-solar*)
 # Old Solaris does not have strerror_r, instaed strerror is thread save
-		strerror_mtsafe=yes;;
+		strerror_mtsafe=yes;
+# sysmbol visability only on later, because the linker can hide the
+# symbols with a mapfile
+		use_mapfile=yes;;
 	*)
 		;;
 esac
@@ -232,9 +236,18 @@ else
 	AC_MSG_RESULT([no])
 fi
 
+
 AC_USE_SYSTEM_EXTENSIONS
 # Checks for programs.
 AC_PROG_CC
+m4_include([m4/acx_pthread.m4])
+ACX_PTHREAD
+# we are a pthread program, make the result the default
+LIBS="$PTHREAD_LIBS $LIBS"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
+CC="$PTHREAD_CC"
+# now check the rest
 AC_PROG_CPP
 AC_PROG_CC_C99
 AC_PROG_INSTALL
@@ -246,8 +259,37 @@ AC_CHECK_TOOL([AR], [ar], [ar])
 AC_CHECK_TOOL([OBJCOPY], [objcopy], [objcopy])
 AC_CHECK_TOOL([STRIP], [strip], [strip])
 
+m4_include([m4/ax_check_linker_flags.m4])
+# get some more symbols in the executable, so backtraces
+# look better
+AX_CHECK_LINKER_FLAGS([-rdynamic],
+                      [LDFLAGS="-rdynamic $LDFLAGS"],
+                      [AX_CHECK_LINKER_FLAGS([-Bdynamic],
+                                             [LDFLAGS="-Bdynamic $LDFLAGS"], [])])
+# the solaris linker can optimize the link some more...
+AX_CHECK_LINKER_FLAGS([-Wl,-B,direct],
+                      [LDFLAGS="-Wl,-B,direct $LDFLAGS"],
+                      [])
+
+if test "$use_mapfiles" = yes; then
+	t_file_name=`mktemp`
+	echo "{};" >> "$t_file_name"
+	AX_CHECK_LINKER_FLAGS([-Wl,-M,"$t_file_name"],
+	                      [LDFLAGS="-Wl,-M,.mapfile $LDFLAGS"],
+	                      [])
+	rm -f "$t_file_name"
+fi
+
+# pmaddubsw %xmm5, %xmm0 == gas 2.17
+# pcmpestri	$0b0010100, (%eax), %xmm1 == gas 2.18
+# vandpd	%ymm0, %ymm1, %ymm0 == gas 2.19
+
 # Checks for libraries.
-AC_CHECK_LIB([dl], [dlopen])
+AC_SEARCH_LIBS([dlopen], [dl])
+AC_SEARCH_LIBS([socket], [socket ws2_32])
+AC_SEARCH_LIBS([gethostname], [nsl])
+AC_SEARCH_LIBS([getaddrinfo], [resolv])
+AC_SEARCH_LIBS([sched_yield], [rt])
 
 # Checks for header files.
 AC_FUNC_ALLOCA

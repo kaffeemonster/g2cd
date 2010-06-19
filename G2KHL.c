@@ -167,6 +167,37 @@ static const char *gwc_res_http_names[] =
 #endif
 
 
+static void put_boot_gwc_in_cache(void)
+{
+	datum key, value;
+
+	/* no boot url?? K, continue, don't crash */
+	if(!server.settings.khl.gwc_boot_url)
+		return;
+
+	/* make shure the boot url is in the cache */
+	key.dptr  = (void*)(intptr_t)server.settings.khl.gwc_boot_url;
+	key.dsize = strlen(key.dptr) + 1;
+
+	value = dbm_fetch(gwc_db, key);
+	if(!value.dptr)
+	{
+		struct gwc boot;
+		/* boot url not in cache */
+		logg_devel("putting GWC boot url in db\n");
+		boot.q_count = 0;
+		boot.m_count = 1;
+		boot.seen_last = 0;
+		boot.access_last = 0;
+		boot.access_period = 60 * 60;
+		boot.url = NULL;
+		value.dptr  = (char *) &boot;
+		value.dsize = sizeof(boot);
+		if(dbm_store(gwc_db, key, value, DBM_REPLACE))
+			logg_errno(LOGF_WARN, "not able to put boot GWC into cache");
+	}
+}
+
 /*
  * Functs
  */
@@ -178,7 +209,6 @@ bool g2_khl_init(void)
 	const char *gwc_cache_fname;
 	char *name, *buff;
 	size_t name_len = 0, i;
-	datum key, value;
 
 	/* open the gwc cache db */
 	if(server.settings.data_root_dir)
@@ -210,33 +240,8 @@ bool g2_khl_init(void)
 		}
 	}
 
-	/* no boot url?? K, continue, don't crash */
-	if(!server.settings.khl.gwc_boot_url)
-		goto init_next;
+	put_boot_gwc_in_cache();
 
-	/* make shure the boot url is in the cache */
-	key.dptr  = (void*)(intptr_t)server.settings.khl.gwc_boot_url;
-	key.dsize = strlen(key.dptr) + 1;
-
-	value = dbm_fetch(gwc_db, key);
-	if(!value.dptr)
-	{
-		struct gwc boot;
-		/* boot url not in cache */
-		logg_devel("putting GWC boot url in db\n");
-		boot.q_count = 0;
-		boot.m_count = 1;
-		boot.seen_last = 0;
-		boot.access_last = 0;
-		boot.access_period = 60 * 60;
-		boot.url = NULL;
-		value.dptr  = (char *) &boot;
-		value.dsize = sizeof(boot);
-		if(dbm_store(gwc_db, key, value, DBM_REPLACE))
-			logg_errno(LOGF_WARN, "not able to put boot GWC into cache");
-	}
-
-init_next:
 	if(pthread_mutex_init(&cache.lock, NULL)) {
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
@@ -520,6 +525,7 @@ static bool gwc_resolv(void)
 
 //TODO: is passing service usefull? Seems to make trouble when setup b0rken
 	/* resolve */
+//	logg_develd("node: \"%s\" service: \"%s\"\n", node, service);
 	ret_val = getaddrinfo(node, service, NULL, &res_res);
 	/* transient errors are bad, but not "kill that entry" bad */
 	if(ret_val) {
@@ -1017,6 +1023,8 @@ bool g2_khl_tick(int *fd)
 	case KHL_FILL:
 		if(gwc_switch())
 			state = KHL_GWC_RES;
+		else
+			put_boot_gwc_in_cache();
 		break;
 	case KHL_GWC_RES:
 		if(gwc_resolv())
