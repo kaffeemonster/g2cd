@@ -752,7 +752,7 @@ eclean: libclean zlibclean
 clean: eclean
 	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o G2PacketTyperGenerator G2HeaderFieldsSort calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
-	-$(RM) version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
+	-$(RM) config.status config.log config_auto.h version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 edistclean: distclean
 	$(RM) G2PacketTyper.h
 

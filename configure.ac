@@ -42,11 +42,11 @@ disable_vis2=no
 case "$host" in
 	*powerpc-*)
 		default_disable_bit_instr=no;
-		default_hate_branch=yes;
+		default_hate_cbranch=yes;
 		default_enable_unaligned_ok=yes;;
 	*powerpc64-*)
 		default_disable_bit_instr=no;
-		default_hate_branch=yes;
+		default_hate_cbranch=yes;
 		default_enable_unaligned_ok=yes;;
 	*i?86-*)
 		default_disable_bit_instr=no;
@@ -82,10 +82,10 @@ AC_ARG_ENABLE([unaligned], [AS_HELP_STRING([--enable-unaligned],
               [enable_unaligned_ok="$enableval"], [enable_unaligned_ok=$default_enable_unaligned_ok])
 AC_ARG_ENABLE([bit-instr], [AS_HELP_STRING([--disable-bit-instr],
               [your arch lacks certain bit manipulation instruction, clz and the like, sometimes other instructions can make up for it, but only if they are fast])],
-              [disble_bit_instr="$enableval"], [disble_bit_instr=$default_disable_bit_instr])
+              [disable_bit_instr="$enableval"], [disable_bit_instr=$default_disable_bit_instr])
 AC_ARG_ENABLE([hw-mult], [AS_HELP_STRING([--disable-hw-mult],
               [your arch has no multiply instruction, or the instruction is slow])],
-              [disble_hw_mult="$enableval"], [])
+              [disable_hw_mult="$enableval"], [])
 AC_ARG_ENABLE([smp], [AS_HELP_STRING([--disable-smp],
               [disable smp safety, only do this if you are 110% sure the code will only run on an UP machine])],
               [disable_smp="$enableval"], [])
@@ -156,7 +156,7 @@ else
 	AC_MSG_RESULT([no])
 fi
 
-AC_MSG_CHECKING([wheter we should avoid multiplicaitons])
+AC_MSG_CHECKING([wheter we should avoid multiplications])
 if test "$disable_hw_mult" = yes; then
 	AC_MSG_RESULT([yes])
 else

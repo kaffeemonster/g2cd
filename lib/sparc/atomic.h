@@ -153,9 +153,9 @@ do {	asm volatile("ba,pt	%%xcc, 1f\n\t" \
  * membars for breakfast they will kick you in the nuts.
  * At least some doc said somewhere that in TSO membars are nops...
  */
-#    define mb()	membar_safe("#StoreLoad|#LoadStore|#StoreStore|#LoadLoad")
-#    define rmb()	membar_safe("#StoreLoad|#LoadLoad")
-#    define wmb()	membar_safe("#LoadStore|#StoreStore")
+#    define mb()	sparc_membar_safe("#StoreLoad|#LoadStore|#StoreStore|#LoadLoad")
+#    define rmb()	sparc_membar_safe("#StoreLoad|#LoadLoad")
+#    define wmb()	sparc_membar_safe("#LoadStore|#StoreStore")
 #   else
 #    define MEMBAR_1
 #    define MEMBAR_2
