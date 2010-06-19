@@ -254,6 +254,39 @@ AC_CHECK_HEADERS([ctype.h pthread.h inttypes.h limits.h stddef.h stdlib.h string
 m4_include([m4/ax_check_zlib.m4])
 AX_CHECK_ZLIB
 
+# do you have db.h or ndbm.h?
+AC_CHECK_HEADER([db.h], [have_db_h=yes],[have_db_h=no][])
+if test "$have_db_h" = yes; then
+	AC_MSG_CHECKING([for ndbm interface in db.h])
+	backup_LIBS="$LIBS"
+	LIBS="-ldb $LIBS"
+	AC_LINK_IFELSE([AC_LANG_PROGRAM(
+	                [
+#define DB_DBM_HSEARCH 1
+#include <db.h>
+	                ],
+	                [
+	                   datum key, value;
+	                   static DBM *s;
+	                   s = dbm_open("bla", 0, 0);
+	                   return 0;
+	                ]
+	               )],
+	               [AC_DEFINE(HAVE_DB, 1,
+	                      Define to 1 if we have IPv6)
+	                AC_MSG_RESULT([yes])],
+	               [have_db_h=no
+	                AC_MSG_RESULT([no])])
+	if test "$have_db_h" = no; then
+		LIBS="$backup_LIBS"
+	fi
+fi
+
+if test "$have_db_h" = no; then
+	AC_CHECK_HEADER([ndbm.h], [],[][AC_MSG_ERROR(can not find an ndbm provider!)])
+	AC_SEARCH_LIBS([dbm_open], [ndbm dbm], [], [AC_MSG_ERROR(can not find ndbm!)])
+fi
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_C_CONST
@@ -330,7 +363,9 @@ epoll_poll=no
 AC_MSG_CHECKING([for epoll])
 AC_LINK_IFELSE([AC_LANG_PROGRAM(
                 [
+#include <sys/types.h>
 #include <sys/epoll.h>
+#include <sys/poll.h>
                 ],
                 [
                    int foo = epoll_create(1);
@@ -350,9 +385,12 @@ if test "$need_epoll_compat" = yes; then
 # Solaris 10 event ports, EXPERIMENTAL
 	AC_MSG_CHECKING([for event ports])
 	AC_LINK_IFELSE([AC_LANG_PROGRAM(
-	                [#include <sys/event.h>],
 	                [
-	                   int foo = kqueue();
+#include <sys/types.h>
+#include <port.h>
+	                ],
+	                [
+	                   int foo = port_create();
 	                   return 0;
 	                ]
 	               )],
@@ -363,9 +401,12 @@ if test "$need_epoll_compat" = yes; then
 # *BSD + MacOS-X kqueue, EXPERIMENTAL
 	AC_MSG_CHECKING([for kqueue])
 	AC_LINK_IFELSE([AC_LANG_PROGRAM(
-	                [#include <port.h>],
 	                [
-	                   int foo = port_create();
+#include <sys/types.h>
+#include <sys/event.h>
+	                ],
+	                [
+	                   int foo = kqueue();
 	                   return 0;
 	                ]
 	               )],

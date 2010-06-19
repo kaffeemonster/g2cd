@@ -151,6 +151,8 @@ static unsigned char *to_base16_SSE2(unsigned char *dst, const unsigned char *sr
 	return dst;
 }
 
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
 static unsigned char *to_base16_SSSE3(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm(
@@ -197,6 +199,8 @@ static unsigned char *to_base16_SSSE3(unsigned char *dst, const unsigned char *s
 		return to_base16_MMX(dst, src, len);
 	return dst;
 }
+# endif
+#endif
 
 static const struct test_cpu_feature t_feat[] =
 {

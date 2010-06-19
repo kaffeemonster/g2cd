@@ -28,7 +28,4 @@
 
 # include "config_auto.h"
 
-/* do you have db.h or ndbm.h? */
-#define HAVE_DB
-
 #endif
