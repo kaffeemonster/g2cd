@@ -1,0 +1,33 @@
+#
+# Variables user might want to change (make it work on his
+# system)
+#
+
+################################
+# Name of your Programs
+################################
+
+# system compiler
+HOSTCC = cc
+
+#
+# host compile tools
+#
+CC = @CC@
+CPP = @CPP@
+AS = @AS@
+AR_PROG = @AR@
+RANLIB_PROG = @RANLIB@
+OBJCOPY = @OBJCOPY@
+STRIP = @STRIP@
+
+################################
+# Target endianess
+################################
+TARGET_ENDIAN = @TARGET_ENDIAN@
+
+################################
+# Helper vars
+################################
+PACKAGE_NAME = @PACKAGE_NAME@
+PACKAGE_VERSION = @PACKAGE_VERSION@

@@ -28,85 +28,7 @@
 # is a little ...
 #
 
-#
-# Variables user might want to change (make it work on his
-# system)
-#
-
-# Target endianess
-# big endian
-#TARGET_ENDIAN = big
-# little endian
-TARGET_ENDIAN = little
-
-#
-# Name of your Programs
-
-#	system compiler
-HOSTCC = gcc
-#
-# use host
-#
-CC = gcc
-AS = as
-AR_PROG = ar
-RANLIB_PROG = ranlib
-OBJCOPY = objcopy
-STRIP = strip
-#
-# x86_64
-#
-#CC = x86_64-pc-linux-gnu-gcc
-#AS = x86_64-pc-linux-gnu-as
-#AR_PROG = x86_64-pc-linux-gnu-ar
-#RANLIB_PROG = x86_64-pc-linux-gnu-ranlib
-#OBJCOPY = x86_64-pc-linux-gnu-objcopy
-#STRIP = x86_64-pc-linux-gnu-strip
-#
-# powerpc
-#
-#CC = powerpc-linux-gnu-gcc
-#AS = powerpc-linux-gnu-as
-#AR_PROG = powerpc-linux-gnu-ar
-#RANLIB_PROG = powerpc-linux-gnu-ranlib
-#OBJCOPY = powerpc-linux-gnu-objcopy
-#STRIP = powerpc-linux-gnu-strip
-#
-# powerpc64
-#
-#CC = powerpc64-linux-gnu-gcc
-#AS = powerpc64-linux-gnu-as
-#AR_PROG = powerpc64-linux-gnu-ar
-#RANLIB_PROG = powerpc64-linux-gnu-ranlib
-#OBJCOPY = powerpc64-linux-gnu-objcopy
-#STRIP = powerpc64-linux-gnu-strip
-#
-# alpha
-#
-#CC = alpha-linux-gnu-gcc
-#AS = alpha-linux-gnu-as
-#AR_PROG = alpha-linux-gnu-ar
-#RANLIB_PROG = alpha-linux-gnu-ranlib
-#OBJCOPY = alpha-linux-gnu-objcopy
-#STRIP = alpha-linux-gnu-strip
-#
-# arm
-#
-#CC = arm-unknown-linux-gnu-gcc
-#AS = arm-unknown-linux-gnu-as
-#AR_PROG = arm-unknown-linux-gnu-ar
-#RANLIB_PROG = arm-unknown-linux-gnu-ranlib
-#OBJCOPY = arm-unknown-linux-gnu-objcopy
-#STRIP = arm-unknown-linux-gnu-strip
-#
-# ia64
-#
-#CC = ia64-linux-gnu-gcc
-#AS = ia64-linux-gnu-as
-#AR_PROG = ia64-linux-gnu-ar
-#RANLIB_PROG = ia64-linux-gnu-ranlib
-#OBJCOPY = ia64-linux-gnu-objcopy
-#STRIP = ia64-linux-gnu-strip
+include config_auto.make
 
 #	version info
 # gcc
@@ -140,14 +62,6 @@ HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_S
 #	don't know how it is right, but cygwin excludes some
 #	essential function if __STRICT_ANSI is defined
 CFLAGS += -std=gnu99
-#	thats what i want
-#CFLAGS += -std=c99
-#	brings us not very far, C99 var macro handling is insane
-#CFLAGS += -pedantic
-#	gcc == 2.95.3
-#	wuerg-Around just functions due to Gnu extension to the
-#	C-Language
-#CFLAGS += -std=gnu9x
 #	relax the cun studio compiler a little bit
 #CFLAGS += -Xa
 
@@ -461,15 +375,13 @@ DATEFLAGS = -u +%Y%m%d-%H%M
 #
 # End of interesting Variables
 ###############################################################
-# Internal Name - Config
+# Internal Config
 #
 #	internal Variables and make-targets
 #	only touch if realy needed
 #
-#	Name of Program
-MAIN = g2cd
-#	Version-ding-dong
-VERSION = 0.0.00.11
+MAIN = $(PACKAGE_NAME)
+VERSION = $(PACKAGE_VERSION)
 DISTNAME = $(MAIN)-$(VERSION)
 LONGNAME = Go2CDaemon $(VERSION)
 
@@ -547,9 +459,11 @@ AUX = \
 	g2cd.conf \
 	COPYING \
 	README \
+	autogen.sh \
 	configure \
 	configure.ac \
 	config_auto.h.in \
+	config_auto.make.in \
 	config.guess \
 	config.sub \
 	install-sh \
@@ -719,11 +633,13 @@ g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P -I. - < g2cd.conf.in > $@"
 
 configure: configure.ac install-sh config.guess config.sub
-	-@./ccdrv -s$(VERBOSE) "AUTOCONF[$@]" autoconf -f
+	-autoconf -f
 config_auto.h.in: configure.ac
-	-@./ccdrv -s$(VERBOSE) "AUTOHEADER[$@]" autoheader -f
+	-autoheader -f
 config_auto.h: config_auto.h.in configure
-	./configure
+	./configure && touch -c "$@" config_auto.make
+config_auto.make: config_auto.make.in configure
+	./configure && touch -c "$@" config_auto.h
 config.guess:
 	-automake -c -f -a
 config.sub:
@@ -752,7 +668,7 @@ eclean: libclean zlibclean
 clean: eclean
 	-$(RM) $(MAIN) $(MAIN)z $(MAIN).exe $(MAIN)z.exe $(MAIN)z.c .$(MAIN).dbg ccdrv arflock bin2o G2PacketTyperGenerator G2HeaderFieldsSort calltree callgraph.dot .arflockgate .final .withzlib .finalwithzlib .finalwithzlib686
 distclean: libdclean zlibdclean clean
-	-$(RM) config.status config.log config_auto.h version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
+	-$(RM) config.status config.log config_auto.h config_auto.make version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 edistclean: distclean
 	$(RM) G2PacketTyper.h
 
@@ -951,7 +867,7 @@ timeout.h: lib/list.h lib/hzp.h
 #
 $(OBJS): $(MY_STD_DEPS)
 $(RTL_DUMPS): $(MY_STD_DEPS)
-Makefile: lib/module.make zlib/module.make
+Makefile: config_auto.make lib/module.make zlib/module.make
 
 #$(DEPENDS): Makefile
 

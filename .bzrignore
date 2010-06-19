@@ -48,3 +48,4 @@ config_auto.h
 config.guess
 config.sub
 install-sh
+config_auto.make

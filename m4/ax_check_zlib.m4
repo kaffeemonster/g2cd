@@ -116,7 +116,7 @@ then
                 LDFLAGS="$ZLIB_OLD_LDFLAGS"
                 CPPFLAGS="$ZLIB_OLD_CPPFLAGS"
                 AC_MSG_RESULT(failed)
-                AC_MSG_ERROR(specify a valid zlib installation with --with-zlib=DIR)
+                AC_MSG_WARN(No working zlib was found! Either specify a valid zlib installation with --with-zlib=DIR or use the special "make withzlib")
         fi
 fi
 

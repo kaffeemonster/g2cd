@@ -241,6 +241,10 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_RANLIB
+AC_CHECK_TOOL([AS], [as], [as])
+AC_CHECK_TOOL([AR], [ar], [ar])
+AC_CHECK_TOOL([OBJCOPY], [objcopy], [objcopy])
+AC_CHECK_TOOL([STRIP], [strip], [strip])
 
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
@@ -258,27 +262,46 @@ AX_CHECK_ZLIB
 AC_CHECK_HEADER([db.h], [have_db_h=yes],[have_db_h=no][])
 if test "$have_db_h" = yes; then
 	AC_MSG_CHECKING([for ndbm interface in db.h])
-	backup_LIBS="$LIBS"
-	LIBS="-ldb $LIBS"
-	AC_LINK_IFELSE([AC_LANG_PROGRAM(
-	                [
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+	                   [
 #define DB_DBM_HSEARCH 1
 #include <db.h>
-	                ],
-	                [
-	                   datum key, value;
-	                   static DBM *s;
-	                   s = dbm_open("bla", 0, 0);
-	                   return 0;
-	                ]
-	               )],
-	               [AC_DEFINE(HAVE_DB, 1,
-	                      Define to 1 if we have IPv6)
-	                AC_MSG_RESULT([yes])],
-	               [have_db_h=no
-	                AC_MSG_RESULT([no])])
-	if test "$have_db_h" = no; then
-		LIBS="$backup_LIBS"
+	                   ],
+	                   [
+	                      datum key, value;
+	                      static DBM *s;
+	                      s = dbm_open("bla", 0, 0);
+	                      return 0;
+	                   ]
+	                  )],
+	                  [AC_MSG_RESULT([yes])],
+	                  [have_db_h=no
+	                   AC_MSG_RESULT([no])])
+	
+	if test "$have_db_h" = yes; then
+		AC_MSG_CHECKING([for ndbm interface in -ldb])
+		backup_LIBS="$LIBS"
+		LIBS="-ldb $LIBS"
+		AC_LINK_IFELSE([AC_LANG_PROGRAM(
+		                [
+#define DB_DBM_HSEARCH 1
+#include <db.h>
+		                ],
+		                [
+		                   datum key, value;
+		                   static DBM *s;
+		                   s = dbm_open("bla", 0, 0);
+		                   return 0;
+		                ]
+		               )],
+		               [AC_DEFINE(HAVE_DB, 1,
+	                             Define to 1 if we have a ndbm in db.h)
+		                AC_MSG_RESULT([yes])],
+		               [have_db_h=no
+		                AC_MSG_RESULT([no])])
+		if test "$have_db_h" = no; then
+			LIBS="$backup_LIBS"
+		fi
 	fi
 fi
 
@@ -293,7 +316,7 @@ AC_C_CONST
 AC_C_INLINE
 AC_C_VOLATILE
 AC_C_RESTRICT
-AC_C_BIGENDIAN([], [], AC_MSG_ERROR(could not determine host endianess), AC_MSG_ERROR(mixed endian binary are not supported))
+AC_C_BIGENDIAN([AC_SUBST(TARGET_ENDIAN, big)], [AC_SUBST(TARGET_ENDIAN, little)], [], AC_MSG_ERROR(mixed endian binary are not supported))
 AC_C_FLEXIBLE_ARRAY_MEMBER
 # Is the __thread keyword for thread local storage available?
 # __thread should be cheaper since direct CPU-instructions
@@ -477,5 +500,5 @@ AC_MSG_RESULT([yes])
 
 
 AC_DEFINE(SYSTEM_MIN_BYTES_WORK, 64, how many bytes must be avail to switch away from byte wise working)
-# AC_CONFIG_FILES([config_auto.make])
+AC_CONFIG_FILES([config_auto.make])
 AC_OUTPUT
