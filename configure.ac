@@ -615,26 +615,8 @@ if test "$need_epoll_compat" = yes; then
 	               [AC_MSG_RESULT([no])])
 
 # Solaris + last HP-UX, maybe IBM AIX /dev/poll support
-	AC_MSG_CHECKING([for /dev/poll])
-	AC_LINK_IFELSE([AC_LANG_PROGRAM(
-	                [
-#include <sys/poll.h>
-#include <sys/devpoll.h>
-#include <fcntl.h>
-#include <unistd.h>
-	                ],
-	                [
-	                   int foo = 1;
-	                   struct dvpoll do_poll;
-	                   int result;
-	                   do_poll.dp_timeout = 1000; do_poll.dp_nfds = 10;
-	                   result = ioctl(foo, DP_POLL, &do_poll);
-	                   return result;
-	                ]
-	               )],
-	               [epoll_devpoll=yes
-	                AC_MSG_RESULT([yes])],
-	               [AC_MSG_RESULT([no])])
+	m4_include([m4/ax_sys_dev_poll.m4])
+	AX_SYS_DEV_POLL([epoll_devpoll=yes], [])
 
 # try to find the "best"
 	if test "$epoll_kepoll" = yes; then
