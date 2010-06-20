@@ -1417,7 +1417,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	else
 	{
-#ifndef HAVE_WCHAR_H
+#if !defined(HAVE_WCHAR_H)
 // TODO: popping an int may be wrong
 		int x GCC_ATTRIB_UNUSED = va_arg(spec->ap, int);
 		if(sav)

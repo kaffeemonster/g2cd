@@ -529,6 +529,8 @@ AC_CHECK_TYPES([sa_family_t, socklen_t], [], [], [[#include <sys/socket.h>]])
 AC_CHECK_TYPES([in_port_t, in_addr_t], [], [], [[#include <netinet/in.h>]])
 AC_CHECK_TYPE([pthread_spinlock_t], [AC_DEFINE(HAVE_SPINLOCKS, 1, do we have Spinlocks? Old Solaris has none!)],[], [[#include <pthread.h>]])
 AC_CHECK_TYPE([struct in_pktinfo], [AC_DEFINE(HAVE_IP_PKTINFO, 1, do we have pktinfo)],[], [[#include <netinet/in.h>]])
+m4_include([m4/ax_wint_t.m4])
+AX_WINT_T
 
 # do we have IPv6 ?
 AC_MSG_CHECKING([for IPv6])
