@@ -65,10 +65,10 @@ CFLAGS += -DDEBUG_DEVEL
 #CFLAGS += -DQHT_DUMP
 #CFLAGS += -DUDP_DUMP
 #CFLAGS += -DHELGRIND_ME
-CFLAGS += -DVALGRIND_ME
+#CFLAGS += -DVALGRIND_ME_CON
+#CFLAGS += -DVALGRIND_ME_RECV
 #CFLAGS += -DPACKET_STATS
 #CFLAGS += -DDEBUG_PACKET_ALLOC
-#CFLAGS += -DHAVE_BINUTILS=218
 #	on glibc-system this brings performance at the cost
 #	of size if your compiler is not smart enough
 #CFLAGS += -D__USE_STRING_INLINES
@@ -105,7 +105,7 @@ DBGFLAGS += -foptimize-sibling-calls
 #ARCH = niagara
 #ARCH = cortex-a8
 #ARCH = ev67
-#ARCH=mckinley
+#ARCH = mckinley
 # set the march
 #ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)

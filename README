@@ -34,7 +34,7 @@
 
 1. Status
 =========
-	This isn't even pre-alpha, this is more like nothing.
+	This is very alpha state software.
 
 	It is able to:
 	* run, spawn several threads
@@ -82,56 +82,52 @@
 	* Brain 1.0
 
 	What to do:
-	 First of all unpack the .tar.bz2 to some place. The first thing you can
-	try is to simply make it, you know ... or in long terms:
-	 Open a shell, go to the place where you unpacked all this and type in
-	"make" followed by a gentle pressure on enter.
+	 First of all unpack the .tar.bz2 to some place.
+	 Then you can try if it will compile on your system. Luckily we now
+	support the classic UNIX "./configure; make"
+	 I am no wizard at autoconf, and just stuffed together some problems i
+	know where compilation can go wrong. The tests may even be brittle, but
+	better then nothing and to make your live easier (most of the time ;).
+
+	 Check the output of configure a little bit. And have a look at the
+	compile messages (i silenced the build a little bit so you can see real
+	messages more clearly).
 	 If you believe in wonders, there is a chance this piece of software will
 	simply compile on your machine.
+
 	 You're kidding? But now, with this little test, there is a high chance,
-	that you have some error-messages from the compiler, and, using the
-	recommended programming skills from above, fix it, until it compiles ;)
+	that you have some error-messages from the compiler or configure, and,
+	using the recommended programming skills from above, fix it, until it
+	compiles ;)
+
 	 Ok, since I'm a real buddy, first some "expert"-tips where to search
 	first. Hopefully with these even someone new to programming will get it
 	also working (muhahaha).
-	a)  Move your recommended editor to the Makefile. Most people will simply
-	   have problems when their GCC < version XYZ don't like options new to
-	   GCC XYZ.
-	    Look at the top of the Makefile, mostly all options will be set there.
-	   Comment them in or out as you need it (thats why they are "one at a
-	   line").
-	    Also interesting here are the arch-specific settings (search for
-	   "ARCH_FLAGS") for users with something else than a cheap x86 or older
-	   than a Pentium2.
-	    Users with special system-setups (for paths/headers) are also advised
-	   to look in the Makefile.
-	    Users with an other compiler than the GCC are on their own and really
-	   should know what they are doing (but they should do it in the
-	   Makefile ;).
-	    Oh, just before i forget about it, the only macro (the "-D"-things)
-	   needed by my source is "-DHAVE_CONFIG_H", all the other are to lower
-	   warnings and to ease the system headers.
-	b)  If the Makefile did not do the trick for you, you now really should
+	a)  Move your recommended editor to the config_auto.make file. Most people
+	   will simply have problems when some parameter or program may not fit
+	   their enviroment. This file is the output of configure! So be carefull,
+	   it may get overwritten by configure again. If this solves your problem,
+	   the question is why autoconf didn't do it right for you.
+	b)  If the "setup" did not do the trick for you, you now really should
 	   have some programming experience, the ability to understand
-	   compiler-error-msg. (hahaha) and the "config.h" opened in your editor.
-	   There are alternatives for some things I had problems on my own test
-	   platforms. Comment them out, as you need it.
+	   compiler-error-msg. (hahaha). You may work you're way down to what
+	   failed, it may prop. be something in the "compat" logic. Look for ifdef
+	   inside the code and what failed and what's in config_auto.h (./configure
+	   output), maybe a search through your system header can help to find the
+	   missing magic knob.
 	c)  If you read this, you are on your own... You have to fix it, alone.
 	   work-around's go into "other.h" (mostly), the switches for them into
-	   "config.h". Don't forget to diff and send it to me. Oh, and i like my
-	   diffs in "-u".
+	   "config.h" or better into autoconf (configure.ac). Don't forget to diff
+	   and send it to me. Oh, and i like my diffs in "-u".
 
-	 If you had success compiling it, you are nearly ready to start. You can
-	go to the config file "g2cd.conf" to look at/change the configuration.
-	 It is recommended you configure a guid and some profile things for your
-	hub to make it unique. Refer to the config file how to do so. If you do
-	not want to generate a guid by hand, you can simply start g2cd the first
-	time without a guid, it will generate one and print it. Then you can c&p
-	this guid into your config
+	 If you had success compiling it, you are nearly ready to start.
+	 ATM g2cd will "stay" in it's directory and there is no install. This is
+	for easier testing so you can start the app right from where you are.
 
-	Fine, ok, whats next? Oh, sure, start it. (You know -> "./g2cd")
+	 Fine, ok, whats next? Oh, sure, start it. (You know -> "./g2cd")
 
-	And now?
+	 Be warned that g2cd may now crash on you.
+	If it does not crash, what now?
 	 There are not many things to see, until some G2-Client connects, and as
 	long as this software is so limited, this surely will not happen by
 	accident. So grep a G2-client and connect to your new "hub" (side note:
@@ -139,8 +135,17 @@
 	machine. Your development machine isn't directly connected to the
 	Internet?). I personally use Shareaza with Wine. If you connect, you
 	should see some debug-text (Edit: no, you will not see anything, this
-	gets noisy with lots of connections...).
-	To stop it, use CTRL-C, you should see it going down.
+	gets noisy with lots of connections, i turned it off...).
+	 To stop it, use CTRL-C, you should see it going down.
+
+	 You could check out the config file "g2cd.conf" to look at/change the
+	configuration (be carefull, this file can be overwritten if you do
+	development, you maybe want to keep a backup of it in this case).
+	 It is recommended you configure a guid and some profile things for your
+	hub to make it unique. Refer to the config file how to do so. If you do
+	not want to generate a guid by hand, you can simply start g2cd the first
+	time without a guid, it will generate one and print it. Then you can c&p
+	this guid into your config
 
 	OK, not impressed?
 	 Look at the Version number... now it's your turn. Again, fire up your
@@ -151,17 +156,22 @@
 	N.B.:
 	 If you think this is all to complicated and hard, please note that this
 	software is only narrowly tested. So there are enough problems down the
-	road to make you life miserable.
+	road to make your life miserable.
 	 And to make matters worse, i was to clever for my own good, and build
 	in a lot of performance hacks.
 	 So it is even very likely the software will simply crash on you or
 	create broken output (if it survives that...).
-	 Plus you can run into compiler nasty problems, the Intel Compiler
-	Version i tried simply crashed on the code, the Sun Compiler generated
-	brocken code in several places (yes, after disabling a lot of cleverness
-	even with -O0), clang/llvm being the only shining example by working
-	sometimes, often it also generates some broken code around inline asm,
-	if not crashing.
+	 Yes, it is alpha software, but more problematic: portability.
+	 You can run into compiler nasty problems, the Intel Compiler Version
+	i tried simply crashed on the code, the Sun Compiler generated brocken
+	code in several places (yes, after disabling a lot of cleverness even
+	with -O0), clang/llvm being the only shining example by working
+	sometimes, most of the time it also generates some broken code around
+	inline asm, if not crashing all by itself.
+	 And then you can run into other stuff (ex. crash on FreeBSD because
+	of an to early write(2), prop. before the threading lib was completely
+	started, maybe wrong linking?).
+
 	 I can not vouch for all versions of GCC, but at least with all versions
 	i tested it didn't let me down. The last test with 2.x is looong ago.
 	3.2.2 and 3.4.3 see a little test ride on Solaris/SPARC from time to time,
@@ -173,7 +183,7 @@
 	broken code for other archs and those guys with their new x86 (SSE4.2)
 	to trip over.</irony>
 	 You can disable most of this brokenness and activate some workarounds
-	in config.h, but not all of it...
+	with configure, but not all of it...
 
 2.1 Misc Install
 ----------------
@@ -237,7 +247,7 @@
 	 15 minutes later the same system crashed hard (drop dead from
 	one moment to the next. You could not ping it or something else,
 	hard reset from the management console needed...). After a little
-	fore and back and more hard lockups it seems G2CD was hammering
+	for and back and more hard lockups it seems G2CD was hammering
 	a locking primitive to hard (it was a 4 way SMP, actually the
 	hammering was lite, there was no great congestion, but this one
 	primitive seems to be seldomly used...). I could prevent that
@@ -339,30 +349,28 @@
 ==============
 	Main Bug: Program not finished
 	Second Bug: Hard to build/install
-	Other Bugs: - nasty livelock in timeout handling (rb-tree
-	              corruption -> infinite loop unter lock) timeout
-	              handling sucks, it's inherent racy...
-	            - seems not 100% SMP safe...
-	            - seldom crashes (after 60h Uptime) if not hung in
-	              timeout handling
+	Other Bugs: - seems not 100% SMP safe...
+	            - seldom crashes (after 220h Uptime)
 	            - to be filled in
 
 	TODO:
 	- complete packet-handling
 	- more timeout-handling
-	- autoconf?
+	- DoS prevention
+	- UDP query limiting
 	- bootstrap
 	- lots of other things
 	- test the BSD-kqueue wrapper (some BSD'ler around?)
 	- test Solaris-/dev/poll & event port wrapper
 	- portability issues of the build (make, compiler, shell)
+	- make the autoconf much better...
 	- lots of other stuff
 
 	What's needed?
 	 Programming wizards, the tooth fairy and santa claus would be nice ;)
 	 An expert for autoconf to make the building simpler... but you have to
-	know, I'm not an autoconf fan (setting it up myself failed in not being a
-	autoconf expert).
+	know, I'm not an autoconf fan (i simply gobbeled something together to
+	give people at least a chance to compile it).
 	 People with different systems, different linux-distri's/unices on
 	different arch'es, to test the build and function.
 	--Some portability-gurus, checking the *code* for portability-problems.--
@@ -405,6 +413,8 @@
 	- config.h is your friend, when you comment out nearly everything, it
 	  will "work". (Hint: some of the commented out stuff needs to be
 	  written/emulated...)
+	  EDIT: this will no longer work, you will have to fix autoconf and more
+	        code to push it through.
 
 	 Which brings us to the real win problems:
 	- G2CD expects a _working_ and thread local errno. win likes to use
