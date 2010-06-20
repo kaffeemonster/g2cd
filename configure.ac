@@ -104,15 +104,20 @@ AC_ARG_ENABLE([smp], [AS_HELP_STRING([--disable-smp],
 AC_ARG_ENABLE([asm], [AS_HELP_STRING([--disable-asm],
               [disable assembler code])],
               [disable_asm=yes], [])
-AC_ARG_ENABLE([sparcv9], [AS_HELP_STRING([--disable-sparcv9],
-              [disable sparcv9 code, only do this if you really do _not_ have a v9, which means < UltraSPARC/SPARC64])],
-              [disable_v9=yes], [])
-AC_ARG_ENABLE([sparcvis], [AS_HELP_STRING([--disable-sparcvis],
-              [disable sparc VIS code, if you have an >= UltraSPARC keep enabled, except for single FPU chips (Niagara, etc.)])],
-              [disable_vis=yes], [])
-AC_ARG_ENABLE([sparcvis2], [AS_HELP_STRING([--disable-sparcvis2],
-              [disable sparc VIS2 code, same as for VIS, but >= UltraSPARC III])],
-              [disable_vis2=yes], [])
+case "$host" in
+	*sparc*)
+	AC_ARG_ENABLE([sparcv9], [AS_HELP_STRING([--disable-sparcv9],
+	              [disable sparcv9 code, only do this if you really do _not_ have a v9, which means < UltraSPARC/SPARC64])],
+	              [disable_v9=yes], [])
+	AC_ARG_ENABLE([sparcvis], [AS_HELP_STRING([--disable-sparcvis],
+	              [disable sparc VIS code, if you have an >= UltraSPARC keep enabled, except for single FPU chips (Niagara, etc.)])],
+	              [disable_vis=yes], [])
+	AC_ARG_ENABLE([sparcvis2], [AS_HELP_STRING([--disable-sparcvis2],
+	              [disable sparc VIS2 code, same as for VIS, but >= UltraSPARC III])],
+	              [disable_vis2=yes], []);;
+	*)
+		;;
+esac
 
 AC_MSG_CHECKING([wheter we should disable backtrace generation])
 if test x"$disable_backtraces" = xno; then
@@ -200,8 +205,10 @@ else
 	AC_MSG_RESULT([yes])
 fi
 
-AC_MSG_CHECKING([wheter we should disable SPARCv9 code])
-if test x"$disable_v9" = xno; then
+case "$host" in
+	*sparc*)
+		AC_MSG_CHECKING([wheter we should disable SPARCv9 code])
+		if test x"$disable_v9" = xno; then
 # Solaris likes to hide the capabilities of their Sparc
 # v9 behind silly games of 32 bit compat and "user space
 # is better of 32 Bit, 64 Bit is for databases", so if not
@@ -212,14 +219,14 @@ if test x"$disable_v9" = xno; then
 # 64 bit arith. just fine. If only the program knew...
 # So here is a switch, only kill it if you are certain
 # you have a real old Sparc.
-	AC_DEFINE(HAVE_REAL_V9, 1, the cpu is act. a v9)
-	AC_MSG_RESULT([no])
-else
-	AC_MSG_RESULT([yes])
-fi
+			AC_DEFINE(HAVE_REAL_V9, 1, the cpu is act. a v9)
+			AC_MSG_RESULT([no])
+		else
+			AC_MSG_RESULT([yes])
+		fi
 
-AC_MSG_CHECKING([wheter we should disable SPARC VIS code])
-if test x"$disable_vis" = xno; then
+		AC_MSG_CHECKING([wheter we should disable SPARC VIS code])
+		if test x"$disable_vis" = xno; then
 # You have an UltraSPARC with VIS?
 # The anwser is prop. yes, see above.
 # Still you may want to disable the VIS code, for example for
@@ -228,21 +235,25 @@ if test x"$disable_vis" = xno; then
 # So on such CPUs it would be faster if the 32 cores are
 # busy coping and doing stuff, even bytewise, than all waiting
 # on one FPU.
-	AC_DEFINE(HAVE_VIS, 1, and we have VIS)
-	AC_MSG_RESULT([no])
-else
-	AC_MSG_RESULT([yes])
-fi
+			AC_DEFINE(HAVE_VIS, 1, and we have VIS)
+			AC_MSG_RESULT([no])
+		else
+			AC_MSG_RESULT([yes])
+		fi
 
-AC_MSG_CHECKING([wheter we should disable SPARC VIS2 code])
-if test x"$disable_vis2" = xno; then
+		AC_MSG_CHECKING([wheter we should disable SPARC VIS2 code])
+		if test x"$disable_vis2" = xno; then
 # You have an UltraSparc III or better (~2001)?
 # don't know whats up with the Fujitsu SPARC64 III/IV/V etc.
-	AC_DEFINE(HAVE_VIS2, 1, and we have VIS2)
-	AC_MSG_RESULT([no])
-else
-	AC_MSG_RESULT([yes])
-fi
+			AC_DEFINE(HAVE_VIS2, 1, and we have VIS2)
+			AC_MSG_RESULT([no])
+		else
+			AC_MSG_RESULT([yes])
+		fi
+		;;
+	*)
+		;;
+esac
 
 
 AC_USE_SYSTEM_EXTENSIONS
