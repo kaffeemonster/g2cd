@@ -557,7 +557,7 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	c_dist = (line + len) - c_start;
 
 	/* remove leading white-spaces in field-data */
-	for(; c_dist > 0 && isspace((int)*c_start); c_dist--)
+	for(; c_dist > 0 && isspace((unsigned)*c_start); c_dist--)
 		c_start++, to_con->recv->pos++;
 
 	/* now call the associated action for this field */

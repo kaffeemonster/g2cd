@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
 	time_t now;
 	struct tm *now_tm, a_tm;
 
+
 	qsort(hdr_fields, anum(hdr_fields), sizeof(hdr_fields[0]), acstr_cmp);
 
 	for(i = 0; i < anum(hdr_fields); i++)
@@ -134,42 +135,66 @@ int main(int argc, char *argv[])
 		now_tm = &a_tm;
 		now_tm->tm_year = 110;
 	}
-	printf("/*\n"
-		" * %s\n"
-		" * automatic sorted header fields\n"
-		" *\n"
-		" * Copyright (c) 2004-%u Jan Seiffert\n"
-		" *\n"
-		" * This file is part of g2cd.\n"
-		" *\n"
-		" * g2cd is free software; you can redistribute it and/or modify\n"
-		" * it under the terms of the GNU General Public License as\n"
-		" * published by the Free Software Foundation, either version 3\n"
-		" * of the License, or (at your option) any later version.\n"
-		" *\n"
-		" * g2cd is distributed in the hope that it will be useful, but\n"
-		" * WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-		" * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
-		" * GNU General Public License for more details.\n"
-		" *\n"
-		" * You should have received a copy of the GNU General Public\n"
-		" * License along with g2cd.\n"
-		" * If not, see <http://www.gnu.org/licenses/>.\n"
-		" *\n"
-		" */\n"
-		"\n",
-		argc > 1 ? argv[1] : "G2HeaderFields.h",
-		now_tm->tm_year + 1900
-	);
 
-	puts("const action_string KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS(\"hidden\") =\n{");
-	for(i = 0; i < anum(hdr_fields); i++)
+	i = 1;
+	do
 	{
-		printf("\t{%*s, str_size(%*s), %*s }, /* %s */\n",
-		       max_f_name, hdr_fields[i]->f_name, max_ktxt, hdr_fields[i]->ktxt,
-		       max_ktxt, hdr_fields[i]->ktxt, hdr_fields[i]->txt);
-	}
+		static const char *df_name = "G2HeaderFields.h";
+		const char *f_name = argc > i ? argv[i] : df_name;
+		FILE *out;
 
-	puts("};\n\n/* EOF */");
+		if('-' == f_name[0] && '\0' == f_name[1])
+			f_name = df_name;
+
+		if(f_name == df_name)
+			out = stdout;
+		else
+		{
+			out = fopen(f_name, "w");
+			if(!out)
+				continue;
+		}
+
+		fprintf(out,
+			"/*\n"
+			" * %s\n"
+			" * automatic sorted header fields\n"
+			" *\n"
+			" * Copyright (c) 2004-%u Jan Seiffert\n"
+			" *\n"
+			" * This file is part of g2cd.\n"
+			" *\n"
+			" * g2cd is free software; you can redistribute it and/or modify\n"
+			" * it under the terms of the GNU General Public License as\n"
+			" * published by the Free Software Foundation, either version 3\n"
+			" * of the License, or (at your option) any later version.\n"
+			" *\n"
+			" * g2cd is distributed in the hope that it will be useful, but\n"
+			" * WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+			" * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\n"
+			" * GNU General Public License for more details.\n"
+			" *\n"
+			" * You should have received a copy of the GNU General Public\n"
+			" * License along with g2cd.\n"
+			" * If not, see <http://www.gnu.org/licenses/>.\n"
+			" *\n"
+			" */\n"
+			"\n",
+			f_name,
+			now_tm->tm_year + 1900
+		);
+
+		fputs("const action_string KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS(\"hidden\") =\n{\n", out);
+		for(i = 0; i < anum(hdr_fields); i++)
+		{
+			fprintf(out, "\t{%*s, str_size(%*s), %*s }, /* %s */\n",
+			       max_f_name, hdr_fields[i]->f_name, max_ktxt, hdr_fields[i]->ktxt,
+			       max_ktxt, hdr_fields[i]->ktxt, hdr_fields[i]->txt);
+		}
+
+		fputs("};\n\n/* EOF */\n", out);
+		if(f_name != df_name)
+			fclose(out);
+	} while(i++ < argc);
 	return 0;
 }

@@ -82,7 +82,7 @@ int main(int argc, char **argv)
 	int com_pipe[2][2];
 	int std_emul_fds[2];
 	int new_stdin;
-	pid_t c_pid = -1;	
+	pid_t c_pid = -1;
 
 	if(2 > argc)
 		goto BAIL_OUT;

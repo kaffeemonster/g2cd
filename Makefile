@@ -39,196 +39,14 @@ CC_VER = "$(PORT_PR) \"%02d%02d\n\" $($(PORT_PR) "__GNUC__ __GNUC_MINOR__\n" | $
 #	rcs, and a little silent-magic
 CO = @$(PORT_PR) "\tRCS[$@]\n"; co
 AR = @./ccdrv -s$(VERBOSE) "AR[$@]" ./arflock $@ $(AR_PROG)
-ARFLAGS = cru
 RANLIB = @./ccdrv -s$(VERBOSE) "RL[$@]" ./arflock $@ $(RANLIB_PROG)
 #	ctags, anyone?
 CTAGS = ctags
 CSCOPE = cscope
 RM = rm -f
-#BIN2O_OPTS = -d sun -l 8
-#BIN2O_OPTS = -d coff
-
-# split up host and target CFLAGS
-#	solaris is so anal... can someone please wake them with a 2 by 4?
-#	Old solaris misses everything, new solaris spews ERRORS!!!
-#	when it sees "illegal" feature combinations (stdbool only when C99,
-#	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
-#	Hello?
-HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
 
 #
-# the C-Standart the compiler should work with
-#
-#	don't know how it is right, but cygwin excludes some
-#	essential function if __STRICT_ANSI is defined
-CFLAGS += -std=gnu99
-#	relax the cun studio compiler a little bit
-#CFLAGS += -Xa
-
-#
-# Warnings (for the Devs)
-#
-#	most eminent warnings
-WARN_FLAGS = -Wall
-#	icc is mostly gcc compatible, mostly...
-WARN_FLAGS += -Wimplicit -Wwrite-strings -Wmissing-prototypes
-#	middle
-WARN_FLAGS += -Wpointer-arith
-#WARN_FLAGS += -Wcast-align
-#  ok, if you want to get picky...
-WARN_FLAGS += -W -Wcast-qual -Wunused
-#	strange warnings under Cygwin, i tripple checked it, to
-#	no avail
-#CFLAGS += -Wconversion
-#	least eminent
-#	not on gcc 2.95.3
-#CFLAGS += -Wpadded
-WARN_FLAGS += -Wshadow
-#	interesting to know
-#CFLAGS += -Winline
-#	not on gcc 2.95.3
-#WARN_FLAGS += -Wdisabled-optimization
-#	gcc 3.4.?
-WARN_FLAGS += -Wsequence-point
-CFLAGS += $(WARN_FLAGS)
-
-#
-# !! mashine-dependent !! non-x86 please see here
-#
-# choose your cpu
-#ARCH = athlon64-sse3
-ARCH = core2
-#ARCH = athlon-xp
-#ARCH = pentium2
-#ARCH = pentium4
-#ARCH = power6
-#ARCH = G4
-#ARCH = G3
-#ARCH = ultrasparc
-#ARCH = ultrasparc3
-#ARCH = niagara
-#ARCH = cortex-a8
-#ARCH = ev67
-#ARCH=mckinley
-# set the march
-ARCH_FLAGS += -march=$(ARCH)
-#ARCH_FLAGS += -mcpu=$(ARCH)
-# mtune on newer gcc
-#ARCH_FLAGS += -mtune=$(ARCH)
-# testest
-#ARCH_FLAGS += -mfpu=neon -mfloat-abi=softfp
-# 64 Bit?
-#ARCH_FLAGS += -m64
-# x86
-#ARCH_FLAGS += -momit-leaf-frame-pointer
-# x86 stringops are in modern processors
-# unfortunatly second class citizians
-#ARCH_FLAGS += -minline-all-stringops
-#ARCH_FLAGS += -minline-stringops-dynamically
-# gcc 4.3??
-#ARCH_FLAGS += -mstringop-strategy=libcall # and gccs stringops are poor...
-#ARCH_FLAGS += -maccumulate-outgoing-args
-# ! SHIT !
-# gcc 4.3 is now so intelligent/dump, when the right cpu is NOT
-# specified, it does not "know" special registers (MMX/SSE) which
-# are not in this CPU, if you give them on inline assembly -> compile error
-# generic archs (i686) do not help
-# always force mmx/sse - PPC: force altivec?
-#ARCH_FLAGS += -mmmx
-#ARCH_FLAGS += -msse2
-#ARCH_FLAGS += -msse4
-#ARCH_FLAGS += -msse4.1
-#ARCH_FLAGS += -msse4.2
-CFLAGS += $(ARCH_FLAGS)
-
-#
-# Include paths (addidtional)
-#
-#ZLIB__SYSTEM_PATH = /opt/zlib-1.1.4
-#CFLAGS += -I$(ZLIB_SYSTEM_PATH)/include
-
-#
-# Debugging
-#
-# stuff it here, were -save-temps is
-#	this hopefully makes compilation faster, gcc-specific?
-CFLAGS += -pipe
-#CFLAGS += -save-temps
-CFLAGS += -g3 # -pg
-#	sun studio
-#CFLAGS += -g
-#CFLAGS += -keeptmp
-
-#
-# Optimisation
-#
-#	burn it baby (needed for inlining on older gcc)
-OPT_FLAGS = -O3
-# 	at least O2 should be selected, or ugly things will happen...
-#OPT_FLAGS = -O2
-#	we are not doing any fancy Math, no need for ieee full blown foo
-OPT_FLAGS += -ffast-math
-#	needed on x86 (and other) even when O3 is and -g is not
-#	specified for max perf.
-#OPT_FLAGS += -fomit-frame-pointers
-#	did they strip the 's' in 4.x??? And now they error out its incompatible with -pg
-OPT_FLAGS += -fomit-frame-pointer
-# gcc >= 3.x and supported for target (-march ?)
-OPT_FLAGS += -fprefetch-loop-arrays
-OPT_FLAGS += -fpeel-loops
-# gcc gets really fun-roll, do not enable
-#OPT_FLAGS += -funroll-loops
-# gcc >= 3.x && < 4.x together with unroll-loops usefull
-#OPT_FLAGS += -fmove-all-movables
-# gcc >= 3.4
-#	needed for inlining on newer gcc if -O is not high enough
-OPT_FLAGS += -funit-at-a-time
-OPT_FLAGS += -fweb
-# gcc >= 3.?
-OPT_FLAGS += -ftracer
-OPT_FLAGS += -funswitch-loops
-# gcc > 4.1??
-#	hmmm, breaks in memxor, seems better with gcc ==4.3.2
-OPT_FLAGS += -ftree-loop-linear
-OPT_FLAGS += -ftree-loop-im
-OPT_FLAGS += -ftree-loop-ivcanon
-OPT_FLAGS += -fivopts
-OPT_FLAGS += -freorder-blocks-and-partition
-OPT_FLAGS += -fmove-loop-invariants
-OPT_FLAGS += -fbranch-target-load-optimize
-# Heaviely broken, but nice...
-#OPT_FLAGS += -fschedule-insns
-#	better not autovectorize, for some functions we already did this our self,
-#	this would only double the code...
-#OPT_FLAGS += -ftree-vectorize
-#	gcc >= 3.5 or 3.4 with orig. path applied, and backtraces
-#	don't look nice anymore
-#OPT_FLAGS += -fvisibility=hidden
-#	want to see whats gcc doing (and how long it needs)?
-#OPT_FLAGS += -ftime-report
-#OPT_FLAGS += -fmem-report
-#	new clang toy
-#OPT_FLAGS += -fcatch-undefined-behavior
-#	
-#OPT_FLAGS += -fwhole-program -combine
-#	sun studio is ...
-#	icc has looots of options, but those are the simple ones...
-#OPT_FLAGS = -O2 -fomit-frame-pointer
-#	minimum while debugging, or asm gets unreadable
-#OPT_FLAGS = -foptimize-sibling-calls
-CFLAGS += $(OPT_FLAGS)
-# switch between profile-generation and final build
-#	this whole profile stuff is ugly, espec. they changed the
-#	option name all the time.
-#	need to build little app which hammers the packet code to generate
-#	profile data, if not cross compiling. Rest of code not so important.
-#OPT_FLAGS += -fprofile-use
-#OPT_FLAGS += -fbranch-probabilities
-#OPT_FLAGS += -fprofile-generate
-#OPT_FLAGS += -fprofile-arcs
-
-#
-# Libs
+# fixed Libs
 #
 #	switch between profile-generation and final build
 #LDLIBS_BASE += -lgcov
@@ -237,7 +55,7 @@ LDLIBS_Z = -lz $(LDLIBS_BASE)
 LDLIBS = -lcommon $(LDLIBS_Z)
 
 #
-#	Linking-Flags
+# Linking-Flags
 #
 
 #	Lib Paths
@@ -257,43 +75,8 @@ LDFLAGS += -Wl,-u,adler32
 CFLAGS += -Izlib
 
 #
-# Macros & Misc
-#
-#	shortcut for -D_REENTRANT and all other such things on
-#	some GCC's
-CFLAGS += -pthread
-#CFLAGS += -D_REENTRANT
-#	sun studio
-#CFLAGS += -mt
-#	not used (until now)
-#CFLAGS += -DFASTDBL2INT
-CFLAGS += -DDEBUG_DEVEL
-#CFLAGS += -DDEBUG_DEVEL_OLD
-#CFLAGS += -DDEBUG_CON_ALLOC
-#CFLAGS += -DDEBUG_HZP_LANDMINE
-CFLAGS += -DHAVE_CONFIG_H
-#CFLAGS += -DASSERT_BUFFERS
-#CFLAGS += -DQHT_DUMP
-#CFLAGS += -DUDP_DUMP
-#CFLAGS += -DHELGRIND_ME
-CFLAGS += -DVALGRIND_ME
-#CFLAGS += -DPACKET_STATS
-#CFLAGS += -DDEBUG_PACKET_ALLOC
-CFLAGS += -DHAVE_BINUTILS=218
-#	on glibc-system this brings performance at the cost
-#	of size if your compiler is not smart enough
-#CFLAGS += -D__USE_STRING_INLINES
-#	on solaris this may be needed for some non std-things
-#CFLAGS += -D_POSIX_SOURCE
-#CFLAGS += -D_POSIX_C_SOURCE
-#CFLAGS += -D_SVID_SOURCE
-#CFLAGS += -D_XOPEN_SOURCE
-#CFLAGS += -D_XPG4_2
-#CFLAGS += -D_XPG6
-
 #
 #
-# End of configurable options.
 ###############################################################
 # Compatibility Option
 #
@@ -416,6 +199,7 @@ AUX = \
 	install-sh \
 	m4/acx_pthread.m4 \
 	m4/ax_check_linker_flags.m4 \
+	m4/ax_check_compiler_flags.m4 \
 	m4/ax_check_zlib.m4
 #
 #	files to be included in a package
@@ -467,8 +251,10 @@ RTL_DUMPS = \
 	G2PacketSerializer.rtl \
 	G2QHT.rtl \
 	G2KHL.rtl \
+	G2GUIDCache.rtl \
 	G2QueryKey.rtl \
-	timeout.rtl
+	timeout.rtl \
+	gup.rtl
 # Insert all rule high enough, so it gets the default rule
 #	std. all-taget
 
@@ -753,7 +539,7 @@ G2PacketTyper.h: G2PacketTyperGenerator ccdrv
 	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator $@
 
 G2HeaderFields.h: G2HeaderFieldsSort ccdrv
-	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./G2HeaderFieldsSort $@ > $@"
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./G2HeaderFieldsSort $@"
 
 #	Batch-creation of version-info
 version.h: Makefile

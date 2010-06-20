@@ -22,7 +22,7 @@
 #
 
 AC_PREREQ([2.65])
-AC_INIT([g2cd], [0.0.0.11], [kaffeemonster@googlemail.com])
+AC_INIT([g2cd], [0.0.00.11], [kaffeemonster@googlemail.com])
 AC_CANONICAL_HOST
 AC_CONFIG_SRCDIR([G2MainServer.c])
 AC_CONFIG_HEADERS([config_auto.h])
@@ -39,6 +39,8 @@ disable_v9=no
 disable_vis=no
 disable_vis2=no
 use_mapfiles=no
+disable_warnings=no
+enable_debug=no
 
 case "$host" in
 	*powerpc-*)
@@ -78,41 +80,47 @@ case "$host" in
 		;;
 esac
 
+AC_ARG_WITH([warnings], [AS_HELP_STRING([--without-warnings],
+            [disable compile time warnings])],
+            [disable_warnings="$witheval"], [])
 AC_ARG_WITH([backtraces], [AS_HELP_STRING([--without-backtraces],
             [do you want backtraces on crash? (This is hacky, but is often the only helper on crash)])],
             [disable_backtraces="$witheval"], [])
+AC_ARG_ENABLE([debug], [AS_HELP_STRING([--enable-debug],
+              [make a debug build])],
+              [enable_debug=yes], [])
 AC_ARG_ENABLE([unaligned], [AS_HELP_STRING([--enable-unaligned],
               [your arch can do unaligned mem access. Do not enable if complicated software fixups make this possible])],
-              [enable_unaligned_ok="$enableval"], [enable_unaligned_ok=$default_enable_unaligned_ok])
+              [enable_unaligned_ok=yes], [enable_unaligned_ok=$default_enable_unaligned_ok])
 AC_ARG_ENABLE([bit-instr], [AS_HELP_STRING([--disable-bit-instr],
               [your arch lacks certain bit manipulation instruction, clz and the like, sometimes other instructions can make up for it, but only if they are fast])],
-              [disable_bit_instr="$enableval"], [disable_bit_instr=$default_disable_bit_instr])
+              [disable_bit_instr=yes], [disable_bit_instr=$default_disable_bit_instr])
 AC_ARG_ENABLE([hw-mult], [AS_HELP_STRING([--disable-hw-mult],
               [your arch has no multiply instruction, or the instruction is slow])],
-              [disable_hw_mult="$enableval"], [])
+              [disable_hw_mult=yes], [])
 AC_ARG_ENABLE([smp], [AS_HELP_STRING([--disable-smp],
               [disable smp safety, only do this if you are 110% sure the code will only run on an UP machine])],
-              [disable_smp="$enableval"], [])
+              [disable_smp=yes], [])
 AC_ARG_ENABLE([asm], [AS_HELP_STRING([--disable-asm],
               [disable assembler code])],
-              [disable_asm="$enableval"], [])
+              [disable_asm=yes], [])
 AC_ARG_ENABLE([sparcv9], [AS_HELP_STRING([--disable-sparcv9],
               [disable sparcv9 code, only do this if you really do _not_ have a v9, which means < UltraSPARC/SPARC64])],
-              [disable_v9="$enableval"], [])
+              [disable_v9=yes], [])
 AC_ARG_ENABLE([sparcvis], [AS_HELP_STRING([--disable-sparcvis],
               [disable sparc VIS code, if you have an >= UltraSPARC keep enabled, except for single FPU chips (Niagara, etc.)])],
-              [disable_vis="$enableval"], [])
+              [disable_vis=yes], [])
 AC_ARG_ENABLE([sparcvis2], [AS_HELP_STRING([--disable-sparcvis2],
               [disable sparc VIS2 code, same as for VIS, but >= UltraSPARC III])],
-              [disable_vis2="$enableval"], [])
+              [disable_vis2=yes], [])
 
 AC_MSG_CHECKING([wheter we should disable backtrace generation])
-if test "$disable_backtraces" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_backtraces" = xno; then
 # this is a call for trouble, but helpfull
 	AC_DEFINE(WANT_BACKTRACES, 1, do we want to generate backtraces)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter the arch does hate conditional branches])
@@ -125,7 +133,7 @@ else
 fi
 
 AC_MSG_CHECKING([wheter we can do unaligned mem access])
-if test "$enable_unaligned_ok" = yes; then
+if test x"$enable_unaligned_ok" = xyes; then
 # Is unaligned access on this machine ok.
 # OK here is a little bit complicated. Your machine should be
 # able to access unaligned memory possitions with "good" speed.
@@ -146,9 +154,7 @@ else
 fi
 
 AC_MSG_CHECKING([wheter we should disable bit instructions])
-if test "$disable_bit_instr" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_bit_instr" = xno; then
 # Does your arch has bit foo instructions?
 # We sometimes need to find the index of a bit. This can be
 # done fast and cheap if your arch has instructions to scan
@@ -158,12 +164,12 @@ else
 # they might help)
 	AC_DEFINE(HAVE_BIT_INSTR, 1, arch has bit manipulation instruction)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we should avoid multiplications])
-if test "$disable_hw_mult" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_hw_mult" = xno; then
 # Does your arch has a fast multiplication?
 # We misuse the multiplication as a fast mixing func for
 # hashes. A slow mull or an hardware emulated (old sparc
@@ -171,31 +177,31 @@ else
 # another aproach (add, shifts, xor, etc.) can be faster.
 	AC_DEFINE(HAVE_HW_MULT, 1, arch has a fast hardware multiplier)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we can disable smp safety])
-if test "$disable_smp" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_smp" = xno; then
 # are we on an multi-processor-mashine
 # (even virtual processors)
 	AC_DEFINE(HAVE_SMP, 1, arch has smp)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we should disable assembler code])
-if test "$disable_asm" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_asm" = xno; then
 # do we want to use my inline-asm's
 	AC_DEFINE(I_LIKE_ASM, 1, build the asm foo)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we should disable SPARCv9 code])
-if test "$disable_v9" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_v9" = xno; then
 # Solaris likes to hide the capabilities of their Sparc
 # v9 behind silly games of 32 bit compat and "user space
 # is better of 32 Bit, 64 Bit is for databases", so if not
@@ -208,12 +214,12 @@ else
 # you have a real old Sparc.
 	AC_DEFINE(HAVE_REAL_V9, 1, the cpu is act. a v9)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we should disable SPARC VIS code])
-if test "$disable_vis" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_vis" = xno; then
 # You have an UltraSPARC with VIS?
 # The anwser is prop. yes, see above.
 # Still you may want to disable the VIS code, for example for
@@ -224,16 +230,18 @@ else
 # on one FPU.
 	AC_DEFINE(HAVE_VIS, 1, and we have VIS)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 AC_MSG_CHECKING([wheter we should disable SPARC VIS2 code])
-if test "$disable_vis2" = yes; then
-	AC_MSG_RESULT([yes])
-else
+if test x"$disable_vis2" = xno; then
 # You have an UltraSparc III or better (~2001)?
 # don't know whats up with the Fujitsu SPARC64 III/IV/V etc.
 	AC_DEFINE(HAVE_VIS2, 1, and we have VIS2)
 	AC_MSG_RESULT([no])
+else
+	AC_MSG_RESULT([yes])
 fi
 
 
@@ -250,6 +258,11 @@ CC="$PTHREAD_CC"
 # now check the rest
 AC_PROG_CPP
 AC_PROG_CC_C99
+# actually we don't wan't real C99, because cygwin excludes some
+# essential function if __STRICT_ANSI is defined, luckily autoconf
+# enables gnu99 mode
+# the sun studio compiler would need a little bit relaxaciton:
+# CFLAGS += -Xa
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
@@ -258,6 +271,44 @@ AC_CHECK_TOOL([AS], [as], [as])
 AC_CHECK_TOOL([AR], [ar], [ar])
 AC_CHECK_TOOL([OBJCOPY], [objcopy], [objcopy])
 AC_CHECK_TOOL([STRIP], [strip], [strip])
+
+if test x"$build" = x"$host"
+then
+# hopefully not cross compiling...
+	HOSTCC="$CC"
+else
+	HOSTCC="cc"
+fi
+AC_SUBST(HOSTCC)
+
+test -n "$ARFLAGS" || ARFLAGS="cru"
+AC_SUBST(ARFLAGS)
+
+# TODO: some nice tests instead of a switch...
+case "$host" in
+	*win32*)
+		BIN2O_OPTS="-d coff";;
+	*mingw*)
+		BIN2O_OPTS="-d coff";;
+	*coff*)
+		BIN2O_OPTS="-d coff";;
+	*-solar*)
+		BIN2O_OPTS="-d sun -l 8";
+# the USE_SYSTEM_EXTENTIONs is not strong enough
+# at least for solars i know some powabunga...
+		AC_DEFINE(_POSIX_SOURCE, 1, because...)
+		AC_DEFINE(_POSIX_C_SOURCE, 1, because...)
+		AC_DEFINE(_SVID_SOURCE, 1, because...)
+		AC_DEFINE(_XOPEN_SOURCE, 1, because...)
+		AC_DEFINE(_XPG4_2, 1, because...)
+		AC_DEFINE(_XPG6, 1, because...);;
+	*arm*)
+		BIN2O_OPTS="-d sun -l 8";;
+	*)
+# is cygwin also coff?
+		;;
+esac
+AC_SUBST(BIN2O_OPTS)
 
 m4_include([m4/ax_check_linker_flags.m4])
 # get some more symbols in the executable, so backtraces
@@ -278,6 +329,57 @@ if test "$use_mapfiles" = yes; then
 	                      [LDFLAGS="-Wl,-M,.mapfile $LDFLAGS"],
 	                      [])
 	rm -f "$t_file_name"
+fi
+
+m4_include([m4/ax_check_compiler_flags.m4])
+if test x"$enable_debug" = xno; then
+# give a switch for whole program opt
+# OPT_FLAGS += -fwhole-program -combine
+# switch between profile-generation and final build
+#	this whole profile stuff is ugly, espec. they changed the
+#	option name all the time.
+#	need to build little app which hammers the packet code to generate
+#	profile data, if not cross compiling. Rest of code not so important
+# OPT_FLAGS += -fprofile-use
+# OPT_FLAGS += -fbranch-probabilities
+# OPT_FLAGS += -fprofile-generate
+# OPT_FLAGS += -fprofile-arcs
+	check_for_prefetch_loop_array=no
+	case "$host" in
+		*powerpc-*)
+			check_for_prefetch_loop_array=yes;;
+		*powerpc64-*)
+			check_for_prefetch_loop_array=yes;;
+		*x86_64-*)
+			check_for_prefetch_loop_array=yes;;
+		*)
+			;;
+	esac
+	if test x"$check_for_prefetch_loop_array" = xyes; then
+		AX_CHECK_COMPILER_FLAGS([-fprefetch-loop-arrays],[CFLAGS="-fprefetch-loop-arrays $CFLAGS"],[])
+	fi
+	AX_CHECK_COMPILER_FLAGS([-fomit-frame-pointer],[CFLAGS="-fomit-frame-pointer $CFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-ffast-math],[CFLAGS="-ffast-math $CFLAGS"],[])
+#	AX_CHECK_COMPILER_FLAGS([-O3],[CFLAGS="-O3 $CFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-g],[CFLAGS="-g $CFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-pipe],[CFLAGS="-pipe $CFLAGS"],[])
+# else
+	# TODO: automatically switch to low CFLAGS, without default -O2 but with user override
+fi
+
+if test x"$disable_warnings" = xno; then
+	WFLAGS=""
+	AX_CHECK_COMPILER_FLAGS([-Wsequence-point],[WFLAGS="-Wsequence-point $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wshadow],[WFLAGS="-Wshadow $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wcast-qual],[WFLAGS="-Wcast-qual $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wmissing-prototypes],[WFLAGS="-Wmissing-prototypes $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wimplicit],[WFLAGS="-Wimplicit $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wwrite-strings],[WFLAGS="-Wwrite-strings $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wpointer-arith],[WFLAGS="-Wpointer-arith $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-W],[WFLAGS="-W $WFLAGS"],[])
+	AX_CHECK_COMPILER_FLAGS([-Wall],[WFLAGS="-Wall $WFLAGS"],[])
+
+	CFLAGS="$WFLAGS $CFLAGS"
 fi
 
 # pmaddubsw %xmm5, %xmm0 == gas 2.17

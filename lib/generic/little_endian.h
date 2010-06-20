@@ -11,9 +11,9 @@
 #  define nul_word_index(x) (__builtin_ctzl(x)/(BITS_PER_CHAR * 2))
 # else
 #  define nul_byte_index32(x) nul_byte_index_l32(x)
-#  define nul_byte_index(x) nul_byte_index_l64(x)
+#  define nul_byte_index(x) (4 >= sizeof(x) ? nul_byte_index_l32(x) : nul_byte_index_l64(x)
 #  define nul_word_index32(x) nul_word_index_l32(x)
-#  define nul_word_index(x) nul_word_index_l64(x)
+#  define nul_word_index(x) (4 >= sizeof(x) ? nul_byte_index_l32(x) : nul_word_index_l64(x)
 # endif
 
 #define cpu_to_le64(x) ((__le64)(uint64_t)(x))

@@ -8,7 +8,7 @@
 ################################
 
 # system compiler
-HOSTCC = cc
+HOSTCC = @HOSTCC@
 
 #
 # host compile tools
@@ -22,6 +22,26 @@ OBJCOPY = @OBJCOPY@
 STRIP = @STRIP@
 
 ################################
+# cflags
+################################
+#
+# split up system and target CFLAGS
+#	solaris is so anal... can someone please wake them with a 2 by 4?
+#	Old solaris misses everything, new solaris spews ERRORS!!!
+#	when it sees "illegal" feature combinations (stdbool only when C99,
+#	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
+#	Hello?
+HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
+
+#
+# target CFLAGS
+#
+CFLAGS += @DEFS@ @CFLAGS@
+
+ARFLAGS = @ARFLAGS@
+BIN2O_OPTS = @BIN2O_OPTS@
+
+################################
 # libs
 ################################
 LDLIBS_BASE += @LIBS@
@@ -31,6 +51,74 @@ LDFLAGS += @LDFLAGS@
 # Target endianess
 ################################
 TARGET_ENDIAN = @TARGET_ENDIAN@
+
+################################
+# Macros & Misc
+################################
+#	not used (until now)
+#CFLAGS += -DFASTDBL2INT
+CFLAGS += -DDEBUG_DEVEL
+#CFLAGS += -DDEBUG_DEVEL_OLD
+#CFLAGS += -DDEBUG_CON_ALLOC
+#CFLAGS += -DDEBUG_HZP_LANDMINE
+#CFLAGS += -DASSERT_BUFFERS
+#CFLAGS += -DQHT_DUMP
+#CFLAGS += -DUDP_DUMP
+#CFLAGS += -DHELGRIND_ME
+CFLAGS += -DVALGRIND_ME
+#CFLAGS += -DPACKET_STATS
+#CFLAGS += -DDEBUG_PACKET_ALLOC
+CFLAGS += -DHAVE_BINUTILS=218
+#	on glibc-system this brings performance at the cost
+#	of size if your compiler is not smart enough
+#CFLAGS += -D__USE_STRING_INLINES
+
+#
+# in case of debug
+#
+DBGFLAGS += -DHAVE_CONFIG_H
+DBGFLAGS += -pthread
+#	new clang toy
+#DBGFLAGS += fcatch-undefined-behavior
+DBGFLAGS += -g3
+DBGFLAGS += -foptimize-sibling-calls
+#DBGFLAGS += -save-temps
+#	sun studio knows this
+#DBGFLAGS += -keeptemp
+#
+#CFLAGS = $(DBGFLAGS)
+
+#
+# !! mashine-dependent !! non-x86 please see here
+#
+# choose your cpu
+#ARCH = athlon64-sse3
+#ARCH = core2
+#ARCH = athlon-xp
+#ARCH = pentium2
+#ARCH = pentium4
+#ARCH = power6
+#ARCH = G4
+#ARCH = G3
+#ARCH = ultrasparc
+#ARCH = ultrasparc3
+#ARCH = niagara
+#ARCH = cortex-a8
+#ARCH = ev67
+#ARCH=mckinley
+# set the march
+#ARCH_FLAGS += -march=$(ARCH)
+#ARCH_FLAGS += -mcpu=$(ARCH)
+# mtune on newer gcc
+#ARCH_FLAGS += -mtune=$(ARCH)
+# testest
+#ARCH_FLAGS += -mfpu=neon -mfloat-abi=softfp
+# 64 Bit?
+#ARCH_FLAGS += -m64
+# x86
+#ARCH_FLAGS += -momit-leaf-frame-pointer
+#ARCH_FLAGS += -maccumulate-outgoing-args
+#CFLAGS += $(ARCH_FLAGS)
 
 ################################
 # Helper vars

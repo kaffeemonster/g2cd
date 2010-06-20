@@ -27,7 +27,7 @@
 # include "sparc_vis.h"
 # define ALIGNMENT_WANTED SOVV
 
-static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
+noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
 {
 	const unsigned long long *src_p, *src_p_n;
 	unsigned long long *dst_p;
@@ -47,7 +47,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	{
 		/* see if an alignment is possible */
 		size_t i = ALIGN_DOWN_DIFF(dst_c, ALIGNMENT_WANTED) ^
-		           ALIGN_DOWN_SIFF(src_c, ALIGNMENT_WANTED);
+		           ALIGN_DOWN_DIFF(src_c, ALIGNMENT_WANTED);
 		if(unlikely(!i))
 		{
 			size_t cnt, t1, t2;

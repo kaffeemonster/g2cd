@@ -80,10 +80,13 @@ else
 fi],
 [AC_MSG_RESULT(yes)])
 
-ZLIB_HOME=/usr/local
-if test ! -f "${ZLIB_HOME}/include/zlib.h"
+if test -n "${ZLIB_HOME}"
 then
-        ZLIB_HOME=/usr
+        ZLIB_HOME=/usr/local
+        if test ! -f "${ZLIB_HOME}/include/zlib.h"
+        then
+                ZLIB_HOME=/usr
+        fi
 fi
 
 #
@@ -97,7 +100,7 @@ then
         CPPFLAGS="$CPPFLAGS -I${ZLIB_HOME}/include"
         AC_LANG_SAVE
         AC_LANG_C
-        AC_CHECK_LIB(z, inflateEnd, [zlib_cv_libz=yes], [zlib_cv_libz=no])
+        AC_CHECK_LIB(z, deflateBound, [zlib_cv_libz=yes], [zlib_cv_libz=no])
         AC_CHECK_HEADER(zlib.h, [zlib_cv_zlib_h=yes], [zlib_cv_zlib_h=no])
         AC_LANG_RESTORE
         if test "$zlib_cv_libz" = "yes" -a "$zlib_cv_zlib_h" = "yes"

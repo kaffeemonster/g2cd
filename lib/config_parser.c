@@ -511,7 +511,7 @@ static bool config_split_at_white(struct list_head *head)
 		w_ptr = t->d.t;
 		len   = t->d.len;
 
-		while(len && !isspace(*w_ptr))
+		while(len && !isspace((unsigned)*w_ptr))
 			len--, w_ptr++;
 
 		if(!len)
@@ -816,7 +816,7 @@ static int config_read_line(struct pctx *ctx)
 static size_t config_prune_white(struct str_buff *s)
 {
 	/* remove trailing whitespace */
-	while(s->len && isspace(*(s->t + s->len - 1)))
+	while(s->len && isspace((unsigned)*(s->t + s->len - 1)))
 		s->len--;
 
 	*(s->t + s->len) = '\0';
@@ -827,13 +827,13 @@ static size_t config_prune_white(struct str_buff *s)
 static size_t config_skip_white(struct str_buff *s)
 {
 	/* sanity check */
-	if(s->freeable && s->len && isspace(*s->t)) {
+	if(s->freeable && s->len && isspace((unsigned)*s->t)) {
 		logg_develd("modified freeable pointer %p -> will try to leak", s->t);
 		s->freeable = false;
 	}
 
 	/* skip whitespace at start */
-	while(s->len && isspace(*s->t))
+	while(s->len && isspace((unsigned)*s->t))
 		s->t++, s->len--;
 
 	/* no compacting, we modified s->t */
@@ -843,17 +843,17 @@ static size_t config_skip_white(struct str_buff *s)
 static size_t config_trim_white(struct str_buff *s)
 {
 	/* sanity check */
-	if(s->freeable && s->len && isspace(*s->t)) {
+	if(s->freeable && s->len && isspace((unsigned)*s->t)) {
 		logg_develd("modified freeable pointer %p -> will try to leak", s->t);
 		s->freeable = false;
 	}
 
 	/* skip whitespace at start */
-	while(s->len && isspace(*s->t))
+	while(s->len && isspace((unsigned)*s->t))
 		s->t++, s->len--;
 
 	/* remove trailing whitespace */
-	while(s->len && isspace(*(s->t + s->len - 1)))
+	while(s->len && isspace((unsigned)*(s->t + s->len - 1)))
 		s->len--;
 
 	/* no compacting, we modified s->t */
