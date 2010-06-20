@@ -68,7 +68,7 @@ CFLAGS += -DDEBUG_DEVEL
 CFLAGS += -DVALGRIND_ME
 #CFLAGS += -DPACKET_STATS
 #CFLAGS += -DDEBUG_PACKET_ALLOC
-CFLAGS += -DHAVE_BINUTILS=218
+#CFLAGS += -DHAVE_BINUTILS=218
 #	on glibc-system this brings performance at the cost
 #	of size if your compiler is not smart enough
 #CFLAGS += -D__USE_STRING_INLINES

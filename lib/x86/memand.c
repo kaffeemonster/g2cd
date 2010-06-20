@@ -104,7 +104,7 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
  */
 static const struct test_cpu_feature t_feat[] =
 {
-#ifdef HAVE_BINTULS
+#ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))memand_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
 # endif

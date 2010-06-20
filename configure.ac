@@ -393,9 +393,31 @@ if test x"$disable_warnings" = xno; then
 	CFLAGS="$WFLAGS $CFLAGS"
 fi
 
-# pmaddubsw %xmm5, %xmm0 == gas 2.17
-# pcmpestri	$0b0010100, (%eax), %xmm1 == gas 2.18
-# vandpd	%ymm0, %ymm1, %ymm0 == gas 2.19
+m4_include([m4/test_asm.m4])
+# use the compiler as as driver, since he may use some other as
+# then the system as. we want to feed inline asm, so it is important
+# to go trough the compiler.
+susp_binutils=215
+my_cv_as="$CC"
+as_tst_needed=no
+case "$host" in
+	*i?86-*)
+		as_tst_needed=yes;;
+	*x86_64-*)
+		as_tst_needed=yes;;
+	*)
+		;;
+esac
+if test "$as_tst_needed" != no; then
+	AS_CHECK_FEATURE(SSSE3, as_cv_ssse3_tst, [-c], [pmaddubsw %xmm5, %xmm0], [susp_binutils=217])
+	if test x"$as_cv_ssse3_tst" != xno; then
+		AS_CHECK_FEATURE(SSE4.2, as_cv_sse42_tst, [-c], [pcmpestri $0b0010100, (%eax), %xmm1], [susp_binutils=218])
+		if test x"$as_cv_sse42_tst" != xno; then
+			AS_CHECK_FEATURE(AVX, as_cv_avx_tst, [-c], [vandpd %ymm0, %ymm1, %ymm0], [susp_binutils=219])
+		fi
+	fi
+fi
+AC_DEFINE_UNQUOTED([HAVE_BINUTILS], [$susp_binutils], [set to the version of you AS])
 
 # Checks for libraries.
 AC_SEARCH_LIBS([dlopen], [dl])

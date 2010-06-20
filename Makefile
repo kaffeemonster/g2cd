@@ -200,7 +200,8 @@ AUX = \
 	m4/acx_pthread.m4 \
 	m4/ax_check_linker_flags.m4 \
 	m4/ax_check_compiler_flags.m4 \
-	m4/ax_check_zlib.m4
+	m4/ax_check_zlib.m4 \
+	m4/test_asm.m4
 #
 #	files to be included in a package
 #
@@ -417,6 +418,7 @@ depend: libdepend $(SRCS)
 #	compression in extra step since the solaris 5.7 'tar'
 #	dosn't unstand ANY compression (no, not even -Z)
 #	hopefully bzip or gzip fallback funktions
+#	($(PORT_PR) "\tLZMA[$(DISTNAME).tar]\n"; lzma -ef9 `cat .fname`.tar) || 
 dist: $(TARED_FILES)
 	@$(PORT_PR) $(DISTNAME)-`$(DATE) $(DATEFLAGS)` > .fname
 	@-$(RM) -rf `cat .fname`
@@ -426,7 +428,7 @@ dist: $(TARED_FILES)
 	@for da_file in $(TARED_FILES) ; do ln $$da_file `cat .fname`/$$da_file ; done
 	@$(PORT_PR) "\tTAR[$(DISTNAME)]\n"
 	@tar chf `cat .fname`.tar `cat .fname`
-	@-(($(PORT_PR) "\tLZMA[$(DISTNAME).tar]\n"; lzma -ef9 `cat .fname`.tar) || ($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || ($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
+	@-(($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || ($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
 	@$(PORT_PR) "please check if packet is correct!\n\n"
 	@-$(RM) -rf `cat .fname` .fname
 
