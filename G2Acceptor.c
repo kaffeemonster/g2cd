@@ -794,12 +794,12 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLH				\
-	GNUTELLA_STRING " 400 to many hubs\r\n"	\
+	GNUTELLA_STRING " 503 to many hubs\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
 	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLC				\
-	GNUTELLA_STRING " 400 to many connections\r\n"	\
+	GNUTELLA_STRING " 503 to many connections\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
 	LISTEN_ADR_KEY ": "
 
