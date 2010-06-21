@@ -313,10 +313,10 @@ static long guid_entry_cmp(struct guid_cache_entry *a, struct guid_cache_entry *
 		return ret;
 	if((ret = ga->x[1] - gb->x[1]))
 		return ret;
-	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
 		return ret;
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->e.na.s_fam))
+	if(likely(AF_INET == a->e.na.s.fam))
 	{
 		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;

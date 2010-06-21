@@ -534,14 +534,15 @@ static bool read_na_from_packet(g2_packet_t *source, union combo_addr *target, c
 	memset(target, 0, sizeof(*target));
 	/* We Assume network byte order for the IP */
 	if(6 == rem) {
-		target->s_fam = AF_INET;
+		target->s.fam = AF_INET;
 		target->in.sin_addr.s_addr = get_unaligned((uint32_t *)buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
 	} else {
-		target->s_fam = AF_INET6;
+		target->s.fam = AF_INET6;
 		memcpy(&target->in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
 		source->data_trunk.pos += INET6_ADDRLEN;
 	}
+	casalen_ii(target);
 
 	/* load port and fix it for those, who sent it the wrong way round */
 	tmp_port = get_unaligned((uint16_t *)buffer_start(source->data_trunk));
@@ -573,7 +574,7 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 	/* We Assume network byte order for the IP */
 	if(4 == rem || 6 == rem)
 	{
-		target->s_fam = AF_INET;
+		target->s.fam = AF_INET;
 		target->in.sin_addr.s_addr = get_unaligned((uint32_t *) buffer_start(source->data_trunk));
 		source->data_trunk.pos += sizeof(uint32_t);
 		if(6 == rem)
@@ -587,7 +588,7 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 	}
 	else
 	{
-		target->s_fam = AF_INET6;
+		target->s.fam = AF_INET6;
 		memcpy(&target->in6.sin6_addr.s6_addr, buffer_start(source->data_trunk), INET6_ADDRLEN);
 		source->data_trunk.pos += INET6_ADDRLEN;
 		if(INET6_ADDRLEN+2 == rem)
@@ -599,6 +600,7 @@ static bool read_sna_from_packet(g2_packet_t *source, union combo_addr *target, 
 			source->data_trunk.pos += sizeof(uint16_t);
 		}
 	}
+	casalen_ii(target);
 
 	logg_packet_old("%s:\t%p#I\n", name, target);
 	return true;
@@ -660,7 +662,7 @@ static bool write_na_to_packet(g2_packet_t *target, union combo_addr *source)
 	uint16_t port;
 	size_t len, old_pos;
 
-	len  = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len  = AF_INET == source->s.fam ? sizeof(uint32_t) : INET6_ADDRLEN;
 	len += sizeof(port);
 
 	if(!g2_packet_steal_data_space(target, len))
@@ -668,7 +670,7 @@ static bool write_na_to_packet(g2_packet_t *target, union combo_addr *source)
 
 	old_pos = target->data_trunk.pos;
 	/* We Assume network byte order for the IP */
-	if(AF_INET == source->s_fam) {
+	if(AF_INET == source->s.fam) {
 		put_unaligned(source->in.sin_addr.s_addr,
 		              (uint32_t *)buffer_start(target->data_trunk));
 		target->data_trunk.pos += sizeof(uint32_t);
@@ -693,7 +695,7 @@ static bool write_nats_to_packet(g2_packet_t *target, union combo_addr *source, 
 	size_t len, old_pos;
 	uint16_t port;
 
-	len  = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len  = AF_INET == source->s.fam ? sizeof(uint32_t) : INET6_ADDRLEN;
 	len += sizeof(time_t) + sizeof(uint16_t);
 
 	if(!g2_packet_steal_data_space(target, len))
@@ -701,7 +703,7 @@ static bool write_nats_to_packet(g2_packet_t *target, union combo_addr *source, 
 
 	old_pos = target->data_trunk.pos;
 	/* We Assume network byte order for the IP */
-	if(AF_INET == source->s_fam) {
+	if(AF_INET == source->s.fam) {
 		put_unaligned(source->in.sin_addr.s_addr,
 		              (uint32_t *)buffer_start(target->data_trunk));
 		target->data_trunk.pos += sizeof(uint32_t);
@@ -728,7 +730,7 @@ static bool write_nats_to_packet(g2_packet_t *target, union combo_addr *source, 
 static void link_sna_to_packet(g2_packet_t *target, union combo_addr *source)
 {
 	/* We Assume network byte order for the IP */
-	if(AF_INET == source->s_fam){
+	if(AF_INET == source->s.fam){
 		target->data_trunk.data = (void *)&source->in.sin_addr.s_addr;
 		target->data_trunk.capacity = sizeof(uint32_t);
 	} else {
@@ -745,8 +747,8 @@ static bool write_sna_to_packet_endian(g2_packet_t *target, union combo_addr *so
 	size_t len;
 	uint16_t port = 0, *p_ptr;
 
-	len = AF_INET == source->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
-	if(AF_INET == source->s_fam)
+	len = AF_INET == source->s.fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	if(AF_INET == source->s.fam)
 		port = source->in.sin_port;
 	else
 		port = source->in6.sin6_port;
@@ -757,7 +759,7 @@ static bool write_sna_to_packet_endian(g2_packet_t *target, union combo_addr *so
 		return false;
 
 	/* We Assume network byte order for the IP */
-	if(AF_INET == source->s_fam) {
+	if(AF_INET == source->s.fam) {
 		put_unaligned(source->in.sin_addr.s_addr,
 		              (uint32_t *)buffer_start(target->data_trunk));
 		p_ptr = (uint16_t *)(buffer_start(target->data_trunk) + sizeof(uint32_t));
@@ -786,7 +788,7 @@ static bool fill_d_packet(g2_packet_t *d, union combo_addr *taddr, uint16_t leaf
 	size_t len, old_pos_in;
 	uint16_t port;
 
-	len  = AF_INET == taddr->s_fam ? sizeof(uint32_t) : INET6_ADDRLEN;
+	len  = AF_INET == taddr->s.fam ? sizeof(uint32_t) : INET6_ADDRLEN;
 	len += sizeof(port) + sizeof(uint16_t);
 
 	if(!g2_packet_steal_data_space(d, len))
@@ -797,7 +799,7 @@ static bool fill_d_packet(g2_packet_t *d, union combo_addr *taddr, uint16_t leaf
 
 	old_pos_in = d->data_trunk.pos;
 	/* We Assume network byte order for the IP */
-	if(AF_INET == taddr->s_fam) {
+	if(AF_INET == taddr->s.fam) {
 		put_unaligned(taddr->in.sin_addr.s_addr,
 		              (uint32_t *)buffer_start(d->data_trunk));
 		d->data_trunk.pos += sizeof(uint32_t);
@@ -1175,7 +1177,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 		}
 	}
 
-	res = g2_khl_fill_p(khle, anum(khle), parg->src_addr->s_fam);
+	res = g2_khl_fill_p(khle, anum(khle), parg->src_addr->s.fam);
 	while(res--)
 	{
 		g2_packet_t *ch = g2_packet_calloc();
@@ -1367,7 +1369,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 			g2_packet_free(yourip);
 	}
 
-	res = g2_khl_fill_p(khle, anum(khle), parg->connec->remote_host.s_fam);
+	res = g2_khl_fill_p(khle, anum(khle), parg->connec->remote_host.s.fam);
 	while(res--)
 	{
 		g2_packet_t *ch = g2_packet_calloc();
@@ -1629,6 +1631,7 @@ noinline bool g2_packet_add_LNI(g2_connection_t *connec)
 	lni->type = PT_LNI;
 	na->type = PT_NA;
 
+	casalen_ib(&local_addr);
 	if(getsockname(connec->com_socket, casa(&local_addr), &sin_size))
 		goto out_fail;
 	if(!write_na_to_packet(na, &local_addr))
@@ -2204,13 +2207,14 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 	if(parg->connec)
 	{
 		socklen_t sin_size = sizeof(backup_addr);
+		casalen_ib(&backup_addr);
 		/*
 		 * get our ip the remote host connected to from
 		 * our socket handle
 		 */
 		if(unlikely(getsockname(parg->connec->com_socket, casa(&backup_addr), &sin_size))) {
 			logg_errno(LOGF_DEBUG, "getting local addr of socket");
-			our_addr = AF_INET == parg->connec->remote_host.s_fam ?
+			our_addr = AF_INET == parg->connec->remote_host.s.fam ?
 			           &server.settings.bind.ip4 : &server.settings.bind.ip6;
 		}
 		else
@@ -2279,7 +2283,7 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 
 		/* start by adding a truck load of KHL */
 		res = g2_khl_fill_p(khle, anum(khle), parg->connec ?
-		                    parg->connec->remote_host.s_fam : parg->src_addr->s_fam);
+		                    parg->connec->remote_host.s.fam : parg->src_addr->s.fam);
 		while(res--)
 		{
 			g2_packet_t *s = g2_packet_calloc();
@@ -3962,9 +3966,10 @@ intptr_t send_HAW_callback(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARA
 	g2_packet_t *haw, *na, *hs, *v;
 	socklen_t sin_size = sizeof(local_addr);
 
+	casalen_ib(&local_addr);
 	if(unlikely(getsockname(con->com_socket, casa(&local_addr), &sin_size))) {
 		logg_errno(LOGF_DEBUG, "getting local addr of socket");
-		local_addr = AF_INET == con->remote_host.s_fam ?
+		local_addr = AF_INET == con->remote_host.s.fam ?
 		             server.settings.bind.ip4 : server.settings.bind.ip6;
 		if(!combo_addr_is_public(&local_addr))
 			return 0;

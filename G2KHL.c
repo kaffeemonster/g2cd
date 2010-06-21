@@ -607,7 +607,8 @@ static int gwc_connect(void)
 
 	addr = (union combo_addr *)tai->ai_addr;
 	/* make sure address family is copied to the struct sockaddr field */
-	addr->s_fam = tai->ai_family;
+	addr->s.fam = tai->ai_family;
+	casalen_ii(addr);
 	combo_addr_set_port(addr, htons(act_gwc.port));
 
 	logg(LOGF_INFO, "Connecting to GWC \"%s\" for Hubs\n", act_gwc.data.url);
@@ -1199,11 +1200,11 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr, uin
 
 // TODO: check for mapped ip addr?
 // TODO: when IPv6 is common, change it
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & KHL_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET)
+			if(e->e.na.s.fam != AF_INET)
 				continue;
 			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
 			   e->e.na.in.sin_port == addr->in.sin_port)
@@ -1214,7 +1215,7 @@ static struct khl_cache_entry *cache_ht_lookup(const union combo_addr *addr, uin
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & KHL_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET6)
+			if(e->e.na.s.fam != AF_INET6)
 				continue;
 			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
 			   e->e.na.in.sin_port == addr->in.sin_port)
@@ -1240,9 +1241,9 @@ static int khl_entry_cmp(struct khl_cache_entry *a, struct khl_cache_entry *b)
 	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
 		return ret;
-	if(likely(AF_INET == a->e.na.s_fam))
+	if(likely(AF_INET == a->e.na.s.fam))
 	{
 		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;
@@ -1401,7 +1402,7 @@ size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
 		e = rb_entry(n, struct khl_cache_entry, rb);
 // TODO: filter neighbours
 		/* we want hubs in our cluster, but not our direct neigbours */
-		if(likely(e->e.na.s_fam == s_fam) && e->cluster)
+		if(likely(e->e.na.s.fam == s_fam) && e->cluster)
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 
@@ -1431,7 +1432,7 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 				break;
 		}
 		e = rb_entry(n, struct khl_cache_entry, rb);
-		if(likely(e->e.na.s_fam == s_fam && !e->cluster))
+		if(likely(e->e.na.s.fam == s_fam && !e->cluster))
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 

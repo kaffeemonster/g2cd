@@ -1536,7 +1536,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 			goto OUT_MORE;
 		}
 
-		if(spec->u.flags.alternate && AF_INET6 == addr->s_fam && len++ <= sav)
+		if(spec->u.flags.alternate && AF_INET6 == addr->s.fam && len++ <= sav)
 			*buf++ = '[';
 
 		ret_val = combo_addr_print_c(addr, buf, sav);
@@ -1550,7 +1550,7 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 		buf = ret_val;
 		if(spec->u.flags.alternate)
 		{
-			if(AF_INET6 == addr->s_fam && len++ <= sav)
+			if(AF_INET6 == addr->s.fam && len++ <= sav)
 				*buf++ = ']';
 			if(len++ <= sav)
 				*buf++ = ':';

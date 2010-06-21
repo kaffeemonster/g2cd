@@ -374,7 +374,7 @@ static uint32_t cache_ht_hash(const union combo_addr *addr, uint16_t seq)
 	uint32_t h;
 
 // TODO: when IPv6 is common, change it
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 		h = hthash_3words(addr->in.sin_addr.s_addr, addr->in.sin_port, seq, cache.ht_seed);
 	else
 		h = hthash_6words(addr->in6.sin6_addr.s6_addr32[0],
@@ -393,11 +393,11 @@ static struct udp_reas_cache_entry *cache_ht_lookup(const union combo_addr *addr
 // TODO: check for mapped ip addr?
 // TODO: when IPv6 is common, change it
 // TODO: leave out port?
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & UDP_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET)
+			if(e->e.na.s.fam != AF_INET)
 				continue;
 			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
 			   e->e.na.in.sin_port == addr->in.sin_port &&
@@ -409,7 +409,7 @@ static struct udp_reas_cache_entry *cache_ht_lookup(const union combo_addr *addr
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & UDP_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET6)
+			if(e->e.na.s.fam != AF_INET6)
 				continue;
 			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
 			   e->e.na.in.sin_port == addr->in.sin_port &&
@@ -436,9 +436,9 @@ static int udp_reas_entry_cmp(struct udp_reas_cache_entry *a, struct udp_reas_ca
 	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
 		return ret;
-	if(likely(AF_INET == a->e.na.s_fam))
+	if(likely(AF_INET == a->e.na.s.fam))
 	{
 		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;
@@ -959,9 +959,10 @@ bool init_udp(int epoll_fd)
 	}
 	if(server.settings.bind.use_ip6 && !ipv6_ready)
 	{
-		if(ipv4_ready)
+		if(ipv4_ready) {
 			logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
-		else {
+			server.settings.bind.use_ip6 = false;
+		} else {
 			clean_up_udp();
 			return false;
 		}
@@ -1289,7 +1290,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 		"\n----------\nseq: %u\tpart: %u/%u\ndeflate: %s\tack_me: %s\nsa_family: %i\nsin_addr:sin_port: %p#I\n----------\n",
 		(unsigned)tmp_packet.sequence, (unsigned)tmp_packet.part, (unsigned)tmp_packet.count,
 		(tmp_packet.flags.deflate) ? "true" : "false", (tmp_packet.flags.ack_me) ? "true" : "false", 
-		from->s_fam, from);
+		from->s.fam, from);
 
 		d_hold->pos += (res_byte > buffer_remaining(*d_hold)) ? buffer_remaining(*d_hold) : res_byte;
 
@@ -1527,7 +1528,7 @@ void g2_udp_send(const union combo_addr *to, struct list_head *answer)
 {
 	struct list_head *e, *n;
 	struct norm_buff *d_hold;
-	int answer_fd = AF_INET == to->s_fam ? udp_outfd_ipv4 : udp_outfd_ipv6;
+	int answer_fd = AF_INET == to->s.fam ? udp_outfd_ipv4 : udp_outfd_ipv6;
 
 	if(-1 == answer_fd) {
 		logg_devel("trying to send to a address we have no fd for!?");
@@ -1630,6 +1631,7 @@ static inline bool handle_udp_sock(struct epoll_event *udp_poll, struct norm_buf
 	do
 	{
 		socklen_t from_len = sizeof(*from), to_len = sizeof(*to);
+		casalen_ib(from); casalen_ib(to);
 		errno = 0;
 /* ssize_t  recvfromto(int s, void *buf, size_t len, int flags,
  *                     struct sockaddr *from, socklen_t *fromlen
@@ -1673,27 +1675,26 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	const char *e;
 	int yes = 1; /* for setsockopt() SO_REUSEADDR, below */
 
-	if(-1 == (*udp_so = socket(our_addr->s_fam, SOCK_DGRAM, 0))) {
+	if(-1 == (*udp_so = socket(our_addr->s.fam, SOCK_DGRAM, 0))) {
 		logg_errno(LOGF_ERR, "creating socket");
 		return false;
 	}
 
-	if(udpfromto_init(*udp_so, our_addr->s_fam))
-		logg_errno(LOGF_ERR, "preparing UDP ip recv");
+	if(udpfromto_init(*udp_so, our_addr->s.fam))
+		OUT_ERR("preparing UDP ip recv");
 
 	/* lose the pesky "address already in use" error message */
 	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1
-	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
+	if(AF_INET6 == our_addr->s.fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
 #endif
 
-	if(bind(*udp_so, casa(our_addr),
-	        AF_INET == our_addr->s_fam ? sizeof(our_addr->in) : sizeof(our_addr->in6)))
+	if(bind(*udp_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("bindding udp fd");
 
 #if 0

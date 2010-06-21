@@ -147,7 +147,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	const char *e;
 	int yes = 1; /* for setsocketopt() SO_REUSEADDR, below */
 
-	if(-1 == (*accept_so = socket(our_addr->s_fam, SOCK_STREAM, 0))) {
+	if(-1 == (*accept_so = socket(our_addr->s.fam, SOCK_STREAM, 0))) {
 		logg_errno(LOGF_ERR, "creating socket");
 		return false;
 	}
@@ -157,14 +157,13 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1
-	if(AF_INET6 == our_addr->s_fam && server.settings.bind.use_ip4) {
+	if(AF_INET6 == our_addr->s.fam && server.settings.bind.use_ip4) {
 		if(setsockopt(*accept_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
 #endif
 
-	if(bind(*accept_so, casa(our_addr),
-	        AF_INET == our_addr->s_fam ? sizeof(our_addr->in) : sizeof(our_addr->in6)))
+	if(bind(*accept_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("binding accept fd");
 
 	if(listen(*accept_so, BACKLOG))
@@ -189,6 +188,7 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 		union combo_addr our_local_addr;
 		socklen_t sin_size = sizeof(our_local_addr);
 
+		casalen_ib(&our_local_addr);
 		if(!getsockname(work_entry->com_socket, casa(&our_local_addr), &sin_size))
 			logg(l, "Connection\tFrom: %p#I\tTo: %p#I\tFDNum: %i -> %s\n",
 			     &work_entry->remote_host, &our_local_addr, work_entry->com_socket, msg);
@@ -865,13 +865,14 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				union combo_addr local_addr;
 				socklen_t sin_size = sizeof(local_addr);
 
+				casalen_ib(&local_addr);
 				/*
 				 * get our ip the remote host connected to from
 				 * our socket handle
 				 */
 				if(unlikely(getsockname(to_con->com_socket, casa(&local_addr), &sin_size))) {
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
-					local_addr = AF_INET == to_con->remote_host.s_fam ?
+					local_addr = AF_INET == to_con->remote_host.s.fam ?
 					             server.settings.bind.ip4 : server.settings.bind.ip6;
 				}
 				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
@@ -986,17 +987,17 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				rem /= (INET6_ADDRSTRLEN + 2 + 4 + 5 + str_size("2007-01-10T23:59Z"));
 				rem  = anum(khl_e) < rem ? anum(khl_e) : rem;
 
-				khl_num = g2_khl_fill_p(khl_e, rem, to_con->remote_host.s_fam);
+				khl_num = g2_khl_fill_p(khl_e, rem, to_con->remote_host.s.fam);
 
 				if(khl_num)
 				{
 					cp_ret = strplitcpy(buffer_start(*to_con->send), X_TRY_HUB_KEY ": ");
 					while(khl_num--)
 					{
-						if(AF_INET6 == khl_e[khl_num].na.s_fam)
+						if(AF_INET6 == khl_e[khl_num].na.s.fam)
 							*cp_ret++ = '[';
 						cp_ret = combo_addr_print_c(&khl_e[khl_num].na, cp_ret, INET6_ADDRSTRLEN);
-						if(AF_INET6 == khl_e[khl_num].na.s_fam)
+						if(AF_INET6 == khl_e[khl_num].na.s.fam)
 							*cp_ret++ = ']';
 						*cp_ret++ = ':';
 						cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));

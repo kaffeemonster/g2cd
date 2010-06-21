@@ -354,10 +354,14 @@ void *gup(void *param)
 			num_helper = 0;
 		}
 	}
-	if(!init_accept(worker.epollfd))
-		goto out_no_accept;
+	/*
+	 * init udp first, if it fails to set the port right for ipv6
+	 * we have to disable ipv6
+	 */
 	if(!init_udp(worker.epollfd))
 		goto out_no_udp;
+	if(!init_accept(worker.epollfd))
+		goto out_no_accept;
 
 	worker.keep_going = true;
 	for(i = 0; i < num_helper; i++)
@@ -382,10 +386,10 @@ void *gup(void *param)
 		}
 	}
 
-	clean_up_udp();
-out_no_udp:
 	clean_up_accept();
 out_no_accept:
+	clean_up_udp();
+out_no_udp:
 	clean_up_gup(from_main.fd);
 	free(helper);
 out_epoll:

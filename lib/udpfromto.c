@@ -116,8 +116,16 @@ int udpfromto_init(int s, int fam)
 	if(AF_INET == fam)
 		err = setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
 	else
-		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
+	{
 // TODO: IPv6? Does someone has a bsd at hand?
+		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
+		/*
+		 * sh... i get a "protocol not available" for prop.
+		 * they say it is deprecated, so KAME nuked it...
+		 * So they don't have IP_PKTINFO vor v4, but IPV6_PKTINFO
+		 * give me a break...
+		 */
+	}
 #elif HAVE_DECL_IP_RECVIF == 1
 	if(AF_INET == fam)
 		err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));

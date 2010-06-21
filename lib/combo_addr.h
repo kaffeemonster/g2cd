@@ -173,7 +173,21 @@ union combo_addr
 	 * sa_fam should alias with the first member
 	 * off all struct: *_family
 	 */
-	sa_family_t         s_fam;
+	struct
+	{
+#ifdef HAVE_SA_LEN
+		/*
+		 * except on some systems, notably BSD.
+		 * They decided it would be better to have a length in
+		 * front of all that, and it must be properly set and
+		 * so on.
+		 * The socklen_t arg to all those socket APIs is for
+		 * what again?
+		 */
+		unsigned char       len;
+#endif
+		sa_family_t         fam;
+	} s;
 /*	struct sockaddr     sa; */
 	/*
 	 * struct sockaddr is normaly unusable. It is a kind
@@ -215,17 +229,36 @@ static inline const struct sockaddr *casac(const union combo_addr *in)
 	return (const struct sockaddr *)in;
 }
 
+static inline size_t casalen(const union combo_addr *in)
+{
+	return AF_INET == in->s.fam ? sizeof(in->in) : sizeof(in->in6);
+}
+
+static inline void casalen_ib(union combo_addr *in GCC_ATTR_UNUSED_PARAM)
+{
+#ifdef HAVE_SA_LEN
+	in->s.len = sizeof(in);
+#endif
+}
+
+static inline void casalen_ii(union combo_addr *in GCC_ATTR_UNUSED_PARAM)
+{
+#ifdef HAVE_SA_LEN
+	in->s.len = casalen(in);
+#endif
+}
+
 static inline const char *combo_addr_print(const union combo_addr *src, char *dst, socklen_t cnt)
 {
-	return inet_ntop(src->s_fam,
-		likely(AF_INET == src->s_fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
+	return inet_ntop(src->s.fam,
+		likely(AF_INET == src->s.fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
 		dst, cnt);
 }
 
 static inline char *combo_addr_print_c(const union combo_addr *src, char *dst, socklen_t cnt)
 {
-	return inet_ntop_c(src->s_fam,
-		likely(AF_INET == src->s_fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
+	return inet_ntop_c(src->s.fam,
+		likely(AF_INET == src->s.fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
 		dst, cnt);
 }
 
@@ -234,13 +267,17 @@ static inline int combo_addr_read(const char *src, union combo_addr *dst)
 	int ret_val;
 
 	ret_val = inet_pton(AF_INET, src, &dst->in.sin_addr);
-	if(0 < ret_val)
-		dst->s_fam = AF_INET;
+	if(0 < ret_val) {
+		dst->s.fam = AF_INET;
+		casalen_ii(dst);
+	}
 	else if(0 == ret_val)
 	{
 		ret_val = inet_pton(AF_INET6, src, &dst->in6.sin6_addr);
-		if(0 < ret_val)
-			dst->s_fam = AF_INET6;
+		if(0 < ret_val) {
+			dst->s.fam = AF_INET6;
+			casalen_ii(dst);
+		}
 	}
 	return ret_val;
 }
@@ -248,13 +285,13 @@ static inline int combo_addr_read(const char *src, union combo_addr *dst)
 static inline in_port_t combo_addr_port(const union combo_addr *addr)
 {
 // TODO: when IPv6 is common, change it
-	return likely(AF_INET == addr->s_fam) ? addr->in.sin_port : addr->in6.sin6_port;
+	return likely(AF_INET == addr->s.fam) ? addr->in.sin_port : addr->in6.sin6_port;
 }
 
 static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
 {
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == addr->s_fam))
+	if(likely(AF_INET == addr->s.fam))
 		addr->in.sin_port = port;
 	else
 		addr->in6.sin6_port = port;
@@ -278,7 +315,7 @@ static inline bool combo_addr_is_public(const union combo_addr *addr)
 	in_addr_t a;
 
 // TODO: when IPv6 is common, change it
-	if(unlikely(AF_INET6 == addr->s_fam))
+	if(unlikely(AF_INET6 == addr->s.fam))
 	{
 		const struct in6_addr *a6 = &addr->in6.sin6_addr;
 		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
@@ -359,7 +396,7 @@ static inline bool combo_addr_is_forbidden(const union combo_addr *addr)
 	in_addr_t a;
 
 // TODO: when IPv6 is common, change it
-	if(unlikely(AF_INET6 == addr->s_fam))
+	if(unlikely(AF_INET6 == addr->s.fam))
 	{
 		const struct in6_addr *a6 = &addr->in6.sin6_addr;
 		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
@@ -431,7 +468,7 @@ static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t se
 	uint32_t h;
 
 // TODO: when IPv6 is common, change it
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, seed);
 	else
 		h = hthash_5words(addr->in6.sin6_addr.s6_addr32[0],
@@ -447,7 +484,7 @@ static inline uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t
 	uint32_t h;
 
 // TODO: when IPv6 is common, change it
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 		h = hthash_1words(addr->in.sin_addr.s_addr, seed);
 	else
 		h = hthash_4words(addr->in6.sin6_addr.s6_addr32[0],
@@ -460,11 +497,11 @@ static inline uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t
 
 static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
 {
-	bool ret = a->s_fam == a->s_fam;
+	bool ret = a->s.fam == a->s.fam;
 	if(!ret)
 		return ret;
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->s_fam)) {
+	if(likely(AF_INET == a->s.fam)) {
 		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr &&
 		       a->in.sin_port == b->in.sin_port;
 	} else {
@@ -475,11 +512,11 @@ static inline bool combo_addr_eq(const union combo_addr *a, const union combo_ad
 
 static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo_addr *b)
 {
-	bool ret = a->s_fam == a->s_fam;
+	bool ret = a->s.fam == a->s.fam;
 	if(!ret)
 		return ret;
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->s_fam)) {
+	if(likely(AF_INET == a->s.fam)) {
 		return a->in.sin_addr.s_addr == b->in.sin_addr.s_addr;
 	} else {
 		return !!IN6_ARE_ADDR_EQUAL(&a->in6.sin6_addr, &b->in6.sin6_addr);
@@ -489,7 +526,7 @@ static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo
 static inline bool combo_addr_eq_any(const union combo_addr *a)
 {
 // TODO: when IPv6 is common, change it
-	if(likely(AF_INET == a->s_fam)) {
+	if(likely(AF_INET == a->s.fam)) {
 		return INADDR_ANY == a->in.sin_addr.s_addr;
 	} else {
 		return 0 == a->in6.sin6_addr.s6_addr32[0] && 0 == a->in6.sin6_addr.s6_addr32[1] &&
@@ -500,7 +537,7 @@ static inline bool combo_addr_eq_any(const union combo_addr *a)
 static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
 {
 // TODO: when ipv6 is common, change it
-	if(likely(AF_INET == a->s_fam))
+	if(likely(AF_INET == a->s.fam))
 	{
 		buf[0] = a->in.sin_addr.s_addr;
 		buf[1] = a->in.sin_port;
@@ -520,7 +557,7 @@ static inline unsigned combo_addr_lin(uint32_t *buf, const union combo_addr *a)
 static inline unsigned combo_addr_lin_ip(uint32_t *buf, const union combo_addr *a)
 {
 // TODO: when ipv6 is common, change it
-	if(likely(AF_INET == a->s_fam))
+	if(likely(AF_INET == a->s.fam))
 	{
 		buf[0] = a->in.sin_addr.s_addr;
 		return 1;

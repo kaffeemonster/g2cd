@@ -379,11 +379,11 @@ static struct qk_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint
 // TODO: check for mapped ip addr?
 // TODO: when IPv6 is common, change it
 // TODO: leave out port?
-	if(likely(addr->s_fam == AF_INET))
+	if(likely(addr->s.fam == AF_INET))
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & QK_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET)
+			if(e->e.na.s.fam != AF_INET)
 				continue;
 			if(e->e.na.in.sin_addr.s_addr == addr->in.sin_addr.s_addr &&
 			   e->e.na.in.sin_port == addr->in.sin_port)
@@ -394,7 +394,7 @@ static struct qk_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint
 	{
 		hlist_for_each_entry(e, n, &cache.ht[h & QK_CACHE_HTMASK], node)
 		{
-			if(e->e.na.s_fam != AF_INET6)
+			if(e->e.na.s.fam != AF_INET6)
 				continue;
 			if(IN6_ARE_ADDR_EQUAL(&e->e.na.in6.sin6_addr, &addr->in6.sin6_addr) &&
 			   e->e.na.in.sin_port == addr->in.sin_port)
@@ -420,9 +420,9 @@ static int qk_entry_cmp(struct qk_cache_entry *a, struct qk_cache_entry *b)
 	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	if((ret = (int)a->e.na.s_fam - (int)b->e.na.s_fam))
+	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
 		return ret;
-	if(likely(AF_INET == a->e.na.s_fam))
+	if(likely(AF_INET == a->e.na.s.fam))
 	{
 		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
 			return ret;

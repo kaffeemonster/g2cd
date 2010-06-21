@@ -764,13 +764,15 @@ static noinline void handle_config(void)
 	server.settings.logging.act_loglevel         = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time        = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format     = DEFAULT_LOG_TIME_FORMAT;
-	server.settings.bind.ip4.s_fam               = AF_INET;
+	server.settings.bind.ip4.s.fam               = AF_INET;
 	server.settings.bind.ip4.in.sin_port         = htons(DEFAULT_PORT);
 	server.settings.bind.ip4.in.sin_addr.s_addr  = htonl(DEFAULT_ADDR);
+	casalen_ii(&server.settings.bind.ip4);
 	server.settings.bind.use_ip4                 = DEFAULT_USE_IPV4;
-	server.settings.bind.ip6.s_fam               = AF_INET6;
+	server.settings.bind.ip6.s.fam               = AF_INET6;
 	server.settings.bind.ip6.in6.sin6_port       = htons(DEFAULT_PORT);
 	server.settings.bind.ip6.in6.sin6_addr       = in6addr_any;
+	casalen_ii(&server.settings.bind.ip6);
 	server.settings.bind.use_ip6                 = DEFAULT_USE_IPV6;
 	server.settings.default_in_encoding          = DEFAULT_ENC_IN;
 	server.settings.default_out_encoding         = DEFAULT_ENC_OUT;
@@ -1086,27 +1088,41 @@ static inline void setup_resources(void)
 
 static void init_prng(void)
 {
-	unsigned rd[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
-#ifndef WIN32
-	FILE *fin;
-	bool have_entropy = false;
-
 	/*
-	 * Warning, even if the compiler cries and valgrind screems:
+	 * WARNING: even if the compiler cries and valgrind screems:
 	 * Do NOT memset/init rd!
 	 */
+	unsigned rd[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+	bool have_entropy = false;
+#ifndef WIN32
+	int fin;
 
-	fin = fopen(server.settings.entropy_source, "rb");
-	if(!fin) {
+	/*
+	 * we could use the libc fopen/fread etc. to be portable, but...
+	 * A truss on FreeBSD reveales that the libc to buffer I/O is
+	 * reading a whoping 4k, instead of our ~32 byte.
+	 * This is not only a perfomace thing, if the entropy source is
+	 * HQ (and prop. slow, some bytes a sec...) someone will be angry
+	 * we eat 4k of best entropy.
+	 */
+	fin = open(server.settings.entropy_source, O_RDONLY|O_NOCTTY);
+	if(0 > fin) {
 		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
 		            server.settings.entropy_source);
-	} else if(1 != fread(rd, sizeof(rd), 1, fin)) {
+	} else if(sizeof(rd) != read(fin, rd, sizeof(rd))) {
 		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
 		            server.settings.entropy_source);
 	} else
 		have_entropy = true;
-	fclose(fin);
-
+	close(fin);
+#else
+	HCRYPTPROV cprovider_h;
+	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, 0)) {
+		CryptGenRandom(cprovider_h, sizeof(rd), (BYTE *)rd);
+		CryptReleaseContext(cprovider_h, 0);
+		have_entropy = true;
+	}
+#endif
 	if(!have_entropy)
 	{
 		struct timeval now;
@@ -1137,15 +1153,10 @@ static void init_prng(void)
 		 * behaivior for the rescue...
 		 */
 	}
+#ifndef WIN32
 	else
 		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
 		     server.settings.entropy_source);
-#else
-	HCRYPTPROV cprovider_h;
-	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, 0)) {
-		CryptGenRandom(cprovider_h, sizeof(rd), (BYTE *)rd);
-		CryptReleaseContext(cprovider_h, 0);
-	}
 #endif
 
 	random_bytes_init((char *)rd);

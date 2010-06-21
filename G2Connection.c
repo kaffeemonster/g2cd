@@ -227,7 +227,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->com_socket = -1;
 
 	/* Internal States */
-	work_entry->sent_addr.s_fam = AF_INET;
+	work_entry->sent_addr.s.fam = AF_INET;
+	casalen_ib(&work_entry->sent_addr);
 #if 0
 	/* they are zero by coincidence, but lets shove some cycles */
 	work_entry->connect_state = UNCONNECTED;
@@ -719,13 +720,14 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 		port = atoi(z);
 		if(!port)
 			continue;
-		combo_addr_set_port(&where, port);
 
 		/* IPv6? */
 		if(*w_ptr == '[')
 			w_ptr++;
 		if(!combo_addr_read(w_ptr, &where))
 			continue;
+
+		combo_addr_set_port(&where, port);
 
 		/* time stamp */
 		if(!read_ts(t_str, &when)) {
