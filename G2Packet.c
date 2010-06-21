@@ -223,6 +223,7 @@ static const g2_ptype_action_func LNI_packet_dict[PT_MAXIMUM] =
 	[PT_TCPNFW] = empty_action_p, /* ?? */
 	[PT_UDPNFW] = empty_action_p, /* ?? */
 	[PT_UDPFW ] = empty_action_p, /* ?? */
+	[PT_g2core] = empty_action_p, /* this is a quazaa client */
 };
 
 /* KHLR-childs */

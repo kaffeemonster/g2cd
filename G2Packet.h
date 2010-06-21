@@ -155,6 +155,7 @@
 	ENUM_CMD( RELAY  ,    79960 ), /* PI PO */ \
 	ENUM_CMD( TO     ,        1 ), \
 	ENUM_CMD( XML    ,        1 ), /* UPROD */ \
+	ENUM_CMD( g2core ,        1 ), /* quazaa */ \
 	ENUM_CMD( dna    ,  2630633 ), /* GnucDNA */ \
 	ENUM_CMD( CR     ,   117310 ), /* GnucDNA */ \
 	ENUM_CMD( NAT    ,     9662 ), /* ?? */ \
