@@ -530,6 +530,7 @@ AC_CHECK_TYPES([sa_family_t, socklen_t], [], [], [[#include <sys/types.h>
 AC_CHECK_TYPES([in_port_t, in_addr_t], [], [], [[#include <netinet/in.h>]])
 AC_CHECK_TYPE([pthread_spinlock_t], [AC_DEFINE(HAVE_SPINLOCKS, 1, do we have Spinlocks? Old Solaris has none!)],[], [[#include <pthread.h>]])
 AC_CHECK_TYPE([struct in_pktinfo], [AC_DEFINE(HAVE_IP_PKTINFO, 1, do we have pktinfo)],[], [[#include <netinet/in.h>]])
+AC_CHECK_TYPE([struct in6_pktinfo], [AC_DEFINE(HAVE_IP6_PKTINFO, 1, do we have pktinfo v6)],[], [[#include <netinet/in.h>]])
 AC_CHECK_MEMBER([struct sockaddr.sa_len], [AC_DEFINE(HAVE_SA_LEN, 1, so we have a sa_len member)], [], [#include <sys/types.h>
 #include <sys/socket.h>])
 

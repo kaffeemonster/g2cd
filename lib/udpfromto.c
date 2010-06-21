@@ -79,56 +79,25 @@
 # endif
 #endif
 
-#ifdef HAVE_IP_PKTINFO
+#ifdef HAVE_IP6_PKTINFO
 static int v6pktinfo;
 #endif
 
-int udpfromto_init(int s, int fam)
+static int init_v4(int s, int fam GCC_ATTR_UNUSED_PARAM)
 {
 	int err = -1, opt = 1;
-	errno = ENOSYS;
 
 #ifdef HAVE_IP_PKTINFO
 	/* Set the IP_PKTINFO option (Linux). */
-	if(AF_INET == fam)
-		err = setsockopt(s, SOL_IP, IP_PKTINFO, &opt, sizeof(opt));
-	else {
-		/* looks like they changed the name/ABI/API 3 times? */
-# ifdef IPV6_RECVPKTINFO
-		v6pktinfo = IPV6_RECVPKTINFO;
-		err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
-#  ifdef IPV6_2292PKTINFO
-		if(-1 == err && ENOPROTOOPT == errno) {
-			if(-1 != (err = setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
-				v6pktinfo = IPV6_2292PKTINFO;
-		}
-#  endif
-# else
-		v6pktinfo = IPV6_PKTINFO;
-		err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, &opt, sizeof(opt));
-# endif
-	}
+	err = setsockopt(s, SOL_IP, IP_PKTINFO, &opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
 	 * Set the IP_RECVDSTADDR option (BSD).
 	 * Note: IP_RECVDSTADDR == IP_SENDSRCADDR
 	 */
-	if(AF_INET == fam)
-		err = setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
-	else
-	{
-// TODO: IPv6? Does someone has a bsd at hand?
-		err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
-		/*
-		 * sh... i get a "protocol not available" for prop.
-		 * they say it is deprecated, so KAME nuked it...
-		 * So they don't have IP_PKTINFO vor v4, but IPV6_PKTINFO
-		 * give me a break...
-		 */
-	}
+	err = setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVIF == 1
-	if(AF_INET == fam)
-		err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
+	err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
 #else
 	opt = opt;
 	s = s;
@@ -137,15 +106,72 @@ int udpfromto_init(int s, int fam)
 	return err;
 }
 
+static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
+{
+	int err = -1, opt = 1;
+
+#ifdef HAVE_IP6_PKTINFO
+	/* Set the IP6_PKTINFO option (Linux).
+	 *
+	 * looks like they changed the name/ABI/API 3 times?
+	 * see down below. in_pktinfo was linux local, but the
+	 * v6 version became an RFC, but with another name
+	 * (and value?).
+	 */
+# ifdef IPV6_RECVPKTINFO
+	v6pktinfo = IPV6_RECVPKTINFO;
+	err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
+#  ifdef IPV6_2292PKTINFO
+	if(-1 == err && ENOPROTOOPT == errno) {
+		if(-1 != (err = setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
+			v6pktinfo = IPV6_2292PKTINFO;
+	}
+#  endif
+# else
+	v6pktinfo = IPV6_PKTINFO;
+	err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, &opt, sizeof(opt));
+# endif
+#elif HAVE_DECL_IP_RECVDSTADDR == 1
+	/*
+	 * Set the IP_RECVDSTADDR option (BSD).
+	 * Note: IP_RECVDSTADDR == IP_SENDSRCADDR
+	 *
+	 * they say it is deprecated, since in6_pktinfo is now 
+	 * an RFC. So KAME nuked it...
+	 * They don't have IP_PKTINFO vor v4, but IPV6_PKTINFO.
+	 * Give me a break...
+	 */
+	err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
+#elif HAVE_DECL_IP_RECVIF == 1
+// TODO: does this also work with IPv6?
+	/* since in6_pktinfo is rfc ... */
+#else
+	opt = opt;
+	s = s;
+	fam = fam;
+#endif
+	return err;
+}
+
+int udpfromto_init(int s, int fam)
+{
+	errno = ENOSYS;
+
+	if(AF_INET == fam)
+		return init_v4(s, fam);
+	else
+		return init_v6(s, fam);
+}
+
 ssize_t recvfromto(int s, void *buf, size_t len, int flags,
                    struct sockaddr *from, socklen_t *fromlen,
                    struct sockaddr *to, socklen_t *tolen)
 {
-#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
+#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
 	struct msghdr msgh;
 	struct iovec iov;
 	struct cmsghdr *cmsg;
-	char cbuf[256];
+	char cbuf[256] GCC_ATTR_ALIGNED(sizeof(size_t));
 #endif
 	ssize_t err;
 
@@ -158,7 +184,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	if(to && (err = getsockname(s, to, tolen)) < 0)
 		return err;
 
-#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
+#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
 	/* Set up iov and msgh structures. */
 	memset(&msgh, 0, sizeof(msgh));
 	iov.iov_base        = buf;
@@ -185,6 +211,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	/* Process auxiliary received data in msgh */
 	for(cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg))
 	{
+	/* IPv4 */
 # ifdef HAVE_IP_PKTINFO
 // TODO: change when IPv6 is big
 		if(likely(SOL_IP      == cmsg->cmsg_level &&
@@ -196,17 +223,6 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			toi->sin_family = AF_INET;
 			toi->sin_addr = ip->ipi_addr;
 			*tolen = sizeof(*toi);
-			break;
-		}
-		if(SOL_IPV6  == cmsg->cmsg_level &&
-		   v6pktinfo == cmsg->cmsg_type)
-		{
-			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
-			struct in6_pktinfo *ipv6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
-
-			toi6->sin6_family = AF_INET6;
-			memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, sizeof(toi6->sin6_addr));
-			*tolen = sizeof(*toi6);
 			break;
 		}
 # elif HAVE_DECL_IP_RECVDSTADDR == 1
@@ -228,10 +244,25 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			*tolen = sizeof(*toi);
 			break;
 		}
+# endif
+	/* IPv6 */
+# ifdef HAVE_IP6_PKTINFO
+		if(SOL_IPV6  == cmsg->cmsg_level &&
+		   v6pktinfo == cmsg->cmsg_type)
+		{
+			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
+			struct in6_pktinfo *ipv6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+
+			toi6->sin6_family = AF_INET6;
+			memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, sizeof(toi6->sin6_addr));
+			*tolen = sizeof(*toi6);
+			break;
+		}
+# elif HAVE_DECL_IP_RECVDSTADDR == 1
+		/* deprecated */
 		if(IPPROTO_IPV6     == cmsg->cmsg_level &&
 		   IPV6_RECVDSTADDR == cmsg->cmsg_type)
 		{
-// TODO: IPv6?? How does BSD do it
 			struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)to;
 			struct in6_addr *ipv6 = (struct in6_addr *)CMSG_DATA(cmsg);
 
@@ -240,12 +271,12 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 			*tolen = sizeof(*toi6);
 			break;
 		}
+# endif
 // TODO: if all fails, one can use IP_RECVIF
 		/*
 		 * this should also work on IPv6 with solaris, but needs
 		 * a scan otver the interfaces to get an ip to the index...
 		 */
-# endif
 	}
 	return err;
 #else
@@ -258,14 +289,15 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
                    struct sockaddr *to, socklen_t tolen,
                    struct sockaddr *from, socklen_t fromlen)
 {
-#if defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1
+#if defined(HAVE_IP_PKTINFO) || defined (HAVE_IP6_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1
 	struct msghdr msgh;
 	struct cmsghdr *cmsg;
 	struct iovec iov;
-# ifdef HAVE_IP_PKTINFO
-	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))];
+# if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO)
+	/* struct in6_pktinfo is larger, so wins */
+	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))] GCC_ATTR_ALIGNED(sizeof(size_t));
 # elif HAVE_DECL_IP_SENDSRCADDR == 1
-	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_addr))];
+	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_addr))] GCC_ATTR_ALIGNED(sizeof(size_t));
 # endif
 
 	fromlen = fromlen;
@@ -283,6 +315,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 
 	cmsg = CMSG_FIRSTHDR(&msgh);
 
+/* IPv4 */
 # ifdef HAVE_IP_PKTINFO
 	if(AF_INET == from->sa_family)
 	{
@@ -296,6 +329,19 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 		memset(pi_ptr, 0, sizeof(*pi_ptr));
 		memcpy(&pi_ptr->ipi_spec_dst, &from_sin->sin_addr, sizeof(pi_ptr->ipi_spec_dst));
 	}
+# elif HAVE_DECL_IP_SENDSRCADDR == 1
+	if(AF_INET == from->sa_family)
+	{
+		struct sockaddr_in *from_sin = (struct sockaddr_in *)from;
+
+		cmsg->cmsg_level = IPPROTO_IP;
+		cmsg->cmsg_type  = IP_SENDSRCADDR;
+		cmsg->cmsg_len   = CMSG_LEN(sizeof(from_sin->sin_addr));
+		memcpy(CMSG_DATA(cmsg), &from_sin->sin_addr, sizeof(from_sin->sin_addr));
+	}
+# endif
+/* IPv6 */
+# ifdef HAVE_IP6_PKTINFO
 	else
 	{
 		struct sockaddr_in6 *from_sin6 = (struct sockaddr_in6 *)from;
@@ -312,15 +358,6 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 		memcpy(&pi6_ptr->ipi6_addr, &from_sin6->sin6_addr, sizeof(pi6_ptr->ipi6_addr));
 	}
 # elif HAVE_DECL_IP_SENDSRCADDR == 1
-	if(AF_INET == from->sa_family)
-	{
-		struct sockaddr_in *from_sin = (struct sockaddr_in *)from;
-
-		cmsg->cmsg_level = IPPROTO_IP;
-		cmsg->cmsg_type  = IP_SENDSRCADDR;
-		cmsg->cmsg_len   = CMSG_LEN(sizeof(from_sin->sin_addr));
-		memcpy(CMSG_DATA(cmsg), &from_sin->sin_addr, sizeof(from_sin->sin_addr));
-	}
 	else
 	{
 		struct sockaddr_in6 *from_sin6 = (struct sockaddr_in6 *)from;
@@ -338,7 +375,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 	from = from;
 	fromlen = fromlen;
 	return sendto(s, buf, len, flags, to, tolen);
-#endif	/* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1 */
+#endif	/* defined(HAVE_IP_PKTINFO) || defined (HAVE_IP6_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1 */
 }
 
 /*@unused@*/

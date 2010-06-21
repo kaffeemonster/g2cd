@@ -364,10 +364,13 @@ static void identify_cpu(void)
 	 */
 
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
+#ifdef __linux__
+	/* other thread impl. do not like an print so early */
 	logg_posd(LOGF_DEBUG,
 		"Vendor: \"%s\" Family: %d Model: %d Stepping: %d Name: \"%s\"\n",
 		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
 		our_cpu.stepping, our_cpu.model_str.s);
+#endif
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
