@@ -1357,7 +1357,6 @@ static bool handle_KHL(struct ptype_action_args *parg)
 		time_t now = local_time_now;
 		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
 		ts->big_endian = HOST_IS_BIGENDIAN;
-		logg_develd("r: %zu\n", buffer_remaining(ts->data_trunk));
 		list_add_tail(&ts->list, &khl->children);
 	}
 	else
