@@ -1250,6 +1250,7 @@ static intptr_t callback_KHL_NH(g2_connection_t *con, void *data)
 	if(!(nh && hs))
 		return 0;
 
+	nh->type = PT_NH;
 	if(!write_na_to_packet(nh, &con->sent_addr))
 		goto out_fail;
 	if(g2_packet_steal_data_space(hs, 2))
