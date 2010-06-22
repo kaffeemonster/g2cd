@@ -1747,7 +1747,7 @@ const char *g2_qht_patch(struct qhtable *table, struct qht_fragment *frag)
 	if(atomic_read(&table->refcnt) > 1)
 		logg_develd("WARNING: patch called on table with refcnt > 1!! %p %i\n", (void*)table, atomic_read(&table->refcnt));
 
-	logg_develd_old("qlen: %lu\tflen: %lu\n", table->data_length, frag->length);
+	logg_develd_old("qlen: %zu\tflen: %zu\n", table->data_length, frag->length);
 
 /*	if(table->flags.reset_needed)
 		logg_develd("reset_needed qht-table passed: %p\n", (void *) table);*/

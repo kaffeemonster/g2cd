@@ -1357,6 +1357,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 		time_t now = local_time_now;
 		put_unaligned(now, (time_t *)(buffer_start(ts->data_trunk)));
 		ts->big_endian = HOST_IS_BIGENDIAN;
+		logg_develd("r: %zu\n", buffer_remaining(ts->data_trunk));
 		list_add_tail(&ts->list, &khl->children);
 	}
 	else
@@ -1364,6 +1365,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 
 	if(yourip)
 	{
+		yourip->type = PT_YOURIP;
 		if(write_sna_to_packet(yourip, &parg->connec->remote_host))
 			list_add_tail(&yourip->list, &khl->children);
 		else
@@ -1816,7 +1818,7 @@ static bool handle_LNI_GU(struct ptype_action_args *parg)
 
 static bool handle_LNI_FW(struct ptype_action_args *parg)
 {
-	logg_packet_old("/LNI/FW\n");
+	logg_packet_old("/LNI/FW\t\tlen: %zu\n", buffer_remaining(parg->source->data_trunk));
 	parg->connec->flags.firewalled = true;
 	((struct LNI_data *)(parg->opaque))->had_LNI_FW = true;
 	return false;

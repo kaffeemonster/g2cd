@@ -116,8 +116,8 @@ static void recv_buff_free_lorg(void *vorg)
 		org->buffs[i++] = NULL;
 		recv_buff_free_system(tmp);
 	}
-#endif
 	free(org);
+#endif
 }
 
 static noinline struct local_buffer_org *recv_buff_init_lorg(void)

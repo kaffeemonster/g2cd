@@ -350,9 +350,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 		}
 		break;
 	}
-	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_entry->send->pos, work_entry->send->limit);
+	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, w_entry->send->pos, w_entry->send->limit);
 	buffer_compact(*w_entry->send);
-	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, work_entry->send->pos, work_entry->send->limit);
+	logg_develd_old("ret_val: %i\tpos: %u\tlim: %u\n", ret_val, w_entry->send->pos, w_entry->send->limit);
 	return ret_val;
 }
 

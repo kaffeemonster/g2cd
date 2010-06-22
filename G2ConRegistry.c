@@ -261,7 +261,7 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 	{
 		for(; i < LEVEL_SIZE; i++)
 		{
-			logg_develd_old("%p, %p, %p, %p, %.*s%u\n", fill, from, raw_bucket_storage, raw_bucket_storage + count_b, level, "\t\t\t\t\t\t", i);
+/*			logg_develd_old("%p, %p, %p, %p, %.*s%u\n", fill, from, raw_bucket_storage, raw_bucket_storage + count_b, level, "\t\t\t\t\t\t", i); */
 			from->qht = NULL;
 			from->dirty = false;
 			fill->d.b[i] = from;
