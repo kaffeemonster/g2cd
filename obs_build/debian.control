@@ -1,0 +1,19 @@
+Source: g2cd
+Section: unknown
+Priority: optional
+Maintainer: Jan Seiffert <kaffeemonster@googlemail.com>
+Build-Depends: debhelper (>= 4.1.16)
+
+Package: g2cd
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: A G2 Hub only implementation
+ This is a server-only implementation for the Gnutella 2 P2P-protocol.
+ Gnutella and Gnutella 2 are self-organizing, "server-less" P2P-networks.
+ But, to maintain network-connectivity, some network nodes become,
+ dynamicaly, special nodes (Ultra-peers/Hubs).
+ The main idea behind this piece of software is to be able to set up a
+ dedicated Gnutella 2 Hub to maintain the G2 network connectivity.  With
+ its ability to run on a typical server grade machine (UNIX® system /
+ 24-7 / static IP / high Bandwidth / SMP), it will hopefully be able to
+ improve the overall Gnutella 2 performance.

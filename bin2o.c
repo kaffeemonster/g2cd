@@ -197,6 +197,11 @@ int main(int argc, char **argv)
 
 	if(GAS == as_dia)
 	{
+// TODO: only set gnu stack on __linux__ && __ELF__
+		if(verbose)
+			(void)writestr(STDOUT_FILENO, "\t.section .note.GNU-stack,\"\",@progbits\n");
+		if(!writestr(as_fd, "\t.section .note.GNU-stack,\"\",@progbits\n"))
+			goto out;
 		if(verbose)
 			(void)writestr(STDOUT_FILENO, "\t.section .rodata,\"a\",@progbits\n");
 		if(!writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))

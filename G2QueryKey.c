@@ -23,6 +23,9 @@
  * $Id:$
  */
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
 /* includes */
 #include <stddef.h>
 #include <stdlib.h>

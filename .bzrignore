@@ -1,5 +1,6 @@
 *.lzma
 *.bz2
+*.gz
 *.bin
 *.diff
 *.patch

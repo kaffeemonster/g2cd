@@ -1252,7 +1252,7 @@ static inline void clean_up_m(void)
 //	fclose(stderr);
 }
 
-#ifdef __linux__
+#if defined(__linux__) && HAVE_DECL_PR_SET_NAME == 1
 #include <sys/prctl.h>
 void g2_set_thread_name(const char *name)
 {

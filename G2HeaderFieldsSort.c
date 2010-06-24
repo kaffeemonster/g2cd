@@ -188,8 +188,8 @@ int main(int argc, char *argv[])
 		for(i = 0; i < anum(hdr_fields); i++)
 		{
 			fprintf(out, "\t{%*s, str_size(%*s), %*s }, /* %s */\n",
-			       max_f_name, hdr_fields[i]->f_name, max_ktxt, hdr_fields[i]->ktxt,
-			       max_ktxt, hdr_fields[i]->ktxt, hdr_fields[i]->txt);
+			       (int)max_f_name, hdr_fields[i]->f_name, (int)max_ktxt, hdr_fields[i]->ktxt,
+			       (int)max_ktxt, hdr_fields[i]->ktxt, hdr_fields[i]->txt);
 		}
 
 		fputs("};\n\n/* EOF */\n", out);

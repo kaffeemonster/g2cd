@@ -558,6 +558,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(
 
 AC_CHECK_DECLS([INET6_ADDRSTRLEN, IPV6_V6ONLY, IP_RECVIF, IP_RECVDSTADDR, IP_SENDSRCADDR], [], [], [[#include <netinet/in.h>]])
 AC_CHECK_DECLS([TCP_CORK], [], [], [[#include <netinet/tcp.h>]])
+AC_CHECK_DECLS([PR_SET_NAME], [], [], [[#include <sys/prctl.h>]])
 
 # do we need epoll compat?
 need_epoll_compat=no

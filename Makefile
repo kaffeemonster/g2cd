@@ -203,13 +203,24 @@ AUX = \
 	m4/ax_check_zlib.m4 \
 	m4/ax_sys_dev_poll.m4 \
 	m4/ax_wint_t.m4 \
-	m4/test_asm.m4
+	m4/test_asm.m4 \
+	obs_build/debian.changelog \
+	obs_build/debian.control \
+	obs_build/debian.rules \
+	obs_build/g2cd-Debian_5.0.dsc \
+	obs_build/g2cd-Debian_Etch.dsc \
+	obs_build/g2cd.spec \
+	obs_build/g2cd-xUbuntu_10.04.dsc \
+	obs_build/g2cd-xUbuntu_8.04.dsc \
+	obs_build/g2cd-xUbuntu_9.04.dsc \
+	obs_build/g2cd-xUbuntu_9.10.dsc
+
 #
 #	files to be included in a package
 #
 TARED_FILES = $(HEADS) $(SRCS) $(AUX)
 # normaly we would set it here, derived vom the mod-dirs, but..
-TARED_DIRS = m4
+TARED_DIRS = m4 obs_build
 
 AUXS = \
 	g2cd.conf \
@@ -421,6 +432,8 @@ depend: libdepend $(SRCS)
 #	dosn't unstand ANY compression (no, not even -Z)
 #	hopefully bzip or gzip fallback funktions
 #	($(PORT_PR) "\tLZMA[$(DISTNAME).tar]\n"; lzma -ef9 `cat .fname`.tar) || 
+#	Debian is anal again... no bzip2 for Debian
+#	($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || 
 dist: $(TARED_FILES)
 	@$(PORT_PR) $(DISTNAME)-`$(DATE) $(DATEFLAGS)` > .fname
 	@-$(RM) -rf `cat .fname`
@@ -430,7 +443,7 @@ dist: $(TARED_FILES)
 	@for da_file in $(TARED_FILES) ; do ln $$da_file `cat .fname`/$$da_file ; done
 	@$(PORT_PR) "\tTAR[$(DISTNAME)]\n"
 	@tar chf `cat .fname`.tar `cat .fname`
-	@-(($(PORT_PR) "\tBZIP2[$(DISTNAME).tar]\n"; bzip2 -f9 `cat .fname`.tar) || ($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
+	@-(($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
 	@$(PORT_PR) "please check if packet is correct!\n\n"
 	@-$(RM) -rf `cat .fname` .fname
 
@@ -481,17 +494,18 @@ love:
 	@$(PORT_PR) "Don't know how to make love\n"
 
 ccdrv: ccdrv.c Makefile
-	@$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
-		$(PORT_PR) "\n *****************************************************\n" ; \
-		$(PORT_PR) " * compiling cc-driver failed, using fallback script *\n" ; \
-		$(PORT_PR) " *****************************************************\n\n" ; \
-		$(PORT_PR) "#! /bin/sh\n" > $@ ; \
-		$(PORT_PR) "shift 2\n" >> $@ ; \
-		$(PORT_PR) "echo \$${@}\n" >> $@ ; \
-		$(PORT_PR) "CC=\$${1}\n" >> $@; \
-		$(PORT_PR) "shift\n" >> $@; \
-		$(PORT_PR) "\$${CC} \$${@}\n" >> $@; \
-		chmod a+x $@ )
+	@$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lncurses || ( \
+		$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
+			$(PORT_PR) "\n *****************************************************\n" ; \
+			$(PORT_PR) " * compiling cc-driver failed, using fallback script *\n" ; \
+			$(PORT_PR) " *****************************************************\n\n" ; \
+			$(PORT_PR) "#! /bin/sh\n" > $@ ; \
+			$(PORT_PR) "shift 2\n" >> $@ ; \
+			$(PORT_PR) "echo \$${@}\n" >> $@ ; \
+			$(PORT_PR) "CC=\$${1}\n" >> $@; \
+			$(PORT_PR) "shift\n" >> $@; \
+			$(PORT_PR) "\$${CC} \"\$${@}\"\n" >> $@; \
+			chmod a+x $@ ) )
 
 arflock: arflock.c ccdrv Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) arflock.c -o $@ || ( \
