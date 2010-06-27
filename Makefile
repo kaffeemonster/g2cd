@@ -186,7 +186,6 @@ AUX = \
 	Makefile \
 	.mapfile \
 	g2cd.conf.in \
-	g2cd.conf \
 	COPYING \
 	README \
 	autogen.sh \
@@ -380,7 +379,7 @@ finalwithzlib: .finalwithzlib
 
 # substitude config file defaults
 g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
-	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P -I. - < g2cd.conf.in > $@"
+	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) $(CPPFLAGS) -P -I. - < g2cd.conf.in > $@"
 
 # keep config up to date
 configure: configure.ac install-sh config.guess config.sub

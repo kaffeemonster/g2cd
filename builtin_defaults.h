@@ -27,6 +27,10 @@
 #ifndef _BUILTIN_DEFAULTS_H
 #define _BUILTIN_DEFAULTS_H
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #define DEFAULT_LOGLEVEL_START	LOGF_NOTICE
 #define DEFAULT_LOGLEVEL	LOGF_DEVEL
 #define DEFAULT_LOG_ADD_TIME	false
