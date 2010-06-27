@@ -520,8 +520,20 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_MSG_CHECKING([for __uint128])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([typedef unsigned __uint128 __attribute__((mode(TI)));],[return 0;])],
-               [AC_DEFINE(HAVE_TIMODE, 1, Define to 1 if your compiler has a 128 bit type)
-                AC_MSG_RESULT([yes])],
+               [AC_MSG_RESULT([yes])
+AC_MSG_CHECKING([if __uint128 works])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([typedef unsigned __uint128 __attribute__((mode(TI)));
+typedef unsigned long long u64;
+void MUL_BIG(u64 x, u64 y, u64 *z, u64 *k)
+{
+	__uint128 a_res = (__uint128)x * y + *k;
+	*k = a_res >> 64;
+	*z = a_res;
+}
+],[return 0;])],
+               [AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_TIMODE, 1, Define to 1 if your compiler has a 128 bit type)],
+               [AC_MSG_RESULT([no])])],
                [AC_MSG_RESULT([no])])
 AC_CHECK_TYPES([ptrdiff_t])
 AC_CHECK_TYPES([sighandler_t], [],[], [[#include <signal.h>]])
