@@ -226,6 +226,8 @@ static void identify_cpu(void)
 	 * the right one.
 	 */
 	our_cpu.init_done = true;
+	/* prevent the compiler from moving this around */
+	barrier();
 
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
@@ -245,7 +247,10 @@ static void identify_cpu(void)
 			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
+#ifdef __linux__
+		/* we may run before main, other thread impl. do not like an print so early */
 		logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
+#endif
 		return;
 	}
 
@@ -631,7 +636,7 @@ int test_cpu_feature_cmov_callback(void)
  * So a major update, not only a new kernel, a hole new userspace,
  * not backward compatible. There are maybe a lot of programs this
  * will not affect, but you are better save than sorry, compilers
- * are suposed to autovectorize, use SSE for fp-math etc.
+ * are suposed to autovectorize, use SSE/AVX for fp-math etc.
  *
  * Even while Intel tried to not fuck it up, no, they not thought
  * it through (or maybe they did in a different problem space?

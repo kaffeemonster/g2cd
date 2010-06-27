@@ -294,6 +294,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strlen_x86, .flags_needed = -1, .callback = NULL},
 };
 
+#if 1
 static size_t strlen_runtime_sw(const char *s);
 /*
  * Func ptr
@@ -323,6 +324,55 @@ size_t strlen(const char *s)
 {
 	return strlen_ptr(s);
 }
+#else
+/*
+ * newer glibc(2.11)/binutils(2.20) now know "ifuncs",
+ * functions which are re-linked to a specific impl. based on
+ * a "test" function. It is meant to use the default dynamic link
+ * interface (plt, got), already used by the dynamic loader only
+ * with a small extention. This way one can do all sorts of foo-bar
+ * but mainly the intetion was to overcome the "has cpu feat. X?"
+ * at runtime "efficient".
+ * The problem for us is since we already have it in an NIH way:
+ * - it is only evaluated once.
+ *   This makes recursion in our cpu detection painfull. Esp.
+ *   since we can not really prevent it (when the compiler decides
+ *   to change something for a memcpy or strlen)
+ * - is it thread safe?
+ *   We specificly try to run the pointer change at constructor
+ *   time (before main) to get the functions in place before
+ *   something funky can happen.
+ * - support detection is a pain.
+ *   There are several things here which needed support:
+ *   1) inline asm
+ *   2) redefining func names by asm
+ *   3) working file scope asm
+ *   4) binutils support for %gnu_indirect_function
+ *   5) runtime support (can not test on cross compile)
+ *   To make matters worse, there are some bugs in corner cases
+ *   like static linking (which we are basically doing, some "magic"
+ *   involved to update our func to plt, in linker/etc), other
+ *   linker (gold, which is the new thing for LTO, clang?), and
+ *   whatnot.
+ * The GCC folks are working on an function attribute "ifunc", but
+ * how it might look and when it will come (4.6? 4.7?) and if it
+ * will "catch" the worst bugs...
+ * Some tests with program wide optimisations inlined the base func
+ * nicely into all caller, because it is so cheap. You basically got
+ * an "call *0xcafebabe" on all callsites, directly reading the
+ * func_ptr. The plt foo would be bogus in this case, this is much
+ * nicer (except when lto/whopr lowers plt...). But, we still may
+ * want to put the ptr into the got and/or write potect it.
+ *
+ * So for reference:
+ */
+extern void *strlen_ifunc (void) __asm__ ("strlen");
+void *strlen_ifunc (void)
+{
+	return test_cpu_feature(t_feat, anum(t_feat));
+}
+__asm__ (".type strlen, %gnu_indirect_function");
+#endif
 
 static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */
