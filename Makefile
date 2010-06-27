@@ -378,9 +378,11 @@ finalwithzlib: .finalwithzlib
 .finalwithzlib: $(AUXS) $(LIBSRCS) $(LIBBINOBJS) $(ZSRCS) $(MSRCS) $(HEADS)
 	@./ccdrv -s$(VERBOSE) "CC-LD[$(MAIN)]" $(CC) $(CFLAGS) $(CPPFLAGS) -o $(MAIN) $(MSRCS) $(LIBSRCS) $(ZSRCS) $(LIBBINOBJS) $(LDFLAGS) $(LOADLIBES) $(LDLIBS_BASE) && touch $@
 
+# substitude config file defaults
 g2cd.conf: g2cd.conf.in builtin_defaults.h Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "CPP[$@]" sh -c "$(CPP) -P -I. - < g2cd.conf.in > $@"
 
+# keep config up to date
 configure: configure.ac install-sh config.guess config.sub
 	-autoconf -f
 config_auto.h.in: configure.ac
@@ -396,9 +398,33 @@ config.sub:
 install-sh:
 	-automake -c -f -a
 
-#	someday we need this, dependend on all or $(MAIN)
-install:
-	@$(PORT_PR) "No install at the moment!\n" && false
+#
+#	Install
+#
+# paths
+$(DESTDIR):
+	mkdir -p "$(DESTDIR)"
+$(BINPATH): $(DESTDIR)
+	mkdir -p "$(BINPATH)"
+$(CACHEPATH): $(DESTDIR)
+	mkdir -p "$(CACHEPATH)"
+$(CONFPATH): $(DESTDIR)
+	mkdir -p "$(CONFPATH)"
+
+# program
+install_$(MAIN): $(MAIN) $(BINPATH)
+	$(INSTALL_PRG) $(MAIN) $(BINPATH)/
+install_program: install_$(MAIN)
+
+# data
+install_g2cd.conf: g2cd.conf $(CONFPATH)
+	$(INSTALL_DAT) g2cd.conf $(CONFPATH)/
+install_data: install_g2cd.conf
+
+install: install_program install_data $(CACHEPATH)
+
+install_striped: install
+	$(STRIP) $(BINPATH)/$(MAIN)
 
 #	strip target, the new way by seperating the dbg-info in a new
 #	file, not discarding them
@@ -411,6 +437,9 @@ strip: .$(MAIN).dbg
 	./ccdrv -s$(VERBOSE) "OBJC[$^]" $(OBJCOPY) --strip-debug $^ && \
 	./ccdrv -s$(VERBOSE) "OBJC[$@]" $(OBJCOPY) --add-gnu-debuglink=$@ $^
 
+#
+#	clean
+#
 #	std-cleaning target
 eclean: libclean zlibclean
 	-$(RM) $(OBJS) $(RTL_DUMPS) sbox.bin sbox.bin.tmp ccdrv.o arflock.o bin2o.o
@@ -475,9 +504,9 @@ help: Makefile
 	$(PORT_PR) "\nYou can run:\n" ; \
 	$(PORT_PR) "\tmake\t\tor\n\tmake all\tor\n\tmake final\tto compile the programm\n" ; \
 	$(PORT_PR) "\tmake strip\tto strip the binaries before install (needs recent objcopy)\n"; \
-	$(PORT_PR) "\tmake install\tto install the programm (not implementet yet)\n" ; \
-	$(PORT_PR) "\nPlease make sure to read the README and *manualy* configure the package,\n" ; \
-	$(PORT_PR) "before compilation! (there is no autoconf at the moment)\n" ; \
+	$(PORT_PR) "\tmake install\tto install the programm\n" ; \
+	$(PORT_PR) "\nPlease make sure to read the README and configure the package,\n" ; \
+	$(PORT_PR) "before compilation!\n" ; \
 	$(PORT_PR) "\nFor the developer:\n" ; \
 	$(PORT_PR) "\tmake clean\tto clean the build directory\n" ; \
 	$(PORT_PR) "\tmake distclean\tto clean the build directory even more\n" ; \

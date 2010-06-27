@@ -32,7 +32,13 @@
 #define DEFAULT_LOG_ADD_TIME	false
 #define DEFAULT_LOG_TIME_FORMAT	NULL
 
-#define DEFAULT_PORT		5000
+#ifdef WE_ARE_MAKING_A_RELEASE
+# define DEFAULT_PORT		6346
+# define DEFAULT_DATA_ROOT_DIR	CONFIGURED_CACHE_DIR
+#else
+# define DEFAULT_PORT		5000
+# define DEFAULT_DATA_ROOT_DIR	./
+#endif
 #define DEFAULT_ADDR		INADDR_ANY
 
 #define DEFAULT_BE_DAEMON	false
@@ -43,8 +49,6 @@
 #define DEFAULT_USER		"nobody"
 #define DEFAULT_NICE_ADJUST	3
 #define DEFAULT_NUM_THREADS	0 /* autodetect */
-// #define DEFAULT_DATA_ROOT_DIR	"/var/lib/g2cd"
-#define DEFAULT_DATA_ROOT_DIR	"./"
 #define DEFAULT_ENTROPY_SOURCE	"/dev/urandom"
 #define DEFAULT_CONFIG_FILE	"g2cd.conf"
 #define DEFAULT_NICK_NAME	NULL

@@ -20,6 +20,9 @@ AR_PROG = @AR@
 RANLIB_PROG = @RANLIB@
 OBJCOPY = @OBJCOPY@
 STRIP = @STRIP@
+INSTALL = @INSTALL@
+INSTALL_DAT = @INSTALL_DATA@
+INSTALL_PRG = @INSTALL_PROGRAM@
 
 ################################
 # cflags
@@ -36,7 +39,7 @@ HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_S
 #
 # target CFLAGS
 #
-CFLAGS += @DEFS@ @CFLAGS@
+CFLAGS += @DEFS@ -DCONFIGURED_CACHE_DIR="$(cachedir)/" @CFLAGS@
 
 ARFLAGS = @ARFLAGS@
 BIN2O_OPTS = @BIN2O_OPTS@
@@ -46,6 +49,22 @@ BIN2O_OPTS = @BIN2O_OPTS@
 ################################
 LDLIBS_BASE += @LIBS@
 LDFLAGS += @LDFLAGS@
+
+################################
+# install paths
+################################
+DESTDIR = /
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+bindir = @bindir@
+localstatedir = @localstatedir@
+sysconfdir = @sysconfdir@
+cachedir = $(localstatedir)/cache/$(PACKAGE_NAME)
+
+BINPATH = $(DESTDIR)$(bindir)
+CONFPATH = $(DESTDIR)$(sysconfdir)
+STATEPATH = $(DESTDIR)$(localstatedir)
+CACHEPATH = $(DESTDIR)$(cachedir)
 
 ################################
 # Target endianess

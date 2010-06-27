@@ -31,6 +31,7 @@ strerror_mtsafe=no
 default_hate_cbranch=no
 default_enable_unaligned_ok=no
 default_disable_bit_instr=yes
+default_enable_release=no
 disable_backtraces=no
 disable_hw_mult=no
 disable_smp=no
@@ -41,6 +42,7 @@ disable_vis2=no
 use_mapfiles=no
 disable_warnings=no
 enable_debug=no
+enable_release=no
 
 case "$host" in
 	*powerpc-*)
@@ -118,6 +120,13 @@ case "$host" in
 	*)
 		;;
 esac
+AC_ARG_ENABLE([release], [AS_HELP_STRING([--enable-release],
+              [compile for real, or for local development])],
+              [enable_release=yes], [enable_release=$default_enable_release])
+
+if test x"$enable_release" = xyes; then
+	AC_DEFINE(WE_ARE_MAKING_A_RELEASE, 1, a release)
+fi
 
 AC_MSG_CHECKING([wheter we should disable backtrace generation])
 if test x"$disable_backtraces" = xno; then

@@ -755,7 +755,7 @@ static noinline void handle_config(void)
 	 * var settings
 	 * first round: apply defaults
 	 */
-	server.settings.data_root_dir                = DEFAULT_DATA_ROOT_DIR;
+	server.settings.data_root_dir                = str_it(DEFAULT_DATA_ROOT_DIR);
 	server.settings.entropy_source               = DEFAULT_ENTROPY_SOURCE;
 	server.settings.config_file                  = DEFAULT_CONFIG_FILE;
 	server.settings.nick.name                    = DEFAULT_NICK_NAME;

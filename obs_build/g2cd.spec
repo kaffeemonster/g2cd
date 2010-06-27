@@ -1,8 +1,8 @@
 # Defines a constant that is used later by the spec file.
 %define shortname g2cd
 %define ver_real 0.0.00.11
-%define ver_date 20100624
-%define ver_time 0346
+%define ver_date 20100627
+%define ver_time 0701
 
 # Name, brief description, and version 
 Summary: A G2 hub only implementation
@@ -51,21 +51,19 @@ This is a server-only implementation for the Gnutella 2 P2P-protocol. Gnutella a
 %setup -q -n "%{fullname}"
 
 %build
-
+# Mandriva... -Werror=format-security, srsly?
+# If you guys really think that makes your distro safer
+# how about hiring a guy who pimps the detection fixing the false positives?
+RPM_OPT_FLAGS=`echo "$RPM_OPT_FLAGS" | sed -e 's|-Werror=format-security||'`
 # Configure
-./configure --with-build-dir=$RPM_BUILD_ROOT --with-install-dir=/usr --prefix=$RPM_BUILD_ROOT/usr
+./configure --enable-release --prefix=/usr --bindir="%{_bindir}" --sysconfdir="%{_sysconfdir}" --localstatedir="%{_localstatedir}" CFLAGS="$RPM_OPT_FLAGS"
 
 make %{?jobs:-j %{jobs}}
 
 %install
-%{__mkdir_p} %{buildroot}%{_bindir}/
-%{__mkdir_p} %{buildroot}%{_sysconfdir}/
-%{__mkdir_p} %{buildroot}%{_localstatedir}/cache/g2cd
 # rpms strip themself
-%{__install} -s -m 755 g2cd %{buildroot}%{_bindir}/
-%{__install} -m 644 g2cd.conf %{buildroot}%{_sysconfdir}/
+make DESTDIR="%{buildroot}" install_striped
 #chown nobody:nobody %{buildroot}%{_localstatedir}/cache/g2cd
-#make install
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -73,9 +71,10 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc README COPYING
-/usr/bin/g2cd
-%config /etc/g2cd.conf
-/var/cache/g2cd
+%{_bindir}/g2cd
+%config %{_sysconfdir}/g2cd.conf
+%defattr(-,nobody,nobody)
+%{_localstatedir}/cache/g2cd
 
 %changelog
 * Thu Jan 24 2010 Jan Seiffert <kaffeemonster@googlemail.com>

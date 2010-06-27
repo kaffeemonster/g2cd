@@ -20,7 +20,7 @@ build-stamp:
 	dh_testdir
 
 	# Add here commands to compile the package.
-	./configure
+	./configure --enable-release --prefix=/usr
 	make all
 	# --- end custom part for compiling
 
@@ -45,13 +45,8 @@ install: build
 
 	# Add here commands to install the package
 	# The DESTDIR Has To Be Exactly /usr/src/packages/BUILD/debian/debian/<nameOfPackage>
-	# make install DESTDIR=/usr/src/packages/BUILD/debian/g2cd
-	mkdir -p /usr/src/packages/BUILD/debian/g2cd/usr/bin/
-	mkdir -p /usr/src/packages/BUILD/debian/g2cd/etc/
-	mkdir -p /usr/src/packages/BUILD/debian/g2cd/var/cache/g2cd
-	install -s -m 755 g2cd /usr/src/packages/BUILD/debian/g2cd/usr/bin/
-	install -m 644 g2cd.conf /usr/src/packages/BUILD/debian/g2cd/etc/
-	#chown nobody:nobody /usr/src/packages/BUILD/debian/g2cd/var/cache/g2cd
+	make  DESTDIR=/usr/src/packages/BUILD/debian/g2cd install_striped
+	# chown nobody:nobody /usr/src/packages/BUILD/debian/g2cd/var/cache/g2cd
 
 
 	# --- end custom part for installing
