@@ -15,13 +15,28 @@ else
 CFLAGS += -O2
 endif
 
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+ifneq (,$(filter nostrip,$(DEB_BUILD_OPTIONS)))
+	MY_INSTALL_TARGET = install_stripped
+else
+	MY_INSTALL_TARGET = install
+endif
+
 build: build-stamp
 build-stamp:
 	dh_testdir
 
 	# Add here commands to compile the package.
 	./configure --enable-release --prefix=/usr
-	make all
+	make $(MAKEFLAGS) all
+
+	# ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+		# Code to run the package test suite.
+	# endif
 	# --- end custom part for compiling
 
 	touch build-stamp
@@ -45,9 +60,8 @@ install: build
 
 	# Add here commands to install the package
 	# The DESTDIR Has To Be Exactly /usr/src/packages/BUILD/debian/debian/<nameOfPackage>
-	make  DESTDIR=/usr/src/packages/BUILD/debian/g2cd install_striped
+	make DESTDIR=/usr/src/packages/BUILD/debian/g2cd $(MY_INSTALL_TARGET)
 	# chown nobody:nobody /usr/src/packages/BUILD/debian/g2cd/var/cache/g2cd
-
 
 	# --- end custom part for installing
 
