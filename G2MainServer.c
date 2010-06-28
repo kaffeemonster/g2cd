@@ -757,7 +757,7 @@ static noinline void handle_config(void)
 	 */
 	server.settings.data_root_dir                = str_it(DEFAULT_DATA_ROOT_DIR);
 	server.settings.entropy_source               = DEFAULT_ENTROPY_SOURCE;
-	server.settings.config_file                  = DEFAULT_CONFIG_FILE;
+	server.settings.config_file                  = str_it(DEFAULT_CONFIG_FILE);
 	server.settings.nick.name                    = DEFAULT_NICK_NAME;
 	server.settings.nice_adjust                  = DEFAULT_NICE_ADJUST;
 	server.settings.num_threads                  = DEFAULT_NUM_THREADS;

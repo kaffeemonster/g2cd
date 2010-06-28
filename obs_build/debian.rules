@@ -31,7 +31,8 @@ build-stamp:
 	dh_testdir
 
 	# Add here commands to compile the package.
-	./configure --enable-release --prefix=/usr
+	# there are surely some vars for the paths...
+	./configure --enable-release --prefix=/usr --sysconfdir="/etc" --localstatedir="/var"
 	make $(MAKEFLAGS) all
 
 	# ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))

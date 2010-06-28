@@ -39,9 +39,11 @@
 #ifdef WE_ARE_MAKING_A_RELEASE
 # define DEFAULT_PORT		6346
 # define DEFAULT_DATA_ROOT_DIR	CONFIGURED_CACHE_DIR
+# define DEFAULT_CONFIG_FILE	CONFIGURED_CONF_DIR/g2cd.conf
 #else
 # define DEFAULT_PORT		5000
 # define DEFAULT_DATA_ROOT_DIR	./
+# define DEFAULT_CONFIG_FILE	g2cd.conf
 #endif
 #define DEFAULT_ADDR		INADDR_ANY
 
@@ -54,7 +56,6 @@
 #define DEFAULT_NICE_ADJUST	3
 #define DEFAULT_NUM_THREADS	0 /* autodetect */
 #define DEFAULT_ENTROPY_SOURCE	"/dev/urandom"
-#define DEFAULT_CONFIG_FILE	"g2cd.conf"
 #define DEFAULT_NICK_NAME	NULL
 #define DEFAULT_GWC_BOOT	"http://cache.trillinux.org/g2/bazooka.php"
 #define DEFAULT_GWC_DB		"gwc_cache"

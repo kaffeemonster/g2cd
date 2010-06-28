@@ -1,8 +1,8 @@
 # Defines a constant that is used later by the spec file.
 %define shortname g2cd
 %define ver_real 0.0.00.11
-%define ver_date 20100627
-%define ver_time 0946
+%define ver_date 20100628
+%define ver_time 1409
 
 # Name, brief description, and version 
 Summary: A G2 hub only implementation
