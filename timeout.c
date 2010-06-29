@@ -116,10 +116,10 @@ static always_inline bool timespec_after(struct timespec *a, struct timespec *b)
 
 static always_inline long timespec_cmp(struct timespec *a, struct timespec *b)
 {
-	long ret = a->tv_sec - b->tv_sec;
+	long ret = (long)a->tv_sec - (long)b->tv_sec;
 	if(ret)
 		return ret;
-	if((ret = a->tv_nsec - b->tv_nsec))
+	if((ret = (long)a->tv_nsec - (long)b->tv_nsec))
 		return ret;
 	return (long)(a - b);
 }

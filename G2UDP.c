@@ -1465,12 +1465,13 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 				goto out;
 			}
 
-			if(!(DECODE_FINISHED == g_packet->packet_decode ||
-			     PACKET_EXTRACTION_COMPLETE == g_packet->packet_decode)) {
-				logg_develd("packet extract stuck in wrong state: \"%s\"\n",
-				            g2_packet_decoder_state_name(g_packet->packet_decode));
-				goto out_free;
-			}
+		}
+
+		if(!(DECODE_FINISHED == g_packet->packet_decode ||
+		     PACKET_EXTRACTION_COMPLETE == g_packet->packet_decode)) {
+			logg_develd("packet extract stuck in wrong state: \"%s\"\n",
+			            g2_packet_decoder_state_name(g_packet->packet_decode));
+			goto out_free;
 		}
 	}
 

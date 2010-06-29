@@ -41,8 +41,8 @@ disable_vis=no
 disable_vis2=no
 use_mapfiles=no
 disable_warnings=no
-enable_debug=no
-enable_release=no
+my_enable_debug=no
+my_enable_release=no
 
 case "$host" in
 	*powerpc-*)
@@ -90,7 +90,7 @@ AC_ARG_WITH([backtraces], [AS_HELP_STRING([--without-backtraces],
             [disable_backtraces="$witheval"], [])
 AC_ARG_ENABLE([debug], [AS_HELP_STRING([--enable-debug],
               [make a debug build])],
-              [enable_debug=yes], [])
+              [my_enable_debug=yes], [])
 AC_ARG_ENABLE([unaligned], [AS_HELP_STRING([--enable-unaligned],
               [your arch can do unaligned mem access. Do not enable if complicated software fixups make this possible])],
               [enable_unaligned_ok=yes], [enable_unaligned_ok=$default_enable_unaligned_ok])
@@ -120,12 +120,21 @@ case "$host" in
 	*)
 		;;
 esac
-AC_ARG_ENABLE([release], [AS_HELP_STRING([--enable-release],
-              [compile for real, or for local development])],
-              [enable_release=yes], [enable_release=$default_enable_release])
 
-if test x"$enable_release" = xyes; then
+AC_ARG_ENABLE([release], [AS_HELP_STRING([--enable-release], [compile for real, or for local development])],[
+              if test x"$enableval" = xno; then
+                  my_enable_release=no
+              else
+                  my_enable_release=yes
+              fi
+              ], [my_enable_release=no])
+
+AC_MSG_CHECKING([wheter we are making a release build])
+if test x"$my_enable_release" = xyes; then
 	AC_DEFINE(WE_ARE_MAKING_A_RELEASE, 1, a release)
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
 fi
 
 AC_MSG_CHECKING([wheter we should disable backtrace generation])
@@ -352,7 +361,7 @@ if test "$use_mapfiles" = yes; then
 fi
 
 m4_include([m4/ax_check_compiler_flags.m4])
-if test x"$enable_debug" = xno; then
+if test x"$my_enable_debug" = xno; then
 # give a switch for whole program opt
 # OPT_FLAGS += -fwhole-program -combine
 # switch between profile-generation and final build

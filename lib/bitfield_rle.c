@@ -281,7 +281,7 @@ static const struct
 
 ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
 {
-	struct sync_block synb[NUM_SYNC_MAX];
+	struct sync_block synb[NUM_SYNC_MAX + 1];
 	uint8_t *r_wptr = res, *flags = NULL;
 	const uint8_t *o_data;
 	size_t idx, idx_step, os_len;
@@ -306,6 +306,8 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		synb[cnt].idx = idx;
 		synb[cnt].off = 0;
 	}
+	synb[NUM_SYNC_MAX].idx = s_len + 1;
+	synb[NUM_SYNC_MAX].off = 0;
 	os_len = s_len;
 
 	while(likely(t_len) && likely(s_len))
