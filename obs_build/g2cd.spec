@@ -53,7 +53,7 @@ This is a server-only implementation for the Gnutella 2 P2P-protocol. Gnutella a
 %build
 # Mandriva... -Werror=format-security, srsly?
 # If you guys really think that makes your distro safer
-# how about hiring a guy who pimps the detection fixing the false positives?
+# how about hiring a guy who pimps the detection logic fixing the false positives?
 RPM_OPT_FLAGS=`echo "$RPM_OPT_FLAGS" | sed -e 's|-Werror=format-security||'`
 # Configure
 ./configure --enable-release --prefix=/usr --bindir="%{_bindir}" --sysconfdir="%{_sysconfdir}" --localstatedir="%{_localstatedir}" CFLAGS="$RPM_OPT_FLAGS"
@@ -73,8 +73,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc README COPYING
 %{_bindir}/g2cd
 %config %{_sysconfdir}/g2cd.conf
-%defattr(-,nobody,nobody)
-%{_localstatedir}/cache/g2cd
+%attr(755,nobody,nobody) %dir %{_localstatedir}/cache/g2cd
 
 %changelog
 * Thu Jan 24 2010 Jan Seiffert <kaffeemonster@googlemail.com>

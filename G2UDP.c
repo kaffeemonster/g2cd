@@ -251,7 +251,6 @@ static struct norm_buff *udp_get_lubuf(void)
 static struct big_buff *udp_get_c_buff(size_t len)
 {
 	struct big_buff *ret_buf, *t;
-	size_t o_len;
 
 #ifndef HAVE___THREAD
 	ret_buf = pthread_getspecific(key2udp_lcb);
@@ -266,9 +265,8 @@ static struct big_buff *udp_get_c_buff(size_t len)
 		}
 	}
 
-	o_len = len;
 	/* round up to a power of two */
-	len += 3 * sizeof(*ret_buf);
+	len += 3 * sizeof(*t);
 	len--;
 	len |= len >> 1;
 	len |= len >> 2;
@@ -278,14 +276,14 @@ static struct big_buff *udp_get_c_buff(size_t len)
 	len++;
 	len += len == 0;
 	len = (len < 4096 ? 4096 : len);
-	t = realloc(ret_buf, len);
+	t = malloc(len);
 	if(!t) {
 		logg_devel("no local udp compress buffer\n");
 		return NULL;
 	}
-	t->capacity = len - 3 * sizeof(*ret_buf);
+	free(ret_buf);
+	t->limit    = t->capacity = len - 3 * sizeof(*t);
 	t->pos      = 0;
-	t->limit    = o_len;
 
 #ifndef HAVE___THREAD
 	pthread_setspecific(key2udp_lcb, t);
@@ -901,10 +899,11 @@ life_tree_error:
 
 void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll_fd)
 {
+	static int warned;
 	/* other variables */
 	struct simple_gup *sg = ev->data.ptr;
 	union combo_addr from, to;
-	static int warned;
+	bool keep_going = true;
 
 	buffer_clear(**d_hold_sp);
 	if(!warned && (*d_hold_sp)->capacity != NORM_BUFF_CAPACITY)
@@ -914,8 +913,8 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 	}
 // TODO: poke the new 2.6.33 recvmmsg through the stack
 	if(!handle_udp_sock(ev, *d_hold_sp, &from, &to, sg->fd)) {
-		/* bad things */ ;
-// TODO: handle bad things
+		/* bad things */
+		keep_going = false;
 	}
 	/*
 	 * We have extracted the data from the UDP socket, now work on it
@@ -928,9 +927,11 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 // TODO: handle bad things
 	}
 
-	buffer_flip(**d_hold_sp);
-	/* if we reach here, we know that there is at least no error or the logic above failed... */
-	handle_udp_packet(d_hold_sp, &from, &to, sg->fd);
+	if(keep_going) {
+		buffer_flip(**d_hold_sp);
+		/* if we reach here, we know that there is at least no error or the logic above failed... */
+		handle_udp_packet(d_hold_sp, &from, &to, sg->fd);
+	}
 	if(*d_hold_sp)
 		buffer_clear(**d_hold_sp);
 }
@@ -1335,6 +1336,13 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 	}
 #endif
 /*********** /DEBUG *****************/
+
+	if(unlikely('G' == *buffer_start(*d_hold) &&
+	            'N' == *(buffer_start(*d_hold)+1) &&
+	            'D' == *(buffer_start(*d_hold)+2))) {
+		logg_develd("received double GND from %pI#\n", from);
+		return true;
+	}
 
 	if(!tmp_packet.count) {
 // TODO: Do an appropriate action on a recived ACK

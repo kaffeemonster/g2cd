@@ -222,6 +222,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi->sin_family = AF_INET;
 			toi->sin_addr = ip->ipi_addr;
+#ifdef HAVE_SA_LEN
+			toi->sin_len =
+#endif
 			*tolen = sizeof(*toi);
 			break;
 		}
@@ -241,6 +244,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi->sin_family = AF_INET;
 			toi->sin_addr = *ip;
+#ifdef HAVE_SA_LEN
+			toi->sin_len =
+#endif
 			*tolen = sizeof(*toi);
 			break;
 		}
@@ -255,6 +261,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi6->sin6_family = AF_INET6;
 			memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, sizeof(toi6->sin6_addr));
+#ifdef HAVE_SA_LEN
+			toi6->sin_len =
+#endif
 			*tolen = sizeof(*toi6);
 			break;
 		}
@@ -268,6 +277,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi6->sin6_family = AF_INET6;
 			memcpy(&toi6->sin6_addr, ipv6, INET6_ADDRLEN);
+#ifdef HAVE_SA_LEN
+			toi6->sin_len =
+#endif
 			*tolen = sizeof(*toi6);
 			break;
 		}

@@ -1316,7 +1316,7 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 
 	/* check for bogus addresses */
 	if(unlikely(!combo_addr_is_public(addr))) {
-		logg_develd_old("addr %pI is privat, not added\n", addr);
+		logg_develd_old("addr %pI is private, not added\n", addr);
 		return;
 	}
 	logg_develd_old("adding: %p#I, %u\n", addr, (unsigned)when);

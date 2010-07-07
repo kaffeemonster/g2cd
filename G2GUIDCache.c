@@ -436,7 +436,7 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 
 	/* check for bogus addresses */
 	if(unlikely(!combo_addr_is_public(addr))) {
-		logg_develd("addr %pI is privat, not added\n", addr);
+		logg_develd("addr %pI is private, not added\n", addr);
 		return ret_val;
 	}
 //TODO: check for own guid
