@@ -70,6 +70,7 @@
 #define FLAG_ACK       (1 << 1)
 #define FLAG_CRITICAL  ((~(FLAG_DEFLATE|FLAG_ACK)) & 0x0F)
 
+#define SEQUENCE_SPACE 16
 /*
  * UDP reassambly Cache
  */
@@ -128,6 +129,7 @@ static struct
 	struct udp_reas_cache_entry entrys[UDP_CACHE_SIZE];
 } cache;
 static int out_file;
+static uint32_t sequence_seed;
 static int udp_outfd_ipv4;
 static int udp_outfd_ipv6;
 static struct simple_gup udp_sos[2];
@@ -259,14 +261,13 @@ static struct big_buff *udp_get_c_buff(size_t len)
 #endif
 	if(likely(ret_buf)) {
 		if(len <= ret_buf->capacity) {
-			ret_buf->pos = 0;
-			ret_buf->limit = len;
+			buffer_clear(*ret_buf);
 			return ret_buf;
 		}
 	}
 
 	/* round up to a power of two */
-	len += 3 * sizeof(*t);
+	len += sizeof(*t);
 	len--;
 	len |= len >> 1;
 	len |= len >> 2;
@@ -282,7 +283,7 @@ static struct big_buff *udp_get_c_buff(size_t len)
 		return NULL;
 	}
 	free(ret_buf);
-	t->limit    = t->capacity = len - 3 * sizeof(*t);
+	t->limit    = t->capacity = len - sizeof(*t);
 	t->pos      = 0;
 
 #ifndef HAVE___THREAD
@@ -943,6 +944,8 @@ bool init_udp(int epoll_fd)
 
 	/* set the cache seed */
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
+	/* set the sequence seed */
+	random_bytes_get(&sequence_seed, sizeof(sequence_seed));
 
 	udp_outfd_ipv4 = udp_sos[0].fd = -1;
 	udp_outfd_ipv6 = udp_sos[1].fd = -1;
@@ -1039,91 +1042,121 @@ static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t pa
 	return num_ptr;
 }
 
-static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold)
+static noinline uint16_t get_next_sequence_number(const union combo_addr *to)
 {
+	static atomica_t internal_sequence[SEQUENCE_SPACE];
+	uint32_t h;
+
+	/*
+	 * If we just use a simple sequence counter, we "wrap" around very fast
+	 * because the GND seq. is only 16 bit. With enough traffic this means we
+	 * use the same sequence number again.
+	 * On the one hand this is not a problem, sequence numbers are "extended"
+	 * by our sending address. So if client A sees our-ip.1234 and client B sees
+	 * our-ip.1234, they both can distinguish seq. 1234 from all other arriving
+	 * at their interface by the IP.
+	 * It only gets problematic if we send the SAME sequence to the SAME client
+	 * in short succession. If external malicius traffic forces us into this
+	 * situation we are screwed...
+	 * If we pick the counter depending on the client address, we "spread" the
+	 * increments (hopefully...) to get a slower increasing counter.
+	 * But to not make them increase to slow (or you could guess the counter
+	 * easily, because we do not have fancy per IP counter), we better do not
+	 * use to much.
+	 * With 16 counter we expand the counter to 20 bit.
+	 */
 // TODO: we need a cryptografically "strong" sequence number...
-	static atomic_t internal_sequence;
+	/* every IP should have it's own independent sequence */
+	h = combo_addr_hash(to, sequence_seed);
+	return ((unsigned)atomic_inca_return(&internal_sequence[h % SEQUENCE_SPACE])) & 0x0000FFFF;
+}
+
+static noinline void udp_writeout_packet_uc(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold, size_t res_len)
+{
 	struct pointer_buff t_hold;
-	ssize_t result;
 	unsigned int num_udp_packets, i;
 	uint16_t sequence_number;
 	uint8_t *num_ptr;
 
-	result = g2_packet_serialize_prep_min(p);
-	if(-1 == result) {
-		logg_devel("serialize prepare failed\n");
+	num_udp_packets = DIV_ROUNDUP(res_len, (UDP_MTU - UDP_RELIABLE_LENGTH));
+	sequence_number = get_next_sequence_number(to);
+	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, 0);
+
+	t_hold.capacity = d_hold->capacity;
+	t_hold.data     = d_hold->data;
+	for(i = 0; i < num_udp_packets; i++)
+	{
+		d_hold->pos   = UDP_RELIABLE_LENGTH;
+		d_hold->limit = UDP_MTU;
+		*num_ptr = i+1;
+
+		g2_packet_serialize_to_buff(p, d_hold);
+		buffer_flip(*d_hold);
+		t_hold.pos   = d_hold->pos;
+		t_hold.limit = d_hold->limit;
+		if(0 >= udp_sock_send(&t_hold, to, fd)) {
+			logg_devel("UDP send loop failed\n");
+			/* no fancy recovery, just break out of loop */
+			break;
+		}
+	}
+
+	if(p->packet_encode != ENCODE_FINISHED)
+		logg_devel("encode not finished!\n");
+}
+
+static noinline void udp_writeout_packet_c(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold, size_t res_len)
+{
+	struct pointer_buff t_hold;
+	unsigned int num_udp_packets, i;
+	uint16_t sequence_number;
+	uint8_t *num_ptr;
+	size_t d_len, c_len;
+	struct big_buff *c_data;
+	struct zpad *zp = NULL;
+
+	zp = qht_get_zpad();
+	if(!zp) {
+		udp_writeout_packet_uc(to, fd, p, d_hold, res_len);
 		return;
 	}
-	if(result > 320)
+
+	zp->z.next_in   = NULL;
+	zp->z.avail_in  = 0;
+	zp->z.next_out  = NULL;
+	zp->z.avail_out = 0;
+	if(deflateInit(&zp->z, Z_DEFAULT_COMPRESSION) != Z_OK) {
+		logg_devel("defalteInit failed\n");
+		udp_writeout_packet_uc(to, fd, p, d_hold, res_len);
+		return;
+	}
+
+	c_data = udp_get_c_buff(deflateBound(&zp->z, res_len));
+	if(!c_data) {
+		deflateEnd(&zp->z);
+		udp_writeout_packet_uc(to, fd, p, d_hold, res_len);
+		return;
+	}
+
+	/* compress it */
+	do
 	{
-		size_t comp_max_len, d_len, c_len, o_limit;
-		struct big_buff *c_data;
-		struct zpad *zp = NULL;
+		g2_packet_serialize_to_buff(p, d_hold);
+		buffer_flip(*d_hold);
+		zp->z.next_in    = (Bytef *)buffer_start(*d_hold);
+		zp->z.avail_in   = buffer_remaining(*d_hold);
+		zp->z.next_out   = (Bytef *)buffer_start(*c_data);
+		zp->z.avail_out  = buffer_remaining(*c_data);
 
-		zp = qht_get_zpad();
-		if(!zp)
-			goto send_anyway;
-
-		zp->z.next_in   = NULL;
-		zp->z.avail_in  = 0;
-		zp->z.next_out  = NULL;
-		zp->z.avail_out = 0;
-		if(deflateInit(&zp->z, Z_DEFAULT_COMPRESSION) != Z_OK) {
-			logg_devel("defalteInit failed\n");
-			goto send_anyway;
-		}
-
-		comp_max_len = deflateBound(&zp->z, result);
-		c_data = udp_get_c_buff(comp_max_len);
-		if(!c_data)
-			goto out_zfree;
-
-		/* compress it */
-		do
+		switch(deflate(&zp->z, Z_NO_FLUSH))
 		{
-			g2_packet_serialize_to_buff(p, d_hold);
-			buffer_flip(*d_hold);
-			zp->z.next_in    = (Bytef *)buffer_start(*d_hold);
-			zp->z.avail_in   = buffer_remaining(*d_hold);
-			zp->z.next_out   = (Bytef *)buffer_start(*c_data);
-			zp->z.avail_out  = buffer_remaining(*c_data);
-
-			switch(deflate(&zp->z, Z_NO_FLUSH))
-			{
-			case Z_OK:
-				d_hold->pos += (buffer_remaining(*d_hold) - zp->z.avail_in);
-				c_data->pos += (buffer_remaining(*c_data) - zp->z.avail_out);
-				break;
-			case Z_STREAM_END:
-				logg_devel("Z_STREAM_END\n");
-				goto out_zfree;
-			case Z_NEED_DICT:
-				logg_devel("Z_NEED_DICT\n");
-				goto out_zfree;
-			case Z_DATA_ERROR:
-				logg_devel("Z_DATA_ERROR\n");
-				goto out_zfree;
-			case Z_STREAM_ERROR:
-				logg_devel("Z_STREAM_ERROR\n");
-				goto out_zfree;
-			case Z_MEM_ERROR:
-				logg_devel("Z_MEM_ERROR\n");
-				goto out_zfree;
-			case Z_BUF_ERROR:
-				logg_devel("Z_BUF_ERROR\n");
-				goto out_zfree;
-			default:
-				logg_devel("deflate was not Z_OK\n");
-				goto out_zfree;
-			}
-			buffer_compact(*d_hold);
-		} while(ENCODE_FINISHED != p->packet_encode);
-		switch(deflate(&zp->z, Z_FINISH))
-		{
-		case Z_STREAM_END:
 		case Z_OK:
+			d_hold->pos += (buffer_remaining(*d_hold) - zp->z.avail_in);
 			c_data->pos += (buffer_remaining(*c_data) - zp->z.avail_out);
 			break;
+		case Z_STREAM_END:
+			logg_devel("Z_STREAM_END\n");
+			goto out_zfree;
 		case Z_NEED_DICT:
 			logg_devel("Z_NEED_DICT\n");
 			goto out_zfree;
@@ -1143,33 +1176,64 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 			logg_devel("deflate was not Z_OK\n");
 			goto out_zfree;
 		}
-		buffer_flip(*c_data);
-		buffer_clear(*d_hold);
-		logg_develd_old("sending compressed %zu:%zu\n", result, buffer_remaining(*c_data));
-		result = buffer_remaining(*c_data);
+		buffer_compact(*d_hold);
+	} while(ENCODE_FINISHED != p->packet_encode);
+	switch(deflate(&zp->z, Z_FINISH))
+	{
+	case Z_STREAM_END:
+	case Z_OK:
+		c_data->pos += (buffer_remaining(*c_data) - zp->z.avail_out);
+		break;
+	case Z_NEED_DICT:
+		logg_devel("Z_NEED_DICT\n");
+		goto out_zfree;
+	case Z_DATA_ERROR:
+		logg_devel("Z_DATA_ERROR\n");
+		goto out_zfree;
+	case Z_STREAM_ERROR:
+		logg_devel("Z_STREAM_ERROR\n");
+		goto out_zfree;
+	case Z_MEM_ERROR:
+		logg_devel("Z_MEM_ERROR\n");
+		goto out_zfree;
+	case Z_BUF_ERROR:
+		logg_devel("Z_BUF_ERROR\n");
+		goto out_zfree;
+	default:
+		logg_devel("deflate was not Z_OK\n");
+		goto out_zfree;
+	}
+	buffer_flip(*c_data);
+	buffer_clear(*d_hold);
+	logg_develd_old("sending compressed %zu:%zu\n", res_len, buffer_remaining(*c_data));
+	res_len = buffer_remaining(*c_data);
 
-		/* send it */
-		num_udp_packets = DIV_ROUNDUP(result, (UDP_MTU - UDP_RELIABLE_LENGTH));
-		sequence_number = ((unsigned)atomic_inc_return(&internal_sequence)) & 0x0000FFFF;
-		num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, FLAG_DEFLATE);
+	/* send it */
+	num_udp_packets = DIV_ROUNDUP(res_len, (UDP_MTU - UDP_RELIABLE_LENGTH));
+	sequence_number = get_next_sequence_number(to);
+	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, FLAG_DEFLATE);
 
-		i = 1;
-		d_hold->pos   = UDP_RELIABLE_LENGTH;
-		d_hold->limit = UDP_MTU;
-		*num_ptr = i;
+	i = 1;
+	d_hold->pos   = UDP_RELIABLE_LENGTH;
+	d_hold->limit = UDP_MTU;
+	*num_ptr = i;
 
-		d_len = buffer_remaining(*d_hold);
-		c_len = buffer_remaining(*c_data);
-		d_len = d_len < c_len ? d_len : c_len;
-		my_memcpy(buffer_start(*d_hold), buffer_start(*c_data), d_len);
-		d_hold->pos += d_len;
-		c_data->pos += d_len;
-		buffer_flip(*d_hold);
-		t_hold.pos      = d_hold->pos;
-		t_hold.limit    = d_hold->limit;
-		t_hold.capacity = d_hold->capacity;
-		t_hold.data     = d_hold->data;
-		udp_sock_send(&t_hold, to, fd);
+	d_len = buffer_remaining(*d_hold);
+	c_len = buffer_remaining(*c_data);
+	d_len = d_len < c_len ? d_len : c_len;
+	my_memcpy(buffer_start(*d_hold), buffer_start(*c_data), d_len);
+	d_hold->pos += d_len;
+	c_data->pos += d_len;
+	buffer_flip(*d_hold);
+	t_hold.pos      = d_hold->pos;
+	t_hold.limit    = d_hold->limit;
+	t_hold.capacity = d_hold->capacity;
+	t_hold.data     = d_hold->data;
+	udp_sock_send(&t_hold, to, fd);
+
+	if(i < num_udp_packets)
+	{
+		size_t o_limit;
 
 		d_hold->pos     = 0;
 		d_hold->limit   = UDP_RELIABLE_LENGTH;
@@ -1187,36 +1251,30 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 			t_hold.limit = o_limit;
 			if(buffer_remaining(t_hold) > UDP_MTU)
 				t_hold.limit = t_hold.pos + UDP_MTU;
-			udp_sock_send(&t_hold, to, fd);
+			if(0 >= udp_sock_send(&t_hold, to, fd)) {
+				logg_devel("compressed UDP send loop failed\n");
+				/* no fancy recovery, just break out of loop to prevent underflow */
+				break;
+			}
 		}
+	}
 out_zfree:
-		deflateEnd(&zp->z);
+	deflateEnd(&zp->z);
+}
+
+static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t *p, struct norm_buff *d_hold)
+{
+	ssize_t result;
+
+	result = g2_packet_serialize_prep_min(p);
+	if(-1 == result) {
+		logg_devel("serialize prepare failed\n");
+		return;
 	}
+	if(result > 320)
+		udp_writeout_packet_c(to, fd, p, d_hold, result);
 	else
-	{
-send_anyway:
-		num_udp_packets = DIV_ROUNDUP(result, (UDP_MTU - UDP_RELIABLE_LENGTH));
-		sequence_number = ((unsigned)atomic_inc_return(&internal_sequence)) & 0x0000FFFF;
-		num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, 0);
-
-		t_hold.capacity = d_hold->capacity;
-		t_hold.data     = d_hold->data;
-		for(i = 0; i < num_udp_packets; i++)
-		{
-			d_hold->pos   = UDP_RELIABLE_LENGTH;
-			d_hold->limit = UDP_MTU;
-			*num_ptr = i+1;
-
-			g2_packet_serialize_to_buff(p, d_hold);
-			buffer_flip(*d_hold);
-			t_hold.pos   = d_hold->pos;
-			t_hold.limit = d_hold->limit;
-			udp_sock_send(&t_hold, to, fd);
-		}
-
-		if(p->packet_encode != ENCODE_FINISHED)
-			logg_devel("encode not finished!\n");
-	}
+		udp_writeout_packet_uc(to, fd, p, d_hold, result);
 }
 
 static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *from, union combo_addr *to, int answer_fd)
@@ -1337,13 +1395,6 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 #endif
 /*********** /DEBUG *****************/
 
-	if(unlikely('G' == *buffer_start(*d_hold) &&
-	            'N' == *(buffer_start(*d_hold)+1) &&
-	            'D' == *(buffer_start(*d_hold)+2))) {
-		logg_develd("received double GND from %pI#\n", from);
-		return true;
-	}
-
 	if(!tmp_packet.count) {
 // TODO: Do an appropriate action on a recived ACK
 		logg_devel_old("ACK recived!\n");
@@ -1352,6 +1403,14 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 
 	if(!buffer_remaining(*d_hold)) /* is there really any data */
 		goto out;
+
+	if(buffer_remaining(*d_hold) >= 3 &&
+	   unlikely('G' == *buffer_start(*d_hold) &&
+	            'N' == *(buffer_start(*d_hold)+1) &&
+	            'D' == *(buffer_start(*d_hold)+2))) {
+		logg_develd("received double GND from %pI#\n", from);
+		return true;
+	}
 
 	if(tmp_packet.count < tmp_packet.part) {
 		logg_devel_old("broken UDP packet part nr. > part count \n");
