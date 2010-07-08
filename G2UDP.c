@@ -542,6 +542,7 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 	struct norm_buff *d_hold_u = NULL;
 	struct zpad *zp = NULL;
 	struct reas_knot *next = NULL, **start;
+	bool first_data = true;
 
 	g_packet = st_pack;
 	if(e->e.deflate)
@@ -622,6 +623,16 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 					goto out_free;
 				}
 				buffer_flip(*src);
+				if(first_data) {
+					if(buffer_remaining(*src) >= 3 &&
+					   unlikely('G' == *buffer_start(*src) &&
+					            'N' == *(buffer_start(*src)+1) &&
+					            'D' == *(buffer_start(*src)+2))) {
+						logg_develd_old("received double GND from %pI# after reas+unpack\n", &e->e.na);
+						goto out_free;
+					}
+					first_data = false;
+				}
 			}
 			else
 				src = src_r;
@@ -1408,13 +1419,13 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 	   unlikely('G' == *buffer_start(*d_hold) &&
 	            'N' == *(buffer_start(*d_hold)+1) &&
 	            'D' == *(buffer_start(*d_hold)+2))) {
-		logg_develd("received double GND from %pI#\n", from);
+		logg_develd_old("received double GND from %pI#\n", from);
 		return true;
 	}
 
 	if(tmp_packet.count < tmp_packet.part) {
 		logg_devel_old("broken UDP packet part nr. > part count \n");
-		goto out;
+		return true;
 	}
 
 	/* ack early to not run into timeouts */
@@ -1452,6 +1463,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 			struct norm_buff *d_hold_n;
 			struct zpad *zp;
 			int z_status;
+			bool first_data = true;
 
 			d_hold_n = udp_get_lubuf();
 			if(!d_hold_n)
@@ -1491,29 +1503,39 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 					break;
 				case Z_NEED_DICT:
 					logg_devel("Z_NEED_DICT\n");
-					goto out;
+					goto out_free;
 				case Z_DATA_ERROR:
 					logg_devel("Z_DATA_ERROR\n");
-					goto out;
+					goto out_free;
 				case Z_STREAM_ERROR:
 					logg_devel("Z_STREAM_ERROR\n");
-					goto out;
+					goto out_free;
 				case Z_MEM_ERROR:
 					logg_devel("Z_MEM_ERROR\n");
-					goto out;
+					goto out_free;
 				case Z_BUF_ERROR:
 					logg_devel("Z_BUF_ERROR\n");
-					goto out;
+					goto out_free;
 				default:
 					logg_devel("inflate was not Z_OK\n");
-					goto out;
+					goto out_free;
 				}
 				buffer_flip(*d_hold_n);
+				if(first_data) {
+					if(buffer_remaining(*d_hold_n) >= 3 &&
+					   unlikely('G' == *buffer_start(*d_hold_n) &&
+					            'N' == *(buffer_start(*d_hold_n)+1) &&
+					            'D' == *(buffer_start(*d_hold_n)+2))) {
+						logg_develd_old("received double GND from %pI# after unpack\n", from);
+						goto out;
+					}
+					first_data = false;
+				}
 
 				/* Look at the packet received */
 				if(!g2_packet_extract_from_stream(d_hold_n, g_packet, server.settings.max_g2_packet_length, false)) {
 					logg_devel("packet extract failed\n");
-					goto out;
+					goto out_free;
 				}
 
 				if(DECODE_FINISHED == g_packet->packet_decode ||
