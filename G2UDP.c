@@ -243,6 +243,8 @@ static struct big_buff *udp_get_lubuf(void)
 		logg_devel("no local udp uncompress buffer\n");
 		return NULL;
 	}
+	ret_buf->pos = 0;
+	ret_buf->limit = ret_buf->capacity = server.settings.max_g2_packet_length;
 
 #ifndef HAVE___THREAD
 	pthread_setspecific(key2udp_lub, ret_buf);
