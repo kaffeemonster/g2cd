@@ -98,11 +98,19 @@ typedef union xxxxxx4
 	char pad[ARCH_NEEDED_APAD];
 } atomicptra_t;
 
+typedef union xxxxxx5
+{
+	volatile int d;
+	char pad[ARCH_NEEDED_APAD];
+} atomica_t;
+
 /* atomicptra_t and atomicptr_t should be abi compatible */
 #define atomic_pxa(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
 #define atomic_pxs(val, ptr) (atomic_px((val), (atomicptr_t *)(ptr)))
 /* same for atomicptr_t and atomicst_t */
 #define atomic_cmpalx(nval, oval, ptr) (atomic_cmppx((nval), (oval), ((atomicptr_t *)(ptr))))
+/* and for atomica_t and atomic_t */
+#define atomic_inca_return(ptr) (atomic_inc_return((atomic_t *)(ptr)))
 
 # if !(defined NEED_GENERIC) && (defined I_LIKE_ASM)
 #  if defined(__i386__) || defined(__x86_64__)
