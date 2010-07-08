@@ -958,6 +958,8 @@ static uint8_t create_control_byte(g2_packet_t *p)
 	 * up on such a packet...
 	 * I don't know why they choose this special meaning for
 	 * is_compound, big_endian would have been easier.
+	 * Gnucleus actually does go belly up, big endian packets are
+	 * discarded (more "return PACKET_BROCKEN;")...
 	 */
 	control = control ? control : 0x04;
 
@@ -1246,6 +1248,12 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, 
 	p->length = size;
 	if(likely(PT_UNKNOWN != p->type))
 		p->type_length = g2_ptype_names_length[p->type];
+	else {
+		if(!p->type_length) {
+			logg_devel("caught not properly initialised packet!\n");
+			return -1;
+		}
+	}
 	/*
 	 * don't touch endiannes, inner packet data mandates
 	 * endiannes. We can adapt how we write the length
