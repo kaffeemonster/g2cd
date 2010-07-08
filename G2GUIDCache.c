@@ -344,7 +344,7 @@ static noinline bool guid_rb_cache_insert(struct guid_cache_entry *e)
 	while(*p)
 	{
 		struct guid_cache_entry *n = rb_entry(*p, struct guid_cache_entry, rb);
-		long result = guid_entry_cmp(e, n);
+		long result = guid_entry_cmp(n, e);
 
 		parent = *p;
 		if(result < 0)

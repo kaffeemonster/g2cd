@@ -468,7 +468,7 @@ static noinline bool udp_reas_rb_cache_insert(struct udp_reas_cache_entry *e)
 	while(*p)
 	{
 		struct udp_reas_cache_entry *n = rb_entry(*p, struct udp_reas_cache_entry, rb);
-		int result = udp_reas_entry_cmp(e, n);
+		int result = udp_reas_entry_cmp(n, e);
 
 		parent = *p;
 		if(result < 0)

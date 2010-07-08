@@ -453,7 +453,7 @@ static noinline bool qk_rb_cache_insert(struct qk_cache_entry *e)
 	while(*p)
 	{
 		struct qk_cache_entry *n = rb_entry(*p, struct qk_cache_entry, rb);
-		int result = qk_entry_cmp(e, n);
+		int result = qk_entry_cmp(n, e);
 
 		parent = *p;
 		if(result < 0)
