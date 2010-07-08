@@ -64,6 +64,8 @@
 #define ACCEPT_ACTIVE_TIMEOUT (15 * 10)
 /* if the header is not delivered in 50 seconds, go play somewhere else */
 #define ACCEPT_HEADER_COMPLETE_TIMEOUT (50 * 10)
+/* they are deprecated? */
+#undef SEND_OLD_HUB_KEYS
 
 /* internal prototypes */
 static inline bool init_con_a(int *, union combo_addr *);
@@ -791,20 +793,17 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 #define HED_2_PART_1				\
 	GNUTELLA_STRING " " STATUS_200 "\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
-	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLH				\
 	GNUTELLA_STRING " 503 to many hubs\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
-	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_1_FULLC				\
 	GNUTELLA_STRING " 503 to many connections\r\n"	\
 	UAGENT_KEY ": " OUR_UA "\r\n"		\
-	LISTEN_ADR_KEY ": "
 
 #define HED_2_PART_3				\
-	"\r\n" CONTENT_KEY ": " ACCEPT_G2 "\r\n"	\
+	CONTENT_KEY ": " ACCEPT_G2 "\r\n"	\
 	ACCEPT_KEY ": " ACCEPT_G2 "\r\n"
 
 // TODO: maybe we want to refuse the connection
@@ -861,9 +860,24 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			 * SO WHO EVER THINKS RUNNING THIS SERVER CODE BEHIND A NAT IS A
 			 * GOOD IDEA SHOULD DIE BY STEEL^w^w^w LIVE WITH THE CONSEQUENCES
 			 */
+			/*
+			 * only send when the other end will be accepted, they reached us
+			 * so obviously the IP must have been correct..
+			 */
+			if(!to_con->flags.dismissed)
 			{
 				union combo_addr local_addr;
 				socklen_t sin_size = sizeof(local_addr);
+
+				/* add start of string to buffer */
+				if(unlikely(str_size(LISTEN_ADR_KEY ": ") >=
+				            buffer_remaining(*to_con->send))) {
+					/* no space for remote addr str? */
+					to_con->flags.dismissed = true;
+					return false;
+				}
+				strplitcpy(buffer_start(*to_con->send), LISTEN_ADR_KEY ": ");
+				to_con->send->pos += str_size(LISTEN_ADR_KEY ": ");
 
 				casalen_ib(&local_addr);
 				/*
@@ -885,8 +899,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				}
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
-				if(unlikely(6 + str_size("\r\n" REMOTE_ADR_KEY ": ") >=
-				            buffer_remaining(*to_con->send))) {
+				if(unlikely(6 + 2 >= buffer_remaining(*to_con->send))) {
 					/* no space for port and foo? */
 					to_con->flags.dismissed = true;
 					return false;
@@ -895,19 +908,43 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				cp_ret = buffer_start(*to_con->send);
 				*cp_ret++ = ':';
 				cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&local_addr)));
-				cp_ret = strplitcpy(cp_ret,"\r\n" REMOTE_ADR_KEY ": ");
+				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			}
 
-			/* tell remote end from which ip we saw it comming */
-			cp_ret = combo_addr_print_c(&to_con->remote_host, buffer_start(*to_con->send),
-			                            buffer_remaining(*to_con->send));
-			if(unlikely(!cp_ret)) {
-				logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
-				to_con->flags.dismissed = true;
-				return false;
+			/*
+			 * only send when the other end got their ip wrong,
+			 * tell them the ip we saw them comming from
+			 */
+			if(!combo_addr_eq_ip(&to_con->remote_host, &to_con->sent_addr))
+			{
+				if(unlikely(str_size(REMOTE_ADR_KEY ": ") >=
+				            buffer_remaining(*to_con->send))) {
+					/* no space for remote addr str? */
+					to_con->flags.dismissed = true;
+					return false;
+				}
+
+				strplitcpy(buffer_start(*to_con->send), REMOTE_ADR_KEY ": ");
+				to_con->send->pos += str_size(REMOTE_ADR_KEY ": ");
+				/* add ip to buffer */
+				cp_ret = combo_addr_print_c(&to_con->remote_host, buffer_start(*to_con->send),
+				                            buffer_remaining(*to_con->send));
+				if(unlikely(!cp_ret)) {
+					logg_errno(LOGF_DEBUG, "writing Remote-Ip-field");
+					to_con->flags.dismissed = true;
+					return false;
+				}
+				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
+				if(2 >= buffer_remaining(*to_con->send)) {
+					/* no space for \r\n? */
+					to_con->flags.dismissed = true;
+					return false;
+				}
+				cp_ret = buffer_start(*to_con->send);
+				*cp_ret++ = '\r'; *cp_ret++ = '\n';
+				to_con->send->pos += 2;
 			}
-			to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 
 			if(str_size(HED_2_PART_3) < buffer_remaining(*to_con->send)) {
 				strlitcpy(buffer_start(*to_con->send), HED_2_PART_3);
@@ -916,9 +953,12 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->flags.dismissed = true;
 				return false;
 			}
-	
-			/* if we have encoding, put in the keys */
-			if(ENC_NONE != to_con->encoding_out)
+
+			/*
+			 * if we have encoding, put in the keys
+			 * only send, if we do not send him away
+			 */
+			if(!to_con->flags.dismissed && ENC_NONE != to_con->encoding_out)
 			{
 				if(likely((str_size(CONTENT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
 				          buffer_remaining(*to_con->send)))
@@ -932,7 +972,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					return false;
 				}
 			}
-			if(ENC_NONE != to_con->encoding_in)
+			if(!to_con->flags.dismissed && ENC_NONE != to_con->encoding_in)
 			{
 				if(likely((str_size(ACCEPT_ENC_KEY) + str_size(ENC_MAX_S) + 4) <
 				          buffer_remaining(*to_con->send)))
@@ -955,17 +995,25 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				cp_ret = buffer_start(*to_con->send);
 				if(server.status.our_server_upeer) {
 					cp_ret = strplitcpy(cp_ret, UPEER_KEY ": " G2_TRUE);
+#ifdef SEND_OLD_HUB_KEYS
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": " G2_TRUE);
+#endif
 				} else {
-					cp_ret = strplitcpy(buffer_start(*to_con->send), UPEER_KEY ": " G2_FALSE);
+					cp_ret = strplitcpy(cp_ret, UPEER_KEY ": " G2_FALSE);
+#ifdef SEND_OLD_HUB_KEYS
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_KEY ": " G2_FALSE);
+#endif
 				}
 				if(atomic_read(&server.status.act_hub_sum) < server.settings.max_hub_sum) {
 					cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": " G2_TRUE);
+#ifdef SEND_OLD_HUB_KEYS
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": " G2_TRUE);
+#endif
 				} else {
 					cp_ret = strplitcpy(cp_ret, "\r\n" UPEER_NEEDED_KEY ": " G2_FALSE);
+#ifdef SEND_OLD_HUB_KEYS
 					cp_ret = strplitcpy(cp_ret, "\r\n" HUB_NEEDED_KEY ": " G2_FALSE);
+#endif
 				}
 				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
