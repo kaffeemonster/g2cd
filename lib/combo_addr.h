@@ -463,6 +463,13 @@ out:
 # undef SLASH32
 # undef IP_CMP
 
+static inline bool combo_addr_is_v6(const union combo_addr *addr)
+{
+	return addr->s.fam == AF_INET6 &&
+	       !(IN6_IS_ADDR_V4MAPPED(&addr->in6.sin6_addr) ||
+	         IN6_IS_ADDR_V4COMPAT(&addr->in6.sin6_addr));
+}
+
 static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed)
 {
 	uint32_t h;

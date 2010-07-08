@@ -63,7 +63,10 @@
 #include "lib/hlist.h"
 #include "lib/ansi_prng.h"
 
+/* IPv4 defines a min MTU of 576 byte. With all header and a little safety */
 #define UDP_MTU        500
+/* IPv6 defines a min MTU of 1280. Since the addresses are longer more safety */
+#define UDP6_MTU       1000
 #define UDP_RELIABLE_LENGTH 8
 
 #define FLAG_DEFLATE   (1 << 0)
@@ -140,7 +143,7 @@ static pthread_key_t key2udp_lub;
 static pthread_key_t key2udp_lcb;
 #else
 static __thread struct norm_buff *udp_lsbuffer;
-static __thread struct norm_buff *udp_lubuffer;
+static __thread struct big_buff *udp_lubuffer;
 static __thread struct big_buff *udp_lcbuffer;
 #endif
 /* protos */
@@ -220,9 +223,9 @@ static struct norm_buff *udp_get_lsbuf(void)
 	return ret_buf;
 }
 
-static struct norm_buff *udp_get_lubuf(void)
+static struct big_buff *udp_get_lubuf(void)
 {
-	struct norm_buff *ret_buf;
+	struct big_buff *ret_buf;
 #ifndef HAVE___THREAD
 	ret_buf = pthread_getspecific(key2udp_lub);
 #else
@@ -230,11 +233,11 @@ static struct norm_buff *udp_get_lubuf(void)
 #endif
 	if(likely(ret_buf)) {
 		ret_buf->pos = 0;
-		ret_buf->limit = ret_buf->capacity = sizeof(ret_buf->data);
+		ret_buf->limit = ret_buf->capacity = server.settings.max_g2_packet_length;
 		return ret_buf;
 	}
 
-	ret_buf = recv_buff_alloc();
+	ret_buf = malloc(sizeof(*ret_buf) + server.settings.max_g2_packet_length);
 
 	if(!ret_buf) {
 		logg_devel("no local udp uncompress buffer\n");
@@ -539,7 +542,7 @@ void g2_udp_reas_timeout(void)
 static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t *st_pack, struct norm_buff **d_hold)
 {
 	g2_packet_t *ret_val = NULL, *g_packet;
-	struct norm_buff *d_hold_u = NULL;
+	struct big_buff *d_hold_u = NULL;
 	struct zpad *zp = NULL;
 	struct reas_knot *next = NULL, **start;
 	bool first_data = true;
@@ -548,7 +551,6 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 	if(e->e.deflate)
 	{
 		logg_devel_old("compressed packet recevied\n");
-// TODO: use a gigantic buffer, so packet_extract does not have to allocate?
 		d_hold_u = udp_get_lubuf();
 		if(!d_hold_u)
 			goto out_free_e;
@@ -576,7 +578,7 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 	start = &e->e.first;
 	for(next = *start; next; next = *start)
 	{
-		struct norm_buff *src_r, *src;
+		struct norm_buff *src_r;
 
 		*start = (*start)->next;
 		src_r = knot2buff(next);
@@ -588,12 +590,10 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 			{
 				int z_status;
 
-				src = d_hold_u;
-				buffer_clear(*src);
 				zp->z.next_in   = (Bytef *)buffer_start(*src_r);
 				zp->z.avail_in  = buffer_remaining(*src_r);
-				zp->z.next_out  = (Bytef *)buffer_start(*src);
-				zp->z.avail_out = buffer_remaining(*src);
+				zp->z.next_out  = (Bytef *)buffer_start(*d_hold_u);
+				zp->z.avail_out = buffer_remaining(*d_hold_u);
 
 				z_status = inflate(&zp->z, Z_SYNC_FLUSH);
 				switch(z_status)
@@ -601,7 +601,7 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 				case Z_OK:
 				case Z_STREAM_END:
 					src_r->pos += buffer_remaining(*src_r) - zp->z.avail_in;
-					src->pos += buffer_remaining(*src) - zp->z.avail_out;
+					d_hold_u->pos += buffer_remaining(*d_hold_u) - zp->z.avail_out;
 					break;
 				case Z_NEED_DICT:
 					logg_devel("Z_NEED_DICT\n");
@@ -622,25 +622,30 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 					logg_devel("inflate was not Z_OK\n");
 					goto out_free;
 				}
-				buffer_flip(*src);
+				buffer_flip(*d_hold_u);
 				if(first_data) {
-					if(buffer_remaining(*src) >= 3 &&
-					   unlikely('G' == *buffer_start(*src) &&
-					            'N' == *(buffer_start(*src)+1) &&
-					            'D' == *(buffer_start(*src)+2))) {
+					if(buffer_remaining(*d_hold_u) >= 3 &&
+					   unlikely('G' == *buffer_start(*d_hold_u) &&
+					            'N' == *(buffer_start(*d_hold_u)+1) &&
+					            'D' == *(buffer_start(*d_hold_u)+2))) {
 						logg_develd_old("received double GND from %pI# after reas+unpack\n", &e->e.na);
 						goto out_free;
 					}
 					first_data = false;
 				}
+				/* Look at the packet received */
+				if(!g2_packet_extract_from_stream_b(d_hold_u, g_packet, server.settings.max_g2_packet_length, false)) {
+					logg_devel("packet extract failed\n");
+					goto out_free;
+				}
 			}
 			else
-				src = src_r;
-
-			/* Look at the packet received */
-			if(!g2_packet_extract_from_stream(src, g_packet, server.settings.max_g2_packet_length, true)) {
-				logg_devel("packet extract failed\n");
-				goto out_free;
+			{
+				/* Look at the packet received */
+				if(!g2_packet_extract_from_stream(src_r, g_packet, server.settings.max_g2_packet_length, true)) {
+					logg_devel("packet extract failed\n");
+					goto out_free;
+				}
 			}
 
 			if(DECODE_FINISHED == g_packet->packet_decode ||
@@ -648,9 +653,15 @@ static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t
 				ret_val = g_packet;
 				goto out_zfree;
 			}
-			if(buffer_remaining(*src)) {
-				logg_devel("couldn't remove all data from buffer\n");
-				goto out_free;
+
+			if(e->e.deflate)
+				buffer_compact(*d_hold_u);
+			else
+			{
+				if(buffer_remaining(*src_r)) {
+					logg_devel("couldn't remove all data from buffer\n");
+					goto out_free;
+				}
 			}
 		} while(buffer_remaining(*src_r));
 		recv_buff_local_ret(src_r);
@@ -1088,8 +1099,9 @@ static noinline void udp_writeout_packet_uc(const union combo_addr *to, int fd, 
 	unsigned int num_udp_packets, i;
 	uint16_t sequence_number;
 	uint8_t *num_ptr;
+	bool is_v6 = combo_addr_is_v6(to);
 
-	num_udp_packets = DIV_ROUNDUP(res_len, (UDP_MTU - UDP_RELIABLE_LENGTH));
+	num_udp_packets = DIV_ROUNDUP(res_len, ((is_v6 ? UDP6_MTU : UDP_MTU) - UDP_RELIABLE_LENGTH));
 	sequence_number = get_next_sequence_number(to);
 	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, 0);
 
@@ -1098,7 +1110,7 @@ static noinline void udp_writeout_packet_uc(const union combo_addr *to, int fd, 
 	for(i = 0; i < num_udp_packets; i++)
 	{
 		d_hold->pos   = UDP_RELIABLE_LENGTH;
-		d_hold->limit = UDP_MTU;
+		d_hold->limit = is_v6 ? UDP6_MTU : UDP_MTU;
 		*num_ptr = i+1;
 
 		g2_packet_serialize_to_buff(p, d_hold);
@@ -1125,6 +1137,7 @@ static noinline void udp_writeout_packet_c(const union combo_addr *to, int fd, g
 	size_t d_len, c_len;
 	struct big_buff *c_data;
 	struct zpad *zp = NULL;
+	bool is_v6;
 
 	zp = qht_get_zpad();
 	if(!zp) {
@@ -1219,14 +1232,15 @@ static noinline void udp_writeout_packet_c(const union combo_addr *to, int fd, g
 	logg_develd_old("sending compressed %zu:%zu\n", res_len, buffer_remaining(*c_data));
 	res_len = buffer_remaining(*c_data);
 
+	is_v6 = combo_addr_is_v6(to);
 	/* send it */
-	num_udp_packets = DIV_ROUNDUP(res_len, (UDP_MTU - UDP_RELIABLE_LENGTH));
+	num_udp_packets = DIV_ROUNDUP(res_len, ((is_v6 ? UDP6_MTU : UDP_MTU) - UDP_RELIABLE_LENGTH));
 	sequence_number = get_next_sequence_number(to);
 	num_ptr = gnd_buff_prep(d_hold, sequence_number, 1, num_udp_packets, FLAG_DEFLATE);
 
 	i = 1;
 	d_hold->pos   = UDP_RELIABLE_LENGTH;
-	d_hold->limit = UDP_MTU;
+	d_hold->limit = is_v6 ? UDP6_MTU : UDP_MTU;
 	*num_ptr = i;
 
 	d_len = buffer_remaining(*d_hold);
@@ -1260,8 +1274,8 @@ static noinline void udp_writeout_packet_c(const union combo_addr *to, int fd, g
 			memcpy(buffer_start(t_hold), buffer_start(*d_hold), UDP_RELIABLE_LENGTH);
 
 			t_hold.limit = o_limit;
-			if(buffer_remaining(t_hold) > UDP_MTU)
-				t_hold.limit = t_hold.pos + UDP_MTU;
+			if(buffer_remaining(t_hold) > (is_v6 ? UDP6_MTU : UDP_MTU))
+				t_hold.limit = t_hold.pos + (is_v6 ? UDP6_MTU : UDP_MTU);
 			if(0 >= udp_sock_send(&t_hold, to, fd)) {
 				logg_devel("compressed UDP send loop failed\n");
 				/* no fancy recovery, just break out of loop to prevent underflow */
@@ -1460,7 +1474,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 		g_packet = &g_packet_store;
 		if(tmp_packet.flags.deflate)
 		{
-			struct norm_buff *d_hold_n;
+			struct big_buff *d_hold_n;
 			struct zpad *zp;
 			int z_status;
 			bool first_data = true;
@@ -1533,7 +1547,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 				}
 
 				/* Look at the packet received */
-				if(!g2_packet_extract_from_stream(d_hold_n, g_packet, server.settings.max_g2_packet_length, false)) {
+				if(!g2_packet_extract_from_stream_b(d_hold_n, g_packet, server.settings.max_g2_packet_length, false)) {
 					logg_devel("packet extract failed\n");
 					goto out_free;
 				}

@@ -132,7 +132,7 @@ static inline int check_control_byte_p(struct pointer_buff *source, g2_packet_t 
 	return 1;
 }
 
-static inline int check_control_byte(struct norm_buff *source, g2_packet_t *target)
+static inline int check_control_byte(struct big_buff *source, g2_packet_t *target)
 {
 	struct pointer_buff tmp_buf = {
 		.pos = source->pos,
@@ -186,7 +186,7 @@ static inline int read_length_p(struct pointer_buff *source, g2_packet_t *target
 	return 1;
 }
 
-static inline int read_length(struct norm_buff *source, g2_packet_t *target, size_t max_len)
+static inline int read_length(struct big_buff *source, g2_packet_t *target, size_t max_len)
 {
 	struct pointer_buff tmp_buf = {
 		.pos = source->pos,
@@ -260,7 +260,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	return 1;
 }
 
-static inline int read_type(struct norm_buff *source, g2_packet_t *target)
+static inline int read_type(struct big_buff *source, g2_packet_t *target)
 {
 	struct pointer_buff tmp_buf = {
 		.pos = source->pos,
@@ -533,6 +533,12 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
  *    byte waste.
  */
 bool g2_packet_extract_from_stream(struct norm_buff *source, g2_packet_t *target, size_t max_len, bool evict_data)
+{
+	/* we exploit that norm_buff and big_buff are cast comaptible */
+	return g2_packet_extract_from_stream_b((struct big_buff *)source, target, max_len, evict_data);
+}
+
+bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *target, size_t max_len, bool evict_data)
 {
 	int func_ret_val;
 	bool ret_val = true;
