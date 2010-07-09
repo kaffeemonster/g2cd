@@ -47,4 +47,22 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
                    struct sockaddr *from, socklen_t fromlen,
                    struct sockaddr *to, socklen_t tolen) GCC_ATTR_VIS("hidden");
 
+#ifdef HAVE_SYS_UIO_H
+# include <sys/uio.h>
+#else
+struct iovec
+{
+	void *iov_base;
+	size_t iov_len;
+}
+#endif
+
+struct mfromto
+{
+	struct iovec iov;
+	struct sockaddr *from, *to;
+	socklen_t from_len, to_len;
+};
+ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags) GCC_ATTR_VIS("hidden");
+
 #endif

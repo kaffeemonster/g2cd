@@ -297,6 +297,147 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 #endif /* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1 */
 }
 
+// TODO: use the new 2.6.33 recvmmsg
+ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
+{
+#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
+	struct msghdr msgh;
+	struct cmsghdr *cmsg;
+	char cbuf[256] GCC_ATTR_ALIGNED(sizeof(size_t));
+#endif
+	ssize_t err = 0;
+	unsigned i;
+
+	for(i = 0; i < len; i++)
+	{
+		/*
+		 * IP_PKTINFO / IP_RECVDSTADDR don't provide sin_port so we have to
+		 * retrieve it using getsockname(). Even when we can not receive the
+		 * sender, we have to provide something.
+		 * This also "primes" the buffer.
+		 */
+		if((err = getsockname(s, info[i].to, &info[i].to_len)) < 0)
+			return err;
+
+#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
+		/* Set up iov and msgh structures. */
+		memset(&msgh, 0, sizeof(msgh));
+		msgh.msg_control    = cbuf;
+		msgh.msg_controllen = sizeof(cbuf);
+		msgh.msg_name       =  info[i].from;
+		msgh.msg_namelen    =  info[i].from_len;
+		msgh.msg_iov        = &info[i].iov;
+		msgh.msg_iovlen     = 1;
+		msgh.msg_flags      = 0;
+
+		/* Receive one packet. */
+		err = recvmsg(s, &msgh, flags);
+		if(err > 0) {
+			info[i].iov.iov_len = err;
+		} else {
+			if(EAGAIN == errno || EWOULDBLOCK == errno)
+				err = 0;
+			break;
+		}
+		info[i].from_len = msgh.msg_namelen;
+
+		/* Process auxiliary received data in msgh */
+		for(cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg))
+		{
+		/* IPv4 */
+# ifdef HAVE_IP_PKTINFO
+	// TODO: change when IPv6 is big
+			if(likely(SOL_IP      == cmsg->cmsg_level &&
+						  IP_PKTINFO == cmsg->cmsg_type))
+			{
+				struct sockaddr_in *toi = (struct sockaddr_in *)info[i].to;
+				struct in_pktinfo *ip = (struct in_pktinfo *)CMSG_DATA(cmsg);
+
+				toi->sin_family = AF_INET;
+				toi->sin_addr = ip->ipi_addr;
+#ifdef HAVE_SA_LEN
+				toi->sin_len =
+#endif
+				info[i].to_len = sizeof(*toi);
+				break;
+			}
+# elif HAVE_DECL_IP_RECVDSTADDR == 1
+	// TODO: May not work with Solaris?
+			/*
+			 * (old? 2.6 (kernel? System?)) Solaris does not seem to use
+			 * the control msg to return the to-address, but msg_accrights?
+			 */
+	// TODO: does RECVDSTADDR return a port?
+			/* Or only on old Solaris? */
+			if(IPPROTO_IP     == cmsg->cmsg_level &&
+				IP_RECVDSTADDR == cmsg->cmsg_type)
+			{
+				struct sockaddr_in *toi = (struct sockaddr_in *)info[i].to;
+				struct in_addr *ip = (struct in_addr *)CMSG_DATA(cmsg);
+
+				toi->sin_family = AF_INET;
+				toi->sin_addr = *ip;
+#ifdef HAVE_SA_LEN
+				toi->sin_len =
+#endif
+				info[i].to_len = sizeof(*toi);
+				break;
+			}
+# endif
+		/* IPv6 */
+# ifdef HAVE_IP6_PKTINFO
+			if(SOL_IPV6  == cmsg->cmsg_level &&
+				v6pktinfo == cmsg->cmsg_type)
+			{
+				struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)info[i].to;
+				struct in6_pktinfo *ipv6 = (struct in6_pktinfo *)CMSG_DATA(cmsg);
+
+				toi6->sin6_family = AF_INET6;
+				memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, sizeof(toi6->sin6_addr));
+#ifdef HAVE_SA_LEN
+				toi6->sin_len =
+#endif
+				info[i].to_len = sizeof(*toi6);
+				break;
+			}
+# elif HAVE_DECL_IP_RECVDSTADDR == 1
+			/* deprecated */
+			if(IPPROTO_IPV6     == cmsg->cmsg_level &&
+				IPV6_RECVDSTADDR == cmsg->cmsg_type)
+			{
+				struct sockaddr_in6 *toi6 = (struct sockaddr_in6 *)info[i].to;
+				struct in6_addr *ipv6 = (struct in6_addr *)CMSG_DATA(cmsg);
+
+				toi6->sin6_family = AF_INET6;
+				memcpy(&toi6->sin6_addr, ipv6, INET6_ADDRLEN);
+#ifdef HAVE_SA_LEN
+				toi6->sin_len =
+#endif
+				info[i].to_len = sizeof(*toi6);
+				break;
+			}
+# endif
+	// TODO: if all fails, one can use IP_RECVIF
+			/*
+			 * this should also work on IPv6 with solaris, but needs
+			 * a scan otver the interfaces to get an ip to the index...
+			 */
+		}
+#else
+		/* fallback: call recvfrom */
+		err = recvfrom(s, info[i].iov.iov_base, info[i].iov.iov_len, flags, info[i].from, &info[i].fromlen);
+		if(err > 0) {
+			info[i].iov.iov_len = err;
+		} else {
+			if(EAGAIN == errno || EWOULDBLOCK == errno)
+				err = 0;
+			break;
+		}
+#endif /* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1 */
+	}
+	return err >= 0 ? i : -(i + 1);
+}
+
 ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
                    struct sockaddr *to, socklen_t tolen,
                    struct sockaddr *from, socklen_t fromlen)

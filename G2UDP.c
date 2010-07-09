@@ -115,7 +115,7 @@ struct udp_reas_cache_entry
 
 /* internal prototypes */
 static ssize_t udp_sock_send(struct pointer_buff *, const union combo_addr *, int);
-static inline bool handle_udp_sock(struct epoll_event *, struct norm_buff *, union combo_addr *, union combo_addr *, int);
+static ssize_t handle_udp_sock(struct epoll_event *, struct norm_buff **, union combo_addr *, union combo_addr *, int, unsigned);
 static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, int);
 static inline bool init_con_u(int *, union combo_addr *);
 
@@ -923,23 +923,36 @@ life_tree_error:
 }
 
 /************************* UDP work funcs ***********************/
-
+#define MULTI_RECV_NUM 4
 void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll_fd)
 {
 	static int warned;
 	/* other variables */
 	struct simple_gup *sg = ev->data.ptr;
-	union combo_addr from, to;
+	union combo_addr from[MULTI_RECV_NUM], to[MULTI_RECV_NUM];
+	struct norm_buff *d_hold_x[MULTI_RECV_NUM];
+	ssize_t result;
+	unsigned i, j;
 	bool keep_going = true;
 
-	buffer_clear(**d_hold_sp);
-	if(!warned && (*d_hold_sp)->capacity != NORM_BUFF_CAPACITY)
+	d_hold_x[0] = d_hold_sp[0];
+	buffer_clear(*(d_hold_x[0]));
+	d_hold_x[1] = d_hold_sp[1];
+	buffer_clear(*(d_hold_x[0]));
+	for(i = 2; i < MULTI_RECV_NUM; i++)
+		d_hold_x[i] = recv_buff_local_get();
+
+	if(!warned)
 	{
-		logg_develd("small buffer!: %zu\n", (*d_hold_sp)->capacity);
-		warned++;
+		for(i = 0; i < MULTI_RECV_NUM; i++) {
+			if(d_hold_x[i]->capacity != NORM_BUFF_CAPACITY) {
+				logg_develd("small buffer!: %zu\n", d_hold_x[i]->capacity);
+				warned++;
+			}
+		}
 	}
-// TODO: poke the new 2.6.33 recvmmsg through the stack
-	if(!handle_udp_sock(ev, *d_hold_sp, &from, &to, sg->fd)) {
+
+	if((result = handle_udp_sock(ev, d_hold_x, from, to, sg->fd, MULTI_RECV_NUM)) < 0) {
 		/* bad things */
 		keep_going = false;
 	}
@@ -954,13 +967,28 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 // TODO: handle bad things
 	}
 
-	if(keep_going) {
-		buffer_flip(**d_hold_sp);
+	if(keep_going)
+	{
 		/* if we reach here, we know that there is at least no error or the logic above failed... */
-		handle_udp_packet(d_hold_sp, &from, &to, sg->fd);
+		for(i = 0; i < (unsigned)result; i++) {
+			buffer_flip(*(d_hold_x[i]));
+			handle_udp_packet(&d_hold_x[i], &from[i], &to[i], sg->fd);
+		}
 	}
-	if(*d_hold_sp)
-		buffer_clear(**d_hold_sp);
+
+	d_hold_sp[0] = NULL;
+	d_hold_sp[1] = NULL;
+	for(i = 0, j = 0; i < MULTI_RECV_NUM; i++)
+	{
+		struct norm_buff *t = d_hold_x[i];
+		if(!t)
+			continue;
+		buffer_clear(*t);
+		if(j < 2)
+			d_hold_sp[j++] = t;
+		else
+			recv_buff_local_ret(t);
+	}
 }
 
 bool init_udp(int epoll_fd)
@@ -1790,58 +1818,49 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	return result;
 }
 
-static inline bool handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff *d_hold, union combo_addr *from, union combo_addr *to, int from_fd)
+static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, int from_fd, unsigned l)
 {
+	struct mfromto m[l];
 	ssize_t result;
+	unsigned i;
 
 	if(udp_poll->events & ~(POLLIN|POLLOUT)) {
 		/* If our udp sock is not ready reading or writing -> fuzz */
 		logg_pos(LOGF_ERR, "udp_so NVAL|ERR|HUP\n");
-		return false;
+		return -1;
 	}
 
 	if(!(udp_poll->events & POLLIN))
-		return true;
+		return 0;
+
+	for(i = 0; i < l; i++)
+	{
+		casalen_ib(&from[i]); casalen_ib(&to[i]);
+		m[i].iov.iov_base = buffer_start(*(d_hold[i]));
+		m[i].iov.iov_len  = buffer_remaining(*(d_hold[i]));
+		m[i].from         = casa(&from[i]);
+		m[i].to           = casa(&to[i]);
+		m[i].from_len     = sizeof(from[0]);
+		m[i].to_len       = sizeof(to[0]);
+	}
 
 	do
 	{
-		socklen_t from_len = sizeof(*from), to_len = sizeof(*to);
-		casalen_ib(from); casalen_ib(to);
 		errno = 0;
-/* ssize_t  recvfromto(int s, void *buf, size_t len, int flags,
- *                     struct sockaddr *from, socklen_t *fromlen
- *                     struct sockaddr *to, socklen_t *tolen); */
-		result = recvfromto(from_fd, buffer_start(*d_hold), buffer_remaining(*d_hold),
-		                    0, casa(from), &from_len, casa(to), &to_len);
+		/* ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags) */
+		result = recvmfromto(from_fd, m, l, 0);
 	} while(unlikely(-1 == result) && EINTR == errno);
 
-	switch(result)
-	{
-	default:
-		d_hold->pos += result;
-		logg_devel_old("Data read from socket\n");
-		break;
-	case  0:
-		if(buffer_remaining(*d_hold))
-		{
-			if(EAGAIN != errno && 0 != errno) {
-				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
-				          "error reading?!", errno, from_fd, from);
-				return false;
-			} else {
-				logg_devel_old("Nothing to read!\n");
-			}
-		}
-		break;
-	case -1:
-		if(EAGAIN != errno) {
-			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i",
-			            "recvfrom:", errno, from_fd);
-			return false;
-		}
-		break;
+	if(result < 0) {
+		logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i", "recvmfromto:", errno, from_fd);
+		result = -(result + 1);
 	}
-	return true;
+
+	for(i = 0; i < (unsigned)result; i++) {
+		logg_devel_old("Data read from socket\n");
+		d_hold[i]->pos += m[i].iov.iov_len;
+	}
+	return result;
 }
 
 #define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
@@ -1872,14 +1891,15 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	if(bind(*udp_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("bindding udp fd");
 
-#if 0
 	/*
-	 * UDP and non-blocking?? that's two points of unrelaiability,
-	 * no, thanks
+	 * UDP and non-blocking??
+	 * Isn't fantastic, but we hope we only get whole msg.
+	 * This way we can "cycle" to pull several msg at once
+	 * from the socket.
 	 */
 	if(fcntl(*udp_so, F_SETFL, O_NONBLOCK))
-		OUR_ERR("udp non-blocking");
-#endif
+		OUT_ERR("udp non-blocking");
+
 	return true;
 
 out_err:
