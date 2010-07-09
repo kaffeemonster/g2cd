@@ -470,6 +470,14 @@ static inline bool combo_addr_is_v6(const union combo_addr *addr)
 	         IN6_IS_ADDR_V4COMPAT(&addr->in6.sin6_addr));
 }
 
+static inline bool combo_addr_is_wildcard(const union combo_addr *addr)
+{
+	if(addr->s.fam == AF_INET)
+		return addr->in.sin_addr.s_addr == INADDR_ANY;
+	else
+		return IN6_IS_ADDR_UNSPECIFIED(&addr->in6.sin6_addr);
+}
+
 static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed)
 {
 	uint32_t h;

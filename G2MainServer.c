@@ -750,47 +750,60 @@ static noinline void handle_config(void)
 	atomic_set(&server.status.act_connection_sum, 0);
 	atomic_set(&server.status.act_hub_sum, 0);
 	server.status.our_server_upeer = DEFAULT_SERVER_UPEER;
+	server.settings.bind.ip4 = malloc(sizeof(*server.settings.bind.ip4));
+	server.settings.bind.ip6 = malloc(sizeof(*server.settings.bind.ip6));
+	server.settings.bind.num_ip4 = 1;
+	server.settings.bind.num_ip6 = 1;
+
+	if(!(server.settings.bind.ip4 && server.settings.bind.ip6))
+		diedie("could not alloc ip mem");
+
+	memset(server.settings.bind.ip4, 0, sizeof(*server.settings.bind.ip4));
+	memset(server.settings.bind.ip6, 0, sizeof(*server.settings.bind.ip6));
 
 	/*
 	 * var settings
 	 * first round: apply defaults
 	 */
-	server.settings.data_root_dir                = str_it(DEFAULT_DATA_ROOT_DIR);
-	server.settings.entropy_source               = DEFAULT_ENTROPY_SOURCE;
-	server.settings.config_file                  = str_it(DEFAULT_CONFIG_FILE);
-	server.settings.nick.name                    = DEFAULT_NICK_NAME;
-	server.settings.nice_adjust                  = DEFAULT_NICE_ADJUST;
-	server.settings.num_threads                  = DEFAULT_NUM_THREADS;
-	server.settings.logging.act_loglevel         = DEFAULT_LOGLEVEL;
-	server.settings.logging.add_date_time        = DEFAULT_LOG_ADD_TIME;
-	server.settings.logging.time_date_format     = DEFAULT_LOG_TIME_FORMAT;
-	server.settings.bind.ip4.s.fam               = AF_INET;
-	server.settings.bind.ip4.in.sin_port         = htons(DEFAULT_PORT);
-	server.settings.bind.ip4.in.sin_addr.s_addr  = htonl(DEFAULT_ADDR);
-	casalen_ii(&server.settings.bind.ip4);
-	server.settings.bind.use_ip4                 = DEFAULT_USE_IPV4;
-	server.settings.bind.ip6.s.fam               = AF_INET6;
-	server.settings.bind.ip6.in6.sin6_port       = htons(DEFAULT_PORT);
-	server.settings.bind.ip6.in6.sin6_addr       = in6addr_any;
-	casalen_ii(&server.settings.bind.ip6);
-	server.settings.bind.use_ip6                 = DEFAULT_USE_IPV6;
-	server.settings.default_in_encoding          = DEFAULT_ENC_IN;
-	server.settings.default_out_encoding         = DEFAULT_ENC_OUT;
-	server.settings.hub_in_encoding              = DEFAULT_HUB_ENC_IN;
-	server.settings.hub_out_encoding             = DEFAULT_HUB_ENC_OUT;
-	server.settings.max_connection_sum           = DEFAULT_CON_MAX;
-	server.settings.max_hub_sum                  = DEFAULT_HUB_MAX;
-	server.settings.max_g2_packet_length         = DEFAULT_PCK_LEN_MAX;
-	server.settings.profile.want_2_send          = DEFAULT_SEND_PROFILE;
-	server.settings.khl.gwc_boot_url             = DEFAULT_GWC_BOOT;
-	server.settings.khl.gwc_cache_fname          = DEFAULT_GWC_DB;
-	server.settings.khl.dump_fname               = DEFAULT_KHL_DUMP;
-	server.settings.guid.dump_fname              = DEFAULT_GUID_DUMP;
-	server.settings.qht.compression              = DEFAULT_QHT_COMPRESSION;
-	server.settings.qht.compress_internal        = DEFAULT_QHT_COMPRESS_INTERNAL;
-	server.settings.qht.max_promille             = DEFAULT_QHT_MAX_PROMILLE;
-	server.settings.nick.send_clients            = DEFAULT_NICK_SEND_CLIENTS;
-	server.settings.nick.send_gps                = DEFAULT_NICK_SEND_GPS;
+	server.settings.data_root_dir                  = str_it(DEFAULT_DATA_ROOT_DIR);
+	server.settings.entropy_source                 = DEFAULT_ENTROPY_SOURCE;
+	server.settings.config_file                    = str_it(DEFAULT_CONFIG_FILE);
+	server.settings.nick.name                      = DEFAULT_NICK_NAME;
+	server.settings.nice_adjust                    = DEFAULT_NICE_ADJUST;
+	server.settings.num_threads                    = DEFAULT_NUM_THREADS;
+	server.settings.logging.act_loglevel           = DEFAULT_LOGLEVEL;
+	server.settings.logging.add_date_time          = DEFAULT_LOG_ADD_TIME;
+	server.settings.logging.time_date_format       = DEFAULT_LOG_TIME_FORMAT;
+	/**/
+	server.settings.bind.ip4[0].s.fam              = AF_INET;
+	server.settings.bind.ip4[0].in.sin_port        = htons(DEFAULT_PORT);
+	server.settings.bind.ip4[0].in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
+	casalen_ii(&server.settings.bind.ip4[0]);
+	server.settings.bind.use_ip4                   = DEFAULT_USE_IPV4;
+	/**/
+	server.settings.bind.ip6[0].s.fam              = AF_INET6;
+	server.settings.bind.ip6[0].in6.sin6_port      = htons(DEFAULT_PORT);
+	server.settings.bind.ip6[0].in6.sin6_addr      = in6addr_any;
+	casalen_ii(&server.settings.bind.ip6[0]);
+	server.settings.bind.use_ip6                   = DEFAULT_USE_IPV6;
+	/**/
+	server.settings.default_in_encoding            = DEFAULT_ENC_IN;
+	server.settings.default_out_encoding           = DEFAULT_ENC_OUT;
+	server.settings.hub_in_encoding                = DEFAULT_HUB_ENC_IN;
+	server.settings.hub_out_encoding               = DEFAULT_HUB_ENC_OUT;
+	server.settings.max_connection_sum             = DEFAULT_CON_MAX;
+	server.settings.max_hub_sum                    = DEFAULT_HUB_MAX;
+	server.settings.max_g2_packet_length           = DEFAULT_PCK_LEN_MAX;
+	server.settings.profile.want_2_send            = DEFAULT_SEND_PROFILE;
+	server.settings.khl.gwc_boot_url               = DEFAULT_GWC_BOOT;
+	server.settings.khl.gwc_cache_fname            = DEFAULT_GWC_DB;
+	server.settings.khl.dump_fname                 = DEFAULT_KHL_DUMP;
+	server.settings.guid.dump_fname                = DEFAULT_GUID_DUMP;
+	server.settings.qht.compression                = DEFAULT_QHT_COMPRESSION;
+	server.settings.qht.compress_internal          = DEFAULT_QHT_COMPRESS_INTERNAL;
+	server.settings.qht.max_promille               = DEFAULT_QHT_MAX_PROMILLE;
+	server.settings.nick.send_clients              = DEFAULT_NICK_SEND_CLIENTS;
+	server.settings.nick.send_gps                  = DEFAULT_NICK_SEND_GPS;
 
 	be_daemon         = DEFAULT_BE_DAEMON;
 	profile.latitude  = DEFAULT_PROFILE_LAT;

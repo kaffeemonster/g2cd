@@ -875,7 +875,7 @@ static bool g2_packet_needs_routing(g2_packet_t *src, uint8_t **guid)
 	return true;
 }
 
-static void g2_packet_send_qka(union combo_addr *req_addr, union combo_addr *send_addr)
+static void g2_packet_send_qka(const union combo_addr *req_addr, union combo_addr *send_addr, const union combo_addr *from)
 {
 	struct list_head answer;
 	g2_packet_t qka, qk, sna;
@@ -909,7 +909,7 @@ static void g2_packet_send_qka(union combo_addr *req_addr, union combo_addr *sen
 
 	INIT_LIST_HEAD(&answer);
 	list_add_tail(&qka.list, &answer);
-	g2_udp_send(req_addr, &answer);
+	g2_udp_send(req_addr, from, &answer);
 }
 
 static void g2_packet_add2target(g2_packet_t *to_add, struct list_head *target, shortlock_t *target_lock)
@@ -1997,8 +1997,19 @@ static bool handle_PI(struct ptype_action_args *parg)
 		/* should we answer, or relay it */
 		if(rdata.relay)
 		{
+			union combo_addr from_addr;
 			struct list_head answer;
 			g2_packet_t po, relay;
+			socklen_t sin_size = sizeof(from_addr);
+
+			casalen_ib(&from_addr);
+			/* send the udp answer from the ip we received the request */
+			if(unlikely(getsockname(connec->com_socket, casa(&from_addr), &sin_size))) {
+				logg_errno(LOGF_DEBUG, "getting local addr of socket");
+				/* this is really just a (broken) fallback, this should not happen */
+				from_addr = AF_INET == connec->remote_host.s.fam ?
+				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+			}
 
 			INIT_LIST_HEAD(&answer);
 			g2_packet_init_on_stack(&po);
@@ -2012,7 +2023,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 			list_add_tail(&po.list, &answer);
 
 // TODO: VALGRIND - uninitilaized? WTF? What?
-			g2_udp_send(&rdata.addr, &answer);
+			g2_udp_send(&rdata.addr, &from_addr, &answer);
 		}
 		else {
 			parg->opaque = &rdata;
@@ -2217,8 +2228,9 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 		 */
 		if(unlikely(getsockname(parg->connec->com_socket, casa(&backup_addr), &sin_size))) {
 			logg_errno(LOGF_DEBUG, "getting local addr of socket");
+			/* this is really just a (broken) fallback, this should not happen */
 			our_addr = AF_INET == parg->connec->remote_host.s.fam ?
-			           &server.settings.bind.ip4 : &server.settings.bind.ip6;
+			           &server.settings.bind.ip4[0] : &server.settings.bind.ip6[0];
 		}
 		else
 			our_addr = &backup_addr;
@@ -2320,10 +2332,21 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 		if(rdata->udp_na_valid &&
 		   !combo_addr_eq_ip(&rdata->udp_na, &parg->connec->remote_host))
 		{
+			union combo_addr from_addr;
 			struct list_head answer;
+			socklen_t sin_size = sizeof(from_addr);
+
+			casalen_ib(&from_addr);
+			/* send the udp answer from the ip we received the request */
+			if(unlikely(getsockname(parg->connec->com_socket, casa(&from_addr), &sin_size))) {
+				logg_errno(LOGF_DEBUG, "getting local addr of socket");
+				/* this is really just a (broken) fallback, this should not happen */
+				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
+				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+			}
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
-			g2_udp_send(&rdata->udp_na, &answer);
+			g2_udp_send(&rdata->udp_na, &from_addr, &answer);
 			return false;
 		}
 		else
@@ -2336,7 +2359,7 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 			struct list_head answer;
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
-			g2_udp_send(&rdata->udp_na, &answer);
+			g2_udp_send(&rdata->udp_na, parg->dst_addr, &answer);
 			return false;
 		}
 		else
@@ -2441,7 +2464,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 
 		if(!g2_qk_check(&rdata.udp_na, rdata.qk)) {
 // TODO: prevent UDP query flooding from single IP
-			g2_packet_send_qka(&rdata.udp_na, parg->src_addr);
+			g2_packet_send_qka(&rdata.udp_na, parg->src_addr, parg->dst_addr);
 			return ret_val;
 		}
 // TODO: prevent UDP query flooding from single IP
@@ -2487,7 +2510,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa.list, &answer);
-			g2_udp_send(&rdata.udp_na, &answer);
+			g2_udp_send(&rdata.udp_na, parg->dst_addr, &answer);
 			return ret_val;
 		}
 
@@ -3188,8 +3211,28 @@ static bool handle_QH2(struct ptype_action_args *parg)
 
 	if(!g2_conreg_for_addr(&dest, forward_lit_callback_found, parg))
 	{
+		union combo_addr *from_addr, backup_addr;
 		struct list_head answer, orig_list;
 		bool orig_freeable, orig_dt_freeable;
+
+		if(parg->connec)
+		{
+			socklen_t sin_size = sizeof(backup_addr);
+
+			casalen_ib(&backup_addr);
+			/* send the udp answer from the ip we received the request */
+			if(unlikely(getsockname(parg->connec->com_socket, casa(&backup_addr), &sin_size))) {
+				logg_errno(LOGF_DEBUG, "getting local addr of socket");
+				/* this is really just a (broken) fallback, this should not happen */
+				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
+				            &server.settings.bind.ip4[0] : &server.settings.bind.ip6[0];
+			}
+			else
+				from_addr = &backup_addr;
+		}
+		else
+			from_addr = parg->dst_addr;
+
 		/* the source packet is only borrowed, do not free it... */
 		orig_freeable = source->is_freeable;
 		orig_dt_freeable = source->data_trunk_is_freeable;
@@ -3202,7 +3245,7 @@ static bool handle_QH2(struct ptype_action_args *parg)
 		INIT_LIST_HEAD(&answer);
 		list_add_tail(&source->list, &answer);
 		/* send it */
-		g2_udp_send(&dest, &answer);
+		g2_udp_send(&dest, from_addr, &answer);
 		/* recreate state */
 		source->list = orig_list;
 		source->is_freeable = orig_freeable;
@@ -3608,7 +3651,18 @@ out_fail:
 		}
 		else
 		{
+			union combo_addr from_addr;
 			g2_packet_t qkr, sna;
+			socklen_t sin_size = sizeof(from_addr);
+
+			casalen_ib(&from_addr);
+			/* send the udp answer from the ip we received the request */
+			if(unlikely(getsockname(parg->connec->com_socket, casa(&from_addr), &sin_size))) {
+				logg_errno(LOGF_DEBUG, "getting local addr of socket");
+				/* this is really just a (broken) fallback, this should not happen */
+				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
+				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+			}
 
 			g2_packet_init_on_stack(&qkr);
 			g2_packet_init_on_stack(&sna);
@@ -3622,12 +3676,12 @@ out_fail:
 
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qkr.list, &answer);
-			g2_udp_send(&rdata.queried_na, &answer);
+			g2_udp_send(&rdata.queried_na, &from_addr, &answer);
 		}
 	}
 	else
 		g2_packet_send_qka(!rdata.requesting_na_valid ? parg->src_addr : &rdata.requesting_na,
-		                    rdata.sending_na_valid ? &rdata.sending_na : NULL);
+		                    rdata.sending_na_valid ? &rdata.sending_na : NULL, parg->dst_addr);
 
 	return ret_val;
 }
@@ -3972,8 +4026,9 @@ intptr_t send_HAW_callback(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARA
 	casalen_ib(&local_addr);
 	if(unlikely(getsockname(con->com_socket, casa(&local_addr), &sin_size))) {
 		logg_errno(LOGF_DEBUG, "getting local addr of socket");
+		/* this is really just a (broken) fallback, this should not happen */
 		local_addr = AF_INET == con->remote_host.s.fam ?
-		             server.settings.bind.ip4 : server.settings.bind.ip6;
+		             server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
 		if(!combo_addr_is_public(&local_addr))
 			return 0;
 	}

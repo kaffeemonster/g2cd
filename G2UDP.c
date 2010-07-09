@@ -119,8 +119,6 @@ static inline bool handle_udp_sock(struct epoll_event *, struct norm_buff *, uni
 static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, int);
 static inline bool init_con_u(int *, union combo_addr *);
 
-#define G2UDP_FD_SUM 3
-
 /* Vars */
 static struct
 {
@@ -133,9 +131,13 @@ static struct
 } cache;
 static int out_file;
 static uint32_t sequence_seed;
-static int udp_outfd_ipv4;
-static int udp_outfd_ipv6;
-static struct simple_gup udp_sos[2];
+static struct
+{
+	enum guppies gup;
+	int fd;
+	union combo_addr na;
+} *udp_sos;
+static unsigned udp_sos_num;
 
 #ifndef HAVE___THREAD
 static pthread_key_t key2udp_lsb;
@@ -963,23 +965,69 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 
 bool init_udp(int epoll_fd)
 {
-	bool ipv4_ready;
-	bool ipv6_ready;
+	unsigned i, sos_num, idx;
+	bool ipv4_ready = false;
+	bool ipv6_ready = false;
 
 	/* set the cache seed */
 	random_bytes_get(&cache.ht_seed, sizeof(cache.ht_seed));
 	/* set the sequence seed */
 	random_bytes_get(&sequence_seed, sizeof(sequence_seed));
 
-	udp_outfd_ipv4 = udp_sos[0].fd = -1;
-	udp_outfd_ipv6 = udp_sos[1].fd = -1;
+	sos_num = server.settings.bind.num_ip4 + server.settings.bind.num_ip6;
+	udp_sos = malloc(sizeof(*udp_sos) * sos_num);
+	if(!udp_sos) {
+		logg_errno(LOGF_ERR, "couldn't allocate udp gups");
+		return false;
+	}
+
+	/* sock-things */
+	for(i = 0; i < sos_num; i++) {
+		udp_sos[i].fd  = -1;
+		udp_sos[i].gup = GUP_UDP;
+		memset(&udp_sos[i].na, 0, sizeof(udp_sos[i].na));
+	}
+
+	idx = 0;
 	/* Setting up the UDP Socket */
-	ipv4_ready = server.settings.bind.use_ip4 ? init_con_u(&udp_sos[0].fd, &server.settings.bind.ip4) : false;
-	ipv6_ready = server.settings.bind.use_ip6 ? init_con_u(&udp_sos[1].fd, &server.settings.bind.ip6) : false;
-	udp_outfd_ipv4 = udp_sos[0].fd;
-	udp_outfd_ipv6 = udp_sos[1].fd;
-	udp_sos[0].gup = GUP_UDP;
-	udp_sos[1].gup = GUP_UDP;
+	if(server.settings.bind.use_ip4 && server.settings.bind.num_ip4)
+	{
+		ipv4_ready = true;
+		for(i = 0; ipv4_ready && i < server.settings.bind.num_ip4; i++)
+		{
+			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip4[i]);
+			if(res)
+				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip4[i], sizeof(udp_sos[0].na));
+			ipv4_ready = ipv4_ready && res;
+		}
+		if(!ipv4_ready)
+		{
+			while(i--) {
+				close(udp_sos[--idx].fd);
+				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
+				udp_sos[idx].fd = -1;
+			}
+		}
+	}
+	if(server.settings.bind.use_ip6 && server.settings.bind.num_ip6)
+	{
+		ipv6_ready = true;
+		for(i = 0; ipv6_ready && i < server.settings.bind.num_ip6; i++)
+		{
+			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip6[i]);
+			if(res)
+				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip6[i], sizeof(udp_sos[0].na));
+			ipv6_ready = ipv6_ready && res;
+		}
+		if(!ipv6_ready)
+		{
+			while(i--) {
+				close(udp_sos[--idx].fd);
+				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
+				udp_sos[idx].fd = -1;
+			}
+		}
+	}
 
 	if(server.settings.bind.use_ip4 && !ipv4_ready) {
 		clean_up_udp();
@@ -995,26 +1043,19 @@ bool init_udp(int epoll_fd)
 			return false;
 		}
 	}
-	if(udp_sos[0].fd > -1)
+
+	udp_sos_num = idx;
+	/* Setting first entry to be polled, our Acceptsocket */
+	for(i = 0; i < idx; i++)
 	{
 		struct epoll_event tmp_ev;
+
+		if(udp_sos[i].fd == -1)
+			continue; /* should not happen, break? */
 		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 		tmp_ev.data.u64 = 0;
-		tmp_ev.data.ptr = &udp_sos[0];
-		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_sos[0].fd, &tmp_ev))
-		{
-			logg_errno(LOGF_ERR, "adding udp-socket to epoll");
-			clean_up_udp();
-			return false;
-		}
-	}
-	if(udp_sos[1].fd > -1)
-	{
-		struct epoll_event tmp_ev;
-		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
-		tmp_ev.data.u64 = 0;
-		tmp_ev.data.ptr = &udp_sos[1];
-		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_sos[1].fd, &tmp_ev))
+		tmp_ev.data.ptr = &udp_sos[i];
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, udp_sos[i].fd, &tmp_ev))
 		{
 			logg_errno(LOGF_ERR, "adding udp-socket to epoll");
 			clean_up_udp();
@@ -1630,15 +1671,43 @@ out:
 	return true;
 }
 
-void g2_udp_send(const union combo_addr *to, struct list_head *answer)
+void g2_udp_send(const union combo_addr *to, const union combo_addr *from, struct list_head *answer)
 {
 	struct list_head *e, *n;
 	struct norm_buff *d_hold;
-	int answer_fd = AF_INET == to->s.fam ? udp_outfd_ipv4 : udp_outfd_ipv6;
+	int answer_fd = -1;
+	int fallback_fd = -1;
+	int fallback_fallback_fd = -1;
+	unsigned i;
 
-	if(-1 == answer_fd) {
-		logg_devel("trying to send to a address we have no fd for!?");
-		goto out_err;
+	/* find a suitable send fd */
+	for(i = 0; i < udp_sos_num; i++)
+	{
+		if(udp_sos[i].na.s.fam != to->s.fam)
+			continue;
+		if(combo_addr_eq_ip(&udp_sos[i].na, from)) {
+			answer_fd = udp_sos[i].fd;
+			break;
+		}
+		if(combo_addr_is_wildcard(&udp_sos[i].na) && -1 != udp_sos[i].fd)
+			fallback_fd = udp_sos[i].fd;
+		if(-1 != udp_sos[i].fd)
+			fallback_fallback_fd = udp_sos[i].fd;
+	}
+
+	if(-1 == answer_fd)
+	{
+		if(-1 == fallback_fd)
+		{
+			if(-1 == fallback_fallback_fd) {
+				/* now we are really screwed */
+				logg_devel("trying to send to an address we have no fd for!?");
+				goto out_err;
+			}
+			/* we have grabed _some_ fd, it may not be suitable */
+			fallback_fd = fallback_fallback_fd; /* but at least we tried... */
+		}
+		answer_fd = fallback_fd;
 	}
 
 	d_hold = udp_get_lsbuf();
@@ -1814,7 +1883,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	return true;
 
 out_err:
-	logg_errno(LOGF_ERR, e);
+	logg_errnod(LOGF_ERR, "%s", e);
 	close(*udp_so);
 	*udp_so = -1;
 	return false;
@@ -1822,10 +1891,13 @@ out_err:
 
 void clean_up_udp(void)
 {
-	if(0 <= udp_sos[0].fd)
-		close(udp_sos[0].fd);
-	if(0 <= udp_sos[1].fd)
-		close(udp_sos[1].fd);
+	unsigned i;
+
+	for(i = 0; i < udp_sos_num; i++) {
+		if(udp_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
+			close(udp_sos[i].fd);
+	}
+
 	if(0 <= out_file)
 		close(out_file);
 }

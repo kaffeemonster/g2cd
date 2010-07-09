@@ -72,63 +72,90 @@ static inline bool init_con_a(int *, union combo_addr *);
 static g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff);
 static noinline bool initiate_g2(g2_connection_t *);
 
-static struct simple_gup accept_sos[2];
+static struct simple_gup *accept_sos;
+static unsigned accept_sos_num;
 
 bool init_accept(int epoll_fd)
 {
-	struct epoll_event tmp_ev;
-	bool ipv4_ready;
-	bool ipv6_ready;
+	unsigned i, sos_num, idx;
+	bool ipv4_ready = false;
+	bool ipv6_ready = false;
+
+	sos_num = server.settings.bind.num_ip4 + server.settings.bind.num_ip6;
+	accept_sos = malloc(sizeof(*accept_sos) * sos_num);
+	if(!accept_sos) {
+		logg_errno(LOGF_ERR, "couldn't allocate accept gups");
+		return false;
+	}
 
 	/* sock-things */
-	accept_sos[0].fd  = -1;
-	accept_sos[0].gup = GUP_ACCEPT;
-	accept_sos[1].fd  = -1;
-	accept_sos[1].gup = GUP_ACCEPT;
+	for(i = 0; i < sos_num; i++) {
+		accept_sos[i].fd  = -1;
+		accept_sos[i].gup = GUP_ACCEPT;
+	}
 
+	idx = 0;
 	/* Setting up the accepting Sockets */
-	if(server.settings.bind.use_ip4)
-		ipv4_ready = init_con_a(&accept_sos[0].fd, &server.settings.bind.ip4);
-	else {
-		ipv4_ready = false;
-		accept_sos[0].fd = 0;
+	if(server.settings.bind.use_ip4 && server.settings.bind.num_ip4)
+	{
+		ipv4_ready = true;
+		for(i = 0; ipv4_ready && i < server.settings.bind.num_ip4; i++) {
+			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip4[i]);
+			idx += !!res;
+			ipv4_ready = ipv4_ready && res;
+		}
+		if(!ipv4_ready)
+		{
+			while(i--) {
+				close(accept_sos[--idx].fd);
+				accept_sos[idx].fd = -1;
+			}
+		}
 	}
-	if(server.settings.bind.use_ip6)
-		ipv6_ready = init_con_a(&accept_sos[1].fd, &server.settings.bind.ip6);
-	else {
-		ipv6_ready = false;
-		accept_sos[1].fd = 0;
+	if(server.settings.bind.use_ip6 && server.settings.bind.num_ip6)
+	{
+		ipv6_ready = true;
+		for(i = 0; ipv6_ready && i < server.settings.bind.num_ip6; i++) {
+			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip6[i]);
+			idx += !!res;
+			ipv6_ready = ipv6_ready && res;
+		}
+		if(!ipv6_ready)
+		{
+			while(i--) {
+				close(accept_sos[--idx].fd);
+				accept_sos[idx].fd = -1;
+			}
+		}
 	}
-	if(server.settings.bind.use_ip4 && !ipv4_ready)
+
+	if(server.settings.bind.use_ip4 && !ipv4_ready) {
+		clean_up_accept();
 		return false;
+	}
 	if(server.settings.bind.use_ip6 && !ipv6_ready)
 	{
-		if(!server.settings.bind.use_ip4)
-			return false;
-		else
+		if(ipv4_ready) {
 			logg(LOGF_ERR, "Error starting IPv6, but will keep going!\n");
-	}
-
-	/* Setting first entry to be polled, our Acceptsocket */
-	if(accept_sos[0].fd > -1)
-	{
-		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
-		tmp_ev.data.u64 = 0;
-		tmp_ev.data.ptr = &accept_sos[0];
-		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_sos[0].fd, &tmp_ev))
-		{
-			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
+			server.settings.bind.use_ip6 = false;
+		} else {
 			clean_up_accept();
 			return false;
 		}
 	}
-	if(accept_sos[1].fd > -1)
+
+	accept_sos_num = idx;
+	/* Setting first entry to be polled, our Acceptsocket */
+	for(i = 0; i < idx; i++)
 	{
+		struct epoll_event tmp_ev;
+
+		if(accept_sos[i].fd == -1)
+			continue; /* should not happen, break? */
 		tmp_ev.events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
 		tmp_ev.data.u64 = 0;
-		tmp_ev.data.ptr = &accept_sos[1];
-		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_sos[1].fd, &tmp_ev))
-		{
+		tmp_ev.data.ptr = &accept_sos[i];
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_ADD, accept_sos[i].fd, &tmp_ev)) {
 			logg_errno(LOGF_ERR, "adding acceptor-socket to epoll");
 			clean_up_accept();
 			return false;
@@ -139,8 +166,12 @@ bool init_accept(int epoll_fd)
 
 void clean_up_accept(void)
 {
-	close(accept_sos[0].fd);
-	close(accept_sos[1].fd);
+	unsigned i;
+
+	for(i = 0; i < accept_sos_num; i++) {
+		if(accept_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
+			close(accept_sos[i].fd);
+	}
 }
 
 #define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
@@ -176,7 +207,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 
 	return true;
 out_err:
-	logg_errno(LOGF_ERR, e);
+	logg_errnod(LOGF_ERR, "%s", e);
 	close(*accept_so);
 	*accept_so = -1;
 	return false;
@@ -886,8 +917,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				 */
 				if(unlikely(getsockname(to_con->com_socket, casa(&local_addr), &sin_size))) {
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
+					/* this is really just a (broken) fallback, this should not happen */
 					local_addr = AF_INET == to_con->remote_host.s.fam ?
-					             server.settings.bind.ip4 : server.settings.bind.ip6;
+					             server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
 				}
 				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
 				                            buffer_remaining(*to_con->send));
