@@ -222,9 +222,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi->sin_family = AF_INET;
 			toi->sin_addr = ip->ipi_addr;
-#ifdef HAVE_SA_LEN
+#  ifdef HAVE_SA_LEN
 			toi->sin_len =
-#endif
+#  endif
 			*tolen = sizeof(*toi);
 			break;
 		}
@@ -244,9 +244,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi->sin_family = AF_INET;
 			toi->sin_addr = *ip;
-#ifdef HAVE_SA_LEN
+#  ifdef HAVE_SA_LEN
 			toi->sin_len =
-#endif
+#  endif
 			*tolen = sizeof(*toi);
 			break;
 		}
@@ -261,9 +261,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi6->sin6_family = AF_INET6;
 			memcpy(&toi6->sin6_addr, &ipv6->ipi6_addr, sizeof(toi6->sin6_addr));
-#ifdef HAVE_SA_LEN
+#  ifdef HAVE_SA_LEN
 			toi6->sin_len =
-#endif
+#  endif
 			*tolen = sizeof(*toi6);
 			break;
 		}
@@ -277,9 +277,9 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 
 			toi6->sin6_family = AF_INET6;
 			memcpy(&toi6->sin6_addr, ipv6, INET6_ADDRLEN);
-#ifdef HAVE_SA_LEN
+#  ifdef HAVE_SA_LEN
 			toi6->sin_len =
-#endif
+#  endif
 			*tolen = sizeof(*toi6);
 			break;
 		}
@@ -297,41 +297,76 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 #endif /* defined(HAVE_IP_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1 */
 }
 
-// TODO: use the new 2.6.33 recvmmsg
+// TODO: test new recvmmsg
 ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 {
 #if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
-	struct msghdr msgh;
-	struct cmsghdr *cmsg;
-	char cbuf[256] GCC_ATTR_ALIGNED(sizeof(size_t));
+# ifdef HAVE_RECVMMSG
+	struct mmsghdr msghv[len];
+	char cbuf[len][256] GCC_ATTR_ALIGNED(sizeof(size_t));
+# else
+	struct msghdr msghv[1];
+	char cbuf[1][256] GCC_ATTR_ALIGNED(sizeof(size_t));
+# endif
+	struct msghdr *msgh;
 #endif
 	ssize_t err = 0;
 	unsigned i;
 
-	for(i = 0; i < len; i++)
-	{
-		/*
-		 * IP_PKTINFO / IP_RECVDSTADDR don't provide sin_port so we have to
-		 * retrieve it using getsockname(). Even when we can not receive the
-		 * sender, we have to provide something.
-		 * This also "primes" the buffer.
-		 */
-		if((err = getsockname(s, info[i].to, &info[i].to_len)) < 0)
-			return err;
+	/*
+	 * IP_PKTINFO / IP_RECVDSTADDR don't provide sin_port so we have to
+	 * retrieve it using getsockname(). Even when we can not receive the
+	 * sender, we have to provide something.
+	 * This also "primes" the buffer.
+	 */
+	if((err = getsockname(s, info[0].to, &info[0].to_len)) < 0)
+		return err;
+	for(i = 1; i < len; i++) {
+		memcpy(info[i].to, info[0].to, sizeof(*info[0].to));
+		info[i].to_len = info[0].to_len;
+	}
 
 #if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
-		/* Set up iov and msgh structures. */
-		memset(&msgh, 0, sizeof(msgh));
-		msgh.msg_control    = cbuf;
-		msgh.msg_controllen = sizeof(cbuf);
-		msgh.msg_name       =  info[i].from;
-		msgh.msg_namelen    =  info[i].from_len;
-		msgh.msg_iov        = &info[i].iov;
-		msgh.msg_iovlen     = 1;
-		msgh.msg_flags      = 0;
+# ifdef HAVE_RECVMMSG
+	memset(msghv, 0, sizeof(msghv[0]) * len);
+	for(i = 0; i < len; i++)
+	{
+		msghv[i].msg_hdr.msg_control    = cbuf[i];
+		msghv[i].msg_hdr.msg_controllen = sizeof(cbuf[0]);
+		msghv[i].msg_hdr.msg_name       =  info[i].from;
+		msghv[i].msg_hdr.msg_namelen    =  info[i].from_len;
+		msghv[i].msg_hdr.msg_iov        = &info[i].iov;
+		msghv[i].msg_hdr.msg_iovlen     = 1;
+		msghv[i].msg_hdr.msg_flags      = 0;
+	}
+	err = recvmmsg(s, msghv, len, flags, NULL);
+	if(-1 == err) {
+		if(EAGAIN == errno || EWOULDBLOCK == errno)
+			err = 0;
+		return err;
+	}
+	len = err;
+# endif
+#endif
+
+	for(i = 0; i < len; i++)
+	{
+#if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
+		struct cmsghdr *cmsg;
+
+# ifndef HAVE_RECVMMSG
+		/* Set up iov and msghv structures. */
+		memset(msghv, 0, sizeof(msghv[0]));
+		msghv[0].msg_control    = cbuf[0];
+		msghv[0].msg_controllen = sizeof(cbuf[0]);
+		msghv[0].msg_name       =  info[i].from;
+		msghv[0].msg_namelen    =  info[i].from_len;
+		msghv[0].msg_iov        = &info[i].iov;
+		msghv[0].msg_iovlen     = 1;
+		msghv[0].msg_flags      = 0;
 
 		/* Receive one packet. */
-		err = recvmsg(s, &msgh, flags);
+		err = recvmsg(s, msghv, flags);
 		if(err > 0) {
 			info[i].iov.iov_len = err;
 		} else {
@@ -339,10 +374,15 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 				err = 0;
 			break;
 		}
-		info[i].from_len = msgh.msg_namelen;
+		msgh = msghv;
+# else
+		info[i].iov.iov_len = msghv[i].msg_len;
+		msgh = &msghv[i].msg_hdr;
+# endif
+		info[i].from_len = msgh->msg_namelen;
 
 		/* Process auxiliary received data in msgh */
-		for(cmsg = CMSG_FIRSTHDR(&msgh); cmsg; cmsg = CMSG_NXTHDR(&msgh, cmsg))
+		for(cmsg = CMSG_FIRSTHDR(msgh); cmsg; cmsg = CMSG_NXTHDR(msgh, cmsg))
 		{
 		/* IPv4 */
 # ifdef HAVE_IP_PKTINFO
