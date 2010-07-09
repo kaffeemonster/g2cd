@@ -711,6 +711,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("num_threads",          &server.settings.num_threads,              config_parser_handle_int),
 	CONF_ITEM("max_g2_packet_length", &server.settings.max_g2_packet_length,     config_parser_handle_int),
 	CONF_ITEM("qht_max_promille",     &server.settings.qht.max_promille,         config_parser_handle_int),
+	CONF_ITEM("default_port",         &server.settings.bind.default_port,        config_parser_handle_int),
 	CONF_ITEM("data_root_dir",        &server.settings.data_root_dir,            config_parser_handle_string),
 	CONF_ITEM("entropy_source",       &server.settings.entropy_source,           config_parser_handle_string),
 	CONF_ITEM("nick_name",            &server.settings.nick.name,                config_parser_handle_string),
@@ -750,16 +751,6 @@ static noinline void handle_config(void)
 	atomic_set(&server.status.act_connection_sum, 0);
 	atomic_set(&server.status.act_hub_sum, 0);
 	server.status.our_server_upeer = DEFAULT_SERVER_UPEER;
-	server.settings.bind.ip4 = malloc(sizeof(*server.settings.bind.ip4));
-	server.settings.bind.ip6 = malloc(sizeof(*server.settings.bind.ip6));
-	server.settings.bind.num_ip4 = 1;
-	server.settings.bind.num_ip6 = 1;
-
-	if(!(server.settings.bind.ip4 && server.settings.bind.ip6))
-		diedie("could not alloc ip mem");
-
-	memset(server.settings.bind.ip4, 0, sizeof(*server.settings.bind.ip4));
-	memset(server.settings.bind.ip6, 0, sizeof(*server.settings.bind.ip6));
 
 	/*
 	 * var settings
@@ -774,19 +765,9 @@ static noinline void handle_config(void)
 	server.settings.logging.act_loglevel           = DEFAULT_LOGLEVEL;
 	server.settings.logging.add_date_time          = DEFAULT_LOG_ADD_TIME;
 	server.settings.logging.time_date_format       = DEFAULT_LOG_TIME_FORMAT;
-	/**/
-	server.settings.bind.ip4[0].s.fam              = AF_INET;
-	server.settings.bind.ip4[0].in.sin_port        = htons(DEFAULT_PORT);
-	server.settings.bind.ip4[0].in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
-	casalen_ii(&server.settings.bind.ip4[0]);
+	server.settings.bind.default_port              = DEFAULT_PORT;
 	server.settings.bind.use_ip4                   = DEFAULT_USE_IPV4;
-	/**/
-	server.settings.bind.ip6[0].s.fam              = AF_INET6;
-	server.settings.bind.ip6[0].in6.sin6_port      = htons(DEFAULT_PORT);
-	server.settings.bind.ip6[0].in6.sin6_addr      = in6addr_any;
-	casalen_ii(&server.settings.bind.ip6[0]);
 	server.settings.bind.use_ip6                   = DEFAULT_USE_IPV6;
-	/**/
 	server.settings.default_in_encoding            = DEFAULT_ENC_IN;
 	server.settings.default_out_encoding           = DEFAULT_ENC_OUT;
 	server.settings.hub_in_encoding                = DEFAULT_HUB_ENC_IN;
@@ -826,6 +807,37 @@ static noinline void handle_config(void)
 			logg_errnod(LOGF_ERR, "Error parsing config file \"%s\"", server.settings.config_file);
 			die("giving up");
 		}
+	}
+
+	if(!server.settings.bind.default_port || server.settings.bind.default_port >= 1 << 16) {
+		logg(LOGF_NOTICE, "Default port number %u is out of range, using compiled in port number %u\n",
+		     server.settings.bind.default_port, DEFAULT_PORT);
+		server.settings.bind.default_port = DEFAULT_PORT;
+	}
+
+	if(!server.settings.bind.ip4)
+	{
+		server.settings.bind.ip4 = malloc(sizeof(*server.settings.bind.ip4));
+		if(!server.settings.bind.ip4)
+			diedie("could not alloc ip mem");
+		server.settings.bind.num_ip4 = 1;
+		memset(server.settings.bind.ip4, 0, sizeof(*server.settings.bind.ip4));
+		server.settings.bind.ip4[0].s.fam              = AF_INET;
+		server.settings.bind.ip4[0].in.sin_port        = htons(server.settings.bind.default_port);
+		server.settings.bind.ip4[0].in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
+		casalen_ii(&server.settings.bind.ip4[0]);
+	}
+	if(!server.settings.bind.ip6)
+	{
+		server.settings.bind.ip6 = malloc(sizeof(*server.settings.bind.ip6));
+		if(!server.settings.bind.ip6)
+			diedie("could not alloc ip mem");
+		server.settings.bind.num_ip6 = 1;
+		memset(server.settings.bind.ip6, 0, sizeof(*server.settings.bind.ip6));
+		server.settings.bind.ip6[0].s.fam              = AF_INET6;
+		server.settings.bind.ip6[0].in6.sin6_port      = htons(server.settings.bind.default_port);
+		server.settings.bind.ip6[0].in6.sin6_addr      = in6addr_any;
+		casalen_ii(&server.settings.bind.ip6[0]);
 	}
 
 	if(server.settings.qht.max_promille > 1000)

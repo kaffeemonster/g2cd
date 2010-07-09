@@ -30,6 +30,12 @@ COMMENTC
 COMMENT use_ipv6 = DEFAULT_USE_IPV6
 
 COMMENTC
+COMMENTC what is the default port number to bind to
+COMMENTC with IPs that don not specify a specific port
+COMMENTC
+COMMENT default_port = DEFAULT_PORT
+
+COMMENTC
 COMMENTC What is the user account we want to run under
 COMMENTC
 COMMENT user_name = DEFAULT_USER
