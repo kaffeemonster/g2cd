@@ -470,14 +470,6 @@ static inline bool combo_addr_is_v6(const union combo_addr *addr)
 	         IN6_IS_ADDR_V4COMPAT(&addr->in6.sin6_addr));
 }
 
-static inline bool combo_addr_is_wildcard(const union combo_addr *addr)
-{
-	if(addr->s.fam == AF_INET)
-		return addr->in.sin_addr.s_addr == INADDR_ANY;
-	else
-		return IN6_IS_ADDR_UNSPECIFIED(&addr->in6.sin6_addr);
-}
-
 static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed)
 {
 	uint32_t h;
@@ -546,6 +538,31 @@ static inline bool combo_addr_eq_any(const union combo_addr *a)
 	} else {
 		return 0 == a->in6.sin6_addr.s6_addr32[0] && 0 == a->in6.sin6_addr.s6_addr32[1] &&
 		       0 == a->in6.sin6_addr.s6_addr32[2] && 0 == a->in6.sin6_addr.s6_addr32[3];
+	}
+}
+
+static inline int combo_addr_cmp(const union combo_addr *a, const union combo_addr *b)
+{
+	int ret;
+	if((ret = (int)a->s.fam - (int)b->s.fam))
+		return ret;
+	if(likely(AF_INET == a->s.fam))
+	{
+		if((ret = (long)a->in.sin_addr.s_addr - (long)b->in.sin_addr.s_addr))
+			return ret;
+		return (int)a->in.sin_port - (int)b->in.sin_port;
+	}
+	else
+	{
+		if((ret = (long)a->in6.sin6_addr.s6_addr32[0] - (long)b->in6.sin6_addr.s6_addr32[0]))
+			return ret;
+		if((ret = (long)a->in6.sin6_addr.s6_addr32[1] - (long)b->in6.sin6_addr.s6_addr32[1]))
+			return ret;
+		if((ret = (long)a->in6.sin6_addr.s6_addr32[2] - (long)b->in6.sin6_addr.s6_addr32[2]))
+			return ret;
+		if((ret = (long)a->in6.sin6_addr.s6_addr32[3] - (long)b->in6.sin6_addr.s6_addr32[3]))
+			return ret;
+		return (int)a->in6.sin6_port - (int)b->in6.sin6_port;
 	}
 }
 

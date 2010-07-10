@@ -423,26 +423,7 @@ static int qk_entry_cmp(struct qk_cache_entry *a, struct qk_cache_entry *b)
 	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
-		return ret;
-	if(likely(AF_INET == a->e.na.s.fam))
-	{
-		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
-			return ret;
-		return (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port;
-	}
-	else
-	{
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
-			return ret;
-		return (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port;
-	}
+	return combo_addr_cmp(&a->e.na, &b->e.na);
 }
 
 static noinline bool qk_rb_cache_insert(struct qk_cache_entry *e)

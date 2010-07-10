@@ -442,28 +442,8 @@ static int udp_reas_entry_cmp(struct udp_reas_cache_entry *a, struct udp_reas_ca
 	int ret = (long)a->e.when - (long)b->e.when;
 	if(ret)
 		return ret;
-	if((ret = (int)a->e.na.s.fam - (int)b->e.na.s.fam))
+	if((ret = combo_addr_cmp(&a->e.na, &b->e.na)))
 		return ret;
-	if(likely(AF_INET == a->e.na.s.fam))
-	{
-		if((ret = (long)a->e.na.in.sin_addr.s_addr - (long)b->e.na.in.sin_addr.s_addr))
-			return ret;
-		if((ret = (int)a->e.na.in.sin_port - (int)b->e.na.in.sin_port))
-			return ret;
-	}
-	else
-	{
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[0] - (long)b->e.na.in6.sin6_addr.s6_addr32[0]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[1] - (long)b->e.na.in6.sin6_addr.s6_addr32[1]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[2] - (long)b->e.na.in6.sin6_addr.s6_addr32[2]))
-			return ret;
-		if((ret = (long)a->e.na.in6.sin6_addr.s6_addr32[3] - (long)b->e.na.in6.sin6_addr.s6_addr32[3]))
-			return ret;
-		if((ret = (int)a->e.na.in6.sin6_port - (int)b->e.na.in6.sin6_port))
-			return ret;
-	}
 	return (int)a->e.sequence - (int)b->e.sequence;
 }
 
@@ -1717,7 +1697,7 @@ void g2_udp_send(const union combo_addr *to, const union combo_addr *from, struc
 			answer_fd = udp_sos[i].fd;
 			break;
 		}
-		if(combo_addr_is_wildcard(&udp_sos[i].na) && -1 != udp_sos[i].fd)
+		if(combo_addr_eq_any(&udp_sos[i].na) && -1 != udp_sos[i].fd)
 			fallback_fd = udp_sos[i].fd;
 		if(-1 != udp_sos[i].fd)
 			fallback_fallback_fd = udp_sos[i].fd;
