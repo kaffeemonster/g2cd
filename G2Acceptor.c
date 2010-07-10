@@ -310,9 +310,9 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	work_entry->active_to.data = work_entry;
 	timeout_add(&work_entry->active_to, ACCEPT_ACTIVE_TIMEOUT);
 
-	work_entry->u.accept.header_complete_to.fun = accept_timeout;
-	work_entry->u.accept.header_complete_to.data = work_entry;
-	timeout_add(&work_entry->u.accept.header_complete_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
+	work_entry->aux_to.fun  = accept_timeout;
+	work_entry->aux_to.data = work_entry;
+	timeout_add(&work_entry->aux_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
 
 	handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "going to handshake");
 
@@ -366,7 +366,7 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
 	return ret_val;
 }
 
-void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[2], int epoll_fd)
+void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], int epoll_fd)
 {
 	g2_connection_t *tmp_con = ev->data.ptr;
 	int lock_res;
@@ -720,7 +720,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 	/* the first header is comlete, give the poor soul new time */
 		case ADVANCE_TIMEOUTS:
-			timeout_advance(&to_con->u.accept.header_complete_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
+			timeout_advance(&to_con->aux_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
 			to_con->connect_state++;
 	/* what's up with the accept-field? */
 		case CHECK_ACCEPT:
@@ -1208,7 +1208,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 		case CANCEL_TIMEOUTS:
 // TODO: cancel here or at end?
 			timeout_cancel(&to_con->active_to);
-			timeout_cancel(&to_con->u.accept.header_complete_to);
+			timeout_cancel(&to_con->aux_to);
 			to_con->connect_state++;
 	/* Content-Key? */
 		case CHECK_CONTENT:
@@ -1267,11 +1267,13 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->connect_state++;
 	/* make everything ready for business */
 		case FINISH_CONNECTION:
-			DESTROY_TIMEOUT(&to_con->u.accept.header_complete_to);
 			/* wipe out the shared space again */
 			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
 			to_con->connect_state = G2CONNECTED;
-			INIT_TIMEOUT(&to_con->u.handler.z_flush_to);
+			to_con->aux_to.fun     = handler_z_flush_timeout;
+			to_con->aux_to.data    = to_con;
+			to_con->active_to.fun  = handler_active_timeout;
+			to_con->active_to.data = to_con;
 			/* OK, handshake was a success, now put the connec in the right place */
 			if(to_con->flags.upeer) {
 				if(!g2_conreg_promote_hub(to_con))
@@ -1288,6 +1290,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->poll_interrests |= (uint32_t) EPOLLOUT;
 				shortlock_t_unlock(&to_con->pts_lock);
 			}
+			timeout_add(&to_con->active_to, HANDLER_ACTIVE_TIMEOUT);
 			more_bytes_needed = true;
 			break;
 		case G2CONNECTED:

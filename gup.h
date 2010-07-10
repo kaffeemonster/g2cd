@@ -55,6 +55,9 @@ union gup
 struct g2_packet;
 struct g2_connection;
 
+# define HANDLER_ACTIVE_TIMEOUT (91 * 10)
+# define MULTI_RECV_NUM 4
+
 # ifndef GUP_C
 #  define GUP_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 # else

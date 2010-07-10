@@ -903,36 +903,40 @@ life_tree_error:
 }
 
 /************************* UDP work funcs ***********************/
-#define MULTI_RECV_NUM 4
-void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll_fd)
+void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_NUM],  int epoll_fd)
 {
 	static int warned;
 	/* other variables */
 	struct simple_gup *sg = ev->data.ptr;
 	union combo_addr from[MULTI_RECV_NUM], to[MULTI_RECV_NUM];
-	struct norm_buff *d_hold_x[MULTI_RECV_NUM];
 	ssize_t result;
 	unsigned i, j;
 	bool keep_going = true;
 
-	d_hold_x[0] = d_hold_sp[0];
-	buffer_clear(*(d_hold_x[0]));
-	d_hold_x[1] = d_hold_sp[1];
-	buffer_clear(*(d_hold_x[0]));
-	for(i = 2; i < MULTI_RECV_NUM; i++)
-		d_hold_x[i] = recv_buff_local_get();
+	/* move buffers to the array start, clear them, count them */
+	for(i = 0, j = 0; i < MULTI_RECV_NUM; i++)
+	{
+		if(!d_hold_sp[i])
+			continue;
 
+		d_hold_sp[j] = d_hold_sp[i];
+		buffer_clear(*(d_hold_sp[j]));
+		j++;
+	}
+
+// TODO: remove
+	/* debug buffer health */
 	if(!warned)
 	{
-		for(i = 0; i < MULTI_RECV_NUM; i++) {
-			if(d_hold_x[i]->capacity != NORM_BUFF_CAPACITY) {
-				logg_develd("small buffer!: %zu\n", d_hold_x[i]->capacity);
+		for(i = 0; i < j; i++) {
+			if(d_hold_sp[i]->capacity != NORM_BUFF_CAPACITY) {
+				logg_develd("small buffer!: %zu\n", d_hold_sp[i]->capacity);
 				warned++;
 			}
 		}
 	}
 
-	if((result = handle_udp_sock(ev, d_hold_x, from, to, sg->fd, MULTI_RECV_NUM)) < 0) {
+	if((result = handle_udp_sock(ev, d_hold_sp, from, to, sg->fd, j)) < 0) {
 		/* bad things */
 		keep_going = false;
 	}
@@ -951,23 +955,17 @@ void handle_udp(struct epoll_event *ev, struct norm_buff **d_hold_sp,  int epoll
 	{
 		/* if we reach here, we know that there is at least no error or the logic above failed... */
 		for(i = 0; i < (unsigned)result; i++) {
-			buffer_flip(*(d_hold_x[i]));
-			handle_udp_packet(&d_hold_x[i], &from[i], &to[i], sg->fd);
+			buffer_flip(*(d_hold_sp[i]));
+			handle_udp_packet(&d_hold_sp[i], &from[i], &to[i], sg->fd);
 		}
 	}
 
-	d_hold_sp[0] = NULL;
-	d_hold_sp[1] = NULL;
-	for(i = 0, j = 0; i < MULTI_RECV_NUM; i++)
+	for(i = 0; i < j; i++)
 	{
-		struct norm_buff *t = d_hold_x[i];
+		struct norm_buff *t = d_hold_sp[i];
 		if(!t)
 			continue;
 		buffer_clear(*t);
-		if(j < 2)
-			d_hold_sp[j++] = t;
-		else
-			recv_buff_local_ret(t);
 	}
 }
 

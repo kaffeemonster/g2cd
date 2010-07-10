@@ -31,15 +31,13 @@
 # include "lib/sec_buffer.h"
 # include "gup.h"
 
-# define HANDLER_ACTIVE_TIMEOUT (91 * 10)
-
 # ifndef _G2HANDLER_C
 #  define _G2HAN_EXTRN(x) extern x GCC_ATTR_VIS("hidden")
 # else
 #  define _G2HAN_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _G2HANDLER_C */
 
-_G2HAN_EXTRN(void handle_con(struct epoll_event *, struct norm_buff *[2], int));
+_G2HAN_EXTRN(void handle_con(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], int));
 
 #endif /* G2HANDLER_H */
 /* EOF */

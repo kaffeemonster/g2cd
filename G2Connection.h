@@ -95,6 +95,7 @@ typedef struct g2_connection
 	/* Internal States */
 	union combo_addr sent_addr;
 	struct timeout   active_to;
+	struct timeout   aux_to;
 	time_t           connect_time;
 	time_t           last_send;
 	time_t           last_active;
@@ -130,12 +131,10 @@ typedef struct g2_connection
 				time_t     Q2;
 			} recv_stamps;
 			unsigned leaf_count;
-			struct timeout z_flush_to;
 			bool z_flush;
 		} handler;
 		struct
 		{
-			struct timeout header_complete_to;
 			size_t         header_bytes_recv;
 			struct
 			{

@@ -61,7 +61,7 @@
 /* internal prototypes */
 static inline g2_connection_t *handle_socket_io_h(struct epoll_event *, int epoll_fd, struct norm_buff **, struct norm_buff **);
 
-void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[2], int epoll_fd)
+void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[MULTI_RECV_NUM], int epoll_fd)
 {
 	g2_connection_t *w_entry = e_wptr->data.ptr;
 	int lock_res;
@@ -265,9 +265,9 @@ retry_pack:
 			 * re-call deflate with the same flush value
 			 */
 			if(!old_flush) {
-				w_entry->u.handler.z_flush_to.data = w_entry;
-				w_entry->u.handler.z_flush_to.fun  = handler_z_flush_timeout;
-				timeout_add(&w_entry->u.handler.z_flush_to, 20);
+				w_entry->aux_to.data = w_entry;
+				w_entry->aux_to.fun  = handler_z_flush_timeout;
+				timeout_add(&w_entry->aux_to, 20);
 			} else if(!genuie_buf_full)
 				w_entry->u.handler.z_flush = false;
 		}

@@ -179,14 +179,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	{
 		timeout_cancel(&work_entry->active_to);
 		DESTROY_TIMEOUT(&work_entry->active_to);
-
-		if(G2CONNECTED != work_entry->connect_state) {
-			timeout_cancel(&work_entry->u.accept.header_complete_to);
-			DESTROY_TIMEOUT(&work_entry->u.accept.header_complete_to);
-		} else {
-			timeout_cancel(&work_entry->u.handler.z_flush_to);
-			DESTROY_TIMEOUT(&work_entry->u.handler.z_flush_to);
-		}
+		timeout_cancel(&work_entry->aux_to);
+		DESTROY_TIMEOUT(&work_entry->aux_to);
 
 		g2_conreg_remove(work_entry);
 		if(work_entry->z_decoder)
@@ -286,7 +280,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
 	INIT_LIST_HEAD(&work_entry->hub_list);
 	INIT_TIMEOUT(&work_entry->active_to);
-	INIT_TIMEOUT(&work_entry->u.accept.header_complete_to);
+	INIT_TIMEOUT(&work_entry->aux_to);
 	pthread_mutex_unlock(&work_entry->lock);
 }
 
@@ -294,14 +288,9 @@ static void g2_con_free_internal(g2_connection_t *to_free)
 {
 	/* timeouts */
 	timeout_cancel(&to_free->active_to);
-
-	if(G2CONNECTED != to_free->connect_state) {
-		timeout_cancel(&to_free->u.accept.header_complete_to);
-		DESTROY_TIMEOUT(&to_free->u.accept.header_complete_to);
-	} else {
-		timeout_cancel(&to_free->u.handler.z_flush_to);
-		DESTROY_TIMEOUT(&to_free->u.handler.z_flush_to);
-	}
+	DESTROY_TIMEOUT(&to_free->active_to);
+	timeout_cancel(&to_free->aux_to);
+	DESTROY_TIMEOUT(&to_free->aux_to);
 
 	/* zlib */
 	if(to_free->z_decoder)

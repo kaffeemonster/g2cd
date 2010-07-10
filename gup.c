@@ -69,10 +69,11 @@ static bool handle_abort(struct simple_gup *, struct epoll_event *);
 
 static void *gup_loop(void *param)
 {
-	struct norm_buff *lbuff[2];
+	struct norm_buff *lbuff[MULTI_RECV_NUM];
 	g2_connection_t *lcon = NULL;
 	int num_poll = 0;
 	int index_poll = 0;
+	unsigned i;
 
 	unsigned refill_count = EVENT_SPACE / 2;
 	bool lcon_refresh_needed = false;
@@ -82,13 +83,17 @@ static void *gup_loop(void *param)
 	recv_buff_local_refill();
 
 	/* fill receive buffer */
-	lbuff[0] = recv_buff_local_get();
-	lbuff[1] = recv_buff_local_get();
-	if(!(lbuff[0] && lbuff[1])) {
-		logg_errno(LOGF_ERR, "allocating local buffer");
-		worker.keep_going = false;
-		goto out;
+	memset(lbuff, 0, sizeof(lbuff));
+	for(i = 0; i < MULTI_RECV_NUM; i++)
+	{
+		lbuff[i] = recv_buff_local_get();
+		if(!lbuff[i]) {
+			logg_errno(LOGF_ERR, "allocating local buffer");
+			worker.keep_going = false;
+			goto out;
+		}
 	}
+	num_poll = 0;
 	/* fill connection buffer */
 	lcon = g2_con_get_free();
 	if(!lcon) {
@@ -112,10 +117,10 @@ static void *gup_loop(void *param)
 			g2_con_clear(lcon);
 			lcon_refresh_needed = false;
 		}
-		if(!lbuff[0])
-			lbuff[0] = recv_buff_local_get();
-		if(!lbuff[1])
-			lbuff[1] = recv_buff_local_get();
+		for(i = 0; i < MULTI_RECV_NUM; i++) {
+			if(!lbuff[i])
+				lbuff[i] = recv_buff_local_get();
+		}
 		if(!(--refill_count)) {
 			recv_buff_local_refill();
 			g2_packet_local_refill();
@@ -262,18 +267,11 @@ static void *gup_loop(void *param)
 			break;
 		case GUP_UDP:
 			{
-				struct norm_buff **t_buff, *tt_buff = NULL;
-				t_buff = lbuff[0] ? &lbuff[0] : (lbuff[1] ? &lbuff[1] : &tt_buff);
-				if(!*t_buff)
-				{
-					if(!(lbuff[0] = recv_buff_local_get())) {
-						logg_errno(LOGF_ERR, "no recv buff!!");
-						kg = false;
-						break;
-					}
-					t_buff = &lbuff[0];
+				for(i = 0; i < MULTI_RECV_NUM; i++) {
+					if(!lbuff[i])
+						lbuff[i] = recv_buff_local_get(); /* try to fill in missing buffers */
 				}
-				handle_udp(ev, t_buff, worker.epollfd);
+				handle_udp(ev, lbuff, worker.epollfd);
 			}
 			break;
 		case GUP_ABORT:
@@ -292,8 +290,8 @@ static void *gup_loop(void *param)
 
 out:
 	g2_con_free(lcon);
-	recv_buff_local_ret(lbuff[0]);
-	recv_buff_local_ret(lbuff[1]);
+	for(i = 0; i < MULTI_RECV_NUM; i++)
+		recv_buff_local_ret(lbuff[i]);
 	recv_buff_local_free();
 
 	/* clean up our hzp */
