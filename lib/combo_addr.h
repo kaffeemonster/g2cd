@@ -219,6 +219,12 @@ union combo_addr
 	struct sockaddr_in6 in6;
 };
 
+struct combo_addr_arr
+{
+	union combo_addr *a;
+	unsigned num;
+};
+
 static inline struct sockaddr *casa(union combo_addr *in)
 {
 	return (struct sockaddr *)in;
@@ -247,6 +253,22 @@ static inline void casalen_ii(union combo_addr *in GCC_ATTR_UNUSED_PARAM)
 	in->s.len = casalen(in);
 #endif
 }
+
+static inline in_port_t combo_addr_port(const union combo_addr *addr)
+{
+// TODO: when IPv6 is common, change it
+	return likely(AF_INET == addr->s.fam) ? addr->in.sin_port : addr->in6.sin6_port;
+}
+
+static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
+{
+// TODO: when IPv6 is common, change it
+	if(likely(AF_INET == addr->s.fam))
+		addr->in.sin_port = port;
+	else
+		addr->in6.sin6_port = port;
+}
+
 
 static inline const char *combo_addr_print(const union combo_addr *src, char *dst, socklen_t cnt)
 {
@@ -282,20 +304,7 @@ static inline int combo_addr_read(const char *src, union combo_addr *dst)
 	return ret_val;
 }
 
-static inline in_port_t combo_addr_port(const union combo_addr *addr)
-{
-// TODO: when IPv6 is common, change it
-	return likely(AF_INET == addr->s.fam) ? addr->in.sin_port : addr->in6.sin6_port;
-}
-
-static inline void combo_addr_set_port(union combo_addr *addr, in_port_t port)
-{
-// TODO: when IPv6 is common, change it
-	if(likely(AF_INET == addr->s.fam))
-		addr->in.sin_port = port;
-	else
-		addr->in6.sin6_port = port;
-}
+bool combo_addr_read_wport(char *str, union combo_addr *addr) GCC_ATTR_VIS("hidden");
 
 # define SLASH04 htonl(0xF0000000)
 # define SLASH08 htonl(0xFF000000)

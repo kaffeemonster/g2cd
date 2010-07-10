@@ -713,7 +713,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 		{
 			union combo_addr a;
 			int since = 0;
-			char *next, *port, *ipsix_end;
+			char *next;
 
 			/* first try to find next seperator */
 			next = strchr(wptr, '|');
@@ -727,34 +727,15 @@ static void gwc_handle_line(char *line, time_t lnow)
 
 			/* skip whitespace at addr start */
 			for(; *wptr && isblank((int)*wptr); wptr++);
-			/*
-			 * playing with fire here, a moron maybe forgot the [ ] needed
-			 * around literal IPv6 addresses where a port may be specified
-			 */
-			if((ipsix_end = strrchr(wptr, ']')))
-			{
-				/* try to skip the [ ] */
-				if('[' == *wptr)
-					wptr++;
-				*ipsix_end++ = '\0';
-				port = strrchr(ipsix_end, ':');
-			} else
-				port = strrchr(wptr, ':');
-			if(port)
-				*port++ = '\0';
-			/* skip whitespace at port start */
-			for(; *port && isblank((int)*port); port++);
-			if(!(*port && isdigit((int)*port)))
-				port = NULL;
 
 			memset(&a, 0, sizeof(a));
-			if(0 >= combo_addr_read(wptr, &a))
-				break; /* nothing to read */
+			if(!combo_addr_read_wport(wptr, &a)) {
+				logg_develd("failed to parse \"%s\"\n", wptr);
+				break;
+			}
 
-			if(port && isdigit((int)*port))
-				combo_addr_set_port(&a, htons(atoi(port)));
-			else
-				combo_addr_set_port(&a, htons(6551));
+			if(!combo_addr_port(&a))
+				combo_addr_set_port(&a, htons(6346));
 
 			/*
 			 * this host is in the gwc cache since 'since' senconds.

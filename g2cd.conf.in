@@ -36,6 +36,16 @@ COMMENTC
 COMMENT default_port = DEFAULT_PORT
 
 COMMENTC
+COMMENTC on which IPs should we listen? These lines can
+COMMENTC be repeated several times for all IPs.
+COMMENTC
+COMMENTC Note: We want to see an IP here, the default
+COMMENTC are special symbols, which can not be parsed.
+COMMENTC
+COMMENT bind_v4 = DEFAULT_ADDR
+COMMENT bind_v6 = DEFAULT_ADDR6
+
+COMMENTC
 COMMENTC What is the user account we want to run under
 COMMENTC
 COMMENT user_name = DEFAULT_USER

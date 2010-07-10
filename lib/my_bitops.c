@@ -26,6 +26,7 @@
 #ifdef HAVE_CONFIG_H
 # include "../config.h"
 #endif
+#include "other.h"
 #include "my_bitops.h"
 
 #ifdef I_LIKE_ASM
@@ -151,5 +152,94 @@ void emit_emms(void)
 {
 }
 #endif
+
+/*
+ * park this function here...
+ */
+#include <string.h>
+#include <stdlib.h>
+#include "combo_addr.h"
+
+bool combo_addr_read_wport(char *str, union combo_addr *addr)
+{
+	char *t;
+	int ret_val;
+	unsigned port = 0;
+
+	/* opening IPv6 bracket? */
+	if('[' == *str)
+	{
+		str++;
+		/* do we have the closing bracket? */
+		t = strrchr(str, ']');
+		if(!t)
+			return false;
+		*t++ = '\0';
+		if(':' == *t) { /* and here comes the port */
+			port = atoi(t+1);
+			if(port >= 1 << 16)
+				return false;
+		}
+
+		ret_val = inet_pton(AF_INET6, str, &addr->in6.sin6_addr);
+		if(0 < ret_val) {
+			addr->s.fam = AF_INET6;
+			casalen_ii(addr);
+		} else
+			return false;
+// TODO: try IPv4?
+	}
+	else
+	{
+		/* ipv4 with port or ipv6 without? */
+		t = strrchr(str, ':');
+		if(t)
+		{
+			char *x = t;
+			/* ok, we have one ':', do we have another? */
+			do {
+				x--;
+			} while(x >= str && ':' != *x);
+			if(x >= str)
+			{
+				/* another ':', we guess it's ipv6  without port */
+				ret_val = inet_pton(AF_INET6, str, &addr->in6.sin6_addr);
+				if(0 < ret_val) {
+					addr->s.fam = AF_INET6;
+					casalen_ii(addr);
+				} else
+					return false;
+// TODO: try IPv4?
+			}
+			else
+			{
+				/* nope, this is prop. the port */
+				*t++ = '\0';
+				port = atoi(t);
+				if(port >= 1 << 16)
+					return false;
+				ret_val = inet_pton(AF_INET, str, &addr->in.sin_addr);
+				if(0 < ret_val) {
+					addr->s.fam = AF_INET;
+					casalen_ii(addr);
+				} else
+					return false;
+// TODO: try IPv6?
+			}
+		}
+		else
+		{
+			ret_val = inet_pton(AF_INET, str, &addr->in.sin_addr);
+			if(0 < ret_val) {
+				addr->s.fam = AF_INET;
+				casalen_ii(addr);
+			} else
+				return false;
+// TODO: try IPv6?
+		}
+	}
+	combo_addr_set_port(addr, htons(port));
+	return true;
+}
 
 static char const rcsid_mbo[] GCC_ATTR_USED_VAR = "$Id:$";

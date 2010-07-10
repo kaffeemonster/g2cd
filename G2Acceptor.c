@@ -81,7 +81,7 @@ bool init_accept(int epoll_fd)
 	bool ipv4_ready = false;
 	bool ipv6_ready = false;
 
-	sos_num = server.settings.bind.num_ip4 + server.settings.bind.num_ip6;
+	sos_num = server.settings.bind.ip4.num + server.settings.bind.ip6.num;
 	accept_sos = malloc(sizeof(*accept_sos) * sos_num);
 	if(!accept_sos) {
 		logg_errno(LOGF_ERR, "couldn't allocate accept gups");
@@ -96,11 +96,11 @@ bool init_accept(int epoll_fd)
 
 	idx = 0;
 	/* Setting up the accepting Sockets */
-	if(server.settings.bind.use_ip4 && server.settings.bind.num_ip4)
+	if(server.settings.bind.use_ip4 && server.settings.bind.ip4.num)
 	{
 		ipv4_ready = true;
-		for(i = 0; ipv4_ready && i < server.settings.bind.num_ip4; i++) {
-			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip4[i]);
+		for(i = 0; ipv4_ready && i < server.settings.bind.ip4.num; i++) {
+			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip4.a[i]);
 			idx += !!res;
 			ipv4_ready = ipv4_ready && res;
 		}
@@ -112,11 +112,11 @@ bool init_accept(int epoll_fd)
 			}
 		}
 	}
-	if(server.settings.bind.use_ip6 && server.settings.bind.num_ip6)
+	if(server.settings.bind.use_ip6 && server.settings.bind.ip6.num)
 	{
 		ipv6_ready = true;
-		for(i = 0; ipv6_ready && i < server.settings.bind.num_ip6; i++) {
-			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip6[i]);
+		for(i = 0; ipv6_ready && i < server.settings.bind.ip6.num; i++) {
+			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip6.a[i]);
 			idx += !!res;
 			ipv6_ready = ipv6_ready && res;
 		}
@@ -919,7 +919,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 					logg_errno(LOGF_DEBUG, "getting local addr of socket");
 					/* this is really just a (broken) fallback, this should not happen */
 					local_addr = AF_INET == to_con->remote_host.s.fam ?
-					             server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+					             server.settings.bind.ip4.a[0] : server.settings.bind.ip6.a[0];
 				}
 				cp_ret = combo_addr_print_c(&local_addr, buffer_start(*to_con->send),
 				                            buffer_remaining(*to_con->send));

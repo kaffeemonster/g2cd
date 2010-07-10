@@ -556,28 +556,12 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 {
 	char *buffer;
 	union combo_addr l_addr;
-	char *z;
-	int ret_val = 0;
-	uint16_t port = 0;
 
 	buffer = buffer_start(*to_con->recv);
 	/* brutally NUL terminate, there is a \r\n behind us */
 	buffer[distance] = '\0';
 
-	/* port */
-	z = strrchr(buffer, ':');
-	if(z) {
-		*z++ = '\0';
-		port = atoi(z);
-	}
-	/* IPv6? */
-	z = buffer;
-	if(*z == '[')
-		z++;
-	ret_val = combo_addr_read(z, &l_addr);
-
-	if(0 < ret_val) {
-		combo_addr_set_port(&l_addr, port);
+	if(combo_addr_read_wport(buffer, &l_addr)) {
 		logg_develd_old("they say is our IP:\t%p#I\n", &l_addr);
 		to_con->u.accept.flags.addr_ok = true;
 		return false;
@@ -585,12 +569,9 @@ static bool remote_ip_what(g2_connection_t *to_con, size_t distance)
 	else
 	{
 		to_con->u.accept.flags.addr_ok = false;
-		if(0 == ret_val)
-			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
-			          "got illegal remote ip from", &to_con->remote_host,
-			           to_con->com_socket, (int)distance, buffer);
-		else
-			logg_errno(LOGF_DEBUG, "reading remote ip");
+		logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
+		          "got illegal remote ip from", &to_con->remote_host,
+		           to_con->com_socket, (int)distance, buffer);
 
 		return true;
 	}
@@ -640,40 +621,20 @@ static bool accept_what(g2_connection_t *to_con, size_t distance)
 static bool listen_what(g2_connection_t *to_con, size_t distance)
 {
 	char *buffer;
-	char *z;
-	int ret_val = 0;
-	uint16_t port = 0;
 
 	buffer = buffer_start(*to_con->recv);
 	/* brutally NUL terminate, there is a \r\n behind us */
 	buffer[distance] = '\0';
 
-	/* port */
-// TODO: memrchr
-	z = strrchr(buffer, ':');
-	if(z) {
-		*z++ = '\0';
-		port = atoi(z);
-	}
-	/* IPv6? */
-	z = buffer;
-	if(*z == '[')
-		z++;
-	ret_val = combo_addr_read(z, &to_con->sent_addr);
-
-	if(0 < ret_val) {
-		combo_addr_set_port(&to_con->sent_addr, htons(port));
+	if(combo_addr_read_wport(buffer, &to_con->sent_addr)) {
 		logg_develd_old("they think of their-IP:\t%p#I\n", &to_con->sent_addr);
 		return false;
 	}
 	else
 	{
-		if(0 == ret_val)
-			logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
-			          "got illegal listen ip from", &to_con->remote_host,
-			           to_con->com_socket, (int)distance, buffer);
-		else
-			logg_errno(LOGF_DEBUG, "reading listen ip");
+		logg_posd(LOGF_DEBUG, "%s %p#I\tFDNum: %i \"%.*s\"\n",
+		          "got illegal listen ip from", &to_con->remote_host,
+		           to_con->com_socket, (int)distance, buffer);
 
 		return true;
 	}
@@ -699,8 +660,7 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 
 	for(c = 0xff; c; w_ptr = x)
 	{
-		char *t_str, *z;
-		uint16_t port;
+		char *t_str;
 
 		x = strchrnul(w_ptr, ',');
 		/* remove leading white-spaces in field-data */
@@ -712,22 +672,12 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 			continue;
 		*t_str++ = '\0';
 
-		/* port */
-		z = strrchr(w_ptr, ':');
-		if(!z)
+		if(!combo_addr_read_wport(w_ptr, &where)) {
+			logg_develd("failed to read \"%s\"\n", w_ptr);
 			continue;
-		*z++ = '\0';
-		port = atoi(z);
-		if(!port)
-			continue;
-
-		/* IPv6? */
-		if(*w_ptr == '[')
-			w_ptr++;
-		if(!combo_addr_read(w_ptr, &where))
-			continue;
-
-		combo_addr_set_port(&where, port);
+		}
+		if(!combo_addr_port(&where))
+			combo_addr_set_port(&where, htons(6346));
 
 		/* time stamp */
 		if(!read_ts(t_str, &when)) {

@@ -982,7 +982,7 @@ bool init_udp(int epoll_fd)
 	/* set the sequence seed */
 	random_bytes_get(&sequence_seed, sizeof(sequence_seed));
 
-	sos_num = server.settings.bind.num_ip4 + server.settings.bind.num_ip6;
+	sos_num = server.settings.bind.ip4.num + server.settings.bind.ip6.num;
 	udp_sos = malloc(sizeof(*udp_sos) * sos_num);
 	if(!udp_sos) {
 		logg_errno(LOGF_ERR, "couldn't allocate udp gups");
@@ -998,14 +998,14 @@ bool init_udp(int epoll_fd)
 
 	idx = 0;
 	/* Setting up the UDP Socket */
-	if(server.settings.bind.use_ip4 && server.settings.bind.num_ip4)
+	if(server.settings.bind.use_ip4 && server.settings.bind.ip4.num)
 	{
 		ipv4_ready = true;
-		for(i = 0; ipv4_ready && i < server.settings.bind.num_ip4; i++)
+		for(i = 0; ipv4_ready && i < server.settings.bind.ip4.num; i++)
 		{
-			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip4[i]);
+			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip4.a[i]);
 			if(res)
-				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip4[i], sizeof(udp_sos[0].na));
+				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip4.a[i], sizeof(udp_sos[0].na));
 			ipv4_ready = ipv4_ready && res;
 		}
 		if(!ipv4_ready)
@@ -1017,14 +1017,14 @@ bool init_udp(int epoll_fd)
 			}
 		}
 	}
-	if(server.settings.bind.use_ip6 && server.settings.bind.num_ip6)
+	if(server.settings.bind.use_ip6 && server.settings.bind.ip6.num)
 	{
 		ipv6_ready = true;
-		for(i = 0; ipv6_ready && i < server.settings.bind.num_ip6; i++)
+		for(i = 0; ipv6_ready && i < server.settings.bind.ip6.num; i++)
 		{
-			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip6[i]);
+			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip6.a[i]);
 			if(res)
-				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip6[i], sizeof(udp_sos[0].na));
+				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip6.a[i], sizeof(udp_sos[0].na));
 			ipv6_ready = ipv6_ready && res;
 		}
 		if(!ipv6_ready)

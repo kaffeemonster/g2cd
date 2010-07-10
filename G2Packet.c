@@ -2008,7 +2008,7 @@ static bool handle_PI(struct ptype_action_args *parg)
 				logg_errno(LOGF_DEBUG, "getting local addr of socket");
 				/* this is really just a (broken) fallback, this should not happen */
 				from_addr = AF_INET == connec->remote_host.s.fam ?
-				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+				            server.settings.bind.ip4.a[0] : server.settings.bind.ip6.a[0];
 			}
 
 			INIT_LIST_HEAD(&answer);
@@ -2230,7 +2230,7 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 			logg_errno(LOGF_DEBUG, "getting local addr of socket");
 			/* this is really just a (broken) fallback, this should not happen */
 			our_addr = AF_INET == parg->connec->remote_host.s.fam ?
-			           &server.settings.bind.ip4[0] : &server.settings.bind.ip6[0];
+			           &server.settings.bind.ip4.a[0] : &server.settings.bind.ip6.a[0];
 		}
 		else
 			our_addr = &backup_addr;
@@ -2342,7 +2342,7 @@ bool g2_packet_search_finalize(uint32_t hashes[], size_t num, void *data, bool h
 				logg_errno(LOGF_DEBUG, "getting local addr of socket");
 				/* this is really just a (broken) fallback, this should not happen */
 				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
-				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+				            server.settings.bind.ip4.a[0] : server.settings.bind.ip6.a[0];
 			}
 			INIT_LIST_HEAD(&answer);
 			list_add_tail(&qa->list, &answer);
@@ -3225,7 +3225,7 @@ static bool handle_QH2(struct ptype_action_args *parg)
 				logg_errno(LOGF_DEBUG, "getting local addr of socket");
 				/* this is really just a (broken) fallback, this should not happen */
 				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
-				            &server.settings.bind.ip4[0] : &server.settings.bind.ip6[0];
+				            &server.settings.bind.ip4.a[0] : &server.settings.bind.ip6.a[0];
 			}
 			else
 				from_addr = &backup_addr;
@@ -3661,7 +3661,7 @@ out_fail:
 				logg_errno(LOGF_DEBUG, "getting local addr of socket");
 				/* this is really just a (broken) fallback, this should not happen */
 				from_addr = AF_INET == parg->connec->remote_host.s.fam ?
-				            server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+				            server.settings.bind.ip4.a[0] : server.settings.bind.ip6.a[0];
 			}
 
 			g2_packet_init_on_stack(&qkr);
@@ -4028,7 +4028,7 @@ intptr_t send_HAW_callback(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARA
 		logg_errno(LOGF_DEBUG, "getting local addr of socket");
 		/* this is really just a (broken) fallback, this should not happen */
 		local_addr = AF_INET == con->remote_host.s.fam ?
-		             server.settings.bind.ip4[0] : server.settings.bind.ip6[0];
+		             server.settings.bind.ip4.a[0] : server.settings.bind.ip6.a[0];
 		if(!combo_addr_is_public(&local_addr))
 			return 0;
 	}

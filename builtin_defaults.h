@@ -45,6 +45,7 @@
 # define DEFAULT_DATA_ROOT_DIR	./
 # define DEFAULT_CONFIG_FILE	g2cd.conf
 #endif
+#define DEFAULT_ADDR6	in6addr_any
 #define DEFAULT_ADDR		INADDR_ANY
 
 #define DEFAULT_BE_DAEMON	false

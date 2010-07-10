@@ -739,6 +739,8 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("encoding_default_out", &server.settings.default_out_encoding,     config_parser_handle_encoding),
 	CONF_ITEM("encoding_hub_in",      &server.settings.hub_in_encoding,          config_parser_handle_encoding),
 	CONF_ITEM("encoding_hub_out",     &server.settings.hub_out_encoding,         config_parser_handle_encoding),
+	CONF_ITEM("bind_v4",              &server.settings.bind.ip4,                 config_parser_handle_ip),
+	CONF_ITEM("bind_v6",              &server.settings.bind.ip6,                 config_parser_handle_ip),
 };
 
 static noinline void handle_config(void)
@@ -746,6 +748,7 @@ static noinline void handle_config(void)
 	uint16_t s_lat, s_long;
 	double d_lat, d_long;
 	char *endptr;
+	unsigned i;
 
 	/* whats fixed */
 	atomic_set(&server.status.act_connection_sum, 0);
@@ -815,29 +818,41 @@ static noinline void handle_config(void)
 		server.settings.bind.default_port = DEFAULT_PORT;
 	}
 
-	if(!server.settings.bind.ip4)
+	if(!server.settings.bind.ip4.a)
 	{
-		server.settings.bind.ip4 = malloc(sizeof(*server.settings.bind.ip4));
-		if(!server.settings.bind.ip4)
+		server.settings.bind.ip4.a = malloc(sizeof(*server.settings.bind.ip4.a));
+		if(!server.settings.bind.ip4.a)
 			diedie("could not alloc ip mem");
-		server.settings.bind.num_ip4 = 1;
-		memset(server.settings.bind.ip4, 0, sizeof(*server.settings.bind.ip4));
-		server.settings.bind.ip4[0].s.fam              = AF_INET;
-		server.settings.bind.ip4[0].in.sin_port        = htons(server.settings.bind.default_port);
-		server.settings.bind.ip4[0].in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
-		casalen_ii(&server.settings.bind.ip4[0]);
+		server.settings.bind.ip4.num = 1;
+		memset(server.settings.bind.ip4.a, 0, sizeof(*server.settings.bind.ip4.a));
+		server.settings.bind.ip4.a[0].s.fam              = AF_INET;
+		server.settings.bind.ip4.a[0].in.sin_port        = htons(server.settings.bind.default_port);
+		server.settings.bind.ip4.a[0].in.sin_addr.s_addr = htonl(DEFAULT_ADDR);
+		casalen_ii(&server.settings.bind.ip4.a[0]);
 	}
-	if(!server.settings.bind.ip6)
+	if(!server.settings.bind.ip6.a)
 	{
-		server.settings.bind.ip6 = malloc(sizeof(*server.settings.bind.ip6));
-		if(!server.settings.bind.ip6)
+		server.settings.bind.ip6.a = malloc(sizeof(*server.settings.bind.ip6.a));
+		if(!server.settings.bind.ip6.a)
 			diedie("could not alloc ip mem");
-		server.settings.bind.num_ip6 = 1;
-		memset(server.settings.bind.ip6, 0, sizeof(*server.settings.bind.ip6));
-		server.settings.bind.ip6[0].s.fam              = AF_INET6;
-		server.settings.bind.ip6[0].in6.sin6_port      = htons(server.settings.bind.default_port);
-		server.settings.bind.ip6[0].in6.sin6_addr      = in6addr_any;
-		casalen_ii(&server.settings.bind.ip6[0]);
+		server.settings.bind.ip6.num = 1;
+		memset(server.settings.bind.ip6.a, 0, sizeof(*server.settings.bind.ip6.a));
+		server.settings.bind.ip6.a[0].s.fam              = AF_INET6;
+		server.settings.bind.ip6.a[0].in6.sin6_port      = htons(server.settings.bind.default_port);
+		server.settings.bind.ip6.a[0].in6.sin6_addr      = DEFAULT_ADDR6;
+		casalen_ii(&server.settings.bind.ip6.a[0]);
+	}
+	for(i = 0; i < server.settings.bind.ip4.num; i++) {
+		if(!combo_addr_port(&server.settings.bind.ip4.a[i]))
+			combo_addr_set_port(&server.settings.bind.ip4.a[i], htons(server.settings.bind.default_port));
+		if(server.settings.bind.use_ip4)
+			logg(LOGF_INFO, "Will listen on %pI#\n", &server.settings.bind.ip4.a[i]);
+	}
+	for(i = 0; i < server.settings.bind.ip6.num; i++) {
+		if(!combo_addr_port(&server.settings.bind.ip6.a[i]))
+			combo_addr_set_port(&server.settings.bind.ip6.a[i], htons(server.settings.bind.default_port));
+		if(server.settings.bind.use_ip6)
+			logg(LOGF_INFO, "Will listen on %pI#\n", &server.settings.bind.ip6.a[i]);
 	}
 
 	if(server.settings.qht.max_promille > 1000)

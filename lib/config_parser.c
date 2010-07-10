@@ -31,6 +31,7 @@
 
 #include "config_parser.h"
 #include "log_facility.h"
+#include "combo_addr.h"
 #include "../G2Connection.h"
 
 #define STR_BUFF_SIZE 80
@@ -225,6 +226,46 @@ bool config_parser_handle_guid(struct list_head *head, void *data)
 		for(i = 0; i < 16; i++)
 			target[i] = (unsigned char)tmp_id[i];
 	}
+	if(!list_is_last(&t->list, head))
+		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+	return true;
+}
+
+bool config_parser_handle_ip(struct list_head *head, void *data)
+{
+	union combo_addr addr, *x;
+	struct ptoken *t, *first;
+	struct combo_addr_arr *target = data;
+
+	first = list_entry(head->next, struct ptoken, list);
+	t = config_token_after_equal(head);
+	if(!t) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Option \"%s\" wants a value assigned, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, first->d.t);
+		return true;
+	}
+
+	memset(&addr, 0, sizeof(addr));
+	if(!combo_addr_read_wport(t->d.t, &addr)) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: \"%s\" does not seem to be a valid IP, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, t->d.t);
+		return true;
+	}
+
+	if(target->a)
+		x = realloc(target->a, sizeof(*target->a) * (target->num + 1));
+	else
+		x = malloc(sizeof(*target->a));
+	if(!x) {
+		logg(LOGF_NOTICE, "Parsing config file %s@%zu: Couldn't allocate memory for IP %pI#, will ignore\n",
+		     first->ctx->in_filename, first->ctx->line_num, &addr);
+		return true;
+	}
+	target->a = x;
+	memcpy(&target->a[target->num], &addr, sizeof(addr));
+	target->num++;
+
 	if(!list_is_last(&t->list, head))
 		logg(LOGF_INFO, "Parsing config file %s@%zu: ignored tokens after \"%s\", hopefully OK\n",
 		     first->ctx->in_filename, first->ctx->line_num, t->d.t);

@@ -105,10 +105,8 @@ _G2MAIN_EXTRNVAR(struct
 			} logging;
 			struct
 			{
-				union combo_addr *ip4;
-				union combo_addr *ip6;
-				size_t num_ip4;
-				size_t num_ip6;
+				struct combo_addr_arr ip4;
+				struct combo_addr_arr ip6;
 				unsigned default_port;
 				bool use_ip4;
 				bool use_ip6;
