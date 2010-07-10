@@ -923,6 +923,8 @@ void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_N
 		buffer_clear(*(d_hold_sp[j]));
 		j++;
 	}
+	for(i = j; i < MULTI_RECV_NUM; i++)
+		d_hold_sp[i] = NULL;
 
 // TODO: remove
 	/* debug buffer health */
