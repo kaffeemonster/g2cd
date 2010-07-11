@@ -1001,12 +1001,14 @@ bool init_udp(int epoll_fd)
 	if(server.settings.bind.use_ip4 && server.settings.bind.ip4.num)
 	{
 		ipv4_ready = true;
-		for(i = 0; ipv4_ready && i < server.settings.bind.ip4.num; i++)
+		for(i = 0; i < server.settings.bind.ip4.num; i++)
 		{
 			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip4.a[i]);
 			if(res)
 				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip4.a[i], sizeof(udp_sos[0].na));
 			ipv4_ready = ipv4_ready && res;
+			if(!ipv4_ready)
+				break;
 		}
 		if(!ipv4_ready)
 		{
@@ -1020,12 +1022,14 @@ bool init_udp(int epoll_fd)
 	if(server.settings.bind.use_ip6 && server.settings.bind.ip6.num)
 	{
 		ipv6_ready = true;
-		for(i = 0; ipv6_ready && i < server.settings.bind.ip6.num; i++)
+		for(i = 0; i < server.settings.bind.ip6.num; i++)
 		{
 			bool res = init_con_u(&udp_sos[idx].fd, &server.settings.bind.ip6.a[i]);
 			if(res)
 				memcpy(&udp_sos[idx++].na, &server.settings.bind.ip6.a[i], sizeof(udp_sos[0].na));
 			ipv6_ready = ipv6_ready && res;
+			if(!ipv6_ready)
+				break;
 		}
 		if(!ipv6_ready)
 		{

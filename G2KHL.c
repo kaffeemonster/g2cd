@@ -770,8 +770,11 @@ static void gwc_handle_line(char *line, time_t lnow)
 			for(next = wptr + strlen(wptr) - 1; next >= wptr && isblank(*next); next--)
 				*next = '\0';
 
+			if('\0' == *wptr)
+				break;
+
 			key.dptr  = (void *)wptr;
-			key.dsize = strlen(key.dptr) + 1;
+			key.dsize = strlen(wptr) + 1;
 
 			value = dbm_fetch(gwc_db, key);
 			if(!value.dptr)

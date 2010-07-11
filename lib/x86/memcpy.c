@@ -60,7 +60,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const v
 	size_t t;
 	asm (
 			"mov	%0, %3\n\t"
-			"lea	7(%0,1), %4\n\t"
+			"lea	7(%0), %4\n\t"
 			"and	$-8, %4\n\t"
 			"sub	%0, %4\n\t"
 			"sub	%4, %2\n\t"
@@ -69,7 +69,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const v
 			"and	$7, %2\n\t"
 			"shr	$3, %4\n\t"
 			"rep	movsq\n\t"
-			"mov	%4, %2\n\t"
+			"mov	%2, %4\n\t"
 			"rep	movsb\n\t"
 		: "=D" (dst_c), "=S" (src_c), "=r" (len), "=r" (ret), "=c" (t), "=m" (*(char *)dst)
 		: "0" (dst), "1" (src), "2" (len), "m" (*(const char *)src)
