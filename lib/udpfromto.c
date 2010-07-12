@@ -79,6 +79,20 @@
 # endif
 #endif
 
+#if defined(HAVE_IP6_PKTINFO)
+# define STRUCT_SIZE (sizeof(struct in6_pktinfo))
+#elif defined(HAVE_IP_PKTINFO)
+# define STRUCT_SIZE (sizeof(struct in_pktinfo))
+#elif HAVE_DECL_IP_RECVDSTADDR == 1
+# ifdef HAVE_IPV6
+#  define STRUCT_SIZE (sizeof(struct in6_addr))
+# else
+#  define STRUCT_SIZE (sizeof(struct in_addr))
+# endif
+#else
+# define STRUCT_SIZE (256)
+#endif
+
 #ifdef HAVE_IP6_PKTINFO
 static int v6pktinfo;
 #endif
@@ -171,7 +185,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	struct msghdr msgh;
 	struct iovec iov;
 	struct cmsghdr *cmsg;
-	char cbuf[256] GCC_ATTR_ALIGNED(sizeof(size_t));
+	char cbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 #endif
 	ssize_t err;
 
@@ -303,10 +317,10 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 #if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
 # ifdef HAVE_RECVMMSG
 	struct mmsghdr msghv[len];
-	char cbuf[len][256] GCC_ATTR_ALIGNED(sizeof(size_t));
+	char cbuf[len][CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 # else
 	struct msghdr msghv[1];
-	char cbuf[1][256] GCC_ATTR_ALIGNED(sizeof(size_t));
+	char cbuf[1][CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 # endif
 	struct msghdr *msgh;
 #endif
@@ -486,12 +500,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 	struct msghdr msgh;
 	struct cmsghdr *cmsg;
 	struct iovec iov;
-# if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO)
-	/* struct in6_pktinfo is larger, so wins */
-	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))] GCC_ATTR_ALIGNED(sizeof(size_t));
-# elif HAVE_DECL_IP_SENDSRCADDR == 1
-	char cmsgbuf[CMSG_SPACE(sizeof(struct in6_addr))] GCC_ATTR_ALIGNED(sizeof(size_t));
-# endif
+	char cmsgbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 
 	fromlen = fromlen;
 
@@ -508,6 +517,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 
 	cmsg = CMSG_FIRSTHDR(&msgh);
 
+	/* CMSG_SPACE instead of CMSG_LEN here? */
 /* IPv4 */
 # ifdef HAVE_IP_PKTINFO
 	if(AF_INET == from->sa_family)
