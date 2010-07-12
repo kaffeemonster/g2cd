@@ -881,6 +881,9 @@ static void g2_packet_send_qka(const union combo_addr *req_addr, union combo_add
 	g2_packet_t qka, qk, sna;
 	uint32_t key;
 
+	if(!combo_addr_is_public(req_addr) || !combo_addr_port(req_addr))
+		return;
+
 	g2_packet_init_on_stack(&qka);
 	g2_packet_init_on_stack(&qk);
 
@@ -2443,6 +2446,8 @@ static bool handle_Q2(struct ptype_action_args *parg)
 		if(!parg->connec->flags.upeer && rdata.udp_na_valid &&
 		   !combo_addr_eq_ip(&parg->connec->remote_host, &rdata.udp_na))
 			return ret_val;
+		if(rdata.udp_na_valid && !combo_addr_is_public(&rdata.udp_na))
+			return ret_val;
 
 		if(g2_guid_add(rdata.s_guid,
 		               rdata.udp_na_valid ? &rdata.udp_na : &parg->connec->remote_host,
@@ -2459,7 +2464,7 @@ static bool handle_Q2(struct ptype_action_args *parg)
 	}
 	else
 	{
-		if(!(rdata.udp_na_valid && rdata.qk_valid))
+		if(!(rdata.udp_na_valid && rdata.qk_valid && combo_addr_is_public(&rdata.udp_na)))
 			return ret_val;
 
 		if(!g2_qk_check(&rdata.udp_na, rdata.qk)) {
@@ -2927,8 +2932,10 @@ static bool handle_QA(struct ptype_action_args *parg)
 	}
 
 	guid = (uint8_t *)buffer_start(source->data_trunk) + (buffer_remaining(source->data_trunk) - GUID_SIZE);
-	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
+	if(!g2_guid_lookup(guid, GT_QUERY, &dest)) {
+		logg_develd_old("couldn't find guid %p#G from %p#I\n", guid, parg->connec ? &parg->connec->remote_host : parg->src_addr);
 		return ret_val;
+	}
 	/* now we have established the packet is legit (with a high prop.) */
 
 	old_pos = source->data_trunk.pos;
@@ -3566,6 +3573,12 @@ static bool handle_QKR(struct ptype_action_args *parg)
 	struct list_head answer;
 	bool ret_val = false, keep_decoding;
 
+	if(parg->connec) {
+		if(!parg->source->is_compound || parg->connec->flags.upeer)
+			return ret_val;
+	} else if(!server.status.our_server_upeer)
+		return ret_val;
+
 	memset(&rdata.refresh, 0, sizeof(struct QKR_data) - offsetof(struct QKR_data, refresh));
 	if(parg->source->is_compound)
 	{
@@ -3603,6 +3616,9 @@ static bool handle_QKR(struct ptype_action_args *parg)
 		uint32_t key;
 
 		if(!rdata.queried_na_valid)
+			return ret_val;
+
+		if(!combo_addr_is_public(&rdata.queried_na) || !combo_addr_port(&rdata.queried_na))
 			return ret_val;
 
 		parg->connec->flags.last_data_active = true;
@@ -3668,7 +3684,7 @@ out_fail:
 			g2_packet_init_on_stack(&sna);
 
 			sna.type = PT_SNA;
-			link_sna_to_packet(&sna, rdata.sending_na_valid ? &rdata.sending_na : &parg->connec->remote_host);
+			link_sna_to_packet(&sna, &parg->connec->remote_host);
 			list_add_tail(&sna.list, &qkr.children);
 
 			qkr.type = PT_QKR;
@@ -3771,7 +3787,7 @@ static intptr_t QKA_SNA_callback(g2_connection_t *con, void *carg)
 	if(!write_na_to_packet(qna, parg->src_addr))
 		goto out_fail;
 
-	sna->type = PT_CACHED;
+	sna->type = PT_SNA;
 	/* buffers are now large enough, should not fail */
 	if(!write_sna_to_packet(sna, &rdata->sending_na))
 		goto out_fail;
