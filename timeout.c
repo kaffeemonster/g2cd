@@ -361,12 +361,12 @@ static int kick_timeouts(void)
 			t->rearm_in_progress = true;
 			wmb();
 		}
-
+		pthread_mutex_unlock(&t->lock);
 		/*
 		 * release the timeout, reaquire the tree lock
+		 * ===============================================================
 		 * in exactly this order, or ABBA-deadlock
 		 */
-		pthread_mutex_unlock(&t->lock);
 		pthread_mutex_lock(&wakeup.mutex);
 		if(ret)
 		{

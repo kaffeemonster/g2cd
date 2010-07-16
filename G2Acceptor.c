@@ -1268,7 +1268,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 	/* make everything ready for business */
 		case FINISH_CONNECTION:
 			/* wipe out the shared space again */
-			memset(&to_con->u.accept, 0, sizeof(to_con->u.accept));
+			memset(&to_con->u, 0, sizeof(to_con->u));
 			to_con->connect_state = G2CONNECTED;
 			to_con->aux_to.fun     = handler_z_flush_timeout;
 			to_con->aux_to.data    = to_con;

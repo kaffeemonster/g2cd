@@ -596,7 +596,6 @@ unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsig
 			"pand	%%mm0, %%mm1\n\t"      /* eliminate */
 			/* convert */
 			"paddb	%%mm2, %%mm1\n\t"
-			"pxor	%%mm2, %%mm2\n\t"
 			"movq	%%mm1, %%mm0\n\t"
 			"pcmpgtb	%%mm3, %%mm0\n\t"
 			"pand	%%mm4, %%mm0\n\t"

@@ -360,6 +360,16 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 {
 	struct epoll_event tmp_eevent;
 
+	if(!keep_it)
+	{
+		/*
+		 * make sure the timeouts can not fire again,
+		 * so they do not undo the epoll_ctl
+		 */
+		timeout_cancel(&w_entry->active_to);
+		timeout_cancel(&w_entry->aux_to);
+	}
+
 	tmp_eevent.events = 0;
 	tmp_eevent.data.u64 = 0;
 	/* remove from EPoll */
@@ -401,6 +411,16 @@ void teardown_con(g2_connection_t *w_entry, int epoll_fd)
 
 	/* remove from conreg */
 	g2_conreg_remove(w_entry);
+
+	/*
+	 * make sure the timeouts can not fire again,
+	 * so they do not undo the epoll_ctl
+	 */
+	/*
+	 * we would need to cancel both timeouts, but we may hold the timeout lock
+	 * we simply assume that it is not the aux_to
+	 */
+	timeout_cancel(&w_entry->aux_to);
 
 	tmp_eevent.events = 0;
 	tmp_eevent.data.u64 = 0;

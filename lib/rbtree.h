@@ -25,10 +25,10 @@
 
   Some example of insert and search follows here. The search is a plain
   normal search over an ordered tree. The insert instead must be implemented
-  int two steps: as first thing the code must insert the element in
-  order as a red leaf in the tree, then the support library function
-  rb_insert_color() must be called. Such function will do the
-  not trivial work to rebalance the rbtree if necessary.
+  in two steps: First, the code must insert the element in order as a red leaf
+  in the tree, and then the support library function rb_insert_color() must
+  be called. Such function will do the not trivial work to rebalance the
+  rbtree, if necessary.
 
 -----------------------------------------------------------------------
 static inline struct page * rb_search_page_cache(struct inode * inode,
@@ -99,7 +99,7 @@ static inline struct page * rb_insert_page_cache(struct inode * inode,
 
 struct rb_node
 {
-	intptr_t rb_parent_color;
+	uintptr_t rb_parent_color;
 #define	RB_RED		0
 #define	RB_BLACK	1
 	struct rb_node *rb_right;
@@ -113,20 +113,20 @@ struct rb_root
 };
 
 
-#define rb_parent(r)   ((struct rb_node *)((r)->rb_parent_color & ~3))
-#define rb_color(r)   ((r)->rb_parent_color & 1)
+#define rb_parent(r)   ((struct rb_node *)((r)->rb_parent_color & ~(uintptr_t)1))
+#define rb_color(r)   ((r)->rb_parent_color & (uintptr_t)1)
 #define rb_is_red(r)   (!rb_color(r))
 #define rb_is_black(r) rb_color(r)
-#define rb_set_red(r)  do { (r)->rb_parent_color &= ~1; } while (0)
-#define rb_set_black(r)  do { (r)->rb_parent_color |= 1; } while (0)
+#define rb_set_red(r)  do { (r)->rb_parent_color &= ~(uintptr_t)1; } while (0)
+#define rb_set_black(r)  do { (r)->rb_parent_color |= (uintptr_t)1; } while (0)
 
 static inline void rb_set_parent(struct rb_node *rb, struct rb_node *p)
 {
-	rb->rb_parent_color = (rb->rb_parent_color & 3) | (unsigned long)p;
+	rb->rb_parent_color = (rb->rb_parent_color & (uintptr_t)1) | ((uintptr_t)p & ~(uintptr_t)1);
 }
 static inline void rb_set_color(struct rb_node *rb, int color)
 {
-	rb->rb_parent_color = (rb->rb_parent_color & ~1) | color;
+	rb->rb_parent_color = (rb->rb_parent_color & ~(uintptr_t)1) | color;
 }
 
 #define RB_ROOT	(struct rb_root) { NULL, }
@@ -140,10 +140,10 @@ extern void rb_insert_color(struct rb_node *, struct rb_root *) GCC_ATTR_VIS("hi
 extern void rb_erase(struct rb_node *, struct rb_root *) GCC_ATTR_VIS("hidden");
 
 /* Find logical next and previous nodes in a tree */
-extern struct rb_node *rb_next(struct rb_node *) GCC_ATTR_VIS("hidden");
-extern struct rb_node *rb_prev(struct rb_node *) GCC_ATTR_VIS("hidden");
-extern struct rb_node *rb_first(struct rb_root *) GCC_ATTR_VIS("hidden");
-extern struct rb_node *rb_last(struct rb_root *) GCC_ATTR_VIS("hidden");
+extern struct rb_node *rb_next(const struct rb_node *) GCC_ATTR_VIS("hidden");
+extern struct rb_node *rb_prev(const struct rb_node *) GCC_ATTR_VIS("hidden");
+extern struct rb_node *rb_first(const struct rb_root *) GCC_ATTR_VIS("hidden");
+extern struct rb_node *rb_last(const struct rb_root *) GCC_ATTR_VIS("hidden");
 
 /* Fast replacement of a single node without remove/rebalance/add/rebalance */
 extern void rb_replace_node(struct rb_node *victim, struct rb_node *new, 
@@ -152,7 +152,7 @@ extern void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 static inline void rb_link_node(struct rb_node * node, struct rb_node * parent,
 				struct rb_node ** rb_link)
 {
-	node->rb_parent_color = (unsigned long )parent;
+	node->rb_parent_color = (uintptr_t)parent & ~(uintptr_t)1;
 	node->rb_left = node->rb_right = NULL;
 
 	*rb_link = node;

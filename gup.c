@@ -416,6 +416,7 @@ int accept_timeout(void *arg)
 	con->flags.dismissed = true;
 // TODO: also try to teardown?
 	/* recheck with rsp. to the conreg & locking on accept */
+	/* nope: we try to cancel this timer on teardown */
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
 	shortlock_t_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
