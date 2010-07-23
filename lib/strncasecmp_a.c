@@ -65,6 +65,8 @@
 #  include "x86/strncasecmp_a.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strncasecmp_a.c"
+# elif defined(__alpha__)
+#  include "alpha/strncasecmp_a.c"
 # else
 #  include "generic/strncasecmp_a.c"
 # endif

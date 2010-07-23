@@ -224,6 +224,7 @@ STRCHRNULSRC = \
 	$(MPL)/ppc/strchrnul.c
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
+	$(MPL)/alpha/strncasecmp_a.c \
 	$(MPL)/x86/strncasecmp_a.c \
 	$(MPL)/ppc/strncasecmp_a.c
 STRNPCPYSRC = \

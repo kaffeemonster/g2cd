@@ -85,10 +85,10 @@ LOOP_AGAIN:
 	if(likely(i >= 2 * SOVUC))
 	{
 		v_perm1 = vec_lvsl(0, (const unsigned char *)s1);
-		v_perm2 = vec_lvsl(0, (const unsigned char *)s1);
+		v_perm2 = vec_lvsl(0, (const unsigned char *)s2);
 		c_ex1 = vec_ldl(0, (const unsigned char *)s1);
 		c_ex2 = vec_ldl(0, (const unsigned char *)s2);
-		for(cycles = i; likely(i >= 2 * SOVUC); i -= SOVUC)
+		for(; likely(i >= 2 * SOVUC); i -= SOVUC)
 		{
 			vector bool char v_mask;
 			c_1   = c_ex1;
