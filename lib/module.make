@@ -312,6 +312,7 @@ LIBSRCS = \
 	$(MPL)/bitfield_rle.c \
 	$(MPL)/cpy_rest.c \
 	$(MPL)/config_parser.c \
+	$(MPL)/combo_addr.c \
 	$(MPL)/entities.c \
 	$(MPL)/flsst.c \
 	$(MPL)/guid.c \
@@ -401,6 +402,7 @@ LIBOBJS = \
 	$(MPL)/atomic.o \
 	$(MPL)/ansi_prng.o \
 	$(MPL)/backtrace.o \
+	$(MPL)/combo_addr.o \
 	$(MPL)/guid.o \
 	$(MPL)/hzp.o \
 	$(MPL)/inet_ntop.o \
@@ -502,13 +504,15 @@ $(MPL)/adler32.o: $(ADLER32SRC)
 $(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
 $(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
-$(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h G2MainServer.h
+$(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h $(MPL)/my_bitopsm.h G2MainServer.h
 %(MPL)/print_ts.o: $(MPL)/itoa.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
+$(MPL)/guid.o: $(MPL)/guid.h $(MPL)/aes.h $(MPL)/ansi_prng.h $(MPL)/hthash.h
 $(MPL)/inet_ntop.o: $(MPL)/combo_addr.h $(MPL)/itoa.h
 $(MPL)/inet_pton.o: $(MPL)/combo_addr.h
+$(MPL)/combo_addr.o: $(MPL)/combo_addr.h $(MPL)/other.h $(MPL)/hthash.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
 $(MPL)/config_parser.o: $(MPL)/config_parser.h $(MPL)/log_facility.h G2Connection.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
@@ -518,7 +522,6 @@ $(MPL)/my_bitops.o: $(MY_BITOPSSRC)
 $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h
-$(MPL)/combo_addr.h: $(MPL)/other.h $(MPL)/hthash.h
 $(MPL)/unaligned.h: $(UNALIGNEDSRC)
 $(MPL)/x86/memxorcpy.c $(MPL)/x86/memand.c $(MPL)/x86/memneg.c: $(MPL)/x86/x86.h
 $(MPL)/x86/my_bitops.c: $(MPL)/x86/x86_features.h

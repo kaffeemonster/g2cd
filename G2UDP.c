@@ -377,18 +377,7 @@ static void udp_reas_cache_entry_free_glob(struct udp_reas_cache_entry *e)
 
 static uint32_t cache_ht_hash(const union combo_addr *addr, uint16_t seq)
 {
-	uint32_t h;
-
-// TODO: when IPv6 is common, change it
-	if(likely(addr->s.fam == AF_INET))
-		h = hthash_3words(addr->in.sin_addr.s_addr, addr->in.sin_port, seq, cache.ht_seed);
-	else
-		h = hthash_6words(addr->in6.sin6_addr.s6_addr32[0],
-		                  addr->in6.sin6_addr.s6_addr32[1],
-		                  addr->in6.sin6_addr.s6_addr32[2],
-		                  addr->in6.sin6_addr.s6_addr32[3],
-		                  addr->in6.sin6_port, seq, cache.ht_seed);
-	return h;
+	return combo_addr_hash_extra(addr, seq, cache.ht_seed);
 }
 
 static struct udp_reas_cache_entry *cache_ht_lookup(const union combo_addr *addr, uint16_t seq, uint32_t h)

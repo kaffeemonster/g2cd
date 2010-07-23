@@ -30,9 +30,20 @@
 
 # include "other.h"
 
+/*
+ * Lets start with some unportable hacks...
+ */
+union guid_fast
+{
+	uint8_t g[GUID_SIZE];
+	uint32_t d[GUID_SIZE/4];
+	int64_t x[GUID_SIZE/8];
+};
+
 # define LIB_GUID_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
 LIB_GUID_EXTRN(void guid_generate(unsigned char out[GUID_SIZE]));
 LIB_GUID_EXTRN(void guid_tick(void));
 LIB_GUID_EXTRN(void guid_init(void));
+LIB_GUID_EXTRN(uint32_t guid_hash(const union guid_fast *g, uint32_t seed));
 #endif

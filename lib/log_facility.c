@@ -46,6 +46,7 @@
 #include "log_facility.h"
 #include "sec_buffer.h"
 #include "itoa.h"
+#include "my_bitopsm.h"
 
 #define LOG_TIME_MAXLEN 128
 #define logg_int_pos(x, y) \

@@ -62,16 +62,6 @@
 #define GUID_DUMP_ENDIAN_MARKER 0x12345678
 #define GUID_DUMP_VERSION 0
 
-/*
- * Lets start with some unportable hacks...
- */
-union guid_fast
-{
-	uint8_t g[GUID_SIZE];
-	uint32_t d[GUID_SIZE/4];
-	int64_t x[GUID_SIZE/8];
-};
-
 struct guid_cache_entry
 {
 	struct rb_node rb; /* keep first */
@@ -265,7 +255,7 @@ static void guid_cache_entry_free(struct guid_cache_entry *e)
 
 static uint32_t cache_ht_hash(const union guid_fast *g, enum guid_type gt)
 {
-	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], cache.ht_seed ^ gt);
+	return guid_hash(g, cache.ht_seed ^ gt);
 }
 
 static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, enum guid_type gt, uint32_t h)

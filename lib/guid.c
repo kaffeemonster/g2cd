@@ -28,6 +28,7 @@
 #include "guid.h"
 #include "aes.h"
 #include "ansi_prng.h"
+#include "hthash.h"
 
 static struct aes_encrypt_ctx ae_ctx;
 static pthread_mutex_t ctx_lock;
@@ -84,3 +85,10 @@ void guid_init(void)
 	pthread_mutex_init(&ctx_lock, NULL);
 	guid_tick();
 }
+
+uint32_t guid_hash(const union guid_fast *g, uint32_t seed)
+{
+	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], seed);
+}
+
+static char const rcsid_gu[] GCC_ATTR_USED_VAR = "$Id:$";

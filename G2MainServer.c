@@ -74,6 +74,7 @@
 #include "lib/backtrace.h"
 #include "lib/ansi_prng.h"
 #include "lib/config_parser.h"
+#include "lib/my_bitopsm.h"
 #include "version.h"
 #include "builtin_defaults.h"
 

@@ -616,7 +616,7 @@ data.o: sbox.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) $(BIN2O_OPTS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
-G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h version.h builtin_defaults.h
+G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h lib/my_bitopsm.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h

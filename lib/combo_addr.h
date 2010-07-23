@@ -45,8 +45,6 @@
 #  include <arpa/inet.h>
 # endif
 # include "other.h"
-# include "hthash.h"
-
 
 /*
  * since IPv6 is in "heavy deployment", they should not suddenly
@@ -130,6 +128,13 @@ struct sockaddr_in6
 	 (((const uint32_t *)(a))[2] == ((const uint32_t *)(b))[2]) &&  \
 	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
 # endif /* HAVE_IPV6 */
+
+# define IN6_IS_ADDR_DOCU(a) \
+	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
+# define IN6_IS_ADDR_UNIQUELOCAL_A(a) \
+	(((const uint8_t *)(a))[0] == 0xfc)
+# define IN6_IS_ADDR_UNIQUELOCAL_B(a) \
+	(((const uint8_t *)(a))[0] == 0xfd)
 
 # if HAVE_DECL_INET6_ADDRSTRLEN != 1
 /*
@@ -305,210 +310,17 @@ static inline int combo_addr_read(const char *src, union combo_addr *dst)
 }
 
 bool combo_addr_read_wport(char *str, union combo_addr *addr) GCC_ATTR_VIS("hidden");
-
-# define SLASH04 htonl(0xF0000000)
-# define SLASH08 htonl(0xFF000000)
-# define SLASH15 htonl(0xFFFE0000)
-# define SLASH16 htonl(0xFFFF0000)
-# define SLASH24 htonl(0xFFFFFF00)
-# define SLASH32 htonl(0xFFFFFFFF)
-# define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
-# define IN6_IS_ADDR_DOCU(a) \
-	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
-# define IN6_IS_ADDR_UNIQUELOCAL_A(a) \
-	(((const uint8_t *)(a))[0] == 0xfc)
-# define IN6_IS_ADDR_UNIQUELOCAL_B(a) \
-	(((const uint8_t *)(a))[0] == 0xfd)
-static inline bool combo_addr_is_public(const union combo_addr *addr)
-{
-	in_addr_t a;
-
-// TODO: when IPv6 is common, change it
-	if(unlikely(AF_INET6 == addr->s.fam))
-	{
-		const struct in6_addr *a6 = &addr->in6.sin6_addr;
-		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_LOOPBACK(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_LINKLOCAL(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_SITELOCAL(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_UNIQUELOCAL_A(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_UNIQUELOCAL_B(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
-			return false;
-		/* keep test for v4 last */
-		if(IN6_IS_ADDR_V4MAPPED(a6) ||
-		   IN6_IS_ADDR_V4COMPAT(a6))
-			a = a6->s6_addr32[3];
-		else
-			goto out;
-	}
-	else
-		a = addr->in.sin_addr.s_addr;
-
-	/* according to RFC 3330 & RFC 5735 */
-	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
-		return false;
-	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
-		return false;
-	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private */
-		return false;
-	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
-	   subject to allocation to RIRs? -> RFC 5735 */
-	/* 24.0.0.0/8 IP over cable television systems
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 39.0.0.0/8 Class A Subnet experiment
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
-		return false;
-	/* 128.0.0.0/16 lowest class B net
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
-		return false;
-	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private */
-		return false;
-	/* 191.255.0.0/16 highest class B
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 192.0.0.0/24 lowest class C
-	   Future protocol assignments */
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
-		return false;
-	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
-		return false; /* only sinks, not source */
-	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
-		return false;
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
-		return false;
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
-		return false;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
-		return false;
-	/* 223.255.255.0/24 highest class C
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
-		return false;
-	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
-		return false;
-out:
-	return true;
-}
-
-static inline bool combo_addr_is_forbidden(const union combo_addr *addr)
-{
-	in_addr_t a;
-
-// TODO: when IPv6 is common, change it
-	if(unlikely(AF_INET6 == addr->s.fam))
-	{
-		const struct in6_addr *a6 = &addr->in6.sin6_addr;
-		if(unlikely(IN6_IS_ADDR_UNSPECIFIED(a6)))
-			return true;
-		if(unlikely(IN6_IS_ADDR_LOOPBACK(a6)))
-			return true;
-		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
-			return true;
-		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
-			return true;
-		/* keep test for v4 last */
-		if(IN6_IS_ADDR_V4MAPPED(a6) ||
-		   IN6_IS_ADDR_V4COMPAT(a6))
-			a = a6->s6_addr32[3];
-		else
-			goto out;
-	}
-	else
-		a = addr->in.sin_addr.s_addr;
-
-	/* according to RFC 3330 & RFC 5735 */
-	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
-		return true;
-	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
-		return true;
-	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
-	   subject to allocation to RIRs? -> RFC 5735 */
-	/* 24.0.0.0/8 IP over cable television systems
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 39.0.0.0/8 Class A Subnet experiment
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
-		return true;
-	/* 128.0.0.0/16 lowest class B net
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 191.255.0.0/16 highest class B
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 192.0.0.0/24 lowest class C
-	   Future protocol assignments */
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
-		return true;
-	if(IP_CMP(a, 0xC0586300, SLASH16)) /* 192.088.099.000/24  6to4 relays anycast */
-		return true; /* only sinks, not source */
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
-		return true;
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
-		return true;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
-		return true;
-	/* 223.255.255.0/24 highest class C
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
-		return true;
-	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
-		return true;
-out:
-	return false;
-}
-# undef SLASH04
-# undef SLASH08
-# undef SLASH15
-# undef SLASH16
-# undef SLASH25
-# undef SLASH32
-# undef IP_CMP
+bool combo_addr_is_forbidden(const union combo_addr *addr) GCC_ATTR_VIS("hidden");
+bool combo_addr_is_public(const union combo_addr *addr) GCC_ATTR_VIS("hidden");
+uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed) GCC_ATTR_VIS("hidden");
+uint32_t combo_addr_hash_extra(const union combo_addr *addr, uint32_t extra, uint32_t seed) GCC_ATTR_VIS("hidden");
+uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed) GCC_ATTR_VIS("hidden");
 
 static inline bool combo_addr_is_v6(const union combo_addr *addr)
 {
 	return addr->s.fam == AF_INET6 &&
 	       !(IN6_IS_ADDR_V4MAPPED(&addr->in6.sin6_addr) ||
 	         IN6_IS_ADDR_V4COMPAT(&addr->in6.sin6_addr));
-}
-
-static inline uint32_t combo_addr_hash(const union combo_addr *addr, uint32_t seed)
-{
-	uint32_t h;
-
-// TODO: when IPv6 is common, change it
-	if(likely(addr->s.fam == AF_INET))
-		h = hthash_2words(addr->in.sin_addr.s_addr, addr->in.sin_port, seed);
-	else
-		h = hthash_5words(addr->in6.sin6_addr.s6_addr32[0],
-		                  addr->in6.sin6_addr.s6_addr32[1],
-		                  addr->in6.sin6_addr.s6_addr32[2],
-		                  addr->in6.sin6_addr.s6_addr32[3],
-		                  addr->in6.sin6_port, seed);
-	return h;
-}
-
-static inline uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
-{
-	uint32_t h;
-
-// TODO: when IPv6 is common, change it
-	if(likely(addr->s.fam == AF_INET))
-		h = hthash_1words(addr->in.sin_addr.s_addr, seed);
-	else
-		h = hthash_4words(addr->in6.sin6_addr.s6_addr32[0],
-		                  addr->in6.sin6_addr.s6_addr32[1],
-		                  addr->in6.sin6_addr.s6_addr32[2],
-		                  addr->in6.sin6_addr.s6_addr32[3],
-		                  seed);
-	return h;
 }
 
 static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
