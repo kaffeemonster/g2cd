@@ -33,6 +33,9 @@
 #include <strings.h>
 #include <ctype.h>
 #include <zlib.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* other */
 #include "lib/other.h"
 /* Own includes */
@@ -95,6 +98,15 @@ const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 /*
  * Funcs
  */
+static inline g2_connection_t *g2_con_to_init(g2_connection_t *c)
+{
+	if(c) {
+		INIT_TIMEOUT(&c->active_to);
+		INIT_TIMEOUT(&c->aux_to);
+	}
+	return c;
+}
+
 #ifndef VALGRIND_ME_CON
 	/* constructor */
 static void g2_con_init(void)
@@ -147,10 +159,12 @@ g2_connection_t *g2_con_alloc(size_t num)
 
 	if(ret_val) {
 		size_t i;
-		for(i = 0; i < num; i++)
+		for(i = 0; i < num; i++) {
 			_g2_con_clear(&ret_val[i], true);
+			g2_con_to_init(&ret_val[i]);
+		}
 	}
-	
+
 	return ret_val;
 }
 
@@ -174,6 +188,10 @@ static void my_zfree(void *opaque GCC_ATTR_UNUSED_PARAM, void *to_free)
 
 void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 {
+#ifdef DRD_ME
+	DRDCL_(ignore_range)(work_entry, offsetof(g2_connection_t, active_to));
+//	DRDCL_(ignore_range)(&work_entry->build_packet, sizeof(*work_entry) - offsetof(g2_connection_t, build_packet));
+#endif
 	/* cleanup stuff we don't wan't to memset */
 	if(!new)
 	{
@@ -206,12 +224,8 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	 * wipe everything which is small, has many fields, of which only
 	 * some need to be initialised
 	 */
+	logg_develd_old("%u memsetting %p %p\n", gettid(), &work_entry->active_to, &work_entry->aux_to);
 	memset(work_entry, 0, offsetof(g2_connection_t, recv));
-#if 0
-// TODO: OUCH! these memset are expensive, and for what did i add these fields?
-	memset(work_entry->tmp1, 0, sizeof(work_entry->tmp1));
-	memset(work_entry->tmp2, 0, sizeof(work_entry->tmp2));
-#endif
 
 	/*
 	 * reinitialise stuff
@@ -279,9 +293,15 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	work_entry->build_packet = NULL;
 	INIT_LIST_HEAD(&work_entry->packets_to_send);
 	INIT_LIST_HEAD(&work_entry->hub_list);
-	INIT_TIMEOUT(&work_entry->active_to);
-	INIT_TIMEOUT(&work_entry->aux_to);
-	pthread_mutex_unlock(&work_entry->lock);
+//	INIT_TIMEOUT(&work_entry->active_to);
+//	INIT_TIMEOUT(&work_entry->aux_to);
+#ifdef DRD_ME
+//	DRD_IGNORE_VAR(work_entry->gup);
+//	DRD_TRACE_VAR(work_entry->active_to);
+//	DRD_TRACE_VAR(work_entry->aux_to);
+#endif
+	if(!new)
+		pthread_mutex_unlock(&work_entry->lock);
 }
 
 static void g2_con_free_internal(g2_connection_t *to_free)
@@ -323,6 +343,12 @@ static void g2_con_free_internal(g2_connection_t *to_free)
 	/* qht */
 	g2_qht_put(to_free->qht);
 	g2_qht_put(to_free->sent_qht);
+
+#ifdef DRD_ME
+	DRDCL_(ignore_range)(to_free, offsetof(g2_connection_t, active_to));
+//	DRDCL_(ignore_range)(&to_free->build_packet, sizeof(*to_free) - offsetof(g2_connection_t, build_packet));
+//	DRD_STOP_IGNORING_VAR(to_free->gup);
+#endif
 
 	shortlock_t_destroy(&to_free->pts_lock);
 	pthread_mutex_destroy(&to_free->lock);
@@ -399,7 +425,7 @@ g2_connection_t *g2_con_get_free(void)
 		{
 			if(atomic_pread(&free_cons[i])) {
 				if((ret_val = atomic_pxa(ret_val, &free_cons[i])))
-					return ret_val;
+					return g2_con_to_init(ret_val);
 			}
 		}
 	} while(++failcount < 2);

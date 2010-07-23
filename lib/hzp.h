@@ -77,10 +77,10 @@ static inline void hzp_ref(enum hzps key, void *new_ref)
 	if(key < HZP_MAX) {
 		local_hzp.ptr[key] = new_ref;
 	}
+	wmb();
 }
 static inline void hzp_unref(enum hzps key)
 {
-	wmb();
 	hzp_ref(key, NULL);
 }
 # else

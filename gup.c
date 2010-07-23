@@ -39,6 +39,9 @@
 #include "lib/my_epoll.h"
 #include "lib/combo_addr.h"
 #include <fcntl.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* other */
 #include "lib/other.h"
 /* Own includes */
@@ -103,6 +106,9 @@ static void *gup_loop(void *param)
 	}
 
 	my_snprintf(lbuff[0]->data, lbuff[0]->limit, OUR_PROC " guppie %ti", (intptr_t)param);
+#ifdef DRD_ME
+	ANNOTATE_THREAD_NAME(lbuff[0]->data);
+#endif
 	g2_set_thread_name(lbuff[0]->data);
 
 	while(worker.keep_going)
@@ -309,6 +315,9 @@ void *gup(void *param)
 	static struct simple_gup from_main;
 	size_t num_helper, i;
 
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(worker.keep_going);
+#endif
 	from_main.gup = GUP_ABORT;
 	from_main.fd = *((int *)param);
 	worker.from_main = *(((int *)param)-1);

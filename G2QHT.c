@@ -1341,6 +1341,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 					if(!tlen || len) /* no output or input not consumed? */
 						break;
 
+					str_buf[tlen] = '\0';
 					wptr = make_keywords(str_buf);
 					qht_zpad_free(zmem, str_buf_orig);
 					if(wptr)
@@ -1971,21 +1972,27 @@ struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *org, const struc
 			t->next = n;
 			n = t;
 		} while(len);
-		if(n) {
+		if(n)
+		{
 			t = n->next;
 			n->next = NULL;
 			ret_val = n;
 			ret_val->count = frags;
 			ret_val->compressed = COMP_NONE;
+
+			while(t)
+			{
+				n = t;
+				t = t->next;
+				n->next = ret_val;
+				ret_val = n;
+				ret_val->count = frags;
+				ret_val->compressed = COMP_NONE;
+			}
 		}
-		while(t)
+		else if(t)
 		{
-			n = t;
-			t = t->next;
-			n->next = ret_val;
-			ret_val = n;
-			ret_val->count = frags;
-			ret_val->compressed = COMP_NONE;
+//TODO: Free something
 		}
 		break;
 	case COMP_DEFLATE:
@@ -2031,21 +2038,27 @@ struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *org, const struc
 			}
 		} while(Z_STREAM_END != res);
 		deflateEnd(&zpad->z);
-		if(n) {
+		if(n)
+		{
 			t = n->next;
 			n->next = NULL;
 			ret_val = n;
 			ret_val->count = frags;
 			ret_val->compressed = COMP_DEFLATE;
+
+			while(t)
+			{
+				n = t;
+				t = t->next;
+				n->next = ret_val;
+				ret_val = n;
+				ret_val->count = frags;
+				ret_val->compressed = COMP_DEFLATE;
+			}
 		}
-		while(t)
+		else if(t)
 		{
-			n = t;
-			t = t->next;
-			n->next = ret_val;
-			ret_val = n;
-			ret_val->count = frags;
-			ret_val->compressed = COMP_DEFLATE;
+//TODO: Free something
 		}
 	}
 

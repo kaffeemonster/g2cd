@@ -42,6 +42,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 #include "lib/my_pthread.h"
 #ifdef HAVE_DB
 # define DB_DBM_HSEARCH 1
@@ -210,6 +213,9 @@ bool g2_khl_init(void)
 	char *name, *buff;
 	size_t name_len = 0, i;
 
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(cache.num);
+#endif
 	/* open the gwc cache db */
 	if(server.settings.data_root_dir)
 		data_root_dir = server.settings.data_root_dir;

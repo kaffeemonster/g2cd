@@ -33,6 +33,9 @@
 #include <time.h>
 #include "lib/my_pthread.h"
 #include <unistd.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* own */
 #define _G2CONREGISTRY_C
 #include "G2ConRegistry.h"
@@ -267,6 +270,9 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 /*			logg_develd_old("%p, %p, %p, %p, %.*s%u\n", fill, from, raw_bucket_storage, raw_bucket_storage + count_b, level, "\t\t\t\t\t\t", i); */
 			from->qht = NULL;
 			from->dirty = false;
+#ifdef DRD_ME
+			DRD_IGNORE_VAR(from->dirty);
+#endif
 			fill->d.b[i] = from;
 			from = init_alloc_bucket(from, from + 1, from_c, level + 1);
 		}
@@ -281,6 +287,9 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 			f_c->qht = NULL;
 			pthread_rwlock_init(&f_c->lock, NULL);
 			f_c->dirty = false;
+#ifdef DRD_ME
+			DRD_IGNORE_VAR(f_c->dirty);
+#endif
 			fill->d.c[i] = f_c;
 		}
 		*from_c = f_c;
@@ -336,6 +345,9 @@ void g2_conreg_init(void)
 	/* the only qht where lazy init harms (at least ATM) */
 	memset(ht_root.qht->data, ~0, ht_root.qht->data_length);
 	ht_root.qht->flags.reset_needed = false;
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(ht_root.dirty);
+#endif
 }
 
 static noinline void free_bucket(struct g2_ht_bucket *b, unsigned level)

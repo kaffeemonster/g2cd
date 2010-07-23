@@ -46,6 +46,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* own */
 #include "udpfromto.h"
 #include "combo_addr.h"
@@ -133,6 +136,9 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	 * (and value?).
 	 */
 # ifdef IPV6_RECVPKTINFO
+# ifdef DRD_ME
+	DRD_IGNORE_VAR(v6pktinfo);
+# endif
 	v6pktinfo = IPV6_RECVPKTINFO;
 	err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
 #  ifdef IPV6_2292PKTINFO

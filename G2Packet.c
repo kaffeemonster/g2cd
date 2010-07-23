@@ -3525,7 +3525,7 @@ static bool handle_QHT(struct ptype_action_args *parg)
 		frags->next = NULL;
 
 		pds = (struct packet_data_store *)frags;
-		qht->data_trunk.capacity = sizeof(*frags) + frags->length - sizeof(*pds);
+		qht->data_trunk.capacity = (sizeof(*frags) - sizeof(*pds)) + frags->length;
 		qht->data_trunk.limit = qht->data_trunk.capacity;
 		qht->data_trunk.pos =
 			offsetof(struct qht_fragment, data) - offsetof(struct packet_data_store, data);

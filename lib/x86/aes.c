@@ -61,7 +61,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #else
 			"1:\n\t"
 #endif
-			"movups	(%2), %%xmm0\n\t"	/* user key (first 16 bytes) */
+			"movups	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	0x10, %0\n\t"	/* key addr */
 			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
@@ -87,8 +87,8 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 			"call	key_expansion_128"
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*ctx->k)
-		: /* %2 */ "r" (in),
-		  /* %4 */ "m" (*(const char *)in)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
 #  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm4"
 #  endif
@@ -438,7 +438,7 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
 	size_t k;
 
 	asm(
-			"movups	(%2), %%xmm0\n\t"	/* input */
+			"movups	%2, %%xmm0\n\t"	/* input */
 			"movaps	(%0), %%xmm1\n\t"	/* key */
 			"pxor	%%xmm1, %%xmm0\n\t"	/* round 0 */
 			"lea	0x30(%0), %0\n\t"	/* prime key address */
@@ -464,13 +464,11 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
 			"movaps	0x70(%0), %%xmm1\n\t"
 			/* aesenclast %xmm1, %xmm0 */	/* last round */
 			".byte	0x66, 0x0f, 0x38, 0xdd, 0xc1\n\t"
-			"movups	%%xmm0, (%4)"	/* output */
+			"movups	%%xmm0, %1"	/* output */
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*(char *)out)
-		: /* %2 */ "r" (in),
-		  /* %4 */ "r" (out),
-		  /* %4 */ "0" (&ctx->k),
-		  /* %5 */ "m" (*(const char *)in)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif

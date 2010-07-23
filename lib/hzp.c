@@ -32,6 +32,9 @@
 #elif defined(HAVE_MALLOC_H)
 # include <malloc.h>
 #endif
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 
 #define LIB_HZP_C
 #include "log_facility.h"
@@ -54,6 +57,9 @@ static atomic_t nr_free;
  */
 bool hzp_alloc(void)
 {
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(local_hzp);
+#endif
 	local_hzp.flags.used = true;
 	atomic_push(&hzp_threads.head, &local_hzp.lst);
 
@@ -63,6 +69,11 @@ bool hzp_alloc(void)
 static pthread_mutex_t hzp_free_lock;
 GCC_ATTR_CONSTRUCT static void init_hzp_free_lock(void)
 {
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(nr_free);
+	DRD_IGNORE_VAR(hzp_threads);
+	DRD_IGNORE_VAR(hzp_freelist);
+#endif
 	if(pthread_mutex_init(&hzp_free_lock, NULL))
 		diedie("couldn't init hzp free lock");
 }

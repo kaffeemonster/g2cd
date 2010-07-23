@@ -53,9 +53,9 @@ static inline void INIT_TIMEOUT(struct timeout *t)
 	t->rearm_in_progress = 0;
 }
 
-static inline void DESTROY_TIMEOUT(struct timeout *t)
+static inline void DESTROY_TIMEOUT(struct timeout *t GCC_ATTR_UNUSED_PARAM)
 {
-	pthread_mutex_destroy(&t->lock);
+//	pthread_mutex_destroy(&t->lock);
 }
 
 TOUT_EXTRN(bool timeout_add(struct timeout *, unsigned int));

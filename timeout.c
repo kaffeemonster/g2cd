@@ -37,6 +37,9 @@
 #ifdef _POSIX_PRIORITY_SCHEDULING
 # include <sched.h>
 #endif
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* Own Includes */
 #define _TIMEOUT_C
 #include "lib/other.h"
@@ -188,6 +191,47 @@ static bool timeout_rb_insert(struct timeout *t)
 	return true;
 }
 
+#if 0
+static void print_tree_dot_w(struct rb_node *node, FILE *out, unsigned *nil_count)
+{
+	if(!node)
+	{
+		fprintf(out, "nil%i;\n\tnil%i [label=\"nil\"];\n", *nil_count, *nil_count);
+		(*nil_count)++;
+	}
+	else
+	{
+		struct timeout *n = container_of(node, struct timeout, rb);
+		fprintf(out, "\"%p\" [label=\"%p\"];\n", node, rb_parent(node));
+		fprintf(out, "\t\"%p\" [label=\"%p\\n%u.%lu\",style=filled,color=\"%s\",fontcolor=\"%s\"]\n", node, node, (unsigned) n->t.tv_sec, n->t.tv_nsec, rb_is_red(node) ? "red" : "black", rb_is_red(node) ? "black" : "red");
+		fprintf(out, "\t\"%p\" -> ", node);
+		print_tree_dot_w(node->rb_right, out, nil_count);
+		fprintf(out, "\t\"%p\" -> ", node);
+		print_tree_dot_w(node->rb_left, out, nil_count);
+	}
+}
+#endif
+
+static void print_tree_dot(struct rb_root *root GCC_ATTR_UNUSED_PARAM, const char *when GCC_ATTR_UNUSED_PARAM)
+{
+#if 0
+	static char path[100];
+	static unsigned fcount = 0;
+	FILE *out;
+	unsigned nil_count = 0;
+	unsigned lfc = fcount = (fcount + 1) % 10000;
+
+	sprintf(path, "rbtreex/%u/%03u.dot", lfc / 1000, lfc % 1000);
+	out = fopen(path, "w");
+	fputs("digraph G {\n", out); //\n\tsize=\"20,20\"", out);
+	fprintf(out, "\t\"root\" -> ");
+	print_tree_dot_w(root->rb_node, out, &nil_count);
+	fprintf(out, "\nlabel=\"%s\"\n}", when);
+	fclose(out);
+#endif
+}
+
+
 /*
  * handling funcs
  */
@@ -205,8 +249,11 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 
 	if(RB_EMPTY_NODE(&new_timeout->rb) && !new_timeout->rearm_in_progress)
 	{
+		logg_develd_old("%u adding %p\n", gettid(), new_timeout);
 		new_timeout->t = now;
+		print_tree_dot(&wakeup.tree, "add_before_insert");
 		ret_val = timeout_rb_insert(new_timeout);
+		print_tree_dot(&wakeup.tree, "add_after_insert");
 		if(ret_val && !timespec_after(&new_timeout->t, &wakeup.time))
 			pthread_cond_broadcast(&wakeup.cond);
 	} else
@@ -236,12 +283,16 @@ bool timeout_advance(struct timeout *timeout, unsigned int advancement)
 		pthread_mutex_unlock(&timeout->lock);
 		goto out_unlock;
 	}
+	logg_develd_old("%u, advancing %p\n", gettid(), timeout);
+	print_tree_dot(&wakeup.tree, "advance_before_erase");
 	rb_erase(&timeout->rb, &wakeup.tree);
+	print_tree_dot(&wakeup.tree, "advance_after_erase_before_insert");
 	RB_CLEAR_NODE(&timeout->rb);
 
 	timeout->t = now;
 
 	ret_val = timeout_rb_insert(timeout);
+	print_tree_dot(&wakeup.tree, "advance_after_insert");
 
 	pthread_mutex_unlock(&timeout->lock);
 	if(ret_val && !timespec_after(&now, &wakeup.time))
@@ -273,7 +324,10 @@ retry:
 	}
 
 	if(!RB_EMPTY_NODE(&who_to_cancel->rb)) {
+		logg_develd_old("%u canceling %p\n", gettid(), who_to_cancel);
+		print_tree_dot(&wakeup.tree, "cancel_before_erase");
 		rb_erase(&who_to_cancel->rb, &wakeup.tree);
+		print_tree_dot(&wakeup.tree, "cancel_after_erase");
 		RB_CLEAR_NODE(&who_to_cancel->rb);
 		ret_val = true;
 	}
@@ -286,7 +340,24 @@ retry:
 void timeout_timer_task_abort(void)
 {
 	wakeup.abort = true;
+#ifdef DRD_ME
+	/*
+	 * We do not lock this mutex by purpose
+	 * this may be forbidden, racy, whatever.
+	 * But:
+	 * this is only called by the main thread to
+	 * bring the whole thing down.
+	 * If the lock is somehow hosed (deadlock,
+	 * livelock, corruption, whatever), we
+	 * would lock the main thread while going
+	 * down.
+	 */
+	pthread_mutex_lock(&wakeup.mutex);
+#endif
 	pthread_cond_broadcast(&wakeup.cond);
+#ifdef DRD_ME
+	pthread_mutex_unlock(&wakeup.mutex);
+#endif
 }
 
 static int kick_timeouts(void)
@@ -323,7 +394,9 @@ static int kick_timeouts(void)
 		 * - the timeout
 		 */
 		if(!RB_EMPTY_NODE(&t->rb)) {
+			print_tree_dot(&wakeup.tree, "timeout_before_erase");
 			rb_erase(&t->rb, &wakeup.tree);
+			print_tree_dot(&wakeup.tree, "timeout_after_erase");
 			RB_CLEAR_NODE(&t->rb);
 		} else {
 			pthread_mutex_unlock(&t->lock);
@@ -379,8 +452,10 @@ static int kick_timeouts(void)
 				 */
 				timespec_fill_local(&t->t);
 				timespec_add(&t->t, ret);
+				print_tree_dot(&wakeup.tree, "timeout_before_reinsert");
 				timeout_rb_insert(t);
 				barrier();
+				print_tree_dot(&wakeup.tree, "timeout_after_reinsert");
 			}
 			t->rearm_in_progress = false;
 			wmb();
@@ -397,6 +472,11 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 {
 	unsigned refill_count = EVENT_SPACE / 2;
 	logg(LOGF_DEBUG, "timeout_timer:\trunning\n");
+
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(wakeup.abort);
+	ANNOTATE_THREAD_NAME("timeout thread");
+#endif
 
 	/* make our hzp ready */
 	hzp_alloc();

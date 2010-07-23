@@ -94,8 +94,6 @@ typedef struct g2_connection
 
 	/* Internal States */
 	union combo_addr sent_addr;
-	struct timeout   active_to;
-	struct timeout   aux_to;
 	time_t           connect_time;
 	time_t           last_send;
 	time_t           last_active;
@@ -173,7 +171,9 @@ typedef struct g2_connection
 	struct qhtable   *sent_qht;
 // TODO: WTF these arrays where supossed to? zlib buffer?
 //	char             tmp1[32000], tmp2[32000];
-	
+
+	struct timeout   active_to;
+	struct timeout   aux_to;
 	/* Packets */
 	g2_packet_t      *build_packet;
 	shortlock_t      pts_lock;

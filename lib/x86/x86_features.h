@@ -87,7 +87,7 @@
 	FEATURE2( X2APIC   , 21, "x2APIC avail."                     ), \
 	FEATURE2( MOVBE    , 22, "MOVBE avail."                      ), \
 	FEATURE2( POPCNT   , 23, "POPCNT avail."                     ), \
-	FEATURE2( RES_2_24 , 24, "Reserved"                          ), \
+	FEATURE2( TSC_DEAD , 24, "TSC Deadline support"              ), \
 	FEATURE2( AES      , 25, "AES Support"                       ), \
 	FEATURE2( XSAVE    , 26, "XSAVE avail."                      ), \
 	FEATURE2( OSXSAVE  , 27, "OS supports XSAVE"                 ), \

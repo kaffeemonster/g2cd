@@ -183,5 +183,12 @@ static always_inline enum loglevel get_act_loglevel(void)
 }*/
 
 _G2MAIN_EXTRN(void g2_set_thread_name(const char *));
+#if 0
+#include <syscall.h>
+static inline pid_t gettid(void)
+{
+	return syscall(SYS_gettid);
+}
+#endif
 #endif /* _G2MAINSERVER_H */
 /* EOF */

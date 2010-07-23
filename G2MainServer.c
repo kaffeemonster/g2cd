@@ -48,6 +48,9 @@
 #include <fcntl.h>
 #include "lib/my_pthread.h"
 #include <unistd.h>
+#ifdef DRD_ME
+# include <valgrind/drd.h>
+#endif
 /* Own Includes */
 #define _G2MAINSERVER_C
 #include "lib/other.h"
@@ -123,6 +126,12 @@ int main(int argc, char **args)
 	size_t i, j;
 	int extra_fd = -1;
 	bool long_poll = true;
+
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(master_time_now);
+	DRD_IGNORE_VAR(server.status.all_abord);
+	ANNOTATE_THREAD_NAME("main thread");
+#endif
 
 	/*
 	 * we have to shourtcut this a little bit, else we would see 
@@ -383,7 +392,7 @@ int main(int argc, char **args)
 		bool all_down = false;
 		for(j = 0; j < THREAD_SUM; j++)
 		{
-			if(!server.status.all_abord[j]) 
+			if(!server.status.all_abord[j])
 				all_down = true;
 			else {
 				all_down = false;
