@@ -48,6 +48,8 @@
 #  include "alpha/mem_searchrn.c"
 # elif defined(__arm__)
 #  include "arm/mem_searchrn.c"
+# elif defined(__ia64__)
+#  include "ia64/mem_searchrn.c"
 # else
 #  include "generic/mem_searchrn.c"
 # endif

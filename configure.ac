@@ -67,6 +67,10 @@ case "$host" in
 # this is a bit more complicated:
 # alpha has the cix extention, a cpu may have it or not...
 		default_disable_bit_instr=no;;
+	*ia64*)
+# ia64 has a popcnt, gcc can build a cntlz or something like
+# that. If it's fast...
+		default_disable_bit_instr=no;;
 	*)
 		;;
 esac
@@ -181,10 +185,10 @@ if test x"$disable_bit_instr" = xno; then
 # Does your arch has bit foo instructions?
 # We sometimes need to find the index of a bit. This can be
 # done fast and cheap if your arch has instructions to scan
-# for a bit (bsf, cntlz). (popcnt is a bad idea if your
-# shifter are slow, sparc, 50 times slower than our generic
-# bitmagic, sparclite/sparclet have a scan instruction (ffs)
-# they might help)
+# for a bit (bsf, cntlz). popcnt would also work, but is a
+# bead idea if it is slow like on sparc (50 times slower than
+# our generic bitmagic). Sparclite/Sparclet have a scan
+# instruction (ffs), it might help.
 	AC_DEFINE(HAVE_BIT_INSTR, 1, arch has bit manipulation instruction)
 	AC_MSG_RESULT([no])
 else
