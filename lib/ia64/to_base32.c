@@ -53,8 +53,8 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 	d1  &= 0x1F1F1F1F1F1F1F1FULL; /* eliminate */
 
 	/* convert */
-	d1  += 0x6161616161616161ULL;
-	d1  -= 0x4949494949494949ULL & pcmp1gt(d1, 0x7A7A7A7A7A7A7A7AULL);
+	d2   = pcmp1gt(d1, 0x1919191919191919ULL); /* i hate signed compare */
+	d1  += (0x6161616161616161ULL & ~d2) | (0x0606060606060606ULL & d2);
 	/* write out */
 	dst[0] = (d1 & 0xff00000000000000ULL) >> 56;
 	dst[1] = (d1 & 0x00ff000000000000ULL) >> 48;

@@ -44,7 +44,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	 */
 	mask = (((size_t)c) & 0xFFFF) * 0x0001000100010001ULL;
 	p  = (const char *)ALIGN_DOWN(s, SOULL);
-	shift = ALIGN_DOWN_DIFF(s, SOULL) * BITS_PER_CHAR;
+	shift = ALIGN_DOWN_DIFF(s, SOULL);
 	x1 = *(const unsigned long long *)p;
 	x2 = x1 ^ mask;
 	if(!HOST_IS_BIGENDIAN) {
@@ -64,7 +64,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	do
 	{
 		p += SOULL;
-		x1 = *(const size_t *)p;
+		x1 = *(const unsigned long long *)p;
 		x2 = x1 ^ mask;
 		r1 = czx2(x1);
 		r2 = czx2(x2);

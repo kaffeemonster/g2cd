@@ -41,9 +41,9 @@ char *strchrnul(const char *s, int c)
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
-	mask = (((size_t)c) & 0xFFFF) * 0x0001000100010001ULL;
+	mask = (((size_t)c) & 0xFF) * 0x0101010101010101ULL;
 	p  = (const char *)ALIGN_DOWN(s, SOULL);
-	shift = ALIGN_DOWN_DIFF(s, SOULL) * BITS_PER_CHAR;
+	shift = ALIGN_DOWN_DIFF(s, SOULL);
 	x1 = *(const unsigned long long *)p;
 	x2 = x1 ^ mask;
 	if(!HOST_IS_BIGENDIAN) {
@@ -63,7 +63,7 @@ char *strchrnul(const char *s, int c)
 	do
 	{
 		p += SOULL;
-		x1 = *(const size_t *)p;
+		x1 = *(const unsigned long long *)p;
 		x2 = x1 ^ mask;
 		r1 = czx1(x1);
 		r2 = czx1(x2);

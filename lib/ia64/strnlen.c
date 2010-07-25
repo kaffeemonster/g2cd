@@ -67,7 +67,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	do
 	{
 		p += SOULL;
-		t = *(const unsigned long *)p;
+		t = *(const unsigned long long *)p;
 		if(maxlen <= SOULL)
 			break;
 		r = czx1(t);
