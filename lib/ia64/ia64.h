@@ -26,9 +26,23 @@
 #ifndef IA64_H
 # define IA64_H
 
+# ifdef __INTEL_COMPILER
+#  include <ia64intrin.h>
+# endif
+
 # define SOULL (sizeof(unsigned long long))
 # define SOULLM1 (SOULL - 1)
 
+static inline unsigned long long shrp(unsigned long long r2, unsigned long long r3, unsigned count)
+{
+	unsigned long long res;
+# ifdef __INTEL_COMPILER
+	res = _m64_shrp(r2, r3, count);
+# else
+	asm("shrp	%0=%r1, %r2, %3" : "=r" (res) : "rO" (r2), "rO" (r3), "M" (count));
+#endif
+	return res;
+}
 static inline unsigned long long psad1(unsigned long long r2, unsigned long long r3)
 {
 	unsigned long long res;

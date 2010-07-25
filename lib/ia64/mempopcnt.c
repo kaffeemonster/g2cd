@@ -23,6 +23,7 @@
  * $Id: $
  */
 
+#include "ia64.h"
 
 static inline size_t popcountst_int1(size_t n)
 {

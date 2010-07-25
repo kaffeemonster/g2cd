@@ -23,6 +23,8 @@
  * $Id:$
  */
 
+#include "ia64.h"
+
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 {
 	size_t tmp;

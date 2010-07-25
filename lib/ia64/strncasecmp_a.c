@@ -1,8 +1,8 @@
 /*
  * strncasecmp_a.c
- * strncasecmp ascii only, alpha implementation
+ * strncasecmp ascii only, ia64 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,7 +23,7 @@
  * $Id: $
  */
 
-#include "alpha.h"
+#include "ia64.h"
 
 static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n)
 {
@@ -55,32 +55,32 @@ LOOP_AGAIN:
 	j = ALIGN_DIFF(s2, 4096);
 	j = j ? j : i;
 	i = i < j ? i : j;
-	j = ROUND_ALIGN(n, 2 * SOUL);
+	j = ROUND_ALIGN(n, 2 * SOULL);
 	i = i < j ? i : j;
 
 	cycles = i;
-	if(likely(i >= 2 * SOUL))
+	if(likely(i >= 2 * SOULL))
 	{
-		const unsigned long *s1_l, *s2_l;
-		unsigned long w1, w2, w1_x, w2_x;
-		unsigned long m1, m2;
+		const unsigned long long *s1_l, *s2_l;
+		unsigned long long w1, w2, w1_x, w2_x;
+		unsigned long long m1, m2;
 		unsigned shift11, shift12, shift21, shift22;
 
-		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOUL);
-		shift12  = SOUL - shift11;
+		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOULL);
+		shift12  = SOULL - shift11;
 		shift11 *= BITS_PER_CHAR;
 		shift12 *= BITS_PER_CHAR;
-		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOUL);
-		shift22  = SOUL - shift21;
+		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOULL);
+		shift22  = SOULL - shift21;
 		shift21 *= BITS_PER_CHAR;
 		shift22 *= BITS_PER_CHAR;
 
-		s1_l = (const unsigned long *)ALIGN_DOWN(s1, SOUL);
-		s2_l = (const unsigned long *)ALIGN_DOWN(s2, SOUL);
+		s1_l = (const unsigned long long *)ALIGN_DOWN(s1, SOULL);
+		s2_l = (const unsigned long long *)ALIGN_DOWN(s2, SOULL);
 
 		w1_x = *s1_l++;
 		w2_x = *s2_l++;
-		for(; likely(i >= 2 * SOUL); i -= SOUL)
+		for(; likely(i >= 2 * SOULL); i -= SOULL)
 		{
 			w1   = w1_x;
 			w2   = w2_x;
@@ -94,34 +94,34 @@ LOOP_AGAIN:
 				w2 = w2 >> shift21 | w2_x << shift22;
 			}
 
-			m1   = cmpbge(0x6060606060606060UL, w1);
-			m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
-			m1   = zapnot(0x2020202020202020UL, m1);
+			m1   = pcmp1gt(w1, 0x6060606060606060ULL);
+			m1  ^= pcmp1gt(w1, 0x7a7a7a7a7a7a7a7aULL);
+			m1   = 0x2020202020202020UL & m1;
 			w1  -= m1;
-			m2   = cmpbge(0x6060606060606060UL, w2);
-			m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
-			m2   = zapnot(0x2020202020202020UL, m2);
+			m2   = pcmp1gt(w2, 0x6060606060606060ULL);
+			m2  ^= pcmp1gt(w2, 0x7a7a7a7a7a7a7a7aULL);
+			m2   = 0x2020202020202020UL & m2;
 			w2  -= m2;
+			m1   = czx1(w1);
+			m2   = czx1(w2);
+			m2   = m1 < m2 ? m1 : m2;
 			m1   = w1 ^ w2;
-			m2   = cmpbeqz(w1) | cmpbeqz(w2);
-			if(m1 || m2)
+			if(m1 || m2 < SOULL)
 			{
-				unsigned long r1, r2;
-				m1 = cmpbeqz(m1);
-				r1 = alpha_nul_byte_index_e(m1);
-				r2 = alpha_nul_byte_index_e(m2);
-				r1 = r1 < r2 ? r1 : r2;
-				cycles = ROUND_TO(cycles - i, SOUL);
+				m1 = czx1(pcmp1eq(m1, 0));
+				m1 = m1 < m2 ? m1 : m2;
+				cycles = ROUND_TO(cycles - i, SOULL);
+				cycles -= i;
 				n -= cycles;
-				r1 = r1 < n - 1 ? r1 : n - 1;
+				m1 = m1 < n - 1 ? m1 : n - 1;
 				if(HOST_IS_BIGENDIAN)
-					r1 = SOULM1 - r1;
-				r1 *= BITS_PER_CHAR;
-				return (int)((w1 >> r1) & 0xFF) - (int)((w2 >> r1) & 0xFF);
+					m1 = SOULLM1 - m1;
+				m1 *= BITS_PER_CHAR;
+				return (int)((w1 >> m1) & 0xFF) - (int)((w2 >> m1) & 0xFF);
 			}
 		}
 	}
-	cycles = ROUND_TO(cycles - i, SOUL);
+	cycles = ROUND_TO(cycles - i, SOULL);
 	if(cycles >= n)
 		return 0;
 	n  -= cycles;
@@ -152,87 +152,81 @@ LOOP_AGAIN:
 
 static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 {
-	unsigned long w1, w2;
-	unsigned long m1, m2;
+	unsigned long long w1, w2;
+	unsigned long long m1, m2;
 	size_t i, cycles;
 	unsigned shift;
 
-	shift = ALIGN_DOWN_DIFF(s1, SOUL);
-	s1 = (const char *)ALIGN_DOWN(s1, SOUL);
-	s2 = (const char *)ALIGN_DOWN(s2, SOUL);
+	shift = ALIGN_DOWN_DIFF(s1, SOULL);
+	s1 = (const char *)ALIGN_DOWN(s1, SOULL);
+	s2 = (const char *)ALIGN_DOWN(s2, SOULL);
 
-	w1   = *(const unsigned long *)s1;
-	w2   = *(const unsigned long *)s2;
-	s1  += SOUL;
-	s2  += SOUL;
-	m1   = cmpbge(0x6060606060606060UL, w1);
-	m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
-	m1   = zapnot(0x2020202020202020UL, m1);
+	w1   = *(const unsigned long long *)s1;
+	w2   = *(const unsigned long long *)s2;
+	s1  += SOULL;
+	s2  += SOULL;
+	m1   = pcmp1gt(w1, 0x6060606060606060ULL);
+	m1  ^= pcmp1gt(w1, 0x7a7a7a7a7a7a7a7aULL);
+	m1   = 0x2020202020202020UL & m1;
 	w1  -= m1;
-	m2   = cmpbge(0x6060606060606060UL, w2);
-	m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
-	m2   = zapnot(0x2020202020202020UL, m2);
+	m2   = pcmp1gt(w2, 0x6060606060606060ULL);
+	m2  ^= pcmp1gt(w2, 0x7a7a7a7a7a7a7a7aULL);
+	m2   = 0x2020202020202020UL & m2;
 	w2  -= m2;
-	m1   = w1 ^ w2;
-	m2   = cmpbeqz(w1) | cmpbeqz(w2);
 	if(!HOST_IS_BIGENDIAN) {
-		m1 >>= shift * BITS_PER_CHAR;
-		m2 >>= shift;
+		w1 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
+		w2 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
 	} else {
-		m1 <<= shift * BITS_PER_CHAR;
-		m2 <<= shift + SOULM1 * BITS_PER_CHAR;
+		w1 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+		w2 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
 	}
-	if(m1 || m2)
+	m1   = czx1(w1);
+	m2   = czx1(w2);
+	m2   = m1 < m2 ? m1 : m2;
+	m1   = w1 ^ w2;
+	if(m1 || m2 < SOULL)
 	{
-		unsigned long r1, r2;
-		m1 = cmpbeqz(m1);
-		if(!HOST_IS_BIGENDIAN)
-			m1 <<= shift + SOULM1 * BITS_PER_CHAR;
-		else
-			m1 >>= shift;
-		r1 = alpha_nul_byte_index_e(m1);
-		r2 = alpha_nul_byte_index_e(m2);
-		r1 = r1 < r2 ? r1 : r2;
-		r1 = r1 < n - 1 ? r1 : n - 1;
-		if(HOST_IS_BIGENDIAN)
-			r1 = SOULM1 - r1;
-		r1 *= BITS_PER_CHAR;
-		return (int)((w1 >> r1) & 0xFF) - (int)((w2 >> r1) & 0xFF);
+			m1 = czx1(pcmp1eq(m1, 0));
+			m1 = m1 < m2 ? m1 : m2;
+			m1 = m1 < n - 1 ? m1 : n - 1;
+			if(HOST_IS_BIGENDIAN)
+				m1 = SOULLM1 - m1;
+			m1 *= BITS_PER_CHAR;
+			return (int)((w1 >> m1) & 0xFF) - (int)((w2 >> m1) & 0xFF);
 	}
-	n -= SOUL - shift;
-	i  = ROUND_ALIGN(n, SOUL);
+	n -= SOULL - shift;
+	i  = ROUND_ALIGN(n, SOULL);
 	cycles = i;
 
-	for(; likely(SOUL <= i); i -= SOUL)
+	for(; likely(SOULL <= i); i -= SOULL)
 	{
-		w1   = *(const unsigned long *)s1;
-		w2   = *(const unsigned long *)s2;
-		s1  += SOUL;
-		s2  += SOUL;
-		m1   = cmpbge(0x6060606060606060UL, w1);
-		m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
-		m1   = zapnot(0x2020202020202020UL, m1);
+		w1   = *(const unsigned long long *)s1;
+		w2   = *(const unsigned long long *)s2;
+		s1  += SOULL;
+		s2  += SOULL;
+		m1   = pcmp1gt(w1, 0x6060606060606060ULL);
+		m1  ^= pcmp1gt(w1, 0x7a7a7a7a7a7a7a7aULL);
+		m1   = 0x2020202020202020UL & m1;
 		w1  -= m1;
-		m2   = cmpbge(0x6060606060606060UL, w2);
-		m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
-		m2   = zapnot(0x2020202020202020UL, m2);
+		m2   = pcmp1gt(w2, 0x6060606060606060ULL);
+		m2  ^= pcmp1gt(w2, 0x7a7a7a7a7a7a7a7aULL);
+		m2   = 0x2020202020202020UL & m2;
 		w2  -= m2;
+		m1   = czx1(w1);
+		m2   = czx1(w2);
+		m2   = m1 < m2 ? m1 : m2;
 		m1   = w1 ^ w2;
-		m2   = cmpbeqz(w1) | cmpbeqz(w2);
-		if(m1 || m2)
+		if(m1 || m2 < SOULL)
 		{
-			unsigned long r1, r2;
-			m1 = cmpbeqz(m1);
-			r1 = alpha_nul_byte_index_e(m1);
-			r2 = alpha_nul_byte_index_e(m2);
-			r1 = r1 < r2 ? r1 : r2;
+			m1 = czx1(pcmp1eq(m1, 0));
+			m1 = m1 < m2 ? m1 : m2;
 			cycles -= i;
 			n -= cycles;
-			r1 = r1 < n - 1 ? r1 : n - 1;
+			m1 = m1 < n - 1 ? m1 : n - 1;
 			if(HOST_IS_BIGENDIAN)
-				r1 = SOULM1 - r1;
-			r1 *= BITS_PER_CHAR;
-			return (int)((w1 >> r1) & 0xFF) - (int)((w2 >> r1) & 0xFF);
+				m1 = SOULLM1 - m1;
+			m1 *= BITS_PER_CHAR;
+			return (int)((w1 >> m1) & 0xFF) - (int)((w2 >> m1) & 0xFF);
 		}
 	}
 	return 0;
@@ -246,9 +240,9 @@ int strncasecmp_a(const char *s1, const char *s2, size_t n)
 	prefetch(s1);
 	prefetch(s2);
 
-	if(likely(((intptr_t)s1 ^ (intptr_t)s2) & SOULM1))
+	if(likely(((intptr_t)s1 ^ (intptr_t)s2) & SOULLM1))
 		return strncasecmp_a_u(s1, s2, n);
 	return strncasecmp_a_a(s1, s2, n);
 }
 
-static char const rcsid_snccaa[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_snccaia[] GCC_ATTR_USED_VAR = "$Id: $";
