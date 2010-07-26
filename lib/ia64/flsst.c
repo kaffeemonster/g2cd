@@ -33,19 +33,22 @@
  */
 #if 1
 /*
- * Newer gcc can generate this code fine, but i think
- * that is the result of a recent reorg (gcc 4.4?).
- * So we fiddle to regenerate _exactly_ the same code
- * so it hopefully works with 0, as the generic one
- * should.
+ * Newer gcc can generate code like this code fine,
+ * but i think that is the result of a recent reorg
+ * (gcc 4.4?).
+ * So we fiddle to generate equivalent code.
  */
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
 	long double d = find;
-	int exp;
+	size_t exp;
 
-	__asm__ ("getf.exp %0=%1;;\n\tsub %0=%2,%0" : "=&r"(exp) : "f"(d), "r" (65598));
-	return 64LL - exp;
+	if(!find)
+		return 0;
+
+	__asm__ ("getf.exp %0=%1" : "=r"(exp) : "f"(d));
+	exp = 65598 - exp;
+	return SIZE_T_BITS - exp;
 }
 #else
 /*
@@ -54,7 +57,8 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
  */
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
-	size_t found;
+	if(!find)
+		return 0;
 	return SIZE_T_BITS - __builtin_clzll(find);
 }
 #endif
