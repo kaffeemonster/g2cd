@@ -136,6 +136,7 @@ FLSSTSRC = \
 	$(MPL)/mips/flsst.c \
 	$(MPL)/ppc/flsst.c \
 	$(MPL)/alpha/flsst.c \
+	$(MPL)/ia64/flsst.c \
 	$(MPL)/arm/flsst.c
 POPCOUNTSTSRC = \
 	$(MPL)/generic/popcountst.c \

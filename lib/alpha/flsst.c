@@ -31,8 +31,27 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 {
 	return SIZE_T_BITS - ctlz(find); /* alpha knows clz */
 }
-
-static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";
 #else
-# include "../generic/flsst.c"
+size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
+{
+	size_t v = find;
+	size_t r;
+	size_t shift;
+
+	/*
+	 * alpha likes this, because it does not have a
+	 * flags register, instead the compare instr. generate
+	 * 0 or 1 in any of the gp-register -> exactly like written.
+	 * Also no jumps, no loads, no constants which do not fit
+	 * into the instructions -> raw instruction execution (~35)
+	 */
+	r =     (v > 0xFFFFFFFFUL) << 8; v >>= r;
+	shift = (v > 0xFFFF      ) << 4; v >>= shift;
+	shift = (v > 0xFF        ) << 3; v >>= shift; r |= shift;
+	shift = (v > 0xF         ) << 2; v >>= shift; r |= shift;
+	shift = (v > 0x3         ) << 1; v >>= shift; r |= shift;
+	                                              r |= (v >> 1);
+	return r;
+}
 #endif
+static char const rcsid_fla[] GCC_ATTR_USED_VAR = "$Id:$";

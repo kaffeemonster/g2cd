@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t
  *
- * Copyright (c) 2004-2008 Jan Seiffert
+ * Copyright (c) 2004-2010 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,6 +47,8 @@
 #  include "ppc/flsst.c"
 # elif defined(__alpha__)
 #  include "alpha/flsst.c"
+# elif defined(__ia64__)
+#  include "ia64/flsst.c"
 # elif defined(__ARM_ARCH_5__) || defined(__ARM_ARCH_5T__) || \
 	defined(__ARM_ARCH_5TE__) || defined(__ARM_ARCH_5TEJ__) || \
 	defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \

@@ -32,6 +32,11 @@
 # include "../other.h"
 
 # ifdef __alpha_cix__
+/*
+ * we could use the __builtin_clzl function and the like,
+ * but someone thought their result should be signed...
+ * gcc cannot gain _that_ much info from them anyway
+ */
 static inline size_t ctlz(unsigned long a)
 {
 	size_t r;
