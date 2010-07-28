@@ -148,6 +148,7 @@ HEADS = \
 	G2QueryKey.h \
 	builtin_defaults.h \
 	timeout.h \
+	idbus.h \
 	gup.h
 #	whith gmake all could be so simple $(wildcard *.h)
 #
@@ -168,6 +169,7 @@ MSRCS = \
 	G2GUIDCache.c \
 	G2QueryKey.c \
 	timeout.c \
+	idbus.c \
 	gup.c
 SRCS = \
 	$(MSRCS) \
@@ -203,6 +205,7 @@ AUX = \
 	m4/ax_sys_dev_poll.m4 \
 	m4/ax_wint_t.m4 \
 	m4/test_asm.m4 \
+	m4/pkg.m4 \
 	obs_build/debian.changelog \
 	obs_build/debian.control \
 	obs_build/debian.rules \
@@ -244,6 +247,7 @@ OBJS = \
 	G2QueryKey.o \
 	data.o \
 	timeout.o \
+	idbus.o \
 	gup.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
 #OBJS = $(patsubst %.c,%.o,$(MSRCS))
@@ -616,7 +620,7 @@ data.o: sbox.bin bin2o
 	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) $(BIN2O_OPTS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
-G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h lib/my_bitopsm.h version.h builtin_defaults.h
+G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h idbus.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h lib/my_bitopsm.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
 G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
@@ -626,10 +630,11 @@ G2ConRegistry.o: G2ConRegistry.h G2Connection.h G2QHT.h lib/combo_addr.h lib/hli
 G2Packet.o: G2Packet.h G2PacketSerializer.h G2PacketTyper.h G2Connection.h G2ConRegistry.h G2QueryKey.h G2KHL.h G2GUIDCache.h G2QHT.h lib/my_bitops.h lib/guid.h
 G2PacketSerializer.o: G2PacketSerializer.h G2Packet.h
 G2QHT.o: G2QHT.h G2Packet.h G2ConRegistry.h lib/my_bitops.h lib/my_bitopsm.h lib/hzp.h lib/atomic.h lib/tchar.h
-G2KHL.o: G2KHL.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
+G2KHL.o: G2KHL.h lib/my_epoll.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h lib/guid.h
 timeout.o: timeout.h
+idbus.o: idbus.h G2MainServer.h G2ConRegistry.h timeout.h lib/my_epoll.h lib/my_bitopsm.h
 gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h

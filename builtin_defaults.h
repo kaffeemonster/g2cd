@@ -49,9 +49,10 @@
 #define DEFAULT_ADDR		INADDR_ANY
 
 #define DEFAULT_BE_DAEMON	false
+#define DEFAULT_DBUS	false
 
-#define DEFAULT_USE_IPV4 true
-#define DEFAULT_USE_IPV6 true
+#define DEFAULT_USE_IPV4	true
+#define DEFAULT_USE_IPV6	true
 
 #define DEFAULT_USER		"nobody"
 #define DEFAULT_NICE_ADJUST	3
@@ -85,7 +86,6 @@
 #define DEFAULT_ENC_OUT		ENC_NONE
 #define DEFAULT_HUB_ENC_IN	ENC_DEFLATE
 #define DEFAULT_HUB_ENC_OUT	ENC_DEFLATE
-
 
 /* real constants, should not be run-time configurable */
 #define NORM_BUFF_CAPACITY	(4096 - (3 * sizeof(size_t)))

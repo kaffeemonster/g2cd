@@ -63,6 +63,7 @@
 #define _NEED_G2_P_TYPE
 #include "G2Packet.h"
 #include "timeout.h"
+#include "idbus.h"
 #include "G2KHL.h"
 #include "G2GUIDCache.h"
 #include "G2QueryKey.h"
@@ -80,14 +81,14 @@
 
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
+static pthread_mutex_t sock_com_lock;
 static int sock_com[THREAD_SUM_COM][2];
-static struct pollfd sock_poll[THREAD_SUM_COM + 1];
+static LIST_HEAD(sock_com_list);
 static volatile sig_atomic_t server_running = true;
-static volatile sig_atomic_t dump_stats;
-static volatile sig_atomic_t dump_conreg;
 
 /* helper vars */
 static bool be_daemon;
+static bool connect_dbus;
 static int log_to_fd = -1;
 static time_t last_HAW;
 static time_t last_full_check;
@@ -106,26 +107,24 @@ static struct
 } profile;
 
 /* Internal prototypes */
-static inline void clean_up_m(void);
 static inline void parse_cmdl_args(int, char **);
 static inline void fork_to_background(void);
 static noinline void handle_config(void);
+static noinline void clean_up_m(void);
 static inline void change_the_user(void);
 static inline void setup_resources(void);
 static void init_prng(void);
 static noinline void read_uprofile(void);
 static void adjust_our_niceness(int);
 static void sig_stop_func(int signr, siginfo_t *, void *);
-#ifndef WIN32
-static void sig_dump_func(int signr, siginfo_t *, void *);
-#endif
 static intptr_t check_con_health(g2_connection_t *con, void *carg);
-static intptr_t dump_a_hub(g2_connection_t *con, void *carg);
+static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, unsigned *len);
 
 int main(int argc, char **args)
 {
 	size_t i, j;
-	int extra_fd = -1;
+	struct pollfd *gpfd;
+	unsigned gpfd_num = 0, gpfd_len = THREAD_SUM_COM + 5;
 	bool long_poll = true;
 
 #ifdef DRD_ME
@@ -143,6 +142,16 @@ int main(int argc, char **args)
 
 	/* first and foremost, before something can go wrong */
 	backtrace_init();
+
+	if(pthread_mutex_init(&sock_com_lock, NULL)) {
+		logg_errno(LOGF_ERR, "couldn't init sock_com lock");
+		return EXIT_FAILURE;
+	}
+	gpfd = malloc(gpfd_len * sizeof(*gpfd));
+	if(!gpfd) {
+		logg_errno(LOGF_ERR, "couldn't allocate mem for poll fds");
+		return EXIT_FAILURE;
+	}
 
 #ifdef WIN32
 	{
@@ -219,6 +228,9 @@ int main(int argc, char **args)
 	if(server.settings.profile.want_2_send)
 		read_uprofile();
 
+	if(connect_dbus && !idbus_init())
+		return EXIT_FAILURE;
+
 /* ANYTHING what need any priviledges should be done before */
 	/* Drop priviledges */
 	change_the_user();
@@ -269,19 +281,13 @@ int main(int argc, char **args)
 		else
 			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
 
-#ifndef WIN32
+#if 0
 		memset(&new_sas, 0, sizeof(new_sas));
 		new_sas.sa_sigaction = sig_dump_func;
 		sigemptyset(&new_sas.sa_mask);
 		new_sas.sa_flags = SA_SIGINFO;
 		if(sigaction(SIGUSR1, &new_sas, NULL))
 			logg_pos(LOGF_WARN, "Error registering stat dump handler\n");
-		memset(&new_sas, 0, sizeof(new_sas));
-		new_sas.sa_sigaction = sig_dump_func;
-		sigemptyset(&new_sas.sa_mask);
-		new_sas.sa_flags = SA_SIGINFO;
-		if(sigaction(SIGUSR2, &new_sas, NULL))
-			logg_pos(LOGF_WARN, "Error registering conreg dump handler\n");
 #endif
 	}
 
@@ -292,42 +298,53 @@ int main(int argc, char **args)
 	/* main server wait loop */
 	while(server_running)
 	{
-		int num_poll = poll(sock_poll,
-				-1 == extra_fd ? THREAD_SUM_COM : THREAD_SUM_COM + 1,
-				long_poll ? 11300 : 1100);
+		int num_poll;
+
+		gpfd = sock_com_create_pfd(gpfd, &gpfd_num, &gpfd_len);
+		num_poll = poll(gpfd, gpfd_num, long_poll ? 11300 : 1100);
 		update_local_time();
 		switch(num_poll)
 		{
 		/* Normally: see what has happened */
 		default:
-			if(!sock_poll[THREAD_SUM_COM].revents) {
-				logg_pos(LOGF_INFO, "bytes at the pipes\n");
-				server_running = false;
-				break;
+			for(i = 0; i < gpfd_num && num_poll; i++)
+			{
+				struct sock_com *s;
+				if(!gpfd[i].revents)
+					continue;
+				num_poll--;
+				s = sock_com_fd_find(gpfd[i].fd);
+				if(!s && !s->enabled)
+					continue;
+				if(!s->handler) {
+					logg_pos(LOGF_INFO, "bytes at the pipes\n");
+					server_running = false;
+					break;
+				} else if(G2KHL_SOCK_COM_HANDLER == s->handler) {
+					/* nop, we fall through to g2_khl_tick */;
+				} else {
+					s->handler(s, gpfd[i].revents);
+				}
 			}
-			/* fall through to g2_khl_tick */
+			/* yes, fall through */
 		/* Nothing happened (or just the Timeout) */
 		case 0:
 			/* all abord? */
 			for(i = 0; i < THREAD_SUM; i++)
 			{
-				logg_develd_old("Up is thread num %lu: %s\n", (unsigned long) i,
-						(server.status.all_abord[i]) ? "true" : "false");
+				logg_develd_old("Up is thread num %zu: %s\n", i,
+				                (server.status.all_abord[i]) ? "true" : "false");
 				if(!server.status.all_abord[i]) {
 					server_running = false;
 					logg_pos(LOGF_ERR, "We've lost someone! Going down!\n");
- 				}
- 			}
+				}
+			}
 			/* service our memleak ;) */
 			if(server_running) /* not when someone lost, maybe deadlock */
 			{
-				extra_fd = -1;
 				num_poll = hzp_scan(NORM_HZP_THRESHOLD);
 				logg_develd_old("HZP reclaimed chunks: %i\n", num_poll);
-				long_poll = g2_khl_tick(&extra_fd);
-				sock_poll[THREAD_SUM_COM].fd = extra_fd;
-				sock_poll[THREAD_SUM_COM].events = POLLIN|POLLERR|POLLHUP;
-				sock_poll[THREAD_SUM_COM].revents = 0;
+				long_poll = g2_khl_tick();
 				/*
 				 * first hzp scan, then update (will generate new
 				 * mem to free, which we want to linger around one
@@ -357,22 +374,6 @@ int main(int argc, char **args)
 			/* and get out here (at the moment) */
 			server_running = false;
 			break;
-		}
-		if(dump_stats)
-		{
-			logg(LOGF_INFO, "Connections: %u (%u hubs)\n",
-			     atomic_read(&server.status.act_connection_sum),
-			     atomic_read(&server.status.act_hub_sum));
-			g2_conreg_all_hub(NULL, dump_a_hub, NULL);
-			dump_stats = false;
-		}
-		if(dump_conreg)
-		{
-			logg(LOGF_INFO, "Connections: %u (%u hubs)\n",
-			     atomic_read(&server.status.act_connection_sum),
-			     atomic_read(&server.status.act_hub_sum));
-			g2_conreg_all_con(dump_a_hub, NULL);
-			dump_conreg = false;
 		}
 	}
 
@@ -457,6 +458,7 @@ int main(int argc, char **args)
 	hzp_scan(0);
 	hzp_scan(0);
 
+	free(gpfd);
 	clean_up_m();
 #ifndef WIN32
 	fsync(STDOUT_FILENO);
@@ -582,13 +584,6 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	return 0;
 }
 
-static intptr_t dump_a_hub(g2_connection_t *con, void *carg GCC_ATTR_UNUSED_PARAM)
-{
-	logg(LOGF_INFO, "\t%p#I\t-> %p#G %s d:%c l:%u\t\"%s\"\n", &con->remote_host, con->guid, con->vendor_code,
-	     con->flags.dismissed ? 't' : 'f', con->u.handler.leaf_count, con->uagent);
-	return 0;
-}
-
 static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGINT == signr
@@ -598,16 +593,6 @@ static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *
 	)
 		server_running = false;
 }
-
-#ifndef WIN32
-static void sig_dump_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
-{
-	if(SIGUSR1 == signr)
-		dump_stats = true;
-	if(SIGUSR2 == signr)
-		dump_conreg = true;
-}
-#endif
 
 static inline void parse_cmdl_args(int argc, char **args)
 {
@@ -744,6 +729,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("crawl_send_gps",       &server.settings.nick.send_gps,            config_parser_handle_bool),
 	CONF_ITEM("qht_compress_internal",&server.settings.qht.compress_internal,    config_parser_handle_bool),
 	CONF_ITEM("be_daemon",            &be_daemon,                                config_parser_handle_bool),
+	CONF_ITEM("connect_dbus",         &connect_dbus,                             config_parser_handle_bool),
 	CONF_ITEM("our_guid",             server.settings.our_guid,                  config_parser_handle_guid),
 	CONF_ITEM("encoding_default_in",  &server.settings.default_in_encoding,      config_parser_handle_encoding),
 	CONF_ITEM("encoding_default_out", &server.settings.default_out_encoding,     config_parser_handle_encoding),
@@ -799,6 +785,7 @@ static noinline void handle_config(void)
 	server.settings.nick.send_clients              = DEFAULT_NICK_SEND_CLIENTS;
 	server.settings.nick.send_gps                  = DEFAULT_NICK_SEND_GPS;
 
+	connect_dbus      = DEFAULT_DBUS;
 	be_daemon         = DEFAULT_BE_DAEMON;
 	profile.latitude  = DEFAULT_PROFILE_LAT;
 	profile.longitude = DEFAULT_PROFILE_LONG;
@@ -1089,8 +1076,8 @@ static inline void setup_resources(void)
 
 	/* adding socket-fd's to a poll-structure */
 	for(i = 0; i < THREAD_SUM_COM; i++) {
-		sock_poll[i].fd = sock_com[i][DIR_OUT];
-		sock_poll[i].events = POLLIN;
+		if(!sock_com_add_fd(NULL, NULL, sock_com[i][DIR_OUT], POLLIN, true))
+			diedie("preparing internal sockets");
 	}
 
 #ifdef __linux__
@@ -1271,7 +1258,7 @@ static void adjust_our_niceness(int adjustment)
 		logg_errno(LOGF_NOTICE, "adjusting niceness failed, continueing, reason");
 }
 
-static inline void clean_up_m(void)
+static noinline void clean_up_m(void)
 {
 	/* Try to clean up as much as possible.
 	 * Normally, if a process dies/terminates, the OS should
@@ -1282,6 +1269,7 @@ static inline void clean_up_m(void)
 	 * this Programm will ever run on such a OS (C99, poll/epoll
 	 * etc.), but...
 	 */
+	struct sock_com *pos, *n;
 	size_t i;
 
 	pthread_attr_destroy(&server.settings.t_def_attr);
@@ -1295,6 +1283,10 @@ static inline void clean_up_m(void)
 	}
 
 	free((void*)(intptr_t)server.settings.profile.xml);
+	list_for_each_entry_safe(pos, n, &sock_com_list, l) {
+		list_del(&pos->l);
+		free(pos);
+	}
 
 	fclose(stdin);
 	fclose(stdout); /* get a sync if we output to a file */
@@ -1318,6 +1310,78 @@ void g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
 	/* NOP */
 }
 #endif
+
+struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void *data, int fd, short events, bool enabled)
+{
+	struct sock_com *r = malloc(sizeof(*r));
+
+	if(!r)
+		return r;
+	INIT_LIST_HEAD(&r->l);
+	r->handler = handler;
+	r->data = data;
+	r->fd = fd;
+	r->events = events;
+	r->enabled = enabled;
+	pthread_mutex_lock(&sock_com_lock);
+	list_add(&r->l, &sock_com_list);
+	pthread_mutex_unlock(&sock_com_lock);
+	return r;
+}
+
+void sock_com_delete(struct sock_com *s)
+{
+	if(!s)
+		return;
+	pthread_mutex_lock(&sock_com_lock);
+	list_del(&s->l);
+	pthread_mutex_unlock(&sock_com_lock);
+}
+
+struct sock_com *sock_com_fd_find(int fd)
+{
+	struct sock_com *ret_val = NULL;
+	struct sock_com *pos;
+
+	pthread_mutex_lock(&sock_com_lock);
+	list_for_each_entry(pos, &sock_com_list, l)
+	{
+		if(pos->fd == fd) {
+			ret_val = pos;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sock_com_lock);
+	return ret_val;
+}
+
+static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, unsigned *len)
+{
+	struct sock_com *pos;
+	unsigned i = 0;
+
+	pthread_mutex_lock(&sock_com_lock);
+	list_for_each_entry(pos, &sock_com_list, l)
+	{
+		if(!pos->enabled)
+			continue;
+		if(i >= *len)
+		{
+			struct pollfd *t = realloc(pfd, (*len + 1) * sizeof(struct pollfd));
+			if(!t)
+				break;
+			(*len)++;
+			pfd = t;
+		}
+		pfd[i].fd = pos->fd;
+		pfd[i].events = pos->events;
+		pfd[i].revents = 0;
+		i++;
+	}
+	pthread_mutex_unlock(&sock_com_lock);
+	*num = i;
+	return pfd;
+}
 
 /*
  * hmpf, ok, we try to say the compiler to include them (if it

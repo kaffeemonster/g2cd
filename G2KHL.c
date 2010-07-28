@@ -65,6 +65,7 @@
 #include "lib/other.h"
 #include "G2KHL.h"
 #include "G2MainServer.h"
+#include "lib/my_epoll.h"
 #include "lib/log_facility.h"
 #include "lib/hlist.h"
 #include "lib/rbtree.h"
@@ -944,14 +945,17 @@ static int gwc_handle_response(void)
 
 static int gwc_receive(void)
 {
+	struct sock_com *s;
 	struct norm_buff *buff = act_gwc.buff;
 	ssize_t result;
 	int ret_val = 1;
 
+	s = sock_com_fd_find(act_gwc.socket);
+
 	do {
 		errno = 0;
 		result = recv(act_gwc.socket, buffer_start(*buff), buffer_remaining(*buff)-1, 0);
-	} while(-1 == ret_val && EINTR == errno);
+	} while(-1 == result && EINTR == errno);
 
 	switch(result)
 	{
@@ -962,9 +966,11 @@ static int gwc_receive(void)
 		if(buffer_remaining(*buff)-1)
 		{
 			if(EAGAIN != errno) { /* we have reached EOF */
+				sock_com_delete(s);
 				close(act_gwc.socket);
 				act_gwc.socket = -1;
 				ret_val = 0;
+				s = NULL;
 			}
 			else
 				logg_devel("nothing to read!\n");
@@ -973,9 +979,11 @@ static int gwc_receive(void)
 	case -1:
 		if(EAGAIN != errno) {
 			logg_errno(LOGF_DEBUG, "reading gwc");
+			sock_com_delete(s);
 			close(act_gwc.socket);
 			act_gwc.socket = -1;
 			ret_val = -1;
+			s = NULL;
 		}
 	}
 	/* we should have 1 char space left put a '\0' at the end */
@@ -983,10 +991,11 @@ static int gwc_receive(void)
 	/* no buff->pos++, the zero is only for safety */
 	buffer_flip(*buff);
 	if(!gwc_handle_response()) {
-			if(-1 != act_gwc.socket)
+		sock_com_delete(s);
+		if(-1 != act_gwc.socket)
 				close(act_gwc.socket);
-			act_gwc.socket = -1;
-			ret_val = -1;
+		act_gwc.socket = -1;
+		ret_val = -1;
 	}
 	buffer_compact(*buff);
 	if(!buffer_remaining(*buff)) {
@@ -998,7 +1007,7 @@ static int gwc_receive(void)
 	return ret_val;
 }
 
-bool g2_khl_tick(int *fd)
+bool g2_khl_tick(void)
 {
 	static enum khl_mnmt_states state = KHL_BOOT;
 	bool long_poll = false;
@@ -1041,6 +1050,15 @@ bool g2_khl_tick(int *fd)
 			/* get the fd-flags and add nonblocking  */
 			if(-1 != (fd_flags = fcntl(act_gwc.socket, F_GETFL)))
 				fcntl(act_gwc.socket, F_SETFL, fd_flags | O_NONBLOCK);
+			if(!sock_com_add_fd(G2KHL_SOCK_COM_HANDLER, NULL, act_gwc.socket,
+			                    POLLIN|POLLERR|POLLHUP, true))
+			{
+				act_gwc.data.q_count++;
+				time(&act_gwc.data.seen_last);
+				gwc_clean();
+				state = KHL_FILL;
+				break;
+			}
 			state = KHL_GWC_REC;
 		}
 		else {
@@ -1051,10 +1069,8 @@ bool g2_khl_tick(int *fd)
 		{
 			int result = gwc_receive();
 			if(0 > result)
-				state = KHL_FILL;
-			else if (0 < result)
-				*fd = act_gwc.socket;
-			else {
+				state = KHL_FILL; /* clean?? */
+			else if (0 == result) {
 				act_gwc.data.q_count++;
 				time(&act_gwc.data.seen_last);
 				gwc_clean();

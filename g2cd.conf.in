@@ -223,6 +223,11 @@ COMMENTC A typical format often used by logger is "%b %d %H:%M:%S"
 COMMENTC
 COMMENT log_time_date_format = DEFAULT_LOG_TIME_FORMAT
 
+COMMENTC
+COMMENTC Should we connect to the dbus?
+COMMENTC
+COMMENT connect_dbus = DEFAULT_DBUS
+
 COMMENTC -----------------------------------------------
 COMMENTC Connection compression
 COMMENTC -----------------------------------------------

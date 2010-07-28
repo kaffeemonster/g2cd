@@ -516,3 +516,6 @@ void backtrace_init(void)
 		logg_pos(LOGF_NOTICE, "Unable to register SIGABRT-handler\n");
 }
 #endif
+/*@unused@*/
+static char const rcsid_bt[] GCC_ATTR_USED_VAR = "$Id: $";
+/* EOF */

@@ -33,6 +33,7 @@ default_enable_unaligned_ok=no
 default_disable_bit_instr=yes
 default_enable_release=no
 disable_backtraces=no
+disable_dbus=no
 disable_hw_mult=no
 disable_smp=no
 disable_asm=no
@@ -92,6 +93,9 @@ AC_ARG_WITH([warnings], [AS_HELP_STRING([--without-warnings],
 AC_ARG_WITH([backtraces], [AS_HELP_STRING([--without-backtraces],
             [do you want backtraces on crash? (This is hacky, but is often the only helper on crash)])],
             [disable_backtraces="$witheval"], [])
+AC_ARG_WITH([dbus], [AS_HELP_STRING([--without-dbus],
+            [do you want a dbus interface])],
+            [disable_dbus="$witheval"], [])
 AC_ARG_ENABLE([debug], [AS_HELP_STRING([--enable-debug],
               [make a debug build])],
               [my_enable_debug=yes], [])
@@ -456,6 +460,17 @@ AC_CHECK_HEADERS([ctype.h pthread.h inttypes.h limits.h stddef.h stdlib.h string
 
 m4_include([m4/ax_check_zlib.m4])
 AX_CHECK_ZLIB
+
+m4_include([m4/pkg.m4])
+if test x"$disable_dbus" = xno; then
+	PKG_CHECK_EXISTS([dbus-1],
+		[
+			AC_DEFINE(HAVE_DBUS, 1, Define to 1 if we have dbus)
+			PKG_CHECK_MODULES([DBUS], [dbus-1])
+			LIBS="$DBUS_LIBS $LIBS"
+			CFLAGS="$DBUS_CFLAGS $CFLAGS"
+		], [])
+fi
 
 # do you have db.h or ndbm.h?
 AC_CHECK_HEADER([db.h], [have_db_h=yes],[have_db_h=no][])
