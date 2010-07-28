@@ -43,6 +43,7 @@
 	* parse the packet-stream
 	* answer packets, searches, etc
 	but there is still a lot to do...
+
 
 2. Setup
 ========
@@ -328,7 +329,7 @@
 
 	 Unfortunatly G2CD can do nothing about that, there is no per
 	connection setting we can frob. On Linux® YOU have to configure the
-	system wide retry count in "/proc/sys/net/ipv4/tcp_retries2".
+	_system wide_ retry count in "/proc/sys/net/ipv4/tcp_retries2".
 	 A number of 6 or 7 retries is recommended and successfully tested
 	on the authors machines with no other adverse effect. You can make
 	this setting permanent by editing /etc/sysctl.conf.
@@ -345,6 +346,48 @@
 	usage, "massive" (lol) multithreading) turns up a lot of "hidden
 	limits" & problems, unfortunatly...
 
+2.2 DBus
+----------
+	 G2CD can connect to DBus to export some data at runtime about it's
+	status. For this you need to compile G2CD with DBus support (should
+	happen automatically if you have the DBus develop stuff (header, etc)
+	installed), enable it in the config file, and configured DBus to allow
+	connections from/to G2CD. The last part is normally done in an config
+	file in /etc/dbus/system.d/whatever.conf.
+	 Such A config file could look like this:
+
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+	<policy context="default">
+		<allow own="org.g2cd"/>
+		<allow send_destination="org.g2cd" send_interface="org.freedesktop.DBus.Introspectable"/>
+		<allow send_destination="org.g2cd" send_interface="org.g2cd"/>
+	</policy>
+</busconfig>
+
+	 But be carefull, this is just a sample, this config does not contain
+	any access restrictions, it is only good to open up the data exchange
+	during development. Also do not forget to restart DBus after creating
+	the config file.
+	 If everything is working you can query G2CD while it is running like so:
+
+$ dbus-send --system --dest=org.g2cd --print-reply /org/g2cd org.g2cd.version
+method return sender=:1.72 -> dest=:1.73 reply_serial=2
+   string "0.0.00.11"
+
+	 Other Methods are "get_num_connections", "get_num_hubs", "list_hubs",
+	"list_cons".
+
+	 I created this interface to get a little "easier" access to (more) info
+	at runtime than SIGUSR{1|2} would allow (and to free up these two signals
+	again for more classical uses). Easy in this context is relative, DBus
+	is not easy, but creating a home grown IPC/RPC sheme is BS in these days.
+	Also, this way maybe some runtime knobs could be implemented. Patches
+	welcome, but beware, i don't want to export/fiddle every internal of G2CD
+	to this interface.
+
+
 3. Bugs / TODO
 ==============
 	Main Bug: Program not finished
@@ -365,6 +408,7 @@
 	- portability issues of the build (make, compiler, shell)
 	- make the autoconf much better...
 	- lots of other stuff
+	- DBus interface is prop. buggy, deadlockable, eats your kitten, etc.
 
 	What's needed?
 	 Programming wizards, the tooth fairy and santa claus would be nice ;)
@@ -440,7 +484,7 @@
 	  Vista and higher (Server 2008, Win7, etc.) finally have a WSAPoll,
 	  which is the real poll (what took you so long?), only with another
 	  name. You have to remove/adapt my own POLLIN/POLLOUT etc. defines
-	  to the real ones.
+	  to the real ones (I couldn't find them).
 	   For epoll, i don't know how to "fix" that. Emulation by poll would
 	  only work on Vista and higher, and is not recommended. There seems
 	  to be no other nice API, which only leaves us with completion ports.
@@ -448,7 +492,7 @@
 	  they mix three things (to achive async io):
 	   1) async transport to/from userland buffer
 	   2) large scale event notification by
-	   3) managing a worker poll churning along all those events
+	   3) managing a worker pool churning along all those events
 	  Point 2 is whats needed, because i build 3 myself. Using the NT
 	  Kernel supplied goodness would be nice and an option, but point
 	  1 really ruins our party.
@@ -461,9 +505,9 @@
 	  fixed recvieve buffer. When connections are ready, they temporaly
 	  get a buffer, data is read, and then we try to consume all the data
 	  in that buffer, which works most of the time. This way we can handle
-	  thousands of conneciton with a handful of buffer. For async transport
+	  thousands of connection with a handful of buffer. For async transport
 	  some core logic in G2CD has to be rewritten to stick a fixed buffer
-	  on every connection.
+	  on every connection. Or completions ports persuaded not to do async io.
 
 
 4. Coding-Style
