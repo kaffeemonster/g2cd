@@ -84,12 +84,13 @@ static pthread_t main_threads[THREAD_SUM];
 static pthread_mutex_t sock_com_lock;
 static int sock_com[THREAD_SUM_COM][2];
 static LIST_HEAD(sock_com_list);
-static volatile sig_atomic_t server_running = true;
+static volatile sig_atomic_t server_running;
+static volatile sig_atomic_t reopen_logfile;
 
 /* helper vars */
 static bool be_daemon;
 static bool connect_dbus;
-static int log_to_fd = -1;
+static const char *log_fname;
 static time_t last_HAW;
 static time_t last_full_check;
 
@@ -107,194 +108,33 @@ static struct
 } profile;
 
 /* Internal prototypes */
-static inline void parse_cmdl_args(int, char **);
-static inline void fork_to_background(void);
-static noinline void handle_config(void);
+static noinline bool startup(int, char **);
+static noinline bool clutch_logfile(void);
 static noinline void clean_up_m(void);
-static inline void change_the_user(void);
-static inline void setup_resources(void);
-static void init_prng(void);
-static noinline void read_uprofile(void);
-static void adjust_our_niceness(int);
-static void sig_stop_func(int signr, siginfo_t *, void *);
 static intptr_t check_con_health(g2_connection_t *con, void *carg);
 static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, unsigned *len);
 
 int main(int argc, char **args)
 {
-	size_t i, j;
+	size_t i;
 	struct pollfd *gpfd;
 	unsigned gpfd_num = 0, gpfd_len = THREAD_SUM_COM + 5;
 	bool long_poll = true;
 
-#ifdef DRD_ME
-	DRD_IGNORE_VAR(master_time_now);
-	DRD_IGNORE_VAR(server.status.all_abord);
-	ANNOTATE_THREAD_NAME("main thread");
-#endif
-
-	/*
-	 * we have to shourtcut this a little bit, else we would see 
-	 * nothing on the sreen until the config is read (and there
-	 * are enough Points of failure until that)
-	 */
-	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL_START;
-
-	/* first and foremost, before something can go wrong */
-	backtrace_init();
-
-	if(pthread_mutex_init(&sock_com_lock, NULL)) {
-		logg_errno(LOGF_ERR, "couldn't init sock_com lock");
-		return EXIT_FAILURE;
-	}
 	gpfd = malloc(gpfd_len * sizeof(*gpfd));
 	if(!gpfd) {
 		logg_errno(LOGF_ERR, "couldn't allocate mem for poll fds");
 		return EXIT_FAILURE;
 	}
 
-#ifdef WIN32
-	{
-		WORD version_req = MAKEWORD(2, 2);
-		WSADATA wsa_data;
-		int err = WSAStartup(version_req, &wsa_data);
-		if(err)
-			diedie("WSAStartup failed");
-	}
-#endif
-
-	parse_cmdl_args(argc, args);
-
-	/* setup how we are set-up :) */
-	handle_config();
-
-	/* become a daemon if wished (useless while devel but i
-	 * stumbled over a snippet) stdin will be /dev/null, stdout
-	 * and stderr unchanged, if no log_to_fd defined it will
-	 * point to a /dev/null fd.
-	 */
-	if(be_daemon)
-		fork_to_background();
-
-	/* output (log) to file? */
-	if(-1 != log_to_fd)
-	{
-		if(STDOUT_FILENO != dup2(log_to_fd, STDOUT_FILENO)) {
-			logg_errno(LOGF_CRIT, "mapping stdout");
-			return EXIT_FAILURE;
-		}
-
-		if(STDERR_FILENO != dup2(log_to_fd, STDERR_FILENO)) {
-// TODO: Can we logg here?
-			puts("mapping stderr");
-			return EXIT_FAILURE;
-		}
-
-		close(log_to_fd);
-	}
-
 	/*
-	 * try to lower our prio, we are a unimportatnt process in respect
-	 * to root's ssh session or other stuff
+	 * OK, lets fire this thing up
+	 * http://www.youtube.com/watch?v=CG91fYHcm-k
 	 */
-	adjust_our_niceness(server.settings.nice_adjust);
-
-	g2_set_thread_name(OUR_PROC " main");
-
-	/*
-	 * Init our prng, also init the clib prng.
-	 * DO NOT USE rand()/random() before this...
-	 */
-	init_prng();
-
-	/* allocate needed working resources */
-	setup_resources();
-
-	g2_conreg_init();
-	g2_qk_init();
-	/* init khl system */
-	if(!g2_khl_init())
+	if(!startup(argc, args))
 		return EXIT_FAILURE;
-	/* init guid cache */
-	if(!g2_guid_init())
-		return EXIT_FAILURE;
+	/* "It's alive!" */
 
-	if(0 == memcmp(server.settings.our_guid, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", sizeof(server.settings.our_guid))) {
-		guid_generate(server.settings.our_guid);
-		logg(LOGF_NOTICE, "Our GUID was not configured, you maybe want to configure a constant GUID\nFor this run i generated one: %pG\n",
-		     server.settings.our_guid);
-	}
-	/* read the user-profile */
-	if(server.settings.profile.want_2_send)
-		read_uprofile();
-
-	if(connect_dbus && !idbus_init())
-		return EXIT_FAILURE;
-
-/* ANYTHING what need any priviledges should be done before */
-	/* Drop priviledges */
-	change_the_user();
-
-	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN])) {
-		logg_errno(LOGF_CRIT, "pthread_create gup");
-		clean_up_m();
-		return EXIT_FAILURE;
-	}
-
-
-	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
-		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
-		/*
-		 * Critical Moment: we could not run further for normal
-		 * shutdown, but when clean_up'ed now->undefined behaivor
-		 */
-		server_running = false;
-	}
-	/* threads startet */
-
-	/* set signalhandler */
-	{
-		struct sigaction old_sas, new_sas;
-		memset(&new_sas, 0, sizeof(new_sas));
-		memset(&old_sas, 0, sizeof(old_sas));
-		new_sas.sa_handler = SIG_IGN;
-		/* See what the Signal-status is, at the moment */
-		if(!sigaction(SIGINT, &new_sas, &old_sas))
-		{
-			/*
-			 * if we are already ignoring this signal
-			 * (backgrounded?), don't register it
-			 */
-			if(SIG_IGN != old_sas.sa_handler)
-			{
-				memset(&new_sas, 0, sizeof(new_sas));
-				new_sas.sa_sigaction = sig_stop_func;
-				sigemptyset(&new_sas.sa_mask);
-				new_sas.sa_flags = SA_SIGINFO;
-				if(sigaction(SIGINT, &new_sas, NULL))
-					logg_pos(LOGF_CRIT, "Error registering signal handler\n"), server_running = false;
-			}
-			else
-				logg_pos(LOGF_NOTICE, "Not registering Shutdown-handler\n");
-		}
-		else
-			logg_pos(LOGF_CRIT, "Error changing signal handler\n"), server_running = false;
-
-#if 0
-		memset(&new_sas, 0, sizeof(new_sas));
-		new_sas.sa_sigaction = sig_dump_func;
-		sigemptyset(&new_sas.sa_mask);
-		new_sas.sa_flags = SA_SIGINFO;
-		if(sigaction(SIGUSR1, &new_sas, NULL))
-			logg_pos(LOGF_WARN, "Error registering stat dump handler\n");
-#endif
-	}
-
-	/* make our hzp ready */
-	hzp_alloc();
-
-	server.status.start_time = time(NULL);
 	/* main server wait loop */
 	while(server_running)
 	{
@@ -364,6 +204,11 @@ int main(int argc, char **args)
 					g2_conreg_all_con(check_con_health, NULL);
 					last_full_check = local_time_now;
 				}
+				if(reopen_logfile) {
+					if(!clutch_logfile())
+						server_running = false;
+					reopen_logfile = false;
+				}
 			}
 			break;
 		/* Something bad happened */
@@ -392,6 +237,7 @@ int main(int argc, char **args)
 	for(i = 0; i < 10; i++)
 	{
 		bool all_down = false;
+		size_t j;
 		for(j = 0; j < THREAD_SUM; j++)
 		{
 			if(!server.status.all_abord[j])
@@ -584,6 +430,12 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	return 0;
 }
 
+static void sig_reopen_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
+{
+	if(SIGUSR2 == signr)
+		reopen_logfile = true;
+}
+
 static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGINT == signr
@@ -594,7 +446,34 @@ static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *
 		server_running = false;
 }
 
-static inline void parse_cmdl_args(int argc, char **args)
+static noinline bool clutch_logfile(void)
+{
+	int log_to_fd;
+
+	if(!log_fname)
+		return true;
+
+	if(-1 == (log_to_fd = open(log_fname, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP))) {
+		logg_errno(LOGF_CRIT, "opening logfile");
+		return false;
+	}
+
+	if(STDOUT_FILENO != dup2(log_to_fd, STDOUT_FILENO)) {
+		logg_errno(LOGF_CRIT, "mapping stdout");
+		return false;
+	}
+
+	if(STDERR_FILENO != dup2(log_to_fd, STDERR_FILENO)) {
+// TODO: Can we logg here?
+		puts("mapping stderr");
+		return false;
+	}
+
+	close(log_to_fd);
+	return true;
+}
+
+static void parse_cmdl_args(int argc, char **args)
 {
 	/* seeking our options */
 	while(true)
@@ -613,9 +492,10 @@ static inline void parse_cmdl_args(int argc, char **args)
 				exit(EXIT_FAILURE);
 		case 'l':
 #ifndef WIN32
-				logg(LOGF_INFO, "will log to: %s\n", optarg);
-				if(-1 == (log_to_fd = open(optarg, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)))
-					diedie("opening logfile");
+				log_fname = malloc(strlen(optarg) + 1);
+				if(!log_fname)
+					diedie("couldn't allocate mem for logfile name");
+				logg(LOGF_INFO, "will try to log to: %s\n", optarg);
 #endif
 				break;
 		case '?':
@@ -631,7 +511,7 @@ static inline void parse_cmdl_args(int argc, char **args)
 	}	
 }
 
-static inline void fork_to_background(void)
+static void fork_to_background(void)
 {
 #ifdef WIN32
 	/* Windows can not fork. do something else */
@@ -674,10 +554,9 @@ static inline void fork_to_background(void)
 			 * maybe the log-to-file option already
 			 * defined a log-file
 			 */
-			if(-1 == log_to_fd)
-				log_to_fd = tmp_fd;
-			else
-				close(tmp_fd);
+			if(!log_fname)
+				log_fname = "/dev/null";
+			close(tmp_fd);
 			break;
 		case -1:
 			diedie("forking for daemon-mode");
@@ -739,7 +618,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("bind_v6",              &server.settings.bind.ip6,                 config_parser_handle_ip),
 };
 
-static noinline void handle_config(void)
+static void handle_config(void)
 {
 	uint16_t s_lat, s_long;
 	double d_lat, d_long;
@@ -903,7 +782,7 @@ static noinline void handle_config(void)
 	return;
 }
 
-static inline void change_the_user(void)
+static void change_the_user(void)
 {
 #ifdef WIN32
 	/*
@@ -977,9 +856,14 @@ static inline void change_the_user(void)
 #endif /* __CYGWIN__ */
 }
 
-static inline void setup_resources(void)
+static void setup_resources(void)
 {
 	size_t i;
+
+	if(pthread_mutex_init(&sock_com_lock, NULL)) {
+		logg_errno(LOGF_CRIT, "couldn't init sock_com lock");
+		exit(EXIT_FAILURE);
+	}
 
 #ifndef WIN32
 	/* check and raise our open-file limit */
@@ -1258,6 +1142,157 @@ static void adjust_our_niceness(int adjustment)
 		logg_errno(LOGF_NOTICE, "adjusting niceness failed, continueing, reason");
 }
 
+static noinline bool startup(int argc, char **args)
+{
+	struct sigaction old_sas, new_sas;
+
+#ifdef DRD_ME
+	DRD_IGNORE_VAR(master_time_now);
+	DRD_IGNORE_VAR(server.status.all_abord);
+	ANNOTATE_THREAD_NAME("main thread");
+#endif
+
+	/*
+	 * we have to shourtcut this a little bit, else we would see 
+	 * nothing on the sreen until the config is read (and there
+	 * are enough Points of failure until that)
+	 */
+	server.settings.logging.act_loglevel = DEFAULT_LOGLEVEL_START;
+
+	/* first and foremost, before something can go wrong */
+	backtrace_init();
+
+#ifdef WIN32
+	{
+		WORD version_req = MAKEWORD(2, 2);
+		WSADATA wsa_data;
+		int err = WSAStartup(version_req, &wsa_data);
+		if(err)
+			diedie("WSAStartup failed");
+	}
+#endif
+
+	parse_cmdl_args(argc, args);
+
+	/* setup how we are set-up :) */
+	handle_config();
+
+	/* become a daemon if wished (useless while devel but i
+	 * stumbled over a snippet) stdin will be /dev/null, stdout
+	 * and stderr unchanged, if no log_to_fd defined it will
+	 * point to a /dev/null fd.
+	 */
+	if(be_daemon)
+		fork_to_background();
+
+	/* output (log) to file? */
+	if(!clutch_logfile())
+		return false;
+
+	/*
+	 * try to lower our prio, we are a unimportatnt process in respect
+	 * to root's ssh session or other stuff
+	 */
+	adjust_our_niceness(server.settings.nice_adjust);
+
+	g2_set_thread_name(OUR_PROC " main");
+
+	/*
+	 * Init our prng, also init the clib prng.
+	 * DO NOT USE rand()/random() before this...
+	 */
+	init_prng();
+
+	/* allocate needed working resources */
+	setup_resources();
+
+	g2_conreg_init();
+	g2_qk_init();
+	/* init khl system */
+	if(!g2_khl_init())
+		return false;
+	/* init guid cache */
+	if(!g2_guid_init())
+		return false;
+
+	if(0 == memcmp(server.settings.our_guid, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", sizeof(server.settings.our_guid))) {
+		guid_generate(server.settings.our_guid);
+		logg(LOGF_NOTICE, "Our GUID was not configured, you maybe want to configure a constant GUID\nFor this run i generated one: %pG\n",
+		     server.settings.our_guid);
+	}
+	/* read the user-profile */
+	if(server.settings.profile.want_2_send)
+		read_uprofile();
+
+	if(connect_dbus && !idbus_init())
+		return false;
+
+/* ANYTHING what need any priviledges should be done before */
+	/* Drop priviledges */
+	change_the_user();
+
+	/* make our hzp ready */
+	hzp_alloc();
+
+	/* set signalhandler */
+	memset(&new_sas, 0, sizeof(new_sas));
+	memset(&old_sas, 0, sizeof(old_sas));
+	new_sas.sa_handler = SIG_IGN;
+	/* See what the Signal-status is, at the moment */
+	if(!sigaction(SIGINT, &new_sas, &old_sas))
+	{
+		/*
+		 * if we are already ignoring this signal
+		 * (backgrounded?), don't register it
+		 */
+		if(SIG_IGN != old_sas.sa_handler)
+		{
+			memset(&new_sas, 0, sizeof(new_sas));
+			new_sas.sa_sigaction = sig_stop_func;
+			sigemptyset(&new_sas.sa_mask);
+			new_sas.sa_flags = SA_SIGINFO;
+			if(sigaction(SIGINT, &new_sas, NULL)) {
+				logg_pos(LOGF_CRIT, "Error registering signal handler\n");
+				return false;
+			}
+		}
+		else
+			logg_pos(LOGF_NOTICE, "Not registering Shutdown-handler\n");
+	}
+	else {
+		logg_pos(LOGF_CRIT, "Error changing signal handler\n");
+		return false;
+	}
+
+	memset(&new_sas, 0, sizeof(new_sas));
+	new_sas.sa_sigaction = sig_reopen_func;
+	sigemptyset(&new_sas.sa_mask);
+	new_sas.sa_flags = SA_SIGINFO;
+	if(sigaction(SIGUSR2, &new_sas, NULL))
+		logg_pos(LOGF_WARN, "Error registering log reopen handler\n");
+
+	server_running = true;
+	/* fire up threads */
+	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN])) {
+		logg_errno(LOGF_CRIT, "pthread_create gup");
+		clean_up_m();
+		return false;
+	}
+
+	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
+		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
+		/*
+		 * Critical Moment: we could not run further for normal
+		 * shutdown, but when clean_up'ed now->undefined behaivor
+		 */
+		server_running = false;
+	}
+	/* threads startet */
+
+	server.status.start_time = time(NULL);
+	return true;
+}
+
 static noinline void clean_up_m(void)
 {
 	/* Try to clean up as much as possible.
@@ -1344,8 +1379,7 @@ struct sock_com *sock_com_fd_find(int fd)
 	struct sock_com *pos;
 
 	pthread_mutex_lock(&sock_com_lock);
-	list_for_each_entry(pos, &sock_com_list, l)
-	{
+	list_for_each_entry(pos, &sock_com_list, l) {
 		if(pos->fd == fd) {
 			ret_val = pos;
 			break;

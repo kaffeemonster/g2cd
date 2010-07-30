@@ -242,6 +242,15 @@ static const char *introspection_xml =
 "	</interface>\n"
 "</node>\n";
 
+// TODO: use one of our other tls buffers
+ /*
+  * The log buffer is not exported (better so?),
+  * but would "fit", problem then: no logging while busy...
+  * The zlib scratchpads are open for grab, but the
+  * threads ending here (main, timeout) normally do not
+  * have one (would be +-0, they gain a zpad for no
+  * other use).
+  */
 static char tfmt_buff[4096];
 
 static intptr_t dump_a_con(g2_connection_t *con, void *carg)
