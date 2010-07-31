@@ -1,6 +1,6 @@
 /*
  * popcountst.c
- * calculate popcount in size_t, ppc64 implementation
+ * calculate popcount in size_t, ppc implementation
  *
  * Copyright (c) 2006-2010 Jan Seiffert
  *
@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-#ifndef __powerpc64__
+#ifndef _ARCH_PWR5
 # include "../generic/popcountst.c"
 #else
 size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
@@ -31,7 +31,7 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
 	/* according to POWER5 spec */
 	size_t tmp;
 	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n) : "cc");
-	return (tmp * 0x0101010101010101ULL) >> 56;
+	return (tmp * MK_C(0x01010101UL)) >> (SIZE_T_BITS - 8);
 }
 #endif
 

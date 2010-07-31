@@ -3318,6 +3318,11 @@ static bool handle_QH1(struct ptype_action_args *parg)
 	*ttl = *ttl - 1;
 	*hop_count = *hop_count + 1;
 	/* most g1 fields (besides IPs?) are little endian */
+// TODO: wait, i have other info here it should be BE
+	/* g1 is more Network byte order, besides some f'up
+	 * So when Shareaza does a LE read, does it mean
+	 * "translate"? Gnarf...
+	 */
 	g1_len = get_unaligned_le32(hop_count + 1);
 	/* g1 packets are only allow up to 4kb */
 	if(g1_len > 4096)
@@ -3326,6 +3331,18 @@ static bool handle_QH1(struct ptype_action_args *parg)
 	if(rem < g1_len + 23)
 		return false;
 
+// TODO: the g1 message ID is not really...
+	/* suitable, because it is the guid of THAT message
+	 * which should be unique and is prop. not the guid
+	 * of the query we try to match here.
+	 * Some rules about the guid imposed by G1 v0.6
+	 * (byte 8 all 1, byte 15 all zero) ruin the party
+	 * anyway
+	 * But how to identify?
+	 * Shareaza also uses the G1 packet guid if i remember
+	 * correctly. Is it replaced on the node translating the
+	 * match?
+	 */
 	/* lets see if we know a query by this guid */
 	if(!g2_guid_lookup(guid, GT_QUERY, &dest))
 		return false;

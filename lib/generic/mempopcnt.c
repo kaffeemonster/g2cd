@@ -98,10 +98,37 @@ static always_inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t
 }
 #endif
 
+static inline size_t popcountst_b(size_t n)
+{
+	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;
+	n = ((n >> 2) & MK_C(0x33333333L)) + (n & MK_C(0x33333333L));
+	n = ((n >> 4) + n) & MK_C(0x0f0f0f0fL);
+	return n;
+}
+
 #ifndef ARCH_NAME_SUFFIX
 # define F_NAME(z, x, y) z x
 #else
 # define F_NAME(z, x, y) static z x##y
+#endif
+
+#ifndef NO_SIDEWAYS_ADD
+static inline size_t sideways_add(size_t sum, size_t x)
+{
+# ifndef HAVE_FULL_POPCNT
+	static const size_t mask = MK_C(0x00ff00ffL);
+	x = ((x & ~mask) >>  8) + (x & mask);
+#  ifdef HAVE_HW_MULT
+	x = (x * MK_C(0x00010001L)) >> (SIZE_T_BITS - 16);
+#  else
+	x = (x >> 16) + x;
+	if(SIZE_T_BITS >= 64)
+		x = (x >> 32) + x;
+	x &= 0x7ff;
+#  endif
+# endif
+	return sum + x;
+}
 #endif
 
 F_NAME(size_t, mempopcnt, _generic)(const void *s, size_t len)
@@ -137,41 +164,48 @@ F_NAME(size_t, mempopcnt, _generic)(const void *s, size_t len)
 		{
 			size_t ones, twos, fours, eights, sum_t;
 
-			r     = len / (SOST * 8);
-			len  %= SOST * 8;
-			sum_t = 0;
-			fours = twos = ones = 0;
-			/*
-			 * popcnt instructions, even if nice, are seldomly the fasted
-			 * instructions. And when you have to do it by "sideways"
-			 * addition, you are screwed (lots of stalls, even if we try to
-			 * leverage this by taking several at once, but this needs regs).
-			 *
-			 * There is another nice trick: compression (Harley's Method).
-			 * We shove several words (8) into one word and count that (its
-			 * like counting the carry of that). With some simple bin ops and
-			 * a few regs you can get a lot better (+33%) then our "unrolled"
-			 * approuch. (this is even a win on x86, with too few register
-			 * and no 3 operand asm).
-			 */
-			for(; r; r--, p += 8)
+			sum_t = fours = twos = ones = 0;
+			while(len >= SOST * 8)
 			{
-				size_t twos_l, twos_h, fours_l, fours_h;
+				size_t sumb = 0;
+
+				r    = len / (SOST * 8);
+#ifndef HAVE_FULL_POPCNT
+// TODO: 31 rounds till sumb overflows is a guess...
+				r    = r > 31 ? 31 : r;
+#endif
+				len -= r * SOST * 8;
+				/*
+				 * popcnt instructions, even if nice, are seldomly the fasted
+				 * instructions. And when you have to do it by "sideways"
+				 * addition, you are screwed (lots of stalls, even if we try to
+				 * leverage this by taking several at once, but this needs regs).
+				 *
+				 * There is another nice trick: compression (Harley's Method).
+				 * We shove several words (8) into one word and count that (its
+				 * like counting the carry of that). With some simple bin ops and
+				 * a few regs you can get a lot better (+33%) then our "unrolled"
+				 * approuch. (this is even a win on x86, with too few register
+				 * and no 3 operand asm).
+				 */
+				for(; r; r--, p += 8)
+				{
+					size_t twos_l, twos_h, fours_l, fours_h;
 
 #define CSA(h,l, a,b,c) \
 	{size_t u = a ^ b; size_t v = c; \
 	 h = (a & b) | (u & v); l = u ^ v;}
-				CSA(twos_l, ones, ones, p[0], p[1])
-				CSA(twos_h, ones, ones, p[2], p[3])
-				CSA(fours_l, twos, twos, twos_l, twos_h)
-				CSA(twos_l, ones, ones, p[4], p[5])
-				CSA(twos_h, ones, ones, p[6], p[7])
-				CSA(fours_h, twos, twos, twos_l, twos_h)
-				CSA(eights, fours, fours, fours_l, fours_h)
+					CSA(twos_l, ones, ones, p[0], p[1])
+					CSA(twos_h, ones, ones, p[2], p[3])
+					CSA(fours_l, twos, twos, twos_l, twos_h)
+					CSA(twos_l, ones, ones, p[4], p[5])
+					CSA(twos_h, ones, ones, p[6], p[7])
+					CSA(fours_h, twos, twos, twos_l, twos_h)
+					CSA(eights, fours, fours, fours_l, fours_h)
 #undef CSA
-// TODO: only do the popcntb?
-				/* split this up like on ppc64 or arm? */
-				sum_t += popcountst_int1(eights);
+					sumb += popcountst_b(eights);
+				}
+				sum_t = sideways_add(sum_t, sumb);
 			}
 			sum += 8 * sum_t + 4 * popcountst_int1(fours) +
 			       2 * popcountst_int1(twos) + popcountst_int1(ones);

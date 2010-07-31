@@ -1,6 +1,6 @@
 /*
  * mempopcnt.c
- * popcount a mem region, ppc64 implementation
+ * popcount a mem region, ppc implementation
  *
  * Copyright (c) 2009-2010 Jan Seiffert
  *
@@ -23,161 +23,12 @@
  * $Id:$
  */
 
-#if defined(__powerpc64__) && !defined(__ALTIVEC__)
-static inline size_t popcountst_int1(size_t n)
-{
-	size_t tmp;
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
-	return (tmp * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8);
-}
-
-static inline size_t popcountst_int2(size_t n, size_t m)
-{
-	size_t tmp1, tmp2;
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp1) : "r" (n));
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp2) : "r" (m));
-	return ((tmp1 + tmp2) * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8);
-}
-
-static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
-{
-	size_t tmp1, tmp2, tmp3, tmp4;
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp1) : "r" (n));
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp2) : "r" (m));
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp3) : "r" (o));
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp4) : "r" (p));
-	return (((tmp1 + tmp2) * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8)) +
-	       (((tmp3 + tmp4) * 0x0101010101010101ULL) >> (SIZE_T_BITS - 8));
-}
-
-static inline size_t popcntb(size_t n)
-{
-	size_t tmp;
-	__asm__ __volatile__("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
-	return tmp;
-}
-
-size_t mempopcnt(const void *s, size_t len)
-{
-	const size_t *p;
-	size_t r;
-	size_t sum = 0;
-	unsigned shift = ALIGN_DOWN_DIFF(s, SOST);
-	prefetch(s);
-
-	p = (const size_t *)ALIGN_DOWN(s, SOST);
-	r = *p;
-	if(!HOST_IS_BIGENDIAN)
-		r >>= shift * BITS_PER_CHAR;
-	else
-		r <<= shift * BITS_PER_CHAR;
-	if(len >= SOST || len + shift >= SOST)
-	{
-		/*
-		 * Sometimes you need a new perspective, like the altivec
-		 * way of handling things.
-		 * Lower address bits? Totaly overestimated.
-		 *
-		 * We don't precheck for alignment.
-		 * Instead we "align hard", do one load "under the address",
-		 * mask the excess info out and afterwards we are fine to go.
-		 */
-		p++;
-		len -= SOST - shift;
-		sum += popcountst_int1(r);
-
-		if(len >= SOST * 8)
-		{
-			size_t mask = MK_C(0x00ff00ffL);
-			size_t ones, twos, fours, eights, sum_t;
-
-			sum_t = fours = twos = ones = 0;
-			while(len >= SOST * 8)
-			{
-				size_t sumb = 0;
-
-				r    = len / (SOST * 8);
-// TODO: 31 rounds till sumb overflows is a guess...
-				r    = r > 31 ? 31 : r;
-				len -= r * SOST * 8;
-				/*
-				 * popcnt instructions, even if nice, are seldomly the fasted
-				 * instructions. Often they also have another knack, like only
-				 * one of several ALUs can do it (so your throughput is capped).
-				 * PowerPC is RISC, so its popcnt is maybe "fast", but i guess
-				 * it has some limitation, because it is not the most important
-				 * instruction.
-				 *
-				 * So let's do less poping and use another nice trick: compression
-				 * (Harley's Method).
-				 * We shove several words (8) into one word and count that (its
-				 * like counting the carry of that). With some simple bin ops
-				 * (often very fast, multiple issue) and a few regs (several
-				 * instructions in flight, scheduling) we may get a lot better.
-				 * This is only a win on big iron (several deep ALUs, etc.) not
-				 * on some cut down embedded chip, to make up for the additional
-				 * ops, but hopefully ppc64 qualifys for that...
-				 * This way we can also stay longer in the loop, less sideway
-				 * addition.
-				 */
-				for(; r; r--, p += 8)
-				{
-					size_t twos_l, twos_h, fours_l, fours_h;
-
-#define CSA(h,l, a,b,c) \
-	{size_t u = a ^ b; size_t v = c; \
-	 h = (a & b) | (u & v); l = u ^ v;}
-					CSA(twos_l, ones, ones, p[0], p[1])
-					CSA(twos_h, ones, ones, p[2], p[3])
-					CSA(fours_l, twos, twos, twos_l, twos_h)
-					CSA(twos_l, ones, ones, p[4], p[5])
-					CSA(twos_h, ones, ones, p[6], p[7])
-					CSA(fours_h, twos, twos, twos_l, twos_h)
-					CSA(eights, fours, fours, fours_l, fours_h)
-#undef CSA
-					sumb += popcntb(eights);
-				}
-				sumb   = ((sumb & ~mask) >>  8) + (sumb & mask);
-				sum_t += (sumb * MK_C(0x00010001L)) >> (SIZE_T_BITS - 16);
-			}
-			sum += 8 * sum_t + 4 * popcountst_int1(fours) +
-			       2 * popcountst_int1(twos) + popcountst_int1(ones);
-		}
-		if(len >= SOST * 4) {
-			sum += popcountst_int4(p[0], p[1], p[2], p[3]);
-			p += 4;
-			len -= SOST * 4;
-		}
-		if(len >= SOST * 2) {
-			sum += popcountst_int2(p[0], p[1]);
-			p += 2;
-			len -= SOST * 2;
-		}
-		if(len >= SOST) {
-			sum += popcountst_int1(p[0]);
-			p++;
-			len -= SOST;
-		}
-		if(len)
-			r =*p;
-	}
-	if(len) {
-		if(!HOST_IS_BIGENDIAN)
-			r <<= (SOST - len) * BITS_PER_CHAR;
-		else
-			r >>= (SOST - len) * BITS_PER_CHAR;
-		sum += popcountst_int1(r);
-	}
-	return sum;
-}
-
-#else
-# if defined(__ALTIVEC__) && defined(__GNUC__)
+#if defined(__ALTIVEC__) && defined(__GNUC__)
 /* We use the GCC vector internals, to make things simple for us. */
-#  include <altivec.h>
-#  include "ppc_altivec.h"
+# include <altivec.h>
+# include "ppc_altivec.h"
 
-#define vec_popcnt(x) \
+# define vec_popcnt(x) \
 	vec_add(vec_perm(lutl, luth, x), vec_perm(lutl, lutl, vec_sr(x, v_5)))
 
 size_t mempopcnt(const void *s, size_t len)
@@ -260,7 +111,7 @@ size_t mempopcnt(const void *s, size_t len)
 				{
 					vector unsigned char v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2;
 
-#define CSA(h,l, a,b,c) \
+# define CSA(h,l, a,b,c) \
 	{vector unsigned char u = vec_xor(a, b); \
 	 vector unsigned char v = c; \
 	 h = vec_or(vec_and(a, b), vec_and(u, v)); \
@@ -280,7 +131,7 @@ size_t mempopcnt(const void *s, size_t len)
 					CSA(v_twos_h, v_ones, v_ones, c1, c2)
 					CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h)
 					CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h)
-#undef CSA
+# undef CSA
 					v_sumb = vec_add(v_sumb, vec_popcnt(v_eights));
 				}
 				v_sum_t = vec_sum4s(v_sumb, v_sum_t);
@@ -318,9 +169,64 @@ size_t mempopcnt(const void *s, size_t len)
 	vec_ste(v_sum, 0, &ret); /* transfer */
 	return ret;
 }
-# else
-#  include "../generic/mempopcnt.c"
+#else
+# if defined(_ARCH_PWR5)
+/*
+ * PowerPC 5 (ISA 2.02) has a popcntb instruction. But:
+ * popcnt instructions, even if nice, are seldomly the fasted
+ * instructions. Often they also have another knack, like only
+ * one of several ALUs (the "complex ALU" or somehting like that)
+ * can do it (so your throughput is capped). PowerPC is RISC, so
+ * its popcnt is maybe "fast", but i guess it has some limitation,
+ * because it is not the most important instruction.
+ *
+ * So let's do less poping and use another nice trick: compression
+ * (Harley's Method).
+ * We shove several words (8) into one word and count that (its
+ * like counting the carry of that). With some simple bin ops
+ * (often very fast, multiple issue) and a few regs (several
+ * instructions in flight, scheduling) we may get a lot better.
+ * This is only a win on big iron (several deep ALUs, etc.) not
+ * on some cut down embedded chip, to make up for the additional
+ * ops, but hopefully ppc64 qualifys for that...
+ * This way we can also stay longer in the loop, less sideway
+ * addition.
+ */
+static inline size_t popcountst_int1(size_t n)
+{
+	size_t tmp;
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
+	return (tmp * MK_C(0x01010101UL)) >> (SIZE_T_BITS - 8);
+}
+
+static inline size_t popcountst_int2(size_t n, size_t m)
+{
+	size_t tmp1, tmp2;
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp1) : "r" (n));
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp2) : "r" (m));
+	return ((tmp1 + tmp2) * MK_C(0x01010101UL)) >> (SIZE_T_BITS - 8);
+}
+
+static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
+{
+	size_t tmp1, tmp2, tmp3, tmp4;
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp1) : "r" (n));
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp2) : "r" (m));
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp3) : "r" (o));
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp4) : "r" (p));
+	return (((tmp1 + tmp2) * MK_C(0x01010101UL)) >> (SIZE_T_BITS - 8)) +
+	       (((tmp3 + tmp4) * MK_C(0x01010101UL)) >> (SIZE_T_BITS - 8));
+}
+
+static inline size_t popcountst_b(size_t n)
+{
+	size_t tmp;
+	__asm__ ("popcntb	%0, %1" : "=r" (tmp) : "r" (n));
+	return tmp;
+}
+#  define NO_GEN_POPER
 # endif
+# include "../generic/mempopcnt.c"
 #endif
 
 static char const rcsid_mpp[] GCC_ATTR_USED_VAR = "$Id:$";

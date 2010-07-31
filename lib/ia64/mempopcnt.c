@@ -25,6 +25,7 @@
 
 #include "ia64.h"
 
+#define popcountst_b(x) popcountst_int1(x)
 static inline size_t popcountst_int1(size_t n)
 {
 	size_t tmp;
@@ -71,6 +72,7 @@ static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
 }
 
 #define NO_GEN_POPER
+#define HAVE_FULL_POPCNT
 #include "../generic/mempopcnt.c"
 
 static char const rcsid_mpia[] GCC_ATTR_USED_VAR = "$Id: $";
