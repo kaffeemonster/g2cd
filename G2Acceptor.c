@@ -291,9 +291,58 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		goto err_out_after_add;
 	}
 
+	/* the next settings are optional, if they fail, no harm done */
 	yes = 1;
 #if HAVE_DECL_TCP_CORK == 1
 	setsockopt(work_entry->com_socket, SOL_TCP, TCP_CORK, &yes, sizeof(yes));
+#endif
+	/*
+	 * Our streams are basically "thin", here and there a packet every
+	 * odd second (only the sum makes the traffic). But thin streams
+	 * are a little proplematic because  they do not trigger proper
+	 * TCP optimitiations, for example because a stable RTT can not
+	 * be mesured.
+	 * Linux >= 2.6.34 has some magic to handle them better (faster
+	 * retransmit, etc.). This magic  would work all by itself (the
+	 * system detects the "thin" state). But for some fear of breakage
+	 * it is disabled by default, system wide.
+	 *
+	 * So we have to enable it manually per connection.
+	 *
+	 * Note: This should NOT be used for download/upload sockets,
+	 * but we don't have those.
+	 * Note: The main idea behind the special thin state handling
+	 * is latency for things like IM/OnlineGames/etc. We are not
+	 * so interrested in latency, but keeping the TCP state alive/
+	 * fast dead connection detection, which should trigger faster
+	 * with these optimitiations (less exponetial backoff, etc.).
+	 * THIN_LINEAR_TIMEOUTS falls back to exponetial backoff after
+	 * a max tries of 6, as the code says "not to hammer black holes",
+	 * but it is exactly what we want, detect black holes early, so
+	 * atleast 6 of the 15 retries are already burned.
+	 * Note: The system detects the thin state internally, and does
+	 * everything automagically, so if a connection is busy (say a HUB
+	 * connection), the system will not mark it thin, no harm done
+	 * (at least i think so). This switch is only to _enable_ this
+	 * automagic at all.
+	 */
+#ifdef __linux__
+# if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 0
+#  define TCP_THIN_LINEAR_TIMEOUTS 16
+#  undef  HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS
+#  define HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS 1
+# endif
+# if HAVE_DECL_TCP_THIN_DUPACK == 0
+#  define TCP_THIN_DUPACK 17
+#  undef  HAVE_DECL_TCP_THIN_DUPACK
+#  define HAVE_DECL_TCP_THIN_DUPACK 1
+# endif
+#endif
+#if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 1
+	setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_LINEAR_TIMEOUTS, &yes, sizeof(yes));
+#endif
+#if HAVE_DECL_TCP_THIN_DUPACK == 1
+	setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_DUPACK, &yes, sizeof(yes));
 #endif
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
@@ -304,7 +353,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 		logg_errno(LOGF_NOTICE, "adding new socket to EPoll");
 		goto err_out_after_add;
 	}
-
+	/* either way, first timeouts then epoll, or the other way round sucks */
 	work_entry->last_active = local_time_now;
 	work_entry->active_to.fun = accept_timeout;
 	work_entry->active_to.data = work_entry;
