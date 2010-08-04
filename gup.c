@@ -566,7 +566,7 @@ static bool handle_abort(struct simple_gup *sg, struct epoll_event *ev)
 
 static void clean_up_gup(int who_to_say)
 {
-	if(0 > send(who_to_say, "All lost", sizeof("All lost"), 0))
+	if(0 > my_epoll_send(who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); /* hate doing this, but now it's to late */
 	logg_pos(LOGF_NOTICE, "should go down\n");
 

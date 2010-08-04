@@ -433,20 +433,25 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	 Because i'm a nice guy and it was a typical rainy april day, i sat down
 	and litteratly bulldozered down the five pages of errors from _every_
 	source file to only some "small" errors (often the reason for pages and
-	pages of compiler blurp is a simple error).
+	pages of compiler blurp is a simple mismatch).
 	 I did this because i know where the problems are and _maybe_ the best
 	way to fix them, and i wanted to cross check my suspicions. Not because
 	i really wanted to port the code.
 	 This is just a little work to get it through the compiler. So if
 	someone really feels the urge to port it (loco?), he does not have to
 	start at square one.
-	 It still does not link, and even with that fixed, it will _NOT_ run.
+	 After another round of "rainy day", and to bring this in sync with the
+	config foo work i've done, it now compiles with (modified) mingw, links,
+	and even starts up (and stays up).
+
+	 But it does _NOT_ work, and there are enough errors left.
 
 	 Some blurb from the top of my head:
 	- Do not try to use VC, it will not work. This is C99 code (yes, with
 	  GNU extentions...), VC will not eat it. And it is no C++ code, so
 	  do not try VC++. Get yourself mingw.
-	- The build system will not work on win, so you better cross compile.
+	- The build system will not work on win, so you better cross compile
+	  from Linux to Windows. ./configure --host=mingw32 is your friend
 	- The mingw header export some functions in their stdlib.h (as the orig.
 	  windows header?), which collide with my functions, namely itoa, ltoa,
 	  ulltoa etc. You could get rid of them by defining a slew of
@@ -454,11 +459,11 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  we need. Simply #if 0 them in the mingw headers. (Yes, modify the
 	  system supplied header).
 	- Get zlib and Berkley DB for mingw, they are available out there.
-	- config.h is your friend, when you comment out nearly everything, it
-	  will "work". (Hint: some of the commented out stuff needs to be
-	  written/emulated...)
-	  EDIT: this will no longer work, you will have to fix autoconf and more
-	        code to push it through.
+	  (you can compile zlib with/into g2cd, but you still need BDB)
+
+	 Even with this "magic" shortcut, some stuff is simply _broken_, because
+	the code is not written for Windows. The emulations put in place are also
+	very rough and broken.
 
 	 Which brings us to the real win problems:
 	- G2CD expects a _working_ and thread local errno. win likes to use
@@ -468,10 +473,14 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	- G2CD uses pthreads. I added a small wrapper, but it is:
 	   * prop. broken
 	   * uses errno, which will not work on win
+	  It starts and so on, but it's not water tight and does hang on
+	  shutdown.
 	- I dumped some more compat stuff in my_pthread.h/.c, which is prop.
 	  also broken.
-	- There is some more functionality needed which needs to be emulated
-	  (udpfromto, socketpair, sigaction, errno (an always working strerror)).
+	- There is some more functionality needed which needs to be proper
+	  emulated (does udpfromto work? socketpair needs some love with iocp,
+	  sigaction is just the sledgehammer aproach, errno (an always working
+	  strerror), etc, etc).
 	- Did i mention the million of other bugs?
 	- Which brings us to the major road block:
 	   * poll
@@ -483,11 +492,12 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  that win only allows 64 sockets to be monitored by these APIs.
 	  Vista and higher (Server 2008, Win7, etc.) finally have a WSAPoll,
 	  which is the real poll (what took you so long?), only with another
-	  name. You have to remove/adapt my own POLLIN/POLLOUT etc. defines
-	  to the real ones (I couldn't find them).
-	   For epoll, i don't know how to "fix" that. Emulation by poll would
-	  only work on Vista and higher, and is not recommended. There seems
-	  to be no other nice API, which only leaves us with completion ports.
+	  name.
+	   Some emulation/wrapper for poll is now in place, which makes g2cd
+	  tick, but for epoll, i don't know how to "fix" that. Emulation by poll
+	  would  only work on Vista and higher, and is not recommended. There
+	  seems to be no other nice API, which only leaves us with completion
+	  ports.
 	   Completion ports are nice and dandy, only there is a little problem,
 	  they mix three things (to achive async io):
 	   1) async transport to/from userland buffer
@@ -498,7 +508,9 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  1 really ruins our party.
 	   Async transport is a nice idea, and surely gives a nice boost for
 	  most apps which churn out a lot of data, but G2CD is incompatible
-	  from the ground up with this, because we do not churn much data.
+	  from the ground up with this, because:
+	   a) our complete event control flow is wrong for this
+	   b) because we do not churn much data.
 	   We have lots and lots of connections, but they are mostly idle.
 	  Every few seconds a connection gets some data. The sum of connections
 	  creates the traffic. For that reason, connections do not have a
@@ -507,7 +519,12 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  in that buffer, which works most of the time. This way we can handle
 	  thousands of connection with a handful of buffer. For async transport
 	  some core logic in G2CD has to be rewritten to stick a fixed buffer
-	  on every connection. Or completions ports persuaded not to do async io.
+	  on every connection. Or completions ports persuaded not to do async
+	  io. But the API really does not look like it can do this, everything
+	  has to be done with some special funcs which take an OVERLAPPED struct.
+	   Or some middle layer has to be added which translates the "syncronous"
+	  io into async IO and extracts the events (some kind of double buffering
+	  behind the scenes).
 
 
 4. Coding-Style

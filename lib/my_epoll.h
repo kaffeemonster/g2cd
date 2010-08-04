@@ -32,6 +32,11 @@
 
 #ifndef WIN32
 # include <sys/poll.h>
+# define my_epoll_accept(a, b, c, d) accept(b, c, d)
+# define my_epoll_socket(a, b, c) socket(a, b, c)
+# define my_epoll_send(a, b, c, d) send(a, b, c, d)
+# define my_epoll_recv(a, b, c, d) recv(a, b, c, d)
+# else
 #endif
 /* no compat needed? simply map the calls */
 #ifndef NEED_EPOLL_COMPAT
@@ -93,6 +98,7 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 # ifdef WIN32
 /* vista and greater know WSAPoll, guess what... */
 #  include <winsock2.h>
+#  include <ws2tcpip.h>
 #  ifndef POLLIN
 #   define POLLERR     (1<<0)
 #   define POLLHUP     (1<<1)
@@ -112,11 +118,15 @@ typedef struct pollfd {
 #  endif
 typedef WSAPOLLFD my_pollfd;
 _MY_E_EXTRN(int PASCAL poll(my_pollfd *fds, unsigned long nfds, int timeout));
+_MY_E_EXTRN(int my_epoll_accept(int epfd, int sockfd, struct sockaddr *addr, socklen_t *addrlen));
+_MY_E_EXTRN(int my_epoll_socket(int domain, int type, int protocol));
+_MY_E_EXTRN(ssize_t my_epoll_send(int sockfd, const void *buf, size_t len, int flags));
+_MY_E_EXTRN(ssize_t my_epoll_recv(int sockfd, void *buf, size_t len, int flags));
 # else
 typedef struct pollfd my_pollfd;
 # endif
 /* now do the things special to the compat-layer */
-# if defined(HAVE_POLL) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)
+# if defined(HAVE_POLL) || defined(HAVE_POLLSET) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)|| defined(WIN32)
 /* Solaris /dev/poll also wraps to some poll things */
 /* Basics */
 #  define EPOLLIN	POLLIN

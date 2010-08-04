@@ -32,6 +32,7 @@
 # include "my_pthread.h"
 # include "combo_addr.h"
 # include "log_facility.h"
+# include "my_epoll.h"
 
 #define NINETHY70_OFF (0x19db1ded53e8000ULL)
 
@@ -789,13 +790,13 @@ int socketpair(int domain GCC_ATTR_UNUSED_PARAM, int type GCC_ATTR_UNUSED_PARAM,
 		goto OUT_ERR;
 	if(SOCKET_ERROR == listen(listener, 1))
 		goto OUT_ERR;
-	sv[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, 0);
-	if(INVALID_SOCKET == (SOCKET)sv[0])
-		goto OUT_ERR;
-	if(SOCKET_ERROR == connect(sv[0], casa(&addr), casalen(&addr)))
-		goto OUT_ERR;
-	sv[1] = accept(listener, NULL, NULL);
+	sv[1] = my_epoll_socket(AF_INET, SOCK_STREAM, 0);
 	if(INVALID_SOCKET == (SOCKET)sv[1])
+		goto OUT_ERR;
+	if(SOCKET_ERROR == connect(sv[1], casa(&addr), casalen(&addr)))
+		goto OUT_ERR;
+	sv[0] = accept(listener, NULL, NULL);
+	if(INVALID_SOCKET == (SOCKET)sv[0])
 		goto OUT_ERR;
 	closesocket(listener);
 	return 0;

@@ -101,7 +101,7 @@ bool do_read(struct epoll_event *p_entry)
 
 	do	{
 		set_s_errno(0);
-		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv),
+		result = my_epoll_recv(w_entry->com_socket, buffer_start(*w_entry->recv),
 		              buffer_remaining(*w_entry->recv), 0);
 	} while(-1 == result && EINTR == s_errno);
 
@@ -255,7 +255,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	buffer_flip(*w_entry->send);
 	do	{
 		set_s_errno(0);
-		result = send(w_entry->com_socket, w_entry->send->data, w_entry->send->limit, 0);
+		result = my_epoll_send(w_entry->com_socket, w_entry->send->data, w_entry->send->limit, 0);
 	} while(-1 == result && EINTR == s_errno);
 
 	switch(result)

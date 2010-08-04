@@ -180,7 +180,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	const char *e;
 	int yes = 1; /* for setsocketopt() SO_REUSEADDR, below */
 
-	if(-1 == (*accept_so = socket(our_addr->s.fam, SOCK_STREAM, 0))) {
+	if(-1 == (*accept_so = my_epoll_socket(our_addr->s.fam, SOCK_STREAM, 0))) {
 		logg_errno(LOGF_ERR, "creating socket");
 		return false;
 	}
@@ -240,7 +240,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	int fd_flags, yes;
 
 	do {
-		tmp_fd = accept(sg->fd, casa(&work_entry->remote_host), &sin_size);
+		tmp_fd = my_epoll_accept(epoll_fd, sg->fd, casa(&work_entry->remote_host), &sin_size);
 	} while(0 > tmp_fd && EINTR == errno);
 
 	tmp_eevent.data.u64 = 0;

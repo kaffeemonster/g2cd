@@ -1842,7 +1842,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	const char *e;
 	int yes = 1; /* for setsockopt() SO_REUSEADDR, below */
 
-	if(-1 == (*udp_so = socket(our_addr->s.fam, SOCK_DGRAM, 0))) {
+	if(-1 == (*udp_so = my_epoll_socket(our_addr->s.fam, SOCK_DGRAM, 0))) {
 		logg_errno(LOGF_ERR, "creating socket");
 		return false;
 	}
