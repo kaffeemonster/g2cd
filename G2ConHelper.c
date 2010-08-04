@@ -100,10 +100,10 @@ bool do_read(struct epoll_event *p_entry)
 #endif
 
 	do	{
-		errno = 0;
+		set_s_errno(0);
 		result = recv(w_entry->com_socket, buffer_start(*w_entry->recv),
 		              buffer_remaining(*w_entry->recv), 0);
-	} while(-1 == result && EINTR == errno);
+	} while(-1 == result && EINTR == s_errno);
 
 	switch(result)
 	{
@@ -113,9 +113,9 @@ bool do_read(struct epoll_event *p_entry)
 	case  0:
 		if(buffer_remaining(*w_entry->recv))
 		{
-			if(EAGAIN != errno) {
+			if(EAGAIN != s_errno) {
 				logg_posd(LOGF_DEVEL_OLD, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
-				          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
+				          "EOF reached!", s_errno, &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
 				ret_val = false;
 			} else
@@ -123,8 +123,8 @@ bool do_read(struct epoll_event *p_entry)
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno) {
-			logg_errno(LOGF_DEBUG, "write");
+		if(!(EAGAIN == s_errno || EWOULDBLOCK == s_errno)) {
+			logg_serrno(LOGF_DEBUG, "write");
 			w_entry->flags.dismissed = true;
 			ret_val = false;
 		}
@@ -153,9 +153,9 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 		return 0;
 
 	do	{
-		errno = 0;
+		set_s_errno(0);
 		result = writev(w_entry->com_socket, vec, cnt);
-	} while(-1 == result && EINTR == errno);
+	} while(-1 == result && EINTR == s_errno);
 
 	switch(result)
 	{
@@ -172,7 +172,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 				shortlock_t_unlock(&w_entry->pts_lock);
 
 				if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &t_entry)) {
-					logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+					logg_serrno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 					w_entry->flags.dismissed = true;
 					result = -1;
 				}
@@ -192,7 +192,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 	case  0:
 		if(iovec_len(vec, cnt))
 		{
-			if(EAGAIN != errno) {
+			if(EAGAIN != s_errno) {
 				logg_posd(LOGF_DEVEL_OLD, "%s Ip: %p#I\tFDNum: %i\n",
 				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
@@ -212,7 +212,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 				shortlock_t_unlock(&w_entry->pts_lock);
 
 				if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &t_entry)) {
-					logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+					logg_serrno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 					w_entry->flags.dismissed = true;
 					result = -1;
 				}
@@ -223,15 +223,15 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 
 				if(w_entry->flags.dismissed) {
 					logg_posd(LOGF_DEBUG, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
-					          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
+					          "EOF reached!", s_errno, &w_entry->remote_host, w_entry->com_socket);
 					result = -1;
 				}
 			}
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno)
-			logg_errno(LOGF_DEBUG, "write");
+		if(EAGAIN != s_errno)
+			logg_serrno(LOGF_DEBUG, "write");
 		break;
 	}
 	return result;
@@ -254,9 +254,9 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 
 	buffer_flip(*w_entry->send);
 	do	{
-		errno = 0;
+		set_s_errno(0);
 		result = send(w_entry->com_socket, w_entry->send->data, w_entry->send->limit, 0);
-	} while(-1 == result && EINTR == errno);
+	} while(-1 == result && EINTR == s_errno);
 
 	switch(result)
 	{
@@ -284,7 +284,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				shortlock_t_unlock(&w_entry->pts_lock);
 
 				if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &t_entry)) {
-					logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+					logg_serrno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 					w_entry->flags.dismissed = true;
 					ret_val = false;
 				}
@@ -306,7 +306,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	case  0:
 		if(buffer_remaining(*w_entry->send))
 		{
-			if(EAGAIN != errno) {
+			if(EAGAIN != s_errno) {
 				logg_posd(LOGF_DEVEL_OLD, "%s Ip: %p#I\tFDNum: %i\n",
 				          "Dismissed!", &w_entry->remote_host, w_entry->com_socket);
 				w_entry->flags.dismissed = true;
@@ -326,7 +326,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 				shortlock_t_unlock(&w_entry->pts_lock);
 
 				if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, &t_entry)) {
-					logg_errno(LOGF_DEBUG, "changing sockets Epoll-interrests");
+					logg_serrno(LOGF_DEBUG, "changing sockets Epoll-interrests");
 					w_entry->flags.dismissed = true;
 					ret_val = false;
 				}
@@ -337,15 +337,15 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 
 				if(w_entry->flags.dismissed) {
 					logg_posd(LOGF_DEVEL_OLD, "%s ERRNO=%i Ip: %p#I\tFDNum: %i\n",
-					          "EOF reached!", errno, &w_entry->remote_host, w_entry->com_socket);
+					          "EOF reached!", s_errno, &w_entry->remote_host, w_entry->com_socket);
 					ret_val = false;
 				}
 			}
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno) {
-			logg_errno(LOGF_DEBUG, "write");
+		if(!(EAGAIN == errno || EWOULDBLOCK == s_errno)) {
+			logg_serrno(LOGF_DEBUG, "write");
 			ret_val = false;
 		}
 		break;
@@ -374,8 +374,8 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 	tmp_eevent.data.u64 = 0;
 	/* remove from EPoll */
 	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent)) {
-		if(ENOENT != errno)
-			logg_errno(LOGF_ERR, "removing bad socket from EPoll");
+		if(ENOENT != s_errno)
+			logg_serrno(LOGF_ERR, "removing bad socket from EPoll");
 	}
 
 	if(!keep_it)
@@ -384,9 +384,9 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 		/* free the fd */
 		do {
 			ret_val = close(w_entry->com_socket);
-		} while(ret_val && EINTR == errno);
+		} while(ret_val && EINTR == s_errno);
 		if(ret_val)
-			logg_errno(LOGF_DEBUG, "closing bad socket");
+			logg_serrno(LOGF_DEBUG, "closing bad socket");
 		w_entry->com_socket = -1;
 
 		/* free associated rescources and remove from conreg */
@@ -426,16 +426,16 @@ void teardown_con(g2_connection_t *w_entry, int epoll_fd)
 	tmp_eevent.data.u64 = 0;
 	/* remove from EPoll */
 	if(my_epoll_ctl(epoll_fd, EPOLL_CTL_DEL, w_entry->com_socket, &tmp_eevent)) {
-		if(ENOENT != errno)
-			logg_errno(LOGF_ERR, "removing bad socket from EPoll");
+		if(ENOENT != s_errno)
+			logg_serrno(LOGF_ERR, "removing bad socket from EPoll");
 	}
 
 	/* free the fd */
 	do {
 		ret_val = close(w_entry->com_socket);
-	} while(ret_val && EINTR == errno);
+	} while(ret_val && EINTR == s_errno);
 	if(ret_val)
-		logg_errno(LOGF_DEBUG, "closing bad socket");
+		logg_serrno(LOGF_DEBUG, "closing bad socket");
 	w_entry->com_socket = -1;
 
 	/* after the fs is free we can take another one */

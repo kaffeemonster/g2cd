@@ -49,17 +49,25 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 
 #ifdef HAVE_SYS_UIO_H
 # include <sys/uio.h>
+typedef struct iovec my_iovec;
 #else
+# ifdef WIN32
+typedef WSABUF my_iovec;
+#  define iov_base buf
+#  define iov_len len
+# else
 struct iovec
 {
 	void *iov_base;
 	size_t iov_len;
-}
+};
+typedef struct iovec my_iovec;
+# endif
 #endif
 
 struct mfromto
 {
-	struct iovec iov;
+	my_iovec iov;
 	struct sockaddr *from, *to;
 	socklen_t from_len, to_len;
 };

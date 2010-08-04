@@ -28,6 +28,8 @@
 
 # ifndef WIN32
 #  include <pthread.h>
+#  define set_s_errno(x) (errno = (x))
+#  define s_errno errno
 # else
 #  ifndef _WIN32_WINNT
 #   define _WIN32_WINNT 0x0501
@@ -39,6 +41,9 @@
 #  define LIB_MY_PTHREAD_EXTRN(x) x GCC_ATTR_VIS("hidden")
 
 // TODO: totaly untested...
+
+#  define set_s_errno(x) (WSASetLastError(x))
+#  define s_errno WSAGetLastError()
 
 struct timespec {
 	time_t	tv_sec;	/* seconds */
@@ -132,13 +137,13 @@ LIB_MY_PTHREAD_EXTRN(int pthread_cond_wait(pthread_cond_t *restrict cond, pthrea
 LIB_MY_PTHREAD_EXTRN(int pthread_key_create(pthread_key_t *key, void (*destructor)(void*)));
 LIB_MY_PTHREAD_EXTRN(int pthread_key_delete(pthread_key_t key));
 #  define pthread_getspecific(key)	TlsGetValue((key))
-#  define pthread_setspecific(key, val)	TlsSetValue((key), (val))
+#  define pthread_setspecific(key, val)	(TlsSetValue((key), (val)) ? 0 : -1)
 
 /*
  * Other stuff....
  */
-typedef int pid_t;
-typedef int gid_t;
+// typedef int pid_t;
+// typedef int gid_t;
 
 /* small fixes */
 #  define getpid   _getpid
@@ -162,8 +167,13 @@ LIB_MY_PTHREAD_EXTRN(struct tm *localtime_r(const time_t *timep, struct tm *resu
 LIB_MY_PTHREAD_EXTRN(int fcntl(int fd, int cmd, ...));
 #  define SA_SIGINFO (1<<0)
 
+LIB_MY_PTHREAD_EXTRN(int sigemptyset(sigset_t *set));
+LIB_MY_PTHREAD_EXTRN(int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact));
+LIB_MY_PTHREAD_EXTRN(int socketpair(int domain, int type, int protocol, int sv[2]));
+
 #  define ETIMEDOUT 7954
 #  define ENOBUFS 7956
+#  define EWOULDBLOCK WSAEWOULDBLOCK
 
 # endif
 #endif

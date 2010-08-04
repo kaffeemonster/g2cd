@@ -49,6 +49,8 @@
 
 # define logg_errno(x, y) logg_more(x, __FILE__, __func__, __LINE__, 1, y)
 # define logg_errnod(x, y, ...) logg_more(x, __FILE__, __func__, __LINE__, 1, y, __VA_ARGS__)
+# define logg_serrno(x, y) logg_more(x, __FILE__, __func__, __LINE__, 1, y)
+# define logg_serrnod(x, y, ...) logg_more(x, __FILE__, __func__, __LINE__, 1, y, __VA_ARGS__)
 
 # define die(x)	\
 	do { logg_more(LOGF_ERR, __FILE__, __func__, __LINE__, 0, x); exit(EXIT_FAILURE); } while(0)

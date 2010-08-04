@@ -1851,7 +1851,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 		OUT_ERR("preparing UDP ip recv");
 
 	/* lose the pesky "address already in use" error message */
-	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)))
+	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(int)))
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1

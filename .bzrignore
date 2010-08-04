@@ -6,6 +6,7 @@
 *.patch
 *.rtl
 g2cd
+g2cd.exe
 ccdrv
 arflock
 bin2o

@@ -31,15 +31,15 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
 # if HAVE_BINUTILS >= 217
-unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
 #endif
-unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len);
 #ifndef __x86_64__
-unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len);
+static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len);
 #endif
 
 static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
@@ -57,7 +57,7 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -171,7 +171,7 @@ unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, uns
 # endif
 
 # if HAVE_BINUTILS >= 217
-unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -361,7 +361,7 @@ unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *src, unsi
 # endif
 #endif
 
-unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
@@ -550,7 +550,7 @@ unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *src, unsi
 }
 
 #ifndef __x86_64__
-unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len)
+static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"

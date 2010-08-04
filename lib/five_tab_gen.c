@@ -45,6 +45,8 @@
  * we need to know if there is a stdint.h
  */
 #include "../config.h"
+#undef gid_t
+#undef uid_t
 #ifdef HAVE_STDINT_H
 # include <stdint.h>
 #else

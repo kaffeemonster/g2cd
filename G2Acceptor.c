@@ -186,7 +186,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	}
 	
 	/* lose the pesky "address already in use" error message */
-	if(setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)))
+	if(setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)))
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1

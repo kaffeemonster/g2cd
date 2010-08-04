@@ -78,6 +78,11 @@
 #include "lib/my_bitopsm.h"
 #include "version.h"
 #include "builtin_defaults.h"
+#ifdef WIN32
+# define DAVE_NULL "NUL"
+#else
+# define DAVE_NULL "/dev/null"
+#endif
 
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
@@ -112,12 +117,12 @@ static noinline bool startup(int, char **);
 static noinline bool clutch_logfile(void);
 static noinline void clean_up_m(void);
 static intptr_t check_con_health(g2_connection_t *con, void *carg);
-static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, unsigned *len);
+static my_pollfd *sock_com_create_pfd(my_pollfd *pfd, unsigned *num, unsigned *len);
 
 int main(int argc, char **args)
 {
 	size_t i;
-	struct pollfd *gpfd;
+	my_pollfd *gpfd;
 	unsigned gpfd_num = 0, gpfd_len = THREAD_SUM_COM + 5;
 	bool long_poll = true;
 
@@ -430,11 +435,13 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	return 0;
 }
 
+#ifndef WIN32
 static void sig_reopen_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGUSR2 == signr)
 		reopen_logfile = true;
 }
+#endif
 
 static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
@@ -453,7 +460,7 @@ static noinline bool clutch_logfile(void)
 	if(!log_fname)
 		return true;
 
-	if(-1 == (log_to_fd = open(log_fname, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP))) {
+	if(-1 == (log_to_fd = open(log_fname, O_WRONLY|O_CREAT|O_APPEND, 0550))) {
 		logg_errno(LOGF_CRIT, "opening logfile");
 		return false;
 	}
@@ -544,8 +551,8 @@ static void fork_to_background(void)
 			 * connect stdin with dave null,
 			 * maybe stderr and stdout
 			 */
-			if(-1 == (tmp_fd = open("/dev/null", O_RDONLY)))
-				diedie("opening /dev/null");
+			if(-1 == (tmp_fd = open(DAVE_NULL, O_RDONLY)))
+				diedie("opening " DAVE_NULL);
 			
 			if(STDIN_FILENO != dup2(tmp_fd, STDIN_FILENO))
 				diedie("mapping stdin");
@@ -555,7 +562,7 @@ static void fork_to_background(void)
 			 * defined a log-file
 			 */
 			if(!log_fname)
-				log_fname = "/dev/null";
+				log_fname = DAVE_NULL;
 			close(tmp_fd);
 			break;
 		case -1:
@@ -1037,8 +1044,8 @@ static void init_prng(void)
 		have_entropy = true;
 	close(fin);
 #else
-	HCRYPTPROV cprovider_h;
-	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, 0)) {
+	HCRYPTPROV cprovider_h = (HCRYPTPROV)INVALID_HANDLE_VALUE;
+	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
 		CryptGenRandom(cprovider_h, sizeof(rd), (BYTE *)rd);
 		CryptReleaseContext(cprovider_h, 0);
 		have_entropy = true;
@@ -1164,9 +1171,17 @@ static noinline bool startup(int argc, char **args)
 
 #ifdef WIN32
 	{
+		BOOL (WINAPI *sdep_proc)(DWORD);
 		WORD version_req = MAKEWORD(2, 2);
 		WSADATA wsa_data;
-		int err = WSAStartup(version_req, &wsa_data);
+		int err;
+
+		sdep_proc = (BOOL (WINAPI *)(DWORD))
+			GetProcAddress(GetModuleHandle(TEXT("kernel32")), "SetProcessDEPPolicy");
+		if(sdep_proc)
+			sdep_proc(0x03); /* PROCESS_DEP_ENABLE|PROCESS_DEP_DISABLE_ATL_THUNK_EMULATION */
+
+		err = WSAStartup(version_req, &wsa_data);
 		if(err)
 			diedie("WSAStartup failed");
 	}
@@ -1264,12 +1279,14 @@ static noinline bool startup(int argc, char **args)
 		return false;
 	}
 
+#ifndef WIN32
 	memset(&new_sas, 0, sizeof(new_sas));
 	new_sas.sa_sigaction = sig_reopen_func;
 	sigemptyset(&new_sas.sa_mask);
 	new_sas.sa_flags = SA_SIGINFO;
 	if(sigaction(SIGUSR2, &new_sas, NULL))
 		logg_pos(LOGF_WARN, "Error registering log reopen handler\n");
+#endif
 
 	server_running = true;
 	/* fire up threads */
@@ -1389,7 +1406,7 @@ struct sock_com *sock_com_fd_find(int fd)
 	return ret_val;
 }
 
-static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, unsigned *len)
+static my_pollfd *sock_com_create_pfd(my_pollfd *pfd, unsigned *num, unsigned *len)
 {
 	struct sock_com *pos;
 	unsigned i = 0;
@@ -1401,7 +1418,7 @@ static struct pollfd *sock_com_create_pfd(struct pollfd *pfd, unsigned *num, uns
 			continue;
 		if(i >= *len)
 		{
-			struct pollfd *t = realloc(pfd, (*len + 1) * sizeof(struct pollfd));
+			my_pollfd *t = realloc(pfd, (*len + 1) * sizeof(my_pollfd));
 			if(!t)
 				break;
 			(*len)++;

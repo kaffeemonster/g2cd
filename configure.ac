@@ -83,6 +83,12 @@ case "$host" in
 # sysmbol visability only on later, because the linker can hide the
 # symbols with a mapfile
 		use_mapfile=yes;;
+	*win32*)
+		disable_dbus=yes;
+		disable_backtraces=yes;;
+	*mingw*)
+		disable_dbus=yes;
+		disable_backtraces=yes;;
 	*)
 		;;
 esac
@@ -286,12 +292,19 @@ AC_USE_SYSTEM_EXTENSIONS
 # Checks for programs.
 AC_PROG_CC
 m4_include([m4/acx_pthread.m4])
-ACX_PTHREAD
-# we are a pthread program, make the result the default
-LIBS="$PTHREAD_LIBS $LIBS"
-CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
-CC="$PTHREAD_CC"
+case "$host" in
+	*win32*)
+		;;
+	*mingw*)
+		;;
+	*)
+		ACX_PTHREAD
+		# we are a pthread program, make the result the default
+		LIBS="$PTHREAD_LIBS $LIBS"
+		CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+		LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
+		CC="$PTHREAD_CC";;
+esac
 # now check the rest
 AC_PROG_CPP
 AC_PROG_CC_C99
@@ -357,6 +370,13 @@ AX_CHECK_LINKER_FLAGS([-rdynamic],
 # the solaris linker can optimize the link some more...
 AX_CHECK_LINKER_FLAGS([-Wl,-B,direct],
                       [LDFLAGS="-Wl,-B,direct $LDFLAGS"],
+                      [])
+# check for DEP/ASLR, yes, i know, they are PE specific...
+AX_CHECK_LINKER_FLAGS([-Wl,--dynamicbase],
+                      [LDFLAGS="-Wl,--dynamicbase $LDFLAGS"],
+                      [])
+AX_CHECK_LINKER_FLAGS([-Wl,--nxcompat],
+                      [LDFLAGS="-Wl,--nxcompat $LDFLAGS"],
                       [])
 
 if test "$use_mapfiles" = yes; then
@@ -447,16 +467,22 @@ AC_DEFINE_UNQUOTED([HAVE_BINUTILS], [$susp_binutils], [set to the version of you
 
 # Checks for libraries.
 AC_SEARCH_LIBS([dlopen], [dl])
-AC_SEARCH_LIBS([socket], [socket ws2_32])
+AC_SEARCH_LIBS([socket], [socket])
 AC_SEARCH_LIBS([gethostname], [nsl])
 AC_SEARCH_LIBS([getaddrinfo], [resolv])
 AC_SEARCH_LIBS([sched_yield], [rt])
+case "$host" in
+	*win32*)
+		LIBS="-lws2_32 $LIBS";;
+	*mingw*)
+		LIBS="-lws2_32 $LIBS";;
+esac
 
 # Checks for header files.
 AC_FUNC_ALLOCA
-AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h syslog.h wchar.h])
+AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h syslog.h wchar.h winsock2.h ws2tcpip.h])
 
-AC_CHECK_HEADERS([ctype.h pthread.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
+AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
 
 m4_include([m4/ax_check_zlib.m4])
 AX_CHECK_ZLIB
@@ -574,14 +600,45 @@ void MUL_BIG(u64 x, u64 y, u64 *z, u64 *k)
                [AC_MSG_RESULT([no])])
 AC_CHECK_TYPES([ptrdiff_t])
 AC_CHECK_TYPES([sighandler_t], [],[], [[#include <signal.h>]])
-AC_CHECK_TYPES([sa_family_t, socklen_t], [], [], [[#include <sys/types.h>
-#include <sys/socket.h>]])
-AC_CHECK_TYPES([in_port_t, in_addr_t], [], [], [[#include <netinet/in.h>]])
+AC_CHECK_TYPES([sa_family_t, socklen_t], [], [], [[#ifndef WIN32
+# include <sys/types.h>
+# include <sys/socket.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
+AC_CHECK_TYPES([in_port_t, in_addr_t], [], [], [[#ifndef WIN32
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
 AC_CHECK_TYPE([pthread_spinlock_t], [AC_DEFINE(HAVE_SPINLOCKS, 1, do we have Spinlocks? Old Solaris has none!)],[], [[#include <pthread.h>]])
-AC_CHECK_TYPE([struct in_pktinfo], [AC_DEFINE(HAVE_IP_PKTINFO, 1, do we have pktinfo)],[], [[#include <netinet/in.h>]])
-AC_CHECK_TYPE([struct in6_pktinfo], [AC_DEFINE(HAVE_IP6_PKTINFO, 1, do we have pktinfo v6)],[], [[#include <netinet/in.h>]])
-AC_CHECK_MEMBER([struct sockaddr.sa_len], [AC_DEFINE(HAVE_SA_LEN, 1, so we have a sa_len member)], [], [#include <sys/types.h>
-#include <sys/socket.h>])
+AC_CHECK_TYPE([struct in_pktinfo], [AC_DEFINE(HAVE_IP_PKTINFO, 1, do we have pktinfo)],[], [[#ifndef WIN32
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
+AC_CHECK_TYPE([struct in6_pktinfo], [AC_DEFINE(HAVE_IP6_PKTINFO, 1, do we have pktinfo v6)],[], [[#ifndef WIN32
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
+AC_CHECK_MEMBER([struct sockaddr.sa_len], [AC_DEFINE(HAVE_SA_LEN, 1, so we have a sa_len member)], [], [[#ifndef WIN32
+# include <sys/types.h>
+# include <sys/socket.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
+AC_CHECK_MEMBER([struct in_pktinfo.ipi_spec_dst], [AC_DEFINE(HAVE_IP_PKTINFO_DST, 1, do we have pktinfo)],[], [[#ifndef WIN32
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
 
 m4_include([m4/ax_wint_t.m4])
 AX_WINT_T
@@ -590,9 +647,14 @@ AX_WINT_T
 AC_MSG_CHECKING([for IPv6])
 AC_LINK_IFELSE([AC_LANG_PROGRAM(
                 [
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#ifndef WIN32
+# include <sys/types.h>
+# include <sys/socket.h>
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif
                 ],
                 [
                    struct sockaddr_in6 s; struct in6_addr t=in6addr_any; int i=AF_INET6;
@@ -605,8 +667,18 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(
                 AC_MSG_RESULT([yes])],
                [AC_MSG_RESULT([no])])
 
-AC_CHECK_DECLS([INET6_ADDRSTRLEN, IPV6_V6ONLY, IP_RECVIF, IP_RECVDSTADDR, IP_SENDSRCADDR], [], [], [[#include <netinet/in.h>]])
-AC_CHECK_DECLS([TCP_CORK, TCP_THIN_LINEAR_TIMEOUTS, TCP_THIN_DUPACK], [], [], [[#include <netinet/tcp.h>]])
+AC_CHECK_DECLS([INET6_ADDRSTRLEN, IPV6_V6ONLY, IP_RECVIF, IP_RECVDSTADDR, IP_SENDSRCADDR], [], [], [[#ifndef WIN32
+# include <netinet/in.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
+AC_CHECK_DECLS([TCP_CORK, TCP_THIN_LINEAR_TIMEOUTS, TCP_THIN_DUPACK], [], [], [[#ifndef WIN32
+# include <netinet/tcp.h>
+#else
+# include <winsock2.h>
+# include <ws2tcpip.h>
+#endif]])
 AC_CHECK_DECLS([PR_SET_NAME], [], [], [[#include <sys/prctl.h>]])
 
 # do we need epoll compat?
@@ -699,9 +771,14 @@ fi
 
 # Checks for library functions.
 AC_FUNC_FORK
-AC_FUNC_MALLOC
 AC_FUNC_MMAP
-AC_FUNC_REALLOC
+# these checks are nice in intend, but suck, since they
+# redefine basic funcs. Every hosted system should have
+# a malloc/realloc, and the behaivios at 0 is not my
+# concern
+# AC_FUNC_MALLOC
+# AC_FUNC_REALLOC
+# the other special tests may also suck
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD

@@ -67,6 +67,7 @@ CONFPATH = $(DESTDIR)$(sysconfdir)
 STATEPATH = $(DESTDIR)$(localstatedir)
 CACHEPATH = $(DESTDIR)$(cachedir)
 
+EXEEXT = @EXEEXT@
 ################################
 # Target endianess
 ################################

@@ -110,9 +110,9 @@ DATEFLAGS = -u +%Y%m%d-%H%M
 #	internal Variables and make-targets
 #	only touch if realy needed
 #
-MAIN = $(PACKAGE_NAME)
+MAIN = $(PACKAGE_NAME)$(EXEEXT)
 VERSION = $(PACKAGE_VERSION)
-DISTNAME = $(MAIN)-$(VERSION)
+DISTNAME = $(PACKAGE_NAME)-$(VERSION)
 LONGNAME = Go2CDaemon $(VERSION)
 
 #

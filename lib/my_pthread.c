@@ -26,9 +26,12 @@
 #ifdef WIN32
 # define _WIN32_WINNT 0x0501
 # include <windows.h>
+# include <signal.h>
 # include <errno.h>
 # include "other.h"
 # include "my_pthread.h"
+# include "combo_addr.h"
+# include "log_facility.h"
 
 #define NINETHY70_OFF (0x19db1ded53e8000ULL)
 
@@ -382,6 +385,7 @@ int pthread_cond_signal(pthread_cond_t *cond)
 int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex, const struct timespec *restrict abstime)
 {
 	int my_generation;
+	int ret_val = 0;
 	BOOL last_waiter, release = TRUE;
 	DWORD ms;
 
@@ -414,11 +418,11 @@ int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restr
 			u.ui.QuadPart -= NINETHY70_OFF;
 			ts.tv_sec  =  u.ui.QuadPart / 10000000;
 			ts.tv_nsec = (u.ui.QuadPart % 10000000) * 100;
-			if(abstime->tv_sec >= ts.tv_sec && abstime->tv_nsec > ts.tv_nsec)
+			if(abstime->tv_sec >= ts.tv_sec || abstime->tv_nsec > ts.tv_nsec)
 			{
 				long nsec = (long)abstime->tv_nsec - (long)ts.tv_nsec;
 				ms   = (abstime->tv_sec - ts.tv_sec) * 1000;
-				ms  += nsec / 1000;
+				ms  += nsec / 1000000;
 				/*
 				 * we could substract some kind of overhead but pfff,
 				 * thats good enough
@@ -435,13 +439,12 @@ int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restr
 		res = WaitForSingleObject(cond->event, ms);
 
 		if(res == WAIT_FAILED) {
-			errno = EACCES;
+			ret_val = EACCES;
 			release = FALSE;
 			break;
 		}
 		if(res == WAIT_TIMEOUT) {
-// TODO: if we do not have a TLS errno, this will crash and burn...
-			errno = ETIMEDOUT;
+			ret_val = ETIMEDOUT;
 			release = FALSE;
 			break;
 		}
@@ -467,7 +470,7 @@ int pthread_cond_timedwait(pthread_cond_t *restrict cond, pthread_mutex_t *restr
 	LeaveCriticalSection(&cond->waiters_count_lock);
 	if(last_waiter) /* We're the last waiter to be notified, so reset the manual event. */
 		ResetEvent(cond->event);
-	return 0;
+	return ret_val;
 }
 
 int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict mutex)
@@ -520,11 +523,17 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict m
  */
 int pthread_key_create(pthread_key_t *key, void (*destructor)(void*))
 {
+	DWORD i;
 	if(!key) {
 		errno = EINVAL;
 		return -1;
 	}
-	*key = TlsAlloc();
+	i = TlsAlloc();
+	if(TLS_OUT_OF_INDEXES == i) {
+		errno = GetLastError();
+		return -1;
+	}
+	*key = i;
 	if(destructor)
 	{
 		/*
@@ -722,6 +731,82 @@ int fcntl(int fd, int cmd, ...)
 	}
 	va_end(args);
 	return ret_val;
+}
+
+int sigemptyset(sigset_t *set)
+{
+	*set = 0;
+	return 0;
+}
+
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+{
+	void (*o_hand)(int);
+	void (*n_hand)(int);
+
+	if(act)
+	{
+		if(act->sa_flags & SA_SIGINFO) {
+			logg(LOGF_INFO,"Warning: setting up a sigaction as normal signal, this is WRONG!\n");
+			n_hand = (void (*)(int)) act->sa_sigaction;
+		}
+		else
+			n_hand = act->sa_handler;
+	} else
+		n_hand = SIG_DFL;
+	o_hand = signal(signum, n_hand);
+	if(SIG_ERR == o_hand)
+		return -1;
+	if(oldact)
+		oldact->sa_handler = o_hand;
+	return 0;
+}
+
+int socketpair(int domain GCC_ATTR_UNUSED_PARAM, int type GCC_ATTR_UNUSED_PARAM, int protocol GCC_ATTR_UNUSED_PARAM, int sv[2])
+{
+	union combo_addr addr;
+	SOCKET listener;
+	socklen_t addrlen;
+	int yes = 1;
+
+	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(INVALID_SOCKET == listener) {
+		errno = WSAGetLastError();
+		return -1;
+	}
+
+	memset(&addr, 0, sizeof(addr));
+	addr.in.sin_family = AF_INET;
+	addr.in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr.in.sin_port = 0;
+	addrlen = sizeof(addr);
+	sv[0] = sv[1] = INVALID_SOCKET;
+	if(-1 == setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)))
+		goto OUT_ERR;
+	if(SOCKET_ERROR == bind(listener, casa(&addr), casalen(&addr)))
+		goto OUT_ERR;
+	if(SOCKET_ERROR == getsockname(listener, casa(&addr), &addrlen))
+		goto OUT_ERR;
+	if(SOCKET_ERROR == listen(listener, 1))
+		goto OUT_ERR;
+	sv[0] = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, 0);
+	if(INVALID_SOCKET == (SOCKET)sv[0])
+		goto OUT_ERR;
+	if(SOCKET_ERROR == connect(sv[0], casa(&addr), casalen(&addr)))
+		goto OUT_ERR;
+	sv[1] = accept(listener, NULL, NULL);
+	if(INVALID_SOCKET == (SOCKET)sv[1])
+		goto OUT_ERR;
+	closesocket(listener);
+	return 0;
+
+OUT_ERR:
+	yes = WSAGetLastError();
+	closesocket(listener);
+	closesocket(sv[0]);
+	closesocket(sv[1]);
+	errno = yes;
+	return -1;
 }
 
 /*@unused@*/

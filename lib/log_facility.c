@@ -415,7 +415,7 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !defined HAVE_STRERROR_R
 			size_t err_str_len;
 # ifdef STRERROR_R_CHAR_P
 			/*

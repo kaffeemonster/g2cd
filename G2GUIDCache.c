@@ -52,6 +52,9 @@
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"
 #include "lib/ansi_prng.h"
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
 
 #define GUID_CACHE_SHIFT 14
 #define GUID_CACHE_SIZE (1 << GUID_CACHE_SHIFT)
@@ -116,7 +119,7 @@ bool g2_guid_init(void)
 	*buff++ = '/';
 	strcpy(buff, server.settings.guid.dump_fname);
 
-	cache.guid_dump = open(name, O_CREAT|O_RDWR, 0664);
+	cache.guid_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);
 	if(-1 == cache.guid_dump) {
 		logg_errnod(LOGF_INFO, "couldn't open guid dump \"%s\"", name);
 		return true;
@@ -190,7 +193,7 @@ void g2_guid_end(void)
 		wptr = strpcpy(name, data_root_dir);
 		strcpy(wptr, server.settings.guid.dump_fname);
 
-		cache.guid_dump = open(name, O_CREAT|O_RDWR, 0664);
+		cache.guid_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);
 		if(-1 == cache.guid_dump) {
 			logg_errnod(LOGF_INFO, "couldn't open guid dump \"%s\"", name);
 			return;

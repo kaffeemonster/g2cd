@@ -52,6 +52,16 @@
 /* own */
 #include "udpfromto.h"
 #include "combo_addr.h"
+#ifdef WIN32
+# include <mswsock.h>
+#endif
+
+/*
+ * First we will have to redefine everything and the kitchen sink.
+ * This is highly non portable, so to get this code compiling
+ * (did i say working???), we have to turn some things to our favour.
+ * Some fallback and magic in here so it may also work, hopefully...
+ */
 
 #if HAVE_DECL_IP_RECVDSTADDR == 1
 # ifndef IPV6_RECVDSTADDR
@@ -72,16 +82,6 @@
 # define SOL_IPV6 IPPROTO_IPV6
 #endif
 
-#if !defined(CMSG_LEN) || !defined(CMSG_SPACE)
-# define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int)) & ~sizeof(int))
-# ifndef CMSG_LEN
-#  define CMSG_LEN(len)   (__CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
-# endif
-# ifndef CMSG_SPACE
-#  define CMSG_SPACE(len) (__CMSG_ALIGN(sizeof(struct cmsghdr)) + __CMSG_ALIGN(len))
-# endif
-#endif
-
 #if defined(HAVE_IP6_PKTINFO)
 # define STRUCT_SIZE (sizeof(struct in6_pktinfo))
 #elif defined(HAVE_IP_PKTINFO)
@@ -96,17 +96,126 @@
 # define STRUCT_SIZE (256)
 #endif
 
+#ifdef WIN32
+# define set_s_errno(x) (WSASetLastError(x))
+# define s_errno WSAGetLastError()
+static int (*PASCAL recv_msg_ptr)(SOCKET,LPWSAMSG,LPDWORD,LPWSAOVERLAPPED,LPWSAOVERLAPPED_COMPLETION_ROUTINE);
+typedef WSAMSG my_msghdr;
+typedef WSACMSGHDR my_cmsghdr;
+# define msg_control Control.buf
+# define msg_controllen Control.len
+# define msg_name name
+# define msg_namelen namelen
+# define msg_flags dwFlags
+# define msg_iov lpBuffers
+# define msg_iovlen dwBufferCount
+static ssize_t recvmsg(int sockfd, my_msghdr *msg, int flags GCC_ATTR_UNUSED_PARAM)
+{
+	DWORD num_recv = 0;
+	int res = recv_msg_ptr(sockfd, msg, &num_recv, NULL, NULL);
+	if(SOCKET_ERROR == res) {
+// TODO: do something 'bout error
+		return -1;
+	}
+	return num_recv;
+}
+#if 0
+// TODO: only >= Vista
+static ssize_t sendmsg(int sockfd, my_msghdr *msg, int flags)
+{
+	DWORD num_recv = 0;
+	int res = WSASendMsg(sockfd, msg, flags, &num_recv, NULL, NULL);
+	if(SOCKET_ERROR == res) {
+// TODO: do something 'bout error
+		return -1;
+	}
+	return num_recv;
+}
+#endif
+# define EWOULDBLOCK WSAEWOULDBLOCK
+/* broken mingw header... */
+# ifdef WSA_CMSG_FIRSTHDR
+#  define CMSG_FIRSTHDR(x) WSA_CMSG_FIRSTHDR(x)
+# endif
+# ifdef WSA_CMSG_NXTHDR
+#  define CMSG_NXTHDR(x, y) WSA_CMSG_NXTHDR(x, y)
+# endif
+# ifdef WSA_CMSG_DATA
+#  define CMSG_DATA(x) WSA_CMSG_DATA(x)
+# endif
+# ifdef WSA_CMSG_LEN
+#  define CMSG_LEN(x) WSA_CMSG_LEN(x)
+# endif
+# ifdef WSA_CMSG_SPACE
+#  define CMSG_SPACE(x) WSA_CMSG_SPACE(x)
+# endif
+# ifdef WSA_CMSG_FIRSTHDR
+#  define CMSG_FIRSTHDR(x) WSA_CMSG_FIRSTHDR(x)
+# endif
+# ifndef WSAID_WSARECVMSG
+#  define WSAID_WSARECVMSG {0xf689d7c8,0x6f1f,0x436b,{0x8a,0x53,0xe5,0x4f,0xe3,0x51,0xc3,0x22}}
+# endif
+static const GUID recv_msg_guid = WSAID_WSARECVMSG;
+#else
+# define set_s_errno(x) (errno = (x))
+# define s_errno errno
+typedef struct msghdr my_msghdr;
+typedef struct cmsghdr my_cmsghdr;
+#endif
+
+/*
+ * Generations of unix have piled up a variety of missing funcs.
+ * Try to fill in with the most propably fitting code.
+ * This is guesswork, and has a high chance to break something...
+ */
+#ifndef CMSG_FIRSTHDR
+# define CMSG_FIRSTHDR(mhdr) \
+	((size_t)(mhdr)->msg_controllen >= sizeof(my_cmsghdr) ? \
+	 (my_cmsghdr *)(mhdr)->msg_control : \
+	 (my_cmsghdr *)0)
+#endif
+#if !defined(CMSG_LEN) || !defined(CMSG_SPACE) || !defined(CMSG_DATA) || !defined(CMSG_NXTHDR)
+# define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int) - 1) & (~(sizeof(int) - 1)))
+# ifndef CMSG_LEN
+#  define CMSG_LEN(len)   (__CMSG_ALIGN(sizeof(my_cmsghdr)) + (len))
+# endif
+# ifndef CMSG_SPACE
+#  define CMSG_SPACE(len) (__CMSG_ALIGN(sizeof(my_cmsghdr)) + __CMSG_ALIGN(len))
+# endif
+# ifndef CMSG_DATA
+#  define CMSG_DATA(cmsg) ((unsigned char *)(cmsg) + __CMSG_ALIGN(sizeof(my_cmsghdr)))
+# endif
+# ifndef CMSG_NXTHDR
+#  define CMSG_NXTHDR(mhdr, cmsg) __cmsg_nxthdr(mhdr, cmsg)
+static my_cmsghdr *__cmsg_nxthdr(my_msghdr *mhdr, my_cmsghdr *cmsg)
+{
+	if(!cmsg)
+		return CMSG_FIRSTHDR(mhdr);
+
+	cmsg = (my_cmsghdr *)((char *)cmsg + __CMSG_ALIGN(cmsg->cmsg_len));
+	if((char *)cmsg + sizeof(my_cmsghdr) >  (char *)mhdr->msg_control + mhdr->msg_controllen)
+		return NULL;
+	return cmsg;
+}
+# endif
+#endif
+
 #ifdef HAVE_IP6_PKTINFO
 static int v6pktinfo;
 #endif
 
+/*
+ * OK
+ *
+ * Now to the init funcs, to hide runtime foo
+ */
 static int init_v4(int s, int fam GCC_ATTR_UNUSED_PARAM)
 {
 	int err = -1, opt = 1;
 
 #ifdef HAVE_IP_PKTINFO
 	/* Set the IP_PKTINFO option (Linux). */
-	err = setsockopt(s, SOL_IP, IP_PKTINFO, &opt, sizeof(opt));
+	err = setsockopt(s, SOL_IP, IP_PKTINFO, (void *)&opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
 	 * Set the IP_RECVDSTADDR option (BSD).
@@ -142,14 +251,14 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	v6pktinfo = IPV6_RECVPKTINFO;
 	err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
 #  ifdef IPV6_2292PKTINFO
-	if(-1 == err && ENOPROTOOPT == errno) {
+	if(-1 == err && ENOPROTOOPT == s_errno) {
 		if(-1 != (err = setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
 			v6pktinfo = IPV6_2292PKTINFO;
 	}
 #  endif
 # else
 	v6pktinfo = IPV6_PKTINFO;
-	err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, &opt, sizeof(opt));
+	err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, (void *)&opt, sizeof(opt));
 # endif
 #elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
@@ -175,7 +284,21 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 
 int udpfromto_init(int s, int fam)
 {
-	errno = ENOSYS;
+	set_s_errno(ENOSYS);
+
+#ifdef WIN32
+	if(!recv_msg_ptr)
+	{
+		DWORD ret_bytes;
+		int res = WSAIoctl(s, SIO_GET_EXTENSION_FUNCTION_POINTER, (void *)(intptr_t)&recv_msg_guid,
+		                   sizeof(recv_msg_guid), &recv_msg_ptr, sizeof(recv_msg_ptr),
+		                   &ret_bytes, NULL, NULL);
+		if(SOCKET_ERROR == res) {
+			errno = s_errno;
+			return -1;
+		}
+	}
+#endif
 
 	if(AF_INET == fam)
 		return init_v4(s, fam);
@@ -183,14 +306,21 @@ int udpfromto_init(int s, int fam)
 		return init_v6(s, fam);
 }
 
+
+/*
+ *
+ * And finally, the funcs
+ *
+ *
+ */
 ssize_t recvfromto(int s, void *buf, size_t len, int flags,
                    struct sockaddr *from, socklen_t *fromlen,
                    struct sockaddr *to, socklen_t *tolen)
 {
 #if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
-	struct msghdr msgh;
-	struct iovec iov;
-	struct cmsghdr *cmsg;
+	my_msghdr msgh;
+	my_iovec iov;
+	my_cmsghdr *cmsg;
 	char cbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 #endif
 	ssize_t err;
@@ -215,10 +345,10 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	msgh.msg_namelen    = fromlen ? *fromlen : 0;
 	msgh.msg_iov        = &iov;
 	msgh.msg_iovlen     = 1;
-	msgh.msg_flags      = 0;
+	msgh.msg_flags      = flags;
 
 	/* Receive one packet. */
-	err = recvmsg(s, &msgh, flags);
+	err = recvmsg(s, &msgh, 0);
 	if(err < 0)
 		return err;
 
@@ -325,10 +455,10 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 	struct mmsghdr msghv[len];
 	char cbuf[len][CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 # else
-	struct msghdr msghv[1];
+	my_msghdr msghv[1];
 	char cbuf[1][CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 # endif
-	struct msghdr *msgh;
+	my_msghdr *msgh;
 #endif
 	ssize_t err = 0;
 	unsigned i;
@@ -357,11 +487,11 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 		msghv[i].msg_hdr.msg_namelen    =  info[i].from_len;
 		msghv[i].msg_hdr.msg_iov        = &info[i].iov;
 		msghv[i].msg_hdr.msg_iovlen     = 1;
-		msghv[i].msg_hdr.msg_flags      = 0;
+		msghv[i].msg_hdr.msg_flags      = flags;
 	}
-	err = recvmmsg(s, msghv, len, flags, NULL);
+	err = recvmmsg(s, msghv, len, 0, NULL);
 	if(-1 == err) {
-		if(EAGAIN == errno || EWOULDBLOCK == errno)
+		if(EAGAIN == s_errno || EWOULDBLOCK == s_errno)
 			err = 0;
 		return err;
 	}
@@ -372,7 +502,7 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 	for(i = 0; i < len; i++)
 	{
 #if defined(HAVE_IP_PKTINFO) || defined(HAVE_IP6_PKTINFO) || HAVE_DECL_IP_RECVDSTADDR == 1
-		struct cmsghdr *cmsg;
+		my_cmsghdr *cmsg;
 
 # ifndef HAVE_RECVMMSG
 		/* Set up iov and msghv structures. */
@@ -383,14 +513,14 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 		msghv[0].msg_namelen    =  info[i].from_len;
 		msghv[0].msg_iov        = &info[i].iov;
 		msghv[0].msg_iovlen     = 1;
-		msghv[0].msg_flags      = 0;
+		msghv[0].msg_flags      = flags;
 
 		/* Receive one packet. */
-		err = recvmsg(s, msghv, flags);
+		err = recvmsg(s, msghv, 0);
 		if(err > 0) {
 			info[i].iov.iov_len = err;
 		} else {
-			if(EAGAIN == errno || EWOULDBLOCK == errno)
+			if(EAGAIN == s_errno || EWOULDBLOCK == s_errno)
 				err = 0;
 			break;
 		}
@@ -489,7 +619,7 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 		if(err > 0) {
 			info[i].iov.iov_len = err;
 		} else {
-			if(EAGAIN == errno || EWOULDBLOCK == errno)
+			if(EAGAIN == s_errno || EWOULDBLOCK == s_errno)
 				err = 0;
 			break;
 		}
@@ -502,10 +632,10 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
                    struct sockaddr *to, socklen_t tolen,
                    struct sockaddr *from, socklen_t fromlen)
 {
-#if defined(HAVE_IP_PKTINFO) || defined (HAVE_IP6_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1
-	struct msghdr msgh;
-	struct cmsghdr *cmsg;
-	struct iovec iov;
+#if !defined(WIN32) && (defined(HAVE_IP_PKTINFO) || defined (HAVE_IP6_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1)
+	my_msghdr msgh;
+	my_cmsghdr *cmsg;
+	my_iovec iov;
 	char cmsgbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 
 	fromlen = fromlen;
@@ -536,7 +666,11 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 		cmsg->cmsg_len   = CMSG_LEN(sizeof(*pi_ptr));
 		pi_ptr           = (struct in_pktinfo *)CMSG_DATA(cmsg);
 		memset(pi_ptr, 0, sizeof(*pi_ptr));
+#  ifdef HAVE_IP_PKTINFO_DST
 		memcpy(&pi_ptr->ipi_spec_dst, &from_sin->sin_addr, sizeof(pi_ptr->ipi_spec_dst));
+#  else
+		memcpy(&pi_ptr->ipi_addr, &from_sin->sin_addr, sizeof(pi_ptr->ipi_addr));
+#  endif
 	}
 # elif HAVE_DECL_IP_SENDSRCADDR == 1
 	if(AF_INET == from->sa_family)

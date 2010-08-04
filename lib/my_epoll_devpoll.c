@@ -163,10 +163,10 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 		errno = EBADF;
 		return -1;
 	}
-	
+
 	if(!event) {
 		errno = EFAULT;
-		return -1; 
+		return -1;
 	}
 
 	/* check for sane op before accuaring the lock */
@@ -178,7 +178,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 	if((EPOLL_CTL_ADD == op || EPOLL_CTL_MOD == op) && event->events & EPOLLET) {
 		/* we cannot emulate EPOLLET */
-		logg_develd("edge triggered request: efd: %i fd: %i e: 0x%x p: %p\n",
+		logg_develd("edge triggered request: efd: %i fd: %i e: %#x p: %p\n",
 		            epfd, fd, event->events, event->data.ptr);
 		errno = EINVAL;
 		return -1;

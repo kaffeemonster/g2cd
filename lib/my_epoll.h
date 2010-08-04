@@ -42,6 +42,7 @@
 # define my_epoll_create(x)	epoll_create(x)
 # define my_epoll_close(x)	close(x)
 
+typedef struct pollfd my_pollfd;
 #else
 /* Ok, we need Compat, lets do things common to
  * all Compat-layers
@@ -90,23 +91,29 @@ _MY_E_EXTRN(int my_epoll_create(int size));
 _MY_E_EXTRN(int my_epoll_close(int epfd));
 
 # ifdef WIN32
-/* vista and greater know WSApoll, guess what... */
-#  define POLLIN	(1<<0)
-#  define POLLPRI	(1<<1)
-#  define POLLOUT	(1<<2)
-#  define POLLERR	(1<<3)
-#  define POLLHUP	(1<<4)
-#  define POLLNVAL	(1<<5)
-#  define POLLRDNORM	(1<<6)
-#  define POLLRDBAND	(1<<7)
-#  define POLLWRNORM	(1<<8)
-#  define POLLWRBAND	(1<<9)
-#  define POLLMSG	(1<<10)
-struct pollfd {
-	int	fd;      /* file descriptor */
+/* vista and greater know WSAPoll, guess what... */
+#  include <winsock2.h>
+#  ifndef POLLIN
+#   define POLLERR     (1<<0)
+#   define POLLHUP     (1<<1)
+#   define POLLNVAL    (1<<2)
+#   define POLLWRNORM  (1<<4)
+#   define POLLWRBAND  (1<<5)
+#   define POLLOUT     POLLWRNORM
+#   define POLLRDNORM  (1<<8)
+#   define POLLRDBAND  (1<<9)
+#   define POLLIN      (POLLRDNORM | POLLRDBAND)
+#   define POLLPRI     (1<<10)
+typedef struct pollfd {
+	SOCKET	fd;   /* file descriptor */
 	short	events;  /* requested events */
 	short	revents; /* returned events */
-};
+} WSAPOLLFD;
+#  endif
+typedef WSAPOLLFD my_pollfd;
+_MY_E_EXTRN(int PASCAL poll(my_pollfd *fds, unsigned long nfds, int timeout));
+# else
+typedef struct pollfd my_pollfd;
 # endif
 /* now do the things special to the compat-layer */
 # if defined(HAVE_POLL) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)

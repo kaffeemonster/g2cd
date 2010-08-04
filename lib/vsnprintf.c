@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
 #endif
@@ -1249,7 +1250,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !defined HAVE_STRERROR_R
 # ifdef STRERROR_R_CHAR_P
 	/*
 	 * the f***ing GNU-Version of strerror_r wich returns
@@ -1425,9 +1426,14 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 		buf++;
 		len = 1;
 #else
+# if WINT_MAX < INT_MAX
+#  define VARG_WINT_TYPE int
+# else
+#  define VARG_WINT_TYPE wint_t
+# endif
 		mbstate_t ps;
 		char tbuf[MB_CUR_MAX];
-		wint_t wc = va_arg(spec->ap, wint_t);
+		wint_t wc = va_arg(spec->ap, VARG_WINT_TYPE);
 		size_t ret_val;
 
 		memset(&ps, 0, sizeof(ps));

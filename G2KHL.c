@@ -71,6 +71,9 @@
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"
 #include "lib/ansi_prng.h"
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
 
 #define KHL_CACHE_SHIFT 11
 #define KHL_CACHE_SIZE (1 << KHL_CACHE_SHIFT)
@@ -236,11 +239,11 @@ bool g2_khl_init(void)
 	*buff++ = '/';
 	strpcpy(buff, gwc_cache_fname);
 
-	gwc_db = dbm_open(name, O_RDWR|O_CREAT, 00666);
+	gwc_db = dbm_open(name, O_RDWR|O_CREAT|O_BINARY, 00666);
 	if(!gwc_db)
 	{
 		logg_errno(LOGF_NOTICE, "opening GWC cache");
-		gwc_db = dbm_open(name, O_RDWR|O_CREAT|O_TRUNC, 00666);
+		gwc_db = dbm_open(name, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, 00666);
 		if(!gwc_db) {
 			logg_errno(LOGF_ERR, "second try opening GWC cache");
 			return false;
@@ -285,7 +288,7 @@ bool g2_khl_init(void)
 	*buff++ = '/';
 	strcpy(buff, server.settings.khl.dump_fname);
 
-	cache.khl_dump = open(name, O_CREAT|O_RDWR, 0664);
+	cache.khl_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);
 	if(-1 == cache.khl_dump) {
 		logg_errnod(LOGF_INFO, "couldn't open khl dump \"%s\"", name);
 		return true;
@@ -606,7 +609,7 @@ static int gwc_connect(void)
 		/* .. because the kernel want something? */
 		else {
 			/* not transient error? */
-			if(!(ENOMEM  == errno || ENOBUFS == errno || EMFILE  == errno))
+			if(!(ENOMEM  == s_errno || ENOBUFS == s_errno || EMFILE  == s_errno))
 				act_gwc.next_addrinfo = act_gwc.next_addrinfo->ai_next; /* mark next to connect */
 		}
 		goto out_err;
@@ -621,9 +624,9 @@ static int gwc_connect(void)
 	logg(LOGF_INFO, "Connecting to GWC \"%s\" for Hubs\n", act_gwc.data.url);
 
 	do {
-		errno = 0;
+		set_s_errno(0);
 		ret_val = connect(fd, casa(addr), tai->ai_addrlen);
-	} while(ret_val && EINTR == errno);
+	} while(ret_val && EINTR == s_errno);
 	time(&act_gwc.data.access_last);
 	if(!ret_val)
 		act_gwc.socket = fd;
@@ -648,9 +651,9 @@ static bool gwc_request(void)
 	int len = strlen(act_gwc.request_string);
 
 	do {
-		errno = 0;
+		set_s_errno(0);
 		ret_val = send(act_gwc.socket, act_gwc.request_string, len, 0);
-	} while(-1 == ret_val && EINTR == errno);
+	} while(-1 == ret_val && EINTR == s_errno);
 
 // TODO: handle partial send
 
@@ -953,9 +956,9 @@ static int gwc_receive(void)
 	s = sock_com_fd_find(act_gwc.socket);
 
 	do {
-		errno = 0;
+		set_s_errno(0);
 		result = recv(act_gwc.socket, buffer_start(*buff), buffer_remaining(*buff)-1, 0);
-	} while(-1 == result && EINTR == errno);
+	} while(-1 == result && EINTR == s_errno);
 
 	switch(result)
 	{
@@ -965,7 +968,8 @@ static int gwc_receive(void)
 	case 0:
 		if(buffer_remaining(*buff)-1)
 		{
-			if(EAGAIN != errno) { /* we have reached EOF */
+			if(EAGAIN != s_errno)
+			{ /* we have reached EOF */
 				sock_com_delete(s);
 				close(act_gwc.socket);
 				act_gwc.socket = -1;
@@ -977,8 +981,9 @@ static int gwc_receive(void)
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno) {
-			logg_errno(LOGF_DEBUG, "reading gwc");
+		if(!(EAGAIN == s_errno || EWOULDBLOCK == s_errno))
+		{
+			logg_serrno(LOGF_DEBUG, "reading gwc");
 			sock_com_delete(s);
 			close(act_gwc.socket);
 			act_gwc.socket = -1;
@@ -1126,7 +1131,7 @@ void g2_khl_end(void)
 		wptr = strpcpy(name, data_root_dir);
 		strcpy(wptr, server.settings.khl.dump_fname);
 
-		cache.khl_dump = open(name, O_CREAT|O_RDWR, 0664);
+		cache.khl_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);
 		if(-1 == cache.khl_dump) {
 			logg_errnod(LOGF_INFO, "couldn't open khl dump \"%s\"", name);
 			return;
