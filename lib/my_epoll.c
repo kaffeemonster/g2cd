@@ -42,6 +42,8 @@
 
 #  ifdef WIN32
 #   include "my_epoll_win.c"
+#  elif HAVE_POLLSET
+#   include "my_epoll_pollset.c"
 #  elif HAVE_POLL
 /* Ok, lets emulate epoll with classical poll */
 #   include "my_epoll_poll.c"

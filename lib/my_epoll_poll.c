@@ -96,7 +96,7 @@ static int realloc_fddata(int new_max)
 	tmp_data->max_fd = new_max;
 	/* make sure memory comes back in place */
 	fds = tmp_data;
-// TODO: maybe membar here...
+	wmb();
 
 	/* mark old data for free */
 	hzp_deferfree(&old_data->hzp, old_data, free);
@@ -399,7 +399,6 @@ out_unlock:
 
 int my_epoll_close(int epfd)
 {
-	
 	if(0 > epfd) {
 		errno = EBADF;
 		return -1;

@@ -1,5 +1,5 @@
 /*
- * my_epoll_poll.c
+ * my_epoll_eport.c
  * wrapper to get epoll on systems providing event ports (Solaris 10)
  *
  * Copyright (c) 2009-2010 Jan Seiffert

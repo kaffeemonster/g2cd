@@ -687,6 +687,7 @@ epoll_kepoll=no
 epoll_eport=no
 epoll_kqueue=no
 epoll_devpoll=no
+epoll_pollset=no
 epoll_poll=no
 
 AC_MSG_CHECKING([for epoll])
@@ -747,6 +748,22 @@ if test "$need_epoll_compat" = yes; then
 	m4_include([m4/ax_sys_dev_poll.m4])
 	AX_SYS_DEV_POLL([epoll_devpoll=yes], [])
 
+	AC_MSG_CHECKING([for pollset])
+	AC_LINK_IFELSE([AC_LANG_PROGRAM(
+	                [
+#include <sys/poll.h>
+#include <sys/pollset.h>
+#include <fcntl.h>
+	                ],
+	                [
+	                   int foo = pollset_create(30);
+	                   return 0;
+	                ]
+	               )],
+	               [epoll_pollset=yes
+	                AC_MSG_RESULT([yes])],
+	               [AC_MSG_RESULT([no])])
+
 # try to find the "best"
 	if test "$epoll_kepoll" = yes; then
 		AC_DEFINE(HAVE_KEPOLL, 1, Define to 1 if the kernel has epoll)
@@ -760,7 +777,11 @@ if test "$need_epoll_compat" = yes; then
 				if test "$epoll_devpoll" = yes; then
 					AC_DEFINE(HAVE_DEVPOLL, 1, Define to 1 if the kernel /dev/poll)
 				else
-					AC_DEFINE(HAVE_POLL, 1, Define to 1 if the kernel has poll)
+					if test "$epoll_pollset" = yes; then
+						AC_DEFINE(HAVE_POLLSET, 1, Define to 1 if the kernel pollset)
+					else
+						AC_DEFINE(HAVE_POLL, 1, Define to 1 if the kernel has poll)
+					fi
 				fi
 			fi
 		fi
