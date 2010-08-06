@@ -371,12 +371,15 @@ AX_CHECK_LINKER_FLAGS([-rdynamic],
 AX_CHECK_LINKER_FLAGS([-Wl,-B,direct],
                       [LDFLAGS="-Wl,-B,direct $LDFLAGS"],
                       [])
-# check for DEP/ASLR, yes, i know, they are PE specific...
+# check for DEP/ASLR/LAA, yes, i know, they are PE specific...
 AX_CHECK_LINKER_FLAGS([-Wl,--dynamicbase],
                       [LDFLAGS="-Wl,--dynamicbase $LDFLAGS"],
                       [])
 AX_CHECK_LINKER_FLAGS([-Wl,--nxcompat],
                       [LDFLAGS="-Wl,--nxcompat $LDFLAGS"],
+                      [])
+AX_CHECK_LINKER_FLAGS([-Wl,--large-address-aware],
+                      [LDFLAGS="-Wl,--large-address-aware $LDFLAGS"],
                       [])
 
 if test "$use_mapfiles" = yes; then

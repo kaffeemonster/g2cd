@@ -34,8 +34,9 @@
 # include <sys/poll.h>
 # define my_epoll_accept(a, b, c, d) accept(b, c, d)
 # define my_epoll_socket(a, b, c) socket(a, b, c)
-# define my_epoll_send(a, b, c, d) send(a, b, c, d)
-# define my_epoll_recv(a, b, c, d) recv(a, b, c, d)
+# define my_epoll_send(a, b, c, d, e) send(b, c, d, e)
+# define my_epoll_recv(a, b, c, d, e) recv(b, c, d, e)
+# define closesocket(x) close(x)
 # else
 #endif
 /* no compat needed? simply map the calls */
@@ -110,6 +111,35 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 #   define POLLRDBAND  (1<<9)
 #   define POLLIN      (POLLRDNORM | POLLRDBAND)
 #   define POLLPRI     (1<<10)
+#   if 0
+enum EPOLL_EVENTS
+{
+    EPOLLIN        = 0x001,
+#define EPOLLIN            EPOLLIN
+    EPOLLPRI    = 0x002,
+#define EPOLLPRI        EPOLLPRI
+    EPOLLOUT    = 0x004,
+#define EPOLLOUT        EPOLLOUT
+    EPOLLRDNORM = 0x040,
+#define EPOLLRDNORM        EPOLLRDNORM
+    EPOLLRDBAND = 0x080,
+#define EPOLLRDBAND        EPOLLRDBAND
+    EPOLLWRNORM = 0x100,
+#define EPOLLWRNORM        EPOLLWRNORM
+    EPOLLWRBAND = 0x200,
+#define EPOLLWRBAND        EPOLLWRBAND
+    EPOLLMSG    = 0x400,
+#define EPOLLMSG        EPOLLMSG
+    EPOLLERR    = 0x008,
+#define EPOLLERR        EPOLLERR
+    EPOLLHUP    = 0x010,
+#define EPOLLHUP        EPOLLHUP
+    EPOLLONESHOT= (1 << 30),
+#define EPOLLONESHOT    EPOLLONESHOT
+    EPOLLET        = (1 << 31)
+#define EPOLLET            EPOLLET
+};
+#   endif
 typedef struct pollfd {
 	SOCKET	fd;   /* file descriptor */
 	short	events;  /* requested events */
@@ -120,13 +150,13 @@ typedef WSAPOLLFD my_pollfd;
 _MY_E_EXTRN(int PASCAL poll(my_pollfd *fds, unsigned long nfds, int timeout));
 _MY_E_EXTRN(int my_epoll_accept(int epfd, int sockfd, struct sockaddr *addr, socklen_t *addrlen));
 _MY_E_EXTRN(int my_epoll_socket(int domain, int type, int protocol));
-_MY_E_EXTRN(ssize_t my_epoll_send(int sockfd, const void *buf, size_t len, int flags));
-_MY_E_EXTRN(ssize_t my_epoll_recv(int sockfd, void *buf, size_t len, int flags));
+_MY_E_EXTRN(ssize_t my_epoll_send(int epfd, int sockfd, const void *buf, size_t len, int flags));
+_MY_E_EXTRN(ssize_t my_epoll_recv(int epfd, int sockfd, void *buf, size_t len, int flags));
 # else
 typedef struct pollfd my_pollfd;
 # endif
 /* now do the things special to the compat-layer */
-# if defined(HAVE_POLL) || defined(HAVE_POLLSET) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)|| defined(WIN32)
+# if (defined(HAVE_POLL) || defined(HAVE_POLLSET) || defined(HAVE_KEPOLL) || defined(HAVE_KQUEUE) || defined(HAVE_DEVPOLL) || defined (HAVE_EPORT)) || defined(WIN32)
 /* Solaris /dev/poll also wraps to some poll things */
 /* Basics */
 #  define EPOLLIN	POLLIN

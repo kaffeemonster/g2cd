@@ -286,7 +286,7 @@ retry_pack:
 		bool retry, compact_cbuff = false, save_build_packet = false;
 
 		w_entry->flags.last_data_active = false;
-		if(!do_read(p_entry))
+		if(!do_read(p_entry, epoll_fd))
 			return w_entry;
 		if(buffer_cempty(*w_entry->recv))
 			goto nothing_to_read;

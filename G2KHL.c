@@ -367,7 +367,7 @@ static void gwc_clean(void)
 	act_gwc.next_addrinfo = NULL;
 
 	if(-1 != act_gwc.socket)
-		close(act_gwc.socket);
+		closesocket(act_gwc.socket);
 	act_gwc.socket = -1;
 
 	free(act_gwc.request_string);
@@ -632,7 +632,7 @@ static int gwc_connect(void)
 		act_gwc.socket = fd;
 	else
 	{
-		close(fd);
+		closesocket(fd);
 		ret_val = -2; /* soft error */
 out_err:
 		/* ok, do we have someone left to connect? */
@@ -673,7 +673,7 @@ static bool gwc_request(void)
 
 	return true;
 out_err:
-	close(act_gwc.socket);
+	closesocket(act_gwc.socket);
 	act_gwc.socket = -1;
 	return false;
 }
@@ -971,7 +971,7 @@ static int gwc_receive(void)
 			if(EAGAIN != s_errno)
 			{ /* we have reached EOF */
 				sock_com_delete(s);
-				close(act_gwc.socket);
+				closesocket(act_gwc.socket);
 				act_gwc.socket = -1;
 				ret_val = 0;
 				s = NULL;
@@ -985,7 +985,7 @@ static int gwc_receive(void)
 		{
 			logg_serrno(LOGF_DEBUG, "reading gwc");
 			sock_com_delete(s);
-			close(act_gwc.socket);
+			closesocket(act_gwc.socket);
 			act_gwc.socket = -1;
 			ret_val = -1;
 			s = NULL;
@@ -998,7 +998,7 @@ static int gwc_receive(void)
 	if(!gwc_handle_response()) {
 		sock_com_delete(s);
 		if(-1 != act_gwc.socket)
-				close(act_gwc.socket);
+			closesocket(act_gwc.socket);
 		act_gwc.socket = -1;
 		ret_val = -1;
 	}

@@ -114,6 +114,7 @@ static void my_epoll_init(void)
 		poll_ptr = pp;
 }
 
+#if 1
 static bool get_extra_funcs(void)
 {
 	static const GUID aeg = WSAID_ACCEPTEX;
@@ -253,6 +254,27 @@ int my_epoll_close(int epfd)
 {
 	return CloseHandle((HANDLE)epfd) ? 0 : -1;
 }
+#else
+int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
+{
+	return epoll_ctl(epfd, op, fd, event);
+}
+
+int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+{
+	return epoll_wait(epfd, events, maxevents, timeout);
+}
+
+int my_epoll_create(int size)
+{
+	return epoll_create(size);
+}
+
+int my_epoll_close(int epfd)
+{
+	return epoll_close(epfd);
+}
+#endif
 
 /*
  * Hooks
@@ -262,20 +284,37 @@ int my_epoll_accept(int epfd GCC_ATTR_UNUSED_PARAM, int sockfd, struct sockaddr 
 	return accept(sockfd, addr, addrlen);
 }
 
+#if 1
 int my_epoll_socket(int domain, int type, int protocol)
 {
 	return socket(domain, type, protocol);
 }
 
-ssize_t my_epoll_send(int sockfd, const void *buf, size_t len, int flags)
+ssize_t my_epoll_send(int epfd GCC_ATTR_UNUSED_PARAM, int sockfd, const void *buf, size_t len, int flags)
 {
 	return send(sockfd, buf, len, flags);
 }
 
-ssize_t my_epoll_recv(int sockfd, void *buf, size_t len, int flags)
+ssize_t my_epoll_recv(int epfd GCC_ATTR_UNUSED_PARAM, int sockfd, void *buf, size_t len, int flags)
 {
 	return recv(sockfd, buf, len, flags);
 }
+#else
+int my_epoll_socket(int domain, int type, int protocol)
+{
+	return epoll_socket(domain, type, protocol);
+}
+
+ssize_t my_epoll_send(int epfd, int sockfd, const void *buf, size_t len, int flags)
+{
+	return epoll_send(epfd, sockfd, buf, len, flags);
+}
+
+ssize_t my_epoll_recv(int epfd, int sockfd, void *buf, size_t len, int flags)
+{
+	return epoll_recv(epfd, sockfd, buf, len, flags);
+}
+#endif
 
 /*
  * Poll emul

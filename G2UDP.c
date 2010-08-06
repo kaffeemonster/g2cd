@@ -1002,7 +1002,7 @@ bool init_udp(int epoll_fd)
 		if(!ipv4_ready)
 		{
 			while(i--) {
-				close(udp_sos[--idx].fd);
+				closesocket(udp_sos[--idx].fd);
 				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
 				udp_sos[idx].fd = -1;
 			}
@@ -1023,7 +1023,7 @@ bool init_udp(int epoll_fd)
 		if(!ipv6_ready)
 		{
 			while(i--) {
-				close(udp_sos[--idx].fd);
+				closesocket(udp_sos[--idx].fd);
 				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
 				udp_sos[idx].fd = -1;
 			}
@@ -1797,13 +1797,13 @@ static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_
 	ssize_t result;
 	unsigned i;
 
-	if(udp_poll->events & ~(POLLIN|POLLOUT)) {
+	if(udp_poll->events & ~(EPOLLIN|EPOLLOUT)) {
 		/* If our udp sock is not ready reading or writing -> fuzz */
 		logg_pos(LOGF_ERR, "udp_so NVAL|ERR|HUP\n");
 		return -1;
 	}
 
-	if(!(udp_poll->events & POLLIN))
+	if(!(udp_poll->events & EPOLLIN))
 		return 0;
 
 	for(i = 0; i < l; i++)
@@ -1877,7 +1877,7 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 
 out_err:
 	logg_errnod(LOGF_ERR, "%s", e);
-	close(*udp_so);
+	closesocket(*udp_so);
 	*udp_so = -1;
 	return false;
 }
@@ -1888,7 +1888,7 @@ void clean_up_udp(void)
 
 	for(i = 0; i < udp_sos_num; i++) {
 		if(udp_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
-			close(udp_sos[i].fd);
+			closesocket(udp_sos[i].fd);
 	}
 
 	if(0 <= out_file)

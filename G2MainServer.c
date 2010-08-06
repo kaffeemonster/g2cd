@@ -952,9 +952,9 @@ static void setup_resources(void)
 			logg_errnod(LOGF_CRIT, "creating internal Socket num %lu", (unsigned long)i);
 			for( ; i; i--)
 			{
-				if(close(sock_com[i-1][0]))
+				if(closesocket(sock_com[i-1][0]))
 					logg_errno(LOGF_WARN, "reclaiming FD's");
-				if(close(sock_com[i-1][1]))
+				if(closesocket(sock_com[i-1][1]))
 					logg_errno(LOGF_WARN, "reclaiming FD's");
 			}
 			/*
@@ -1328,9 +1328,9 @@ static noinline void clean_up_m(void)
 
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
-		close(sock_com[i][0]);
+		closesocket(sock_com[i][0]);
 			/* output? */
-		close(sock_com[i][1]);
+		closesocket(sock_com[i][1]);
 			/* output? */
 	}
 

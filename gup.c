@@ -402,7 +402,7 @@ out_no_udp:
 out_epoll:
 	my_epoll_close(worker.epollfd);
 out:
-	close(from_main.fd);
+	closesocket(from_main.fd);
 	pthread_exit(NULL);
 	/* to avoid warning about reaching end of non-void function */
 	return NULL;
@@ -566,7 +566,7 @@ static bool handle_abort(struct simple_gup *sg, struct epoll_event *ev)
 
 static void clean_up_gup(int who_to_say)
 {
-	if(0 > my_epoll_send(who_to_say, "All lost", sizeof("All lost"), 0))
+	if(0 > my_epoll_send(worker.epollfd, who_to_say, "All lost", sizeof("All lost"), 0))
 		diedie("initiating stop"); /* hate doing this, but now it's to late */
 	logg_pos(LOGF_NOTICE, "should go down\n");
 

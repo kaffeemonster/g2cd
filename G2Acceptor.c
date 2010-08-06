@@ -107,7 +107,7 @@ bool init_accept(int epoll_fd)
 		if(!ipv4_ready)
 		{
 			while(i--) {
-				close(accept_sos[--idx].fd);
+				closesocket(accept_sos[--idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
@@ -123,7 +123,7 @@ bool init_accept(int epoll_fd)
 		if(!ipv6_ready)
 		{
 			while(i--) {
-				close(accept_sos[--idx].fd);
+				closesocket(accept_sos[--idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
@@ -170,7 +170,7 @@ void clean_up_accept(void)
 
 	for(i = 0; i < accept_sos_num; i++) {
 		if(accept_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
-			close(accept_sos[i].fd);
+			closesocket(accept_sos[i].fd);
 	}
 }
 
@@ -208,7 +208,7 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	return true;
 out_err:
 	logg_errnod(LOGF_ERR, "%s", e);
-	close(*accept_so);
+	closesocket(*accept_so);
 	*accept_so = -1;
 	return false;
 }
@@ -260,7 +260,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum + 5) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
-		while(-1 == close(work_entry->com_socket) && EINTR == errno);
+		while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "too many connections");
 		return false;
 	}
@@ -270,7 +270,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	if(unlikely(g2_conreg_have_ip(&work_entry->remote_host))) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
-		while(-1 == close(work_entry->com_socket) && EINTR == errno);
+		while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "ip already connected");
 		return false;
 	}
@@ -372,7 +372,7 @@ err_out_after_add:
 err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
 	atomic_dec(&server.status.act_connection_sum);
-	while(-1 == close(work_entry->com_socket) && EINTR == errno);
+	while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
 	handle_accept_give_msg(work_entry, LOGF_DEBUG, "problems adding it!");
 	return false;
 }
@@ -383,7 +383,17 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
 	const char *msg = NULL;
 	const char *extra_msg = NULL;
 	enum loglevel needed_level = LOGF_INFO;
-	
+
+#ifdef WIN32
+	if(accept_ptr->events & (uint32_t)EPOLLHUP)
+	{
+		accept_ptr->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sg->fd, accept_ptr))
+			logg_errno(LOGF_NOTICE, "resetting accept-fd in EPoll to default-interrests");
+
+		return ret_val;
+	}
+#endif
 	if(accept_ptr->events & (uint32_t)EPOLLOUT)
 	{
 		accept_ptr->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
@@ -410,7 +420,7 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
  */
 		needed_level = LOGF_ERR;
 	}
-	
+
 	logg_posd(needed_level, "%s%s\n", msg, extra_msg);
 	return ret_val;
 }
@@ -472,7 +482,7 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epol
 	{
 		w_entry->last_active = local_time_now;
 		timeout_advance(&w_entry->active_to, ACCEPT_ACTIVE_TIMEOUT);
-		if(!do_read(p_entry))
+		if(!do_read(p_entry, epoll_fd))
 			goto killit_silent;
 
 		if(initiate_g2(w_entry)) {
