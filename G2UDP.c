@@ -803,7 +803,6 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		e->e.sequence = p->sequence;
 		e->e.part_count = p->count;
 	}
-	e->e.when = when;
 
 	/*
 	 * Look if we already have this part.
@@ -820,6 +819,8 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		unsigned i, pc;
 
 		SET_BIT(e->e.parts_recv, p->part - 1);
+		/* only update time if we know we want to keep this part */
+		e->e.when = when;
 		/* create "all parts received" mask */
 		recv_mask = 0;
 		for(pc = e->e.part_count, i = 0; pc >= BPLONG && i < anum(e->e.parts_recv); pc -= BPLONG, i++)
@@ -859,7 +860,8 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		/* optimize */
 		reas_knots_optimize(e->e.first, d_hold);
 
-		if(recv_mask == 0) {
+		if(recv_mask == 0)
+		{
 			/* take a last shot at concatinating */
 			if(e->e.first->next)
 				reas_knots_optimize(e->e.first, d_hold);

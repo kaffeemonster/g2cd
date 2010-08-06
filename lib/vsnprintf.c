@@ -152,6 +152,7 @@ struct format_spec
 	size_t maxlen;
 	unsigned precision;
 	unsigned width;
+	union {unsigned u; unsigned long long ull; } t_store;
 	union
 	{
 		struct
@@ -163,6 +164,7 @@ struct format_spec
 			bool alternate:1;
 			bool ip:1;
 			bool guid:1;
+			bool negative:1;
 		} flags;
 		int xyz;
 	} u;
@@ -195,6 +197,127 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 	return r;
 }
 
+static char *put_dec_full(char *buf, unsigned q)
+{
+	unsigned r;
+	char a = '0';
+
+	if(q > 0xffff) {
+		a = '6';
+		q -= 60000;
+	}
+
+	r      = (q * 0xcccd) >> 19;
+	*buf++ = (q - 10 * r) + '0';
+
+	q      = (r * 0x199a) >> 16;
+	*buf++ = (r - 10 * q)  + '0';
+
+	r      = (q * 0xcd) >> 11;
+	*buf++ = (q - 10 * r)  + '0';
+
+	q      = (r * 0xd) >> 7;
+	*buf++ = (r - 10 * q) + '0';
+
+	*buf++ = q + a;
+
+	return buf;
+}
+
+
+static char *put_dec_trunc(char *buf, unsigned q)
+{
+	unsigned r;
+
+	/* if we have to print more than 5 digit, use the full version */
+	if(q > 9999)
+		return put_dec_full(buf, q);
+
+	r      = (q * 0xcccd) >> 19;
+	*buf++ = (q - 10 * r) + '0';
+
+	if(r)
+	{
+		q      = (r * 0x199a) >> 16;
+		*buf++ = (r - 10 * q)  + '0';
+	
+		if(q)
+		{
+			r      = (q * 0xcd) >> 11;
+			*buf++ = (q - 10 * r)  + '0';
+
+			if(r)
+				*buf++ = r + '0';
+		}
+	}
+
+	return buf;
+}
+
+static noinline char *put_dec(char *buf, unsigned num)
+{
+	do
+	{
+		unsigned rem;
+		if(likely(num < 100000))
+			return put_dec_trunc(buf, num);
+		rem  = num % 100000;
+		num /= 100000;
+		buf  = put_dec_full(buf, rem);
+	} while(true);
+}
+
+static noinline char *put_dec_ll(char *buf, unsigned long long num)
+{
+	if(sizeof(size_t) == sizeof(num))
+	{
+		do
+		{
+			unsigned rem;
+			if(likely(num < 100000))
+				return put_dec_trunc(buf, num);
+			rem  = num % 100000;
+			num /= 100000;
+			buf  = put_dec_full(buf, rem);
+		} while(true);
+	}
+	else
+	{
+		unsigned d3, d2, d1, q;
+
+		if(!num) {
+			*buf++ = '0';
+			return buf;
+		}
+
+		d1  = (num >> 16) & 0xFFFF;
+		d2  = (num >> 32) & 0xFFFF;
+		d3  = (num >> 48) & 0xFFFF;
+
+		q   = 656 * d3 + 7296 * d2 + 5536 * d1 + (num & 0xFFFF);
+
+		buf = put_dec_full(buf, q % 10000);
+		q   = q / 10000;
+
+		d1  = q + 7671 * d3 + 9496 * d2 + 6 * d1;
+		buf = put_dec_full(buf, d1 % 10000);
+		q   = d1 / 10000;
+
+		d2  = q + 4749 * d3 + 42 * d2;
+		buf = put_dec_full(buf, d2 % 10000);
+		q   = d2 / 10000;
+
+		d3  = q + 281 * d3;
+		buf = put_dec_full(buf, d3 % 10000);
+		q   = d3 / 10000;
+
+		buf = put_dec_full(buf, q);
+
+		while(buf[-1] == '0')
+			--buf;
+		return buf;
+	}
+}
 
 /*****************************************************************************************
  *
@@ -241,22 +364,56 @@ OUT_CPY:
 /*
  * SIGNED
  */
+static noinline const char *signed_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	char *wptr = put_dec(spec->conv_buf, spec->t_store.u);
+	if(spec->u.flags.negative)
+		*wptr++ = '-';
+	else if(spec->u.flags.sign && !spec->u.flags.zero)
+		*wptr++ = '+';
+	else if(spec->u.flags.space)
+		*wptr++ = ' ';
+	spec->wptr = wptr;
+	return decimal_finish(buf, fmt, spec);
+}
+
+static noinline const char *signed_finish_ll(char *buf, const char *fmt, struct format_spec *spec)
+{
+	char *wptr = put_dec_ll(spec->conv_buf, spec->t_store.ull);
+	if(spec->u.flags.negative)
+		*wptr++ = '-';
+	else if(spec->u.flags.sign && !spec->u.flags.zero)
+		*wptr++ = '+';
+	else if(spec->u.flags.space)
+		*wptr++ = ' ';
+	spec->wptr = wptr;
+	return decimal_finish(buf, fmt, spec);
+}
+
 #define MAKE_SFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
-	type t = va_arg(spec->ap, type); \
-	type n = t < 0 ? -t : t; \
-	char *wptr; \
-	wptr = spec->conv_buf; \
-	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
-	if(t < 0) \
-		*wptr++ = '-'; \
-	else if(spec->u.flags.sign && !spec->u.flags.zero) \
-		*wptr++ = '+'; \
-	else if(spec->u.flags.space) \
-		*wptr++ = ' '; \
-	spec->wptr = wptr; \
-	return decimal_finish(buf, fmt, spec); \
+	type n = va_arg(spec->ap, type); \
+	spec->u.flags.negative = n < 0 ? true : false; \
+	n = n < 0 ? -n : n; \
+	if(sizeof(unsigned) == sizeof(n)) { \
+		spec->t_store.u = n; \
+		return signed_finish(buf, fmt, spec); \
+	} else if(sizeof(unsigned long long) == sizeof(n)) { \
+		spec->t_store.ull = n; \
+		return signed_finish_ll(buf, fmt, spec); \
+	} else { \
+		char *wptr = spec->conv_buf; \
+		do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
+		if(spec->u.flags.negative) \
+			*wptr++ = '-'; \
+		else if(spec->u.flags.sign && !spec->u.flags.zero) \
+			*wptr++ = '+'; \
+		else if(spec->u.flags.space) \
+			*wptr++ = ' '; \
+		spec->wptr = wptr; \
+		return decimal_finish(buf, fmt, spec); \
+	} \
 }
 
 MAKE_SFUNC( i, int)
@@ -269,15 +426,34 @@ MAKE_SFUNC( t, ptrdiff_t)
 /*
  * UNSIGNED
  */
+static noinline const char *unsigned_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->wptr = put_dec(spec->conv_buf, spec->t_store.u);
+	return decimal_finish(buf, fmt, spec);
+}
+
+static noinline const char *unsigned_finish_ull(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->wptr = put_dec_ll(spec->conv_buf, spec->t_store.ull);
+	return decimal_finish(buf, fmt, spec);
+}
+
 #define MAKE_UFUNC(prfx, type) \
 static const char *v##prfx##toa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
 	type n = va_arg(spec->ap, type); \
-	char *wptr; \
-	wptr = spec->conv_buf; \
-	do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
-	spec->wptr = wptr; \
-	return decimal_finish(buf, fmt, spec); \
+	if(sizeof(unsigned) == sizeof(n)) { \
+		spec->t_store.u = n; \
+		return unsigned_finish(buf, fmt, spec); \
+	} else if(sizeof(unsigned long long) == sizeof(n)) { \
+		spec->t_store.ull = n; \
+		return unsigned_finish_ull(buf, fmt, spec); \
+	} else { \
+		char *wptr = spec->conv_buf; \
+		do { *wptr++ = (n % 10) + '0'; n /= 10; } while(n); \
+		spec->wptr = wptr; \
+		return decimal_finish(buf, fmt, spec); \
+	} \
 }
 
 MAKE_UFUNC(  u, unsigned)
