@@ -90,7 +90,7 @@ typedef struct g2_connection
 	/* System Com-Things */
 	union combo_addr remote_host;
 	uint32_t         poll_interrests;
-	int              com_socket;
+	some_fd          com_socket;
 
 	/* Internal States */
 	union combo_addr sent_addr;

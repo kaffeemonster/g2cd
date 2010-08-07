@@ -32,7 +32,6 @@
 # include "my_pthread.h"
 # include "combo_addr.h"
 # include "log_facility.h"
-# include "my_epoll.h"
 
 #define NINETHY70_OFF (0x19db1ded53e8000ULL)
 
@@ -710,30 +709,6 @@ struct tm *localtime_r(const time_t *timep, struct tm *result)
 	return result;
 }
 
-int fcntl(int fd, int cmd, ...)
-{
-	va_list args;
-	int ret_val = 0;
-	u_long arg;
-
-	va_start(args, cmd);
-	switch(cmd)
-	{
-	case F_GETFL:
-		break;
-	case F_SETFL:
-		arg = va_arg(args, int);
-		arg = arg & O_NONBLOCK ? 1 : 0;
-		ioctlsocket(fd, FIONBIO, &arg);
-		break;
-	default:
-		errno = ENOSYS;
-		ret_val = -1;
-	}
-	va_end(args);
-	return ret_val;
-}
-
 int sigemptyset(sigset_t *set)
 {
 	*set = 0;
@@ -761,53 +736,6 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 	if(oldact)
 		oldact->sa_handler = o_hand;
 	return 0;
-}
-
-int socketpair(int domain GCC_ATTR_UNUSED_PARAM, int type GCC_ATTR_UNUSED_PARAM, int protocol GCC_ATTR_UNUSED_PARAM, int sv[2])
-{
-	union combo_addr addr;
-	SOCKET listener;
-	socklen_t addrlen;
-	int yes = 1;
-
-	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if(INVALID_SOCKET == listener) {
-		errno = WSAGetLastError();
-		return -1;
-	}
-
-	memset(&addr, 0, sizeof(addr));
-	addr.in.sin_family = AF_INET;
-	addr.in.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	addr.in.sin_port = 0;
-	addrlen = sizeof(addr);
-	sv[0] = sv[1] = INVALID_SOCKET;
-	if(-1 == setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)))
-		goto OUT_ERR;
-	if(SOCKET_ERROR == bind(listener, casa(&addr), casalen(&addr)))
-		goto OUT_ERR;
-	if(SOCKET_ERROR == getsockname(listener, casa(&addr), &addrlen))
-		goto OUT_ERR;
-	if(SOCKET_ERROR == listen(listener, 1))
-		goto OUT_ERR;
-	sv[1] = my_epoll_socket(AF_INET, SOCK_STREAM, 0);
-	if(INVALID_SOCKET == (SOCKET)sv[1])
-		goto OUT_ERR;
-	if(SOCKET_ERROR == connect(sv[1], casa(&addr), casalen(&addr)))
-		goto OUT_ERR;
-	sv[0] = accept(listener, NULL, NULL);
-	if(INVALID_SOCKET == (SOCKET)sv[0])
-		goto OUT_ERR;
-	closesocket(listener);
-	return 0;
-
-OUT_ERR:
-	yes = WSAGetLastError();
-	closesocket(listener);
-	closesocket(sv[0]);
-	closesocket(sv[1]);
-	errno = yes;
-	return -1;
 }
 
 /*@unused@*/

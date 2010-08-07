@@ -39,11 +39,11 @@
 #  define _G2ACC_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _G2ACCEPTOR_C */
 
-_G2ACC_EXTRN(bool init_accept(int));
+_G2ACC_EXTRN(bool init_accept(some_fd));
 _G2ACC_EXTRN(void clean_up_accept(void));
-_G2ACC_EXTRN(bool handle_accept_abnorm(struct simple_gup *, struct epoll_event *, int));
-_G2ACC_EXTRN(bool handle_accept_in(struct simple_gup *, void *, int)); /* put a g2_connection_t in for void * */
-_G2ACC_EXTRN(void handle_con_a(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], int));
+_G2ACC_EXTRN(bool handle_accept_abnorm(struct simple_gup *, struct epoll_event *, some_fd));
+_G2ACC_EXTRN(bool handle_accept_in(struct simple_gup *, void *, some_fd)); /* put a g2_connection_t in for void * */
+_G2ACC_EXTRN(void handle_con_a(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], some_fd));
 
 #endif /* G2ACCEPTOR_H */
 /* EOF */

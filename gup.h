@@ -28,6 +28,7 @@
 
 /* Own */
 # include "lib/other.h"
+# include "lib/my_epoll.h"
 
 enum guppies
 {
@@ -41,7 +42,7 @@ enum guppies
 struct simple_gup
 {
 	enum guppies gup;
-	int fd;
+	some_fd fd;
 };
 
 union gup

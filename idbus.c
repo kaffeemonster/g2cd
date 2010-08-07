@@ -80,7 +80,7 @@ static dbus_bool_t add_watch(DBusWatch *watch, void *data GCC_ATTR_UNUSED_PARAM)
 {
 	struct sock_com *s;
 	unsigned int flags;
-	int fd;
+	some_fd fd;
 	short events = 0;
 
 	fd = dbus_watch_get_unix_fd(watch);

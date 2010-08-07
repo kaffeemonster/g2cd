@@ -87,7 +87,7 @@
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
 static pthread_mutex_t sock_com_lock;
-static int sock_com[THREAD_SUM_COM][2];
+static some_fd sock_com[THREAD_SUM_COM][2];
 static LIST_HEAD(sock_com_list);
 static volatile sig_atomic_t server_running;
 static volatile sig_atomic_t reopen_logfile;

@@ -60,8 +60,8 @@
 
 /* data-structures */
 static struct worker_sync {
-	int epollfd;
-	int from_main;
+	some_fd epollfd;
+	some_fd from_main;
 	char padding[128 - 2 * sizeof(int)]; /* move at least a cacheline between data */
 	volatile bool wait;
 	volatile bool keep_going;
@@ -319,12 +319,12 @@ void *gup(void *param)
 	DRD_IGNORE_VAR(worker.keep_going);
 #endif
 	from_main.gup = GUP_ABORT;
-	from_main.fd = *((int *)param);
-	worker.from_main = *(((int *)param)-1);
-	logg(LOGF_INFO, "gup:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", from_main.fd, *(((int *)param)-1));
+	from_main.fd = *((some_fd *)param);
+	worker.from_main = *(((some_fd *)param)-1);
+	logg(LOGF_INFO, "gup:\t\tOur SockFD -> %d\tMain SockFD -> %d\n", from_main.fd, *(((some_fd *)param)-1));
 
 	worker.epollfd = my_epoll_create(PD_START_CAPACITY);
-	if(0 > worker.epollfd) {
+	if(-1 == worker.epollfd) {
 		logg_errno(LOGF_ERR, "creating epoll-fd");
 		goto out;
 	}
@@ -402,7 +402,7 @@ out_no_udp:
 out_epoll:
 	my_epoll_close(worker.epollfd);
 out:
-	closesocket(from_main.fd);
+	my_epoll_closesocket(from_main.fd);
 	pthread_exit(NULL);
 	/* to avoid warning about reaching end of non-void function */
 	return NULL;

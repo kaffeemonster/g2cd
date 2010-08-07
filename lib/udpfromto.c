@@ -52,9 +52,7 @@
 /* own */
 #include "udpfromto.h"
 #include "combo_addr.h"
-#ifdef WIN32
-# include <mswsock.h>
-#endif
+#include "my_epoll.h"
 
 /*
  * First we will have to redefine everything and the kitchen sink.
@@ -99,40 +97,6 @@
 #ifdef WIN32
 # define set_s_errno(x) (WSASetLastError(x))
 # define s_errno WSAGetLastError()
-static int (*PASCAL recv_msg_ptr)(SOCKET,LPWSAMSG,LPDWORD,LPWSAOVERLAPPED,LPWSAOVERLAPPED_COMPLETION_ROUTINE);
-typedef WSAMSG my_msghdr;
-typedef WSACMSGHDR my_cmsghdr;
-# define msg_control Control.buf
-# define msg_controllen Control.len
-# define msg_name name
-# define msg_namelen namelen
-# define msg_flags dwFlags
-# define msg_iov lpBuffers
-# define msg_iovlen dwBufferCount
-static ssize_t recvmsg(int sockfd, my_msghdr *msg, int flags GCC_ATTR_UNUSED_PARAM)
-{
-	DWORD num_recv = 0;
-	int res = recv_msg_ptr(sockfd, msg, &num_recv, NULL, NULL);
-	if(SOCKET_ERROR == res) {
-// TODO: do something 'bout error
-		return -1;
-	}
-	return num_recv;
-}
-#if 0
-// TODO: only >= Vista
-static ssize_t sendmsg(int sockfd, my_msghdr *msg, int flags)
-{
-	DWORD num_recv = 0;
-	int res = WSASendMsg(sockfd, msg, flags, &num_recv, NULL, NULL);
-	if(SOCKET_ERROR == res) {
-// TODO: do something 'bout error
-		return -1;
-	}
-	return num_recv;
-}
-#endif
-# define EWOULDBLOCK WSAEWOULDBLOCK
 /* broken mingw header... */
 # ifdef WSA_CMSG_FIRSTHDR
 #  define CMSG_FIRSTHDR(x) WSA_CMSG_FIRSTHDR(x)
@@ -152,10 +116,6 @@ static ssize_t sendmsg(int sockfd, my_msghdr *msg, int flags)
 # ifdef WSA_CMSG_FIRSTHDR
 #  define CMSG_FIRSTHDR(x) WSA_CMSG_FIRSTHDR(x)
 # endif
-# ifndef WSAID_WSARECVMSG
-#  define WSAID_WSARECVMSG {0xf689d7c8,0x6f1f,0x436b,{0x8a,0x53,0xe5,0x4f,0xe3,0x51,0xc3,0x22}}
-# endif
-static const GUID recv_msg_guid = WSAID_WSARECVMSG;
 #else
 # define set_s_errno(x) (errno = (x))
 # define s_errno errno
@@ -286,20 +246,6 @@ int udpfromto_init(int s, int fam)
 {
 	set_s_errno(ENOSYS);
 
-#ifdef WIN32
-	if(!recv_msg_ptr)
-	{
-		DWORD ret_bytes;
-		int res = WSAIoctl(s, SIO_GET_EXTENSION_FUNCTION_POINTER, (void *)(intptr_t)&recv_msg_guid,
-		                   sizeof(recv_msg_guid), &recv_msg_ptr, sizeof(recv_msg_ptr),
-		                   &ret_bytes, NULL, NULL);
-		if(SOCKET_ERROR == res) {
-			errno = s_errno;
-			return -1;
-		}
-	}
-#endif
-
 	if(AF_INET == fam)
 		return init_v4(s, fam);
 	else
@@ -348,7 +294,7 @@ ssize_t recvfromto(int s, void *buf, size_t len, int flags,
 	msgh.msg_flags      = flags;
 
 	/* Receive one packet. */
-	err = recvmsg(s, &msgh, 0);
+	err = my_epoll_recvmsg(s, &msgh, 0);
 	if(err < 0)
 		return err;
 
@@ -516,7 +462,7 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 		msghv[0].msg_flags      = flags;
 
 		/* Receive one packet. */
-		err = recvmsg(s, msghv, 0);
+		err = my_epoll_recvmsg(s, msghv, 0);
 		if(err > 0) {
 			info[i].iov.iov_len = err;
 		} else {
@@ -717,7 +663,7 @@ ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
 	/* fallback: call sendto() */
 	from = from;
 	fromlen = fromlen;
-	return sendto(s, buf, len, flags, to, tolen);
+	return my_epoll_sendto(s, buf, len, flags, to, tolen);
 #endif	/* defined(HAVE_IP_PKTINFO) || defined (HAVE_IP6_PKTINFO) || HAVE_DECL_IP_SENDSRCADDR == 1 */
 }
 

@@ -25,6 +25,11 @@
  */
 
 #define _MY_EPOLL_C
+# ifdef HAVE_STDINT_H
+#  include <stdint.h>
+# else
+#  include <inttypes.h>
+# endif
 # include "my_epoll.h"
 
 # ifdef NEED_EPOLL_COMPAT

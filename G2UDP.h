@@ -51,9 +51,9 @@ typedef struct
 #  define _G2UDP_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _G2UDP_C */
 
-_G2UDP_EXTRN(bool init_udp(int));
+_G2UDP_EXTRN(bool init_udp(some_fd));
 _G2UDP_EXTRN(void clean_up_udp(void));
-_G2UDP_EXTRN(void handle_udp(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], int));
+_G2UDP_EXTRN(void handle_udp(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], some_fd));
 _G2UDP_EXTRN(void g2_udp_send(const union combo_addr *, const union combo_addr *, struct list_head *));
 _G2UDP_EXTRN(void g2_udp_reas_timeout(void));
 

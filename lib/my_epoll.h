@@ -33,11 +33,21 @@
 #ifndef WIN32
 # include <sys/poll.h>
 # define my_epoll_accept(a, b, c, d) accept(b, c, d)
+# define my_epoll_connect(b, c, d) connect(b, c, d)
 # define my_epoll_socket(a, b, c) socket(a, b, c)
+# define my_epoll_fcntl(x, y, ...) fcntl(x, y, ## __VA_ARGS__)
+# define my_epoll_bind(a, b, c) bind(a, b, c)
+# define my_epoll_listen(a, b) listen(a, b)
+# define my_epoll_setsockopt(a, b, c, d, e) setsockopt(a, b, c, d, e)
 # define my_epoll_send(a, b, c, d, e) send(b, c, d, e)
+# define my_epoll_sendto(a, b, c, d, e, f) sendto(a, b, c, d, e, f)
 # define my_epoll_recv(a, b, c, d, e) recv(b, c, d, e)
+# define my_epoll_recvmsg(a, b, c) recvmsg(a, b, c)
+# define my_epoll_closesocket(x) close(x)
 # define closesocket(x) close(x)
+typedef int some_fd;
 # else
+typedef intptr_t some_fd;
 #endif
 /* no compat needed? simply map the calls */
 #ifndef NEED_EPOLL_COMPAT
@@ -66,7 +76,7 @@ typedef struct pollfd my_pollfd;
 typedef union epoll_data
 {
 		void *ptr;
-		int fd;
+		some_fd fd;
 		uint32_t u32;
 		uint64_t u64;
 } epoll_data_t;
@@ -91,15 +101,16 @@ struct epoll_event
 #  define _MY_E_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif /* _MY_EPOLL_C */
 
-_MY_E_EXTRN(int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event));
-_MY_E_EXTRN(int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout));
-_MY_E_EXTRN(int my_epoll_create(int size));
-_MY_E_EXTRN(int my_epoll_close(int epfd));
+_MY_E_EXTRN(int my_epoll_ctl(some_fd epfd, int op, some_fd fd, struct epoll_event *event));
+_MY_E_EXTRN(int my_epoll_wait(some_fd epfd, struct epoll_event *events, int maxevents, int timeout));
+_MY_E_EXTRN(some_fd my_epoll_create(int size));
+_MY_E_EXTRN(int my_epoll_close(some_fd epfd));
 
 # ifdef WIN32
 /* vista and greater know WSAPoll, guess what... */
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
+#  include <mswsock.h>
 #  ifndef POLLIN
 #   define POLLERR     (1<<0)
 #   define POLLHUP     (1<<1)
@@ -111,35 +122,6 @@ _MY_E_EXTRN(int my_epoll_close(int epfd));
 #   define POLLRDBAND  (1<<9)
 #   define POLLIN      (POLLRDNORM | POLLRDBAND)
 #   define POLLPRI     (1<<10)
-#   if 0
-enum EPOLL_EVENTS
-{
-    EPOLLIN        = 0x001,
-#define EPOLLIN            EPOLLIN
-    EPOLLPRI    = 0x002,
-#define EPOLLPRI        EPOLLPRI
-    EPOLLOUT    = 0x004,
-#define EPOLLOUT        EPOLLOUT
-    EPOLLRDNORM = 0x040,
-#define EPOLLRDNORM        EPOLLRDNORM
-    EPOLLRDBAND = 0x080,
-#define EPOLLRDBAND        EPOLLRDBAND
-    EPOLLWRNORM = 0x100,
-#define EPOLLWRNORM        EPOLLWRNORM
-    EPOLLWRBAND = 0x200,
-#define EPOLLWRBAND        EPOLLWRBAND
-    EPOLLMSG    = 0x400,
-#define EPOLLMSG        EPOLLMSG
-    EPOLLERR    = 0x008,
-#define EPOLLERR        EPOLLERR
-    EPOLLHUP    = 0x010,
-#define EPOLLHUP        EPOLLHUP
-    EPOLLONESHOT= (1 << 30),
-#define EPOLLONESHOT    EPOLLONESHOT
-    EPOLLET        = (1 << 31)
-#define EPOLLET            EPOLLET
-};
-#   endif
 typedef struct pollfd {
 	SOCKET	fd;   /* file descriptor */
 	short	events;  /* requested events */
@@ -147,11 +129,37 @@ typedef struct pollfd {
 } WSAPOLLFD;
 #  endif
 typedef WSAPOLLFD my_pollfd;
+
+#  define F_GETFL 0
+#  define F_SETFL 1
+#  define O_NONBLOCK (1<<0)
+typedef WSAMSG my_msghdr;
+typedef WSACMSGHDR my_cmsghdr;
+# define msg_control Control.buf
+# define msg_controllen Control.len
+# define msg_name name
+# define msg_namelen namelen
+# define msg_flags dwFlags
+# define msg_iov lpBuffers
+# define msg_iovlen dwBufferCount
+
+# define EWOULDBLOCK WSAEWOULDBLOCK
+_MY_E_EXTRN(int fcntl(int fd, int cmd, ...));
 _MY_E_EXTRN(int PASCAL poll(my_pollfd *fds, unsigned long nfds, int timeout));
-_MY_E_EXTRN(int my_epoll_accept(int epfd, int sockfd, struct sockaddr *addr, socklen_t *addrlen));
-_MY_E_EXTRN(int my_epoll_socket(int domain, int type, int protocol));
-_MY_E_EXTRN(ssize_t my_epoll_send(int epfd, int sockfd, const void *buf, size_t len, int flags));
-_MY_E_EXTRN(ssize_t my_epoll_recv(int epfd, int sockfd, void *buf, size_t len, int flags));
+_MY_E_EXTRN(int socketpair(int domain, int type, int protocol, some_fd sv[2]));
+_MY_E_EXTRN(int my_epoll_closesocket(some_fd sockfd));
+_MY_E_EXTRN(int my_epoll_fcntl(some_fd fd, int cmd, ...));
+_MY_E_EXTRN(int my_epoll_bind(some_fd sockfd, const struct sockaddr *addr, socklen_t addrlen));
+_MY_E_EXTRN(int my_epoll_listen(some_fd sockfd, int backlog));
+_MY_E_EXTRN(int my_epoll_setsockopt(some_fd sockfd, int level, int optname, const void *optval, socklen_t optlen));
+_MY_E_EXTRN(some_fd my_epoll_accept(some_fd epfd, some_fd sockfd, struct sockaddr *addr, socklen_t *addrlen));
+_MY_E_EXTRN(int my_epoll_connect(some_fd sockfd, const struct sockaddr *addr, socklen_t addrlen));
+_MY_E_EXTRN(some_fd my_epoll_socket(int domain, int type, int protocol));
+_MY_E_EXTRN(ssize_t my_epoll_send(some_fd epfd, some_fd sockfd, const void *buf, size_t len, int flags));
+_MY_E_EXTRN(ssize_t my_epoll_sendto(some_fd sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen));
+_MY_E_EXTRN(ssize_t my_epoll_recv(some_fd epfd, some_fd sockfd, void *buf, size_t len, int flags));
+_MY_E_EXTRN(ssize_t my_epoll_recvmsg(some_fd sockfd, my_msghdr *msg, int flags));
+
 # else
 typedef struct pollfd my_pollfd;
 # endif

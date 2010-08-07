@@ -114,10 +114,10 @@ struct udp_reas_cache_entry
 };
 
 /* internal prototypes */
-static ssize_t udp_sock_send(struct pointer_buff *, const union combo_addr *, int);
-static ssize_t handle_udp_sock(struct epoll_event *, struct norm_buff **, union combo_addr *, union combo_addr *, int, unsigned);
-static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, int);
-static inline bool init_con_u(int *, union combo_addr *);
+static ssize_t udp_sock_send(struct pointer_buff *, const union combo_addr *, some_fd);
+static ssize_t handle_udp_sock(struct epoll_event *, struct norm_buff **, union combo_addr *, union combo_addr *, some_fd, unsigned);
+static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, some_fd);
+static inline bool init_con_u(some_fd *, union combo_addr *);
 
 /* Vars */
 static struct
@@ -134,7 +134,7 @@ static uint32_t sequence_seed;
 static struct
 {
 	enum guppies gup;
-	int fd;
+	some_fd fd;
 	union combo_addr na;
 } *udp_sos;
 static unsigned udp_sos_num;
@@ -894,7 +894,7 @@ life_tree_error:
 }
 
 /************************* UDP work funcs ***********************/
-void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_NUM],  int epoll_fd)
+void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_NUM], some_fd epoll_fd)
 {
 	static int warned;
 	/* other variables */
@@ -962,7 +962,7 @@ void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_N
 	}
 }
 
-bool init_udp(int epoll_fd)
+bool init_udp(some_fd epoll_fd)
 {
 	unsigned i, sos_num, idx;
 	bool ipv4_ready = false;
@@ -1004,7 +1004,7 @@ bool init_udp(int epoll_fd)
 		if(!ipv4_ready)
 		{
 			while(i--) {
-				closesocket(udp_sos[--idx].fd);
+				my_epoll_closesocket(udp_sos[--idx].fd);
 				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
 				udp_sos[idx].fd = -1;
 			}
@@ -1025,7 +1025,7 @@ bool init_udp(int epoll_fd)
 		if(!ipv6_ready)
 		{
 			while(i--) {
-				closesocket(udp_sos[--idx].fd);
+				my_epoll_closesocket(udp_sos[--idx].fd);
 				memset(&udp_sos[idx].na, 0, sizeof(udp_sos[idx].na));
 				udp_sos[idx].fd = -1;
 			}
@@ -1348,7 +1348,7 @@ static void udp_writeout_packet(const union combo_addr *to, int fd, g2_packet_t 
 		udp_writeout_packet_uc(to, fd, p, d_hold, result);
 }
 
-static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *from, union combo_addr *to, int answer_fd)
+static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *from, union combo_addr *to, some_fd answer_fd)
 {
 	gnd_packet_t tmp_packet;
 	g2_packet_t g_packet_store, *g_packet;
@@ -1678,9 +1678,9 @@ void g2_udp_send(const union combo_addr *to, const union combo_addr *from, struc
 {
 	struct list_head *e, *n;
 	struct norm_buff *d_hold;
-	int answer_fd = -1;
-	int fallback_fd = -1;
-	int fallback_fallback_fd = -1;
+	some_fd answer_fd = -1;
+	some_fd fallback_fd = -1;
+	some_fd fallback_fallback_fd = -1;
 	unsigned i;
 
 	/* find a suitable send fd */
@@ -1736,7 +1736,7 @@ out_err:
 	}
 }
 
-static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr *to, int fd)
+static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr *to, some_fd fd)
 {
 	ssize_t result;
 	union combo_addr to_st;
@@ -1754,15 +1754,15 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	}
 	do
 	{
-		errno = 0;
+		set_s_errno(0);
 /* ssize_t sendto(int s, const void *buf, size_t len, int flags, const struct sockaddr *to, socklen_t tolen); */
-		result = sendto(fd,
+		result = my_epoll_sendto(fd,
 			buffer_start(*d_hold),
 			buffer_remaining(*d_hold),
 			0,
 			casac(to),
 			sizeof(*to));
-	} while(unlikely(-1 == result) && EINTR == errno);
+	} while(unlikely(-1 == result) && EINTR == s_errno);
 
 	switch(result)
 	{
@@ -1774,18 +1774,18 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	case  0:
 		if(buffer_remaining(*d_hold))
 		{
-			if(EAGAIN != errno) {
+			if(EAGAIN != s_errno) {
 				logg_posd(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i\tFromIp: %p#I\n",
-				         "error writing?!", errno, fd, to);
+				         "error writing?!", s_errno, fd, to);
 				return -1;
 			} else
 				logg_devel("Nothing to write!\n");
 		}
 		break;
 	case -1:
-		if(EAGAIN != errno) {
-			logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i to: %p#I",
-			            "sendto:", errno, fd, to);
+		if(EAGAIN != s_errno) {
+			logg_serrnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i to: %p#I",
+			            "sendto:", s_errno, fd, to);
 			return -1;
 		}
 		break;
@@ -1793,7 +1793,7 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	return result;
 }
 
-static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, int from_fd, unsigned l)
+static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, some_fd from_fd, unsigned l)
 {
 	struct mfromto m[l];
 	ssize_t result;
@@ -1821,13 +1821,13 @@ static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_
 
 	do
 	{
-		errno = 0;
+		set_s_errno(0);
 		/* ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags) */
 		result = recvmfromto(from_fd, m, l, 0);
-	} while(unlikely(-1 == result) && EINTR == errno);
+	} while(unlikely(-1 == result) && EINTR == s_errno);
 
 	if(result < 0) {
-		logg_errnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i", "recvmfromto:", errno, from_fd);
+		logg_serrnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i", "recvmfromto:", s_errno, from_fd);
 		result = -(result + 1);
 	}
 
@@ -1839,13 +1839,13 @@ static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_
 }
 
 #define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
-static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
+static inline bool init_con_u(some_fd *udp_so, union combo_addr *our_addr)
 {
 	const char *e;
 	int yes = 1; /* for setsockopt() SO_REUSEADDR, below */
 
 	if(-1 == (*udp_so = my_epoll_socket(our_addr->s.fam, SOCK_DGRAM, 0))) {
-		logg_errno(LOGF_ERR, "creating socket");
+		logg_serrno(LOGF_ERR, "creating socket");
 		return false;
 	}
 
@@ -1853,17 +1853,17 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 		OUT_ERR("preparing UDP ip recv");
 
 	/* lose the pesky "address already in use" error message */
-	if(setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(int)))
+	if(my_epoll_setsockopt(*udp_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(int)))
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1
 	if(AF_INET6 == our_addr->s.fam && server.settings.bind.use_ip4) {
-		if(setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
+		if(my_epoll_setsockopt(*udp_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
 #endif
 
-	if(bind(*udp_so, casa(our_addr), casalen(our_addr)))
+	if(my_epoll_bind(*udp_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("bindding udp fd");
 
 	/*
@@ -1872,14 +1872,14 @@ static inline bool init_con_u(int *udp_so, union combo_addr *our_addr)
 	 * This way we can "cycle" to pull several msg at once
 	 * from the socket.
 	 */
-	if(fcntl(*udp_so, F_SETFL, O_NONBLOCK))
+	if(my_epoll_fcntl(*udp_so, F_SETFL, O_NONBLOCK))
 		OUT_ERR("udp non-blocking");
 
 	return true;
 
 out_err:
-	logg_errnod(LOGF_ERR, "%s", e);
-	closesocket(*udp_so);
+	logg_serrnod(LOGF_ERR, "%s", e);
+	my_epoll_closesocket(*udp_so);
 	*udp_so = -1;
 	return false;
 }
@@ -1890,7 +1890,7 @@ void clean_up_udp(void)
 
 	for(i = 0; i < udp_sos_num; i++) {
 		if(udp_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
-			closesocket(udp_sos[i].fd);
+			my_epoll_closesocket(udp_sos[i].fd);
 	}
 
 	if(0 <= out_file)

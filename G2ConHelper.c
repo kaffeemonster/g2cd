@@ -85,7 +85,7 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 	return w_entry;
 }
 
-bool do_read(struct epoll_event *p_entry, int epoll_fd GCC_ATTR_UNUSED_PARAM)
+bool do_read(struct epoll_event *p_entry, some_fd epoll_fd GCC_ATTR_UNUSED_PARAM)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	ssize_t result = 0;
@@ -238,7 +238,7 @@ ssize_t do_writev(struct epoll_event *p_entry, int epoll_fd, const struct iovec 
 }
 #endif
 
-bool do_write(struct epoll_event *p_entry, int epoll_fd)
+bool do_write(struct epoll_event *p_entry, some_fd epoll_fd)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	bool ret_val = true, more_write;
@@ -356,7 +356,7 @@ bool do_write(struct epoll_event *p_entry, int epoll_fd)
 	return ret_val;
 }
 
-bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
+bool recycle_con(g2_connection_t *w_entry, some_fd epoll_fd, int keep_it)
 {
 	struct epoll_event tmp_eevent;
 
@@ -383,7 +383,7 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 		int ret_val;
 		/* free the fd */
 		do {
-			ret_val = closesocket(w_entry->com_socket);
+			ret_val = my_epoll_closesocket(w_entry->com_socket);
 		} while(ret_val && EINTR == s_errno);
 		if(ret_val)
 			logg_serrno(LOGF_DEBUG, "closing bad socket");
@@ -404,7 +404,7 @@ bool recycle_con(g2_connection_t *w_entry, int epoll_fd, int keep_it)
 	return true;
 }
 
-void teardown_con(g2_connection_t *w_entry, int epoll_fd)
+void teardown_con(g2_connection_t *w_entry, some_fd epoll_fd)
 {
 	struct epoll_event tmp_eevent;
 	int ret_val;
@@ -432,7 +432,7 @@ void teardown_con(g2_connection_t *w_entry, int epoll_fd)
 
 	/* free the fd */
 	do {
-		ret_val = closesocket(w_entry->com_socket);
+		ret_val = my_epoll_closesocket(w_entry->com_socket);
 	} while(ret_val && EINTR == s_errno);
 	if(ret_val)
 		logg_serrno(LOGF_DEBUG, "closing bad socket");

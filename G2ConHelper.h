@@ -37,13 +37,13 @@
 # endif /* _G2CONHELPER_C */
 
 _G2CONHELPER_EXTRN(g2_connection_t *handle_socket_abnorm(struct epoll_event *));
-_G2CONHELPER_EXTRN(bool do_read(struct epoll_event *, int));
+_G2CONHELPER_EXTRN(bool do_read(struct epoll_event *, some_fd));
 # if 0
 _G2CONHELPER_EXTRN(ssize_t do_writev(struct epoll_event *, int, const struct iovec [], size_t, bool));
 # endif
-_G2CONHELPER_EXTRN(bool do_write(struct epoll_event *, int));
-_G2CONHELPER_EXTRN(bool recycle_con(g2_connection_t *, int, int));
-_G2CONHELPER_EXTRN(void teardown_con(g2_connection_t *, int));
+_G2CONHELPER_EXTRN(bool do_write(struct epoll_event *, some_fd));
+_G2CONHELPER_EXTRN(bool recycle_con(g2_connection_t *, some_fd, int));
+_G2CONHELPER_EXTRN(void teardown_con(g2_connection_t *, some_fd));
 
 _G2CONHELPER_EXTRN(bool manage_buffer_before(struct norm_buff **con_buff, struct norm_buff **our_buff));
 _G2CONHELPER_EXTRN(void manage_buffer_after(struct norm_buff **con_buff, struct norm_buff **our_buff));

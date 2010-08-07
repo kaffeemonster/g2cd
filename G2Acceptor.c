@@ -68,14 +68,14 @@
 #undef SEND_OLD_HUB_KEYS
 
 /* internal prototypes */
-static inline bool init_con_a(int *, union combo_addr *);
-static g2_connection_t *handle_socket_io_a(struct epoll_event *, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff);
+static inline bool init_con_a(some_fd *, union combo_addr *);
+static g2_connection_t *handle_socket_io_a(struct epoll_event *, some_fd epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff);
 static noinline bool initiate_g2(g2_connection_t *);
 
 static struct simple_gup *accept_sos;
 static unsigned accept_sos_num;
 
-bool init_accept(int epoll_fd)
+bool init_accept(some_fd epoll_fd)
 {
 	unsigned i, sos_num, idx;
 	bool ipv4_ready = false;
@@ -107,7 +107,7 @@ bool init_accept(int epoll_fd)
 		if(!ipv4_ready)
 		{
 			while(i--) {
-				closesocket(accept_sos[--idx].fd);
+				my_epoll_closesocket(accept_sos[--idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
@@ -123,7 +123,7 @@ bool init_accept(int epoll_fd)
 		if(!ipv6_ready)
 		{
 			while(i--) {
-				closesocket(accept_sos[--idx].fd);
+				my_epoll_closesocket(accept_sos[--idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
@@ -170,12 +170,12 @@ void clean_up_accept(void)
 
 	for(i = 0; i < accept_sos_num; i++) {
 		if(accept_sos[i].fd > 2) /* do not close fd 0,1,2 by accident */
-			closesocket(accept_sos[i].fd);
+			my_epoll_closesocket(accept_sos[i].fd);
 	}
 }
 
 #define OUT_ERR(x)	do {e = x; goto out_err;} while(0)
-static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
+static inline bool init_con_a(some_fd *accept_so, union combo_addr *our_addr)
 {
 	const char *e;
 	int yes = 1; /* for setsocketopt() SO_REUSEADDR, below */
@@ -186,29 +186,29 @@ static inline bool init_con_a(int *accept_so, union combo_addr *our_addr)
 	}
 	
 	/* lose the pesky "address already in use" error message */
-	if(setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)))
+	if(my_epoll_setsockopt(*accept_so, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)))
 		OUT_ERR("setsockopt reuse");
 
 #if HAVE_DECL_IPV6_V6ONLY == 1
 	if(AF_INET6 == our_addr->s.fam && server.settings.bind.use_ip4) {
-		if(setsockopt(*accept_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
+		if(my_epoll_setsockopt(*accept_so, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes)))
 			OUT_ERR("setsockopt V6ONLY");
 	}
 #endif
 
-	if(bind(*accept_so, casa(our_addr), casalen(our_addr)))
+	if(my_epoll_bind(*accept_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("binding accept fd");
 
-	if(listen(*accept_so, BACKLOG))
+	if(my_epoll_listen(*accept_so, BACKLOG))
 		OUT_ERR("calling listen()");
 
-	if(fcntl(*accept_so, F_SETFL, O_NONBLOCK))
+	if(my_epoll_fcntl(*accept_so, F_SETFL, O_NONBLOCK))
 		OUT_ERR("making accept fd non-blocking");
 
 	return true;
 out_err:
 	logg_errnod(LOGF_ERR, "%s", e);
-	closesocket(*accept_so);
+	my_epoll_closesocket(*accept_so);
 	*accept_so = -1;
 	return false;
 }
@@ -231,17 +231,17 @@ static noinline void handle_accept_give_msg(g2_connection_t *work_entry, enum lo
 	}
 }
 
-bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
+bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 {
 	struct epoll_event tmp_eevent;
 	g2_connection_t *work_entry = wke_ptr;
 	socklen_t sin_size = sizeof(work_entry->remote_host); /* what to do with this info??? */
-	int tmp_fd;
+	some_fd tmp_fd;
 	int fd_flags, yes;
 
 	do {
 		tmp_fd = my_epoll_accept(epoll_fd, sg->fd, casa(&work_entry->remote_host), &sin_size);
-	} while(0 > tmp_fd && EINTR == errno);
+	} while(-1 == tmp_fd && EINTR == errno);
 
 	tmp_eevent.data.u64 = 0;
 	tmp_eevent.data.ptr = sg;
@@ -260,7 +260,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	if(atomic_inc_return(&server.status.act_connection_sum) > server.settings.max_connection_sum + 5) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
-		while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
+		while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "too many connections");
 		return false;
 	}
@@ -270,7 +270,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	if(unlikely(g2_conreg_have_ip(&work_entry->remote_host))) {
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
-		while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
+		while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "ip already connected");
 		return false;
 	}
@@ -282,11 +282,11 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 
 	/* get the fd-flags and add nonblocking  */
 	/* according to POSIX manpage EINTR is only encountered when the cmd was F_SETLKW */
-	if(-1 == (fd_flags = fcntl(work_entry->com_socket, F_GETFL))) {
+	if(-1 == (fd_flags = my_epoll_fcntl(work_entry->com_socket, F_GETFL))) {
 		logg_errno(LOGF_NOTICE, "getting socket fd-flags");
 		goto err_out_after_add;
 	}
-	if(fcntl(work_entry->com_socket, F_SETFL, fd_flags | O_NONBLOCK)) {
+	if(my_epoll_fcntl(work_entry->com_socket, F_SETFL, fd_flags | O_NONBLOCK)) {
 		logg_errno(LOGF_NOTICE, "setting socket non-blocking");
 		goto err_out_after_add;
 	}
@@ -294,7 +294,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 	/* the next settings are optional, if they fail, no harm done */
 	yes = 1;
 #if HAVE_DECL_TCP_CORK == 1
-	setsockopt(work_entry->com_socket, SOL_TCP, TCP_CORK, &yes, sizeof(yes));
+	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_CORK, &yes, sizeof(yes));
 #endif
 	/*
 	 * Our streams are basically "thin", here and there a packet every
@@ -339,10 +339,10 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, int epoll_fd)
 # endif
 #endif
 #if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 1
-	setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_LINEAR_TIMEOUTS, &yes, sizeof(yes));
+	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_LINEAR_TIMEOUTS, &yes, sizeof(yes));
 #endif
 #if HAVE_DECL_TCP_THIN_DUPACK == 1
-	setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_DUPACK, &yes, sizeof(yes));
+	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_DUPACK, &yes, sizeof(yes));
 #endif
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
@@ -372,12 +372,12 @@ err_out_after_add:
 err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
 	atomic_dec(&server.status.act_connection_sum);
-	while(-1 == closesocket(work_entry->com_socket) && EINTR == errno);
+	while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
 	handle_accept_give_msg(work_entry, LOGF_DEBUG, "problems adding it!");
 	return false;
 }
 
-bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr, int epoll_fd)
+bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr, some_fd epoll_fd)
 {
 	bool ret_val = true;
 	const char *msg = NULL;
@@ -425,7 +425,7 @@ bool handle_accept_abnorm(struct simple_gup *sg, struct epoll_event *accept_ptr,
 	return ret_val;
 }
 
-void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], int epoll_fd)
+void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], some_fd epoll_fd)
 {
 	g2_connection_t *tmp_con = ev->data.ptr;
 	int lock_res;
@@ -463,7 +463,7 @@ void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM
 	}
 }
 
-static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, int epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
+static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, some_fd epoll_fd, struct norm_buff **lrecv_buff, struct norm_buff **lsend_buff)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	g2_connection_t *ret_val = NULL;
