@@ -69,7 +69,7 @@ struct cpuinfo
 	uint32_t max_ext;
 	int count;
 	int num_cores;
-	uint32_t features[5];
+	uint32_t features[6];
 	bool init_done;
 };
 
@@ -342,12 +342,19 @@ static void identify_cpu(void)
 		}
 	}
 
+	/* poke on the basic set again */
+	if(our_cpu.max_basic >= 0x00000007)
+	{
+		cpuids(&a, 0x00000007);
+		our_cpu.features[4] = a.r.ebx;
+	}
+
 	/* poke on the centauer extendet feature flags */
 // TODO: only do this on centauer?
 	cpuids(&a, 0xC0000000UL);
 	if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
 		cpuids(&a, 0xC0000001UL);
-		our_cpu.features[4] = a.r.edx;
+		our_cpu.features[5] = a.r.edx;
 	}
 
 	/*

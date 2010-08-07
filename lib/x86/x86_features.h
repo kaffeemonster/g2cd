@@ -31,6 +31,7 @@
 # define FEATURE3(x,y,z) ENUM_CMD(x, (y +  64))
 # define FEATURE4(x,y,z) ENUM_CMD(x, (y +  96))
 # define FEATURE5(x,y,z) ENUM_CMD(x, (y + 128))
+# define FEATURE6(x,y,z) ENUM_CMD(x, (y + 160))
 # define X86_CPU_FEATURE_ENUM \
 	FEATURE1( FPU      ,  0, "FPU on chip"                       ), \
 	FEATURE1( VME      ,  1, "Virtual-8086 Mode Extensions"      ), \
@@ -92,8 +93,8 @@
 	FEATURE2( XSAVE    , 26, "XSAVE avail."                      ), \
 	FEATURE2( OSXSAVE  , 27, "OS supports XSAVE"                 ), \
 	FEATURE2( AVX      , 28, "AVX Extensions"                    ), \
-	FEATURE2( RES_2_29 , 29, "Reserved"                          ), \
-	FEATURE2( RES_2_30 , 30, "Reserved"                          ), \
+	FEATURE2( F16C     , 29, "Float16 Conversions"               ), \
+	FEATURE2( RDRAND   , 30, "Read Random"                       ), \
 	FEATURE2( RAZ      , 31, "On a Hypervisor??"                 ), \
 	FEATURE3( MIR_FPU  ,  0, "FPU on Chip, mirrored"             ), \
 	FEATURE3( MIR_VME  ,  1, "Virtual Mode Extensions, mirrored" ), \
@@ -143,16 +144,17 @@
 	FEATURE4( LWP      , 15, "Lightweight Profiling"             ), \
 	FEATURE4( FMA4     , 16, "FMA AMD-Style"                     ), \
 	FEATURE4( CVT16    , 18, "Half Float extention"              ), \
-	FEATURE5( PL_RNG   ,  2, "Padlock Random Number Generator"   ), \
-	FEATURE5( PL_RNG_E ,  3, "Padlock RNG enabled"               ), \
-	FEATURE5( PL_ACE   ,  6, "Padlock Advanced Coding ..."       ), \
-	FEATURE5( PL_ACE_E ,  7, "Padlock ACE enabled"               ), \
-	FEATURE5( PL_ACE2  ,  8, "Padlock ACE2 avail."               ), \
-	FEATURE5( PL_ACE2_E,  9, "Padlock ACE2 enabled"              ), \
-	FEATURE5( PL_PHE   , 10, "Padlock Hashing Engine"            ), \
-	FEATURE5( PL_PHE_E , 11, "Padlock HE enabled"                ), \
-	FEATURE5( PL_PMM   , 12, "Padlock Montgommery Multiplier"    ), \
-	FEATURE5( PL_PMM_E , 13, "Padlock MM enabled"                ),
+	FEATURE5( FGSBASE  ,  0, "User Baseregister manipulation"    ), \
+	FEATURE6( PL_RNG   ,  2, "Padlock Random Number Generator"   ), \
+	FEATURE6( PL_RNG_E ,  3, "Padlock RNG enabled"               ), \
+	FEATURE6( PL_ACE   ,  6, "Padlock Advanced Coding ..."       ), \
+	FEATURE6( PL_ACE_E ,  7, "Padlock ACE enabled"               ), \
+	FEATURE6( PL_ACE2  ,  8, "Padlock ACE2 avail."               ), \
+	FEATURE6( PL_ACE2_E,  9, "Padlock ACE2 enabled"              ), \
+	FEATURE6( PL_PHE   , 10, "Padlock Hashing Engine"            ), \
+	FEATURE6( PL_PHE_E , 11, "Padlock HE enabled"                ), \
+	FEATURE6( PL_PMM   , 12, "Padlock Montgommery Multiplier"    ), \
+	FEATURE6( PL_PMM_E , 13, "Padlock MM enabled"                ),
 
 # define ENUM_CMD(x,y) CFEATURE_##x = y
 enum x86_cpu_features

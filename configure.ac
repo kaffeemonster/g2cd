@@ -490,6 +490,8 @@ AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.
 m4_include([m4/ax_check_zlib.m4])
 AX_CHECK_ZLIB
 
+# keep this above the dbm test, so when cross compiling and
+# pkc-config takes the host libs, things brake
 m4_include([m4/pkg.m4])
 if test x"$disable_dbus" = xno; then
 	PKG_CHECK_EXISTS([dbus-1],

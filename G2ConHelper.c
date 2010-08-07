@@ -85,7 +85,7 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 	return w_entry;
 }
 
-bool do_read(struct epoll_event *p_entry, int epoll_fd)
+bool do_read(struct epoll_event *p_entry, int epoll_fd GCC_ATTR_UNUSED_PARAM)
 {
 	g2_connection_t *w_entry = (g2_connection_t *)p_entry->data.ptr;
 	ssize_t result = 0;
