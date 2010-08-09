@@ -117,9 +117,11 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 
 	nget = 1;
 	ev_val = port_getn(epfd, ev_list, maxevents, &nget, tsp_tmp);
+	/* _only_ compare to -1, sometimes the retval is broken */
 	if(-1 == ev_val) {
 		if(ETIME == errno)
 			return 0;
+// TODO: handle EINTR??
 		return -1;
 	}
 

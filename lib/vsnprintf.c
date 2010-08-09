@@ -197,14 +197,14 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 	return r;
 }
 
-static char *put_dec_full(char *buf, unsigned q)
+static char *put_dec_full5(char *buf, unsigned q)
 {
 	unsigned r;
 	char a = '0';
 
-	if(q > 0xffff) {
-		a = '6';
-		q -= 60000;
+	if(q >= 50000) {
+		a = '5';
+		q -= 50000;
 	}
 
 	r      = (q * 0xcccd) >> 19;
@@ -224,6 +224,24 @@ static char *put_dec_full(char *buf, unsigned q)
 	return buf;
 }
 
+static char *put_dec_full4(char *buf, unsigned q)
+{
+	unsigned r;
+
+	r      = (q * 0xcccd) >> 19;
+	*buf++ = (q - 10 * r) + '0';
+
+	q      = (r * 0x199a) >> 16;
+	*buf++ = (r - 10 * q)  + '0';
+
+	r      = (q * 0xcd) >> 11;
+	*buf++ = (q - 10 * r)  + '0';
+
+	*buf++ = r + '0';
+
+	return buf;
+}
+
 
 static char *put_dec_trunc(char *buf, unsigned q)
 {
@@ -231,7 +249,7 @@ static char *put_dec_trunc(char *buf, unsigned q)
 
 	/* if we have to print more than 5 digit, use the full version */
 	if(q > 9999)
-		return put_dec_full(buf, q);
+		return put_dec_full5(buf, q);
 
 	r      = (q * 0xcccd) >> 19;
 	*buf++ = (q - 10 * r) + '0';
@@ -263,7 +281,7 @@ static noinline char *put_dec(char *buf, unsigned num)
 			return put_dec_trunc(buf, num);
 		rem  = num % 100000;
 		num /= 100000;
-		buf  = put_dec_full(buf, rem);
+		buf  = put_dec_full5(buf, rem);
 	} while(true);
 }
 
@@ -278,7 +296,7 @@ static noinline char *put_dec_ll(char *buf, unsigned long long num)
 				return put_dec_trunc(buf, num);
 			rem  = num % 100000;
 			num /= 100000;
-			buf  = put_dec_full(buf, rem);
+			buf  = put_dec_full5(buf, rem);
 		} while(true);
 	}
 	else
@@ -296,22 +314,22 @@ static noinline char *put_dec_ll(char *buf, unsigned long long num)
 
 		q   = 656 * d3 + 7296 * d2 + 5536 * d1 + (num & 0xFFFF);
 
-		buf = put_dec_full(buf, q % 10000);
+		buf = put_dec_full4(buf, q % 10000);
 		q   = q / 10000;
 
 		d1  = q + 7671 * d3 + 9496 * d2 + 6 * d1;
-		buf = put_dec_full(buf, d1 % 10000);
+		buf = put_dec_full4(buf, d1 % 10000);
 		q   = d1 / 10000;
 
 		d2  = q + 4749 * d3 + 42 * d2;
-		buf = put_dec_full(buf, d2 % 10000);
+		buf = put_dec_full4(buf, d2 % 10000);
 		q   = d2 / 10000;
 
 		d3  = q + 281 * d3;
-		buf = put_dec_full(buf, d3 % 10000);
+		buf = put_dec_full4(buf, d3 % 10000);
 		q   = d3 / 10000;
 
-		buf = put_dec_full(buf, q);
+		buf = put_dec_full4(buf, q);
 
 		while(buf[-1] == '0')
 			--buf;
