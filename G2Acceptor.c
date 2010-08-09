@@ -935,7 +935,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				return false;
 			}
 
-// TODO: add prefernce what's our global ip?
+// TODO: add preference what's our global ip?
 			/*
 			 * It's totaly fine for a REAL host to be multihomed.
 			 * But the answer to the question "What's my IP?" then
@@ -998,7 +998,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 				cp_ret = buffer_start(*to_con->send);
 				*cp_ret++ = ':';
-				cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&local_addr)));
+				cp_ret = ustoa_trunc(cp_ret, ntohs(combo_addr_port(&local_addr)));
 				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			}
@@ -1139,7 +1139,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 						if(AF_INET6 == khl_e[khl_num].na.s.fam)
 							*cp_ret++ = ']';
 						*cp_ret++ = ':';
-						cp_ret = ustoa(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
+						cp_ret = ustoa_trunc(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
 						*cp_ret++ = ' ';
 						cp_ret += print_ts(cp_ret, 20, &khl_e[khl_num].when);
 						*cp_ret++ = ',';

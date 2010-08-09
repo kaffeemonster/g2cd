@@ -197,7 +197,7 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 	return r;
 }
 
-static char *put_dec_full5(char *buf, unsigned q)
+static GCC_ATTR_FASTCALL char *put_dec_full5(char *buf, unsigned q)
 {
 	unsigned r;
 	char a = '0';
@@ -224,7 +224,7 @@ static char *put_dec_full5(char *buf, unsigned q)
 	return buf;
 }
 
-static char *put_dec_full4(char *buf, unsigned q)
+static GCC_ATTR_FASTCALL char *put_dec_full4(char *buf, unsigned q)
 {
 	unsigned r;
 
@@ -243,7 +243,7 @@ static char *put_dec_full4(char *buf, unsigned q)
 }
 
 
-static char *put_dec_trunc(char *buf, unsigned q)
+char *put_dec_trunc(char *buf, unsigned q)
 {
 	unsigned r;
 
@@ -1754,8 +1754,8 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 				*buf++ = ']';
 			if(len++ <= sav)
 				*buf++ = ':';
-			ret_val = usntoa(buf, sav - len, ntohs(combo_addr_port(addr)));
-			ret_val = ret_val ? ret_val : buf;
+			ret_val = put_dec_trunc(spec->conv_buf, ntohs(combo_addr_port(addr)));
+			ret_val = strncpyrev(buf, ret_val - 1, spec->conv_buf, len < sav ? sav - len : 0);
 			len += ret_val - buf;
 			buf = ret_val;
 		}

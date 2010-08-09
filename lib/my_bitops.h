@@ -100,6 +100,13 @@ static inline void strreverse(char *begin, char *end)
 		tchar = *end, *end-- = *begin, *begin++ = tchar;
 }
 
+static inline char *strcpyreverse(char *dst, const char *begin, const char *end)
+{
+	while(end >= begin)
+		*dst++ = *end--;
+	return dst;
+}
+
 LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src, size_t len));
 
 struct test_cpu_feature

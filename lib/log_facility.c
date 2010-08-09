@@ -329,7 +329,7 @@ static int logg_internal(const enum loglevel level,
 			remaining--;
 			rstart = strnpcpy(sptr, func, remaining);
 			remaining -= rstart - sptr;
-			if(unlikely(remaining < 7))
+			if(unlikely(remaining < 18)) /* make sure we have enough space */
 				goto realloc;
 			sptr = rstart;
 
@@ -337,9 +337,8 @@ static int logg_internal(const enum loglevel level,
 			*sptr++ = ')';
 			*sptr++ = '@';
 			remaining -= 3;
-			rstart = untoa(sptr, remaining, line);
-			if(unlikely(!rstart))
-				goto realloc;
+			rstart = put_dec_trunc(sptr, line); /* 99,999 lines should be... */
+			strreverse(sptr, rstart - 1);
 			remaining -= rstart - sptr;
 			if(unlikely(remaining < 2))
 				goto realloc;

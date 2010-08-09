@@ -121,7 +121,7 @@ static const unsigned short days_in_year_till_month[2][13] =
 	{ 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 }
 };
 
-static bool is_leap_year(unsigned long year)
+static always_inline bool is_leap_year(unsigned long year)
 {
 	if(unlikely(year % 4 == 0))
 	{
@@ -136,12 +136,12 @@ static bool is_leap_year(unsigned long year)
 	return false;
 }
 
-static long mod_div(long a, long b)
+static always_inline long mod_div(long a, long b)
 {
 	return a / b - (a % b < 0);
 }
 
-static long leaps_thru_end_of(long year)
+static always_inline long leaps_thru_end_of(long year)
 {
 	return mod_div(year, 4) - mod_div(year, 100) + mod_div(year, 400);
 }
@@ -235,6 +235,22 @@ static noinline bool dfields_calc(time_t *t, const struct dfields *f)
 	return true;
 }
 
+static noinline GCC_ATTR_FASTCALL char *put_dec_8bit_2fix(char *buf, unsigned q)
+{
+	unsigned r;
+
+	r      = (q * 0xcd) >> 11;
+	*buf++ = (q - 10 * r) + '0';
+
+	q      = (r * 0xd) >> 7;
+	*buf++ = (r - 10 * q)  + '0';
+
+	if(unlikely(q))
+		*buf++ = q + '0';
+
+	return buf;
+}
+
 size_t print_ts(char *buf, size_t n, const time_t *t)
 {
 	struct dfields f;
@@ -243,18 +259,20 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 	if(unlikely(!buf || n < 18 || !calc_dfields(&f, t)))
 		return 0;
 
-	wptr = ultoa(buf, f.year);
-	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, f.month, 2);
-	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, f.day, 2);
-	*wptr++ = 'T';
-	wptr = ustoa_0fix(wptr, f.hour, 2);
-	*wptr++ = ':';
-	wptr = ustoa_0fix(wptr, f.minute, 2);
+	wptr = buf;
+	*wptr++ = '\0';
 	*wptr++ = 'Z';
-	*wptr = '\0';
-	return wptr - buf;
+	wptr = put_dec_8bit_2fix(wptr, f.minute);
+	*wptr++ = ':';
+	wptr = put_dec_8bit_2fix(wptr, f.hour);
+	*wptr++ = 'T';
+	wptr = put_dec_8bit_2fix(wptr, f.day);
+	*wptr++ = '-';
+	wptr = put_dec_8bit_2fix(wptr, f.month);
+	*wptr++ = '-';
+	wptr = put_dec_trunc(wptr, f.year); /* will keep us afloat till 99,999 */
+	strreverse(buf, wptr - 1);
+	return (wptr - 1) - buf;
 }
 
 size_t print_lts(char *buf, size_t n, const time_t *t)
@@ -265,20 +283,22 @@ size_t print_lts(char *buf, size_t n, const time_t *t)
 	if(unlikely(!buf || n < 21 || !calc_dfields(&f, t)))
 		return 0;
 
-	wptr = ultoa(buf, f.year);
-	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, f.month, 2);
-	*wptr++ = '-';
-	wptr = ustoa_0fix(wptr, f.day, 2);
-	*wptr++ = 'T';
-	wptr = ustoa_0fix(wptr, f.hour, 2);
-	*wptr++ = ':';
-	wptr = ustoa_0fix(wptr, f.minute, 2);
-	*wptr++ = ':';
-	wptr = ustoa_0fix(wptr, f.seconds, 2);
+	wptr = buf;
+	*wptr++ = '\0';
 	*wptr++ = 'Z';
-	*wptr = '\0';
-	return wptr - buf;
+	wptr = put_dec_8bit_2fix(wptr, f.seconds);
+	*wptr++ = ':';
+	wptr = put_dec_8bit_2fix(wptr, f.minute);
+	*wptr++ = ':';
+	wptr = put_dec_8bit_2fix(wptr, f.hour);
+	*wptr++ = 'T';
+	wptr = put_dec_8bit_2fix(wptr, f.day);
+	*wptr++ = '-';
+	wptr = put_dec_8bit_2fix(wptr, f.month);
+	*wptr++ = '-';
+	wptr = put_dec_trunc(wptr, f.year); /* will keep us afloat till 99,999 */
+	strreverse(buf, wptr - 1);
+	return (wptr - 1) - buf;
 }
 
 int read_ts(const char *buf, time_t *t)

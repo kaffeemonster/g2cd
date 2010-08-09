@@ -61,9 +61,32 @@
 # define str_size(x)       (sizeof(x) - 1)
 #endif
 
+static char *put_dec_8bit(char *buf, unsigned q)
+{
+	unsigned r;
+
+	r      = (q * 0xcd) >> 11;
+	*buf++ = (q - 10 * r) + '0';
+
+	if(r)
+	{
+		q      = (r * 0xd) >> 7;
+		*buf++ = (r - 10 * q)  + '0';
+
+		if(q)
+			*buf++ = q + '0';
+	}
+
+	return buf;
+}
+
 static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 {
-	char tbuf[sizeof("000.000.000.000")];
+	union {
+		uint32_t a;
+		unsigned char c[4];
+	} u;
+	char tbuf[sizeof("000.000.000.000") + 1];
 	char *wptr;
 	int i;
 
@@ -72,16 +95,18 @@ static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 		return NULL;
 	}
 
-	for(i = 0, wptr = tbuf; i < 4; i++) {
-		wptr = uctoa(wptr, ((const unsigned char *)src)[i]);
+	u.a = src->s_addr;
+	wptr = tbuf;
+	*wptr++ = '\0';
+	for(i = 4; i--;) {
+		wptr = put_dec_8bit(wptr, u.c[i]);
 		*wptr++ = '.';
 	}
-	*(wptr - 1)= '\0';
 	if((socklen_t)(wptr - tbuf) > cnt) {
 		errno = ENOSPC;
 		return NULL;
 	}
-	return (char *)my_mempcpy(dst, tbuf, wptr - tbuf) - 1;
+	return strcpyreverse(dst, tbuf, wptr - 2) - 1;
 }
 
 static const char *print_ipv4(const struct in_addr *src, char *dst, socklen_t cnt)

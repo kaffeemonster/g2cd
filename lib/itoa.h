@@ -210,6 +210,15 @@ static inline char *ptoa(char *buff, const void *ptr)
 	return buff + (sizeof(ptr) * 2) + 2;
 }
 
+char *put_dec_trunc(char *buf, unsigned q) GCC_ATTR_VIS("hidden");
+
+static inline char *ustoa_trunc(char *buf, unsigned q)
+{
+	char *ret_val = put_dec_trunc(buf, q); /* if this is really a short, this is enough */
+	strreverse(buf, ret_val - 1);
+	return ret_val;
+}
+
 #undef HEXUC_STRING
 #undef HEXLC_STRING
 #undef SIGNED_KERNEL
