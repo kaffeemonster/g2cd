@@ -6,6 +6,7 @@
 # ifdef __linux__
 #  include <endian.h>
 # elif defined(__NetBSD__) || defined(__OpenBSD__)
+// TODO: put FreeBSD here too?
 #  include <sys/endian.h>
 # elif defined(__FreeBSD__) || defined(BSD)
 #  include <machine/endian.h>

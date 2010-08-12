@@ -210,7 +210,7 @@ static inline char *ptoa(char *buff, const void *ptr)
 	return buff + (sizeof(ptr) * 2) + 2;
 }
 
-char *put_dec_trunc(char *buf, unsigned q) GCC_ATTR_VIS("hidden");
+GCC_ATTR_FASTCALL char *put_dec_trunc(char *buf, unsigned q) GCC_ATTR_VIS("hidden");
 
 static inline char *ustoa_trunc(char *buf, unsigned q)
 {

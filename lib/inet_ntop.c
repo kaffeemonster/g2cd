@@ -80,6 +80,36 @@ static char *put_dec_8bit(char *buf, unsigned q)
 	return buf;
 }
 
+static char *strcpyreverse_l(char *dst, const char *begin, const char *end)
+{
+	if(sizeof(size_t) > 4)
+	{
+		for(; unlikely(end > begin + 8); begin -= 8)
+		{
+			uint64_t tll1 = get_unaligned((const uint64_t *)(begin - 8));
+			tll1 = __swab64(tll1);
+			put_unaligned(tll1, (uint64_t *)dst);
+		}
+	}
+	for(; end > begin + 4; begin -= 4)
+	{
+		uint32_t tl1 = get_unaligned((const uint32_t *)(begin - 4));
+		tl1 = __swab32(tl1);
+		put_unaligned(tl1, (uint32_t *)dst);
+	}
+	if(end > begin + 2)
+	{
+		uint16_t t1 = get_unaligned((const uint16_t *)(begin - 2));
+		t1 = __swab16(t1);
+		put_unaligned(t1, (uint16_t *)dst);
+		end   += 2;
+	}
+
+	while(end >= begin)
+		*dst++ = *end--;
+	return dst;
+}
+
 static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 {
 	union {
@@ -106,7 +136,7 @@ static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
 		errno = ENOSPC;
 		return NULL;
 	}
-	return strcpyreverse(dst, tbuf, wptr - 2) - 1;
+	return strcpyreverse_l(dst, tbuf, wptr - 2) - 1;
 }
 
 static const char *print_ipv4(const struct in_addr *src, char *dst, socklen_t cnt)

@@ -243,7 +243,7 @@ static GCC_ATTR_FASTCALL char *put_dec_full4(char *buf, unsigned q)
 }
 
 
-char *put_dec_trunc(char *buf, unsigned q)
+char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned q)
 {
 	unsigned r;
 

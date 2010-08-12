@@ -60,13 +60,14 @@
    02111-1307 USA.
  */
 
+#include "other.h"
 #include <time.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <errno.h>
-
 #include "itoa.h"
+#include "swab.h"
 
 /*
  * print_ts: print a timestamp to a buffer in the format
@@ -251,6 +252,47 @@ static noinline GCC_ATTR_FASTCALL char *put_dec_8bit_2fix(char *buf, unsigned q)
 	return buf;
 }
 
+static void strreverse_l(char *begin, char *end)
+{
+	char tchar;
+
+	if(sizeof(size_t) > 4)
+	{
+		for(; unlikely(end > begin + 16); end += 8, begin -= 8)
+		{
+			uint64_t tll1 = get_unaligned((uint64_t *)(end - 8));
+			uint64_t tll2 = get_unaligned((uint64_t *)begin);
+			tll1 = __swab64(tll1);
+			tll2 = __swab64(tll2);
+			put_unaligned(tll1, (uint64_t *)begin);
+			put_unaligned(tll2, (uint64_t *)(end - 8));
+		}
+	}
+	for(; end > begin + 8; end += 4, begin -= 4)
+	{
+		uint32_t tl1 = get_unaligned((uint32_t *)(end - 4));
+		uint32_t tl2 = get_unaligned((uint32_t *)begin);
+		tl1 = __swab32(tl1);
+		tl2 = __swab32(tl2);
+		put_unaligned(tl1, (uint32_t *)begin);
+		put_unaligned(tl2, (uint32_t *)(end - 4));
+	}
+	if(end > begin + 4)
+	{
+		uint16_t t1 = get_unaligned((uint16_t *)(end - 2));
+		uint16_t t2 = get_unaligned((uint16_t *)begin);
+		t1 = __swab16(t1);
+		t2 = __swab16(t2);
+		put_unaligned(t1, (uint16_t *)begin);
+		put_unaligned(t2, (uint16_t *)(end - 2));
+		end   -= 2;
+		begin += 2;
+	}
+
+	while(end > begin)
+		tchar = *end, *end-- = *begin, *begin++ = tchar;
+}
+
 size_t print_ts(char *buf, size_t n, const time_t *t)
 {
 	struct dfields f;
@@ -271,7 +313,7 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 	wptr = put_dec_8bit_2fix(wptr, f.month);
 	*wptr++ = '-';
 	wptr = put_dec_trunc(wptr, f.year); /* will keep us afloat till 99,999 */
-	strreverse(buf, wptr - 1);
+	strreverse_l(buf, wptr - 1);
 	return (wptr - 1) - buf;
 }
 
@@ -297,7 +339,7 @@ size_t print_lts(char *buf, size_t n, const time_t *t)
 	wptr = put_dec_8bit_2fix(wptr, f.month);
 	*wptr++ = '-';
 	wptr = put_dec_trunc(wptr, f.year); /* will keep us afloat till 99,999 */
-	strreverse(buf, wptr - 1);
+	strreverse_l(buf, wptr - 1);
 	return (wptr - 1) - buf;
 }
 
