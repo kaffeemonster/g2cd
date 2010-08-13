@@ -202,6 +202,7 @@ static GCC_ATTR_FASTCALL char *put_dec_full5(char *buf, unsigned q)
 	unsigned r;
 	char a = '0';
 
+#if 0
 	if(q >= 50000) {
 		a = '5';
 		q -= 50000;
@@ -209,6 +210,10 @@ static GCC_ATTR_FASTCALL char *put_dec_full5(char *buf, unsigned q)
 
 	r      = (q * 0xcccd) >> 19;
 	*buf++ = (q - 10 * r) + '0';
+#else
+	r      = (q * (uint64_t)0xcccd) >> 19;
+	*buf++ = (q - 10 * r) + '0';
+#endif
 
 	q      = (r * 0x199a) >> 16;
 	*buf++ = (r - 10 * q)  + '0';
@@ -251,12 +256,12 @@ char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned q)
 	if(q > 9999)
 		return put_dec_full5(buf, q);
 
-	r      = (q * 0xcccd) >> 19;
+	r      = (q * 0x199a) >> 16;
 	*buf++ = (q - 10 * r) + '0';
 
 	if(r)
 	{
-		q      = (r * 0x199a) >> 16;
+		q      = (r * 0xcd) >> 11;
 		*buf++ = (r - 10 * q)  + '0';
 	
 		if(q)
@@ -303,8 +308,8 @@ static noinline char *put_dec_ll(char *buf, unsigned long long num)
 	{
 		unsigned d3, d2, d1, q;
 
-		if(!num) {
-			*buf++ = '0';
+		if(num < 10) {
+			*buf++ = '0' + (unsigned)num;
 			return buf;
 		}
 

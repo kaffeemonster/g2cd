@@ -84,25 +84,26 @@ static char *strcpyreverse_l(char *dst, const char *begin, const char *end)
 {
 	if(sizeof(size_t) > 4)
 	{
-		for(; unlikely(end > begin + 8); begin -= 8)
+		for(; unlikely(end - 7 >= begin); end -= 8, dst += 8)
 		{
-			uint64_t tll1 = get_unaligned((const uint64_t *)(begin - 8));
+			uint64_t tll1 = get_unaligned((const uint64_t *)(end - 7));
 			tll1 = __swab64(tll1);
 			put_unaligned(tll1, (uint64_t *)dst);
 		}
 	}
-	for(; end > begin + 4; begin -= 4)
+	for(; end - 3 >= begin; end -= 4, dst += 4)
 	{
-		uint32_t tl1 = get_unaligned((const uint32_t *)(begin - 4));
+		uint32_t tl1 = get_unaligned((const uint32_t *)(end - 3));
 		tl1 = __swab32(tl1);
 		put_unaligned(tl1, (uint32_t *)dst);
 	}
-	if(end > begin + 2)
+	if(end - 1 >= begin)
 	{
-		uint16_t t1 = get_unaligned((const uint16_t *)(begin - 2));
+		uint16_t t1 = get_unaligned((const uint16_t *)(end - 1));
 		t1 = __swab16(t1);
 		put_unaligned(t1, (uint16_t *)dst);
-		end   += 2;
+		end -= 2;
+		dst += 2;
 	}
 
 	while(end >= begin)

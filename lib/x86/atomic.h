@@ -72,7 +72,7 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_pread(ptr))
-		: /* %2 */ "m"	(atomic_pread(ptr)),
+		: /* %2 */ "m" (atomic_pread(ptr)),
 		  /* %3 */ "0" (val));
 	return val;
 }
@@ -84,7 +84,7 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 		: /* %0 */ "=r" (val),
 		/* gcc < 3 needs this, "+m" will not work reliable */
 		  /* %1 */ "=m" (atomic_read(ptr))
-		: /* %2 */ "m"	(atomic_read(ptr)),
+		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "0" (val));
 	return val;
 }
