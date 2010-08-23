@@ -70,6 +70,7 @@ struct cpuinfo
 	int count;
 	int num_cores;
 	uint32_t features[6];
+	unsigned short clflush_size;
 	bool init_done;
 };
 
@@ -104,6 +105,7 @@ const char x86_cpu_feature_names[][16] =
 #define CPUID_FAMILY(x)	(((x) >> 8) & 0x0F)
 #define CPUID_XMODEL(x)	(((x) >> 16) & 0x0F)
 #define CPUID_XFAMILY(x)	(((x) >> 20) & 0xFF)
+#define CPUID_CLFLUSHS(x)	(((x) >> 8) & 0xFF)
 
 /*
  * Prototypes
@@ -300,6 +302,8 @@ static void identify_cpu(void)
 	/* and finaly: get the features */
 	our_cpu.features[0] = a.r.edx;
 	our_cpu.features[1] = a.r.ecx;
+	if(cpu_feature(CFEATURE_CLFSH))
+		our_cpu.clflush_size = CPUID_CLFLUSHS(a.r.ebx);
 
 	/*
 	 * We simply try the extented (AMD)flags, seems this is OK and uses
@@ -383,6 +387,13 @@ static void identify_cpu(void)
 		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
 		our_cpu.stepping, our_cpu.model_str.s);
 #endif
+
+	/*
+	 * AMD performance hints?
+	 * 0x8000001A
+	 * EAX: 0 - FP128 full 128 bit pipeline
+	 *      1 - MOVU  movu{dp|ps|pd} is prefered over movl/movh{ps|pd}
+	 */
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
@@ -568,6 +579,11 @@ int test_cpu_feature_3dnow_callback(void)
 	return cpu_feature(CFEATURE_3DNOW);
 }
 
+int test_cpu_feature_3dnowprf_callback(void)
+{
+	return cpu_feature(CFEATURE_3DNOWPRE);
+}
+
 /*
  * Callback test if we have CMOV (thanks VIA)
  */
@@ -699,7 +715,7 @@ int test_cpu_feature_cmov_callback(void)
  * "need" (as in application->bussiness: "MpegDecoder"->"$$$"),
  * and whining how expensive a requested "generic" feature is
  * (e.g. good usable SIMD permutation, not all this (un)pack BS)
- * while integrating MByte of cache and other transitor eater,
+ * while integrating MByte of cache and other transistor eater,
  * someone is lost in hoping their needed (missing) instruction
  * will show up if he has no billion dollar business plan and a
  * platinium Intel support contract...

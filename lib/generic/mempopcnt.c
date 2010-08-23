@@ -96,7 +96,6 @@ static always_inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t
 # endif
 	return n;
 }
-#endif
 
 static inline size_t popcountst_b(size_t n)
 {
@@ -105,6 +104,7 @@ static inline size_t popcountst_b(size_t n)
 	n = ((n >> 4) + n) & MK_C(0x0f0f0f0fL);
 	return n;
 }
+#endif
 
 #ifndef ARCH_NAME_SUFFIX
 # define F_NAME(z, x, y) z x

@@ -106,10 +106,13 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))memneg_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
 # endif
 #endif
+	{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memneg_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+	{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memneg_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memneg_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
 #ifndef __x86_64__

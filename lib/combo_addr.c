@@ -171,6 +171,21 @@ uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
 
+//TODO: add DS-Lite well known addresses
+/*
+ * When the draft gets to standard:
+ * 192.0.0.0/29 is reserved for the p2p tunnel link between
+ * B4 & AFTR (CPE and Carrier NAT).
+ * These should not show up in the internet.
+ * Only question is:
+ * - ICMP messages may "come" from there
+ * - A machine beeing the B4 and running a servent may output
+ *   this address, even for a short period, till it finds it
+ *   outside address
+ * Still, we can not answer to it, this address is "not
+ * reachable". Since its use is optional, some provider
+ * may set up their own "dead end", undocumented...
+ */
 bool combo_addr_is_public(const union combo_addr *addr)
 {
 	in_addr_t a;

@@ -43,7 +43,7 @@
 	FEATURE1( MCE      ,  7, "Machine Check Execptions"          ), \
 	FEATURE1( CX8      ,  8, "CMPXCHG8 instruction"              ), \
 	FEATURE1( APIC     ,  9, "APIC on chip"                      ), \
-	FEATURE1( RES_1_10 , 10, "Reserverd"                         ), \
+	FEATURE1( RES_1_10 , 10, "Reserved"                          ), \
 	FEATURE1( SEP      , 11, "SYSENTER avail."                   ), \
 	FEATURE1( MTRR     , 12, "Mem. Type Range Regs"              ), \
 	FEATURE1( PGE      , 13, "PTE Global Bit"                    ), \
@@ -52,7 +52,8 @@
 	FEATURE1( PAT      , 16, "Page Attribute Table"              ), \
 	FEATURE1( PSE36    , 17, "Page Size Extention"               ), \
 	FEATURE1( PSN      , 18, "Processor Serial Number"           ), \
-	FEATURE1( CFLSH    , 19, "CFLUSH avail."                     ), \
+	FEATURE1( CLFSH    , 19, "CLFLUSH avail."                    ), \
+	FEATURE1( RES_1_20 , 20, "Reserved"                          ), \
 	FEATURE1( DS       , 21, "Debug Store"                       ), \
 	FEATURE1( ACPI     , 22, "Thermal Monitoring and Clock Ctrl" ), \
 	FEATURE1( MMX      , 23, "MMX Technology"                    ), \
@@ -75,7 +76,7 @@
 	FEATURE2( TM2      ,  8, "Thermal Monitor 2"                 ), \
 	FEATURE2( SSSE3    ,  9, "Supplemental SSE3 Extentions"      ), \
 	FEATURE2( CNXTID   , 10, "L1 Cache Context switch avail."    ), \
-	FEATURE2( RES_2_11 , 11, "Reserverd"                         ), \
+	FEATURE2( RES_2_11 , 11, "Reserved"                          ), \
 	FEATURE2( FMA      , 12, "Fused Multiply Add Extension"      ), \
 	FEATURE2( CX16     , 13, "CMPXCHG16 avail."                  ), \
 	FEATURE2( XTPR     , 14, "xTPR Update Control"               ), \
@@ -106,7 +107,7 @@
 	FEATURE3( MIR_MCE  ,  7, "Machine Check Execptions, mirrored"), \
 	FEATURE3( MIR_CX8  ,  8, "CMPXCHG8 instruction, mirrored"    ), \
 	FEATURE3( MIR_APIC ,  9, "APIC on chip, mirrored"            ), \
-	FEATURE3( RES_3_10 , 10, "Reserverd"                         ), \
+	FEATURE3( RES_3_10 , 10, "Reserved"                          ), \
 	FEATURE3( SYSCALL  , 11, "SYSCALL avail."                    ), \
 	FEATURE3( MIR_MTRR , 12, "Mem. Type Range Regs, mirrored"    ), \
 	FEATURE3( MIR_PGE  , 13, "PTE Global Bit, mirrored"          ), \
@@ -114,16 +115,17 @@
 	FEATURE3( MIR_CMOV , 15, "CMOV avail., mirrored"             ), \
 	FEATURE3( MIR_PAT  , 16, "Page Attribute Table, mirrored"    ), \
 	FEATURE3( MIR_PSE36, 17, "Page Size Extention, mirrored"     ), \
-	FEATURE3( RES_3_18 , 18, "Reserverd"                         ), \
+	FEATURE3( RES_3_18 , 18, "Reserved"                          ), \
 	FEATURE3( MP       , 19, "MP Capable"                        ), \
 	FEATURE3( NX       , 20, "Execute Disable"                   ), \
-	FEATURE3( RES_3_21 , 21, "Reserverd"                         ), \
+	FEATURE3( RES_3_21 , 21, "Reserved"                          ), \
 	FEATURE3( MMXEXT   , 22, "MMX Technology Extensions"         ), \
 	FEATURE3( MIR_MMX  , 23, "MMX Technology, mirrored"          ), \
 	FEATURE3( MIR_FXSR , 24, "FXSAVE avail., mirrored"           ), \
 	FEATURE3( FFXSR    , 25, "FXSAVE optimizations"              ), \
 	FEATURE3( PAGE1GB  , 26, "1 Giga byte pages supported"       ), \
 	FEATURE3( RDTSCP   , 27, "RDTSCP avail."                     ), \
+	FEATURE3( RES_3_28 , 28, "Reserved"                          ), \
 	FEATURE3( LM       , 29, "Longmode, 64Bit avail."            ), \
 	FEATURE3( 3DNOWEXT , 30, "3DNow! Extended supported"         ), \
 	FEATURE3( 3DNOW    , 31, "3DNow! supported"                  ), \

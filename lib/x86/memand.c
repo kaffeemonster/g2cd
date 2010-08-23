@@ -76,18 +76,22 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 #include "memand_tmpl.c"
 #undef HAVE_3DNOW
 
-#define HAVE_SSE3
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
+#  define HAVE_SSE3
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3
 static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memand_tmpl.c"
+#  include "memand_tmpl.c"
 
-#define HAVE_3DNOW
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3_3DNOW
+#  define HAVE_3DNOW
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3_3DNOW
 static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memand_tmpl.c"
-#undef HAVE_3DNOW
+#  include "memand_tmpl.c"
+#  undef HAVE_3DNOW
+# endif
+#endif
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -109,10 +113,17 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))memand_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
 # endif
 #endif
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))memand_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memand_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memand_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
+# endif
+#endif
+	{.func = (void (*)(void))memand_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memand_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memand_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))memand_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnowprf_callback},
 	{.func = (void (*)(void))memand_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
 	{.func = (void (*)(void))memand_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
 #ifndef __x86_64__
