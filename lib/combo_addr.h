@@ -167,6 +167,7 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t cnt);
 int inet_pton(int af, const char *src, void *dst);
 # endif
 char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt) GCC_ATTR_VIS("hidden");
+char *inet_ntop_c_rev(int af, const void *src, char *dst) GCC_ATTR_VIS("hidden");
 
 /*
  * Comboaddress to represent IPv4 & IPv6
@@ -288,6 +289,14 @@ static inline char *combo_addr_print_c(const union combo_addr *src, char *dst, s
 		likely(AF_INET == src->s.fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
 		dst, cnt);
 }
+
+static inline char *combo_addr_print_c_rev(const union combo_addr *src, char *dst)
+{
+	return inet_ntop_c_rev(src->s.fam,
+		likely(AF_INET == src->s.fam) ? (const void *)&src->in.sin_addr : (const void *)&src->in6.sin6_addr,
+		dst);
+}
+
 
 static inline int combo_addr_read(const char *src, union combo_addr *dst)
 {

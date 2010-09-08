@@ -55,7 +55,6 @@
 #include <errno.h>
 #include "other.h"
 #include "combo_addr.h"
-#include "itoa.h"
 
 #ifndef str_size
 # define str_size(x)       (sizeof(x) - 1)
@@ -111,33 +110,39 @@ static char *strcpyreverse_l(char *dst, const char *begin, const char *end)
 	return dst;
 }
 
-static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
+static char *print_ipv4_c_rev(const struct in_addr *src, char *dst)
 {
 	union {
 		uint32_t a;
 		unsigned char c[4];
 	} u;
+	int i;
+
+	u.a = src->s_addr;
+	for(i = 4; i--;) {
+		dst = put_dec_8bit(dst, u.c[i]);
+		*dst++ = '.';
+	}
+	return dst - 1;
+}
+
+static char *print_ipv4_c(const struct in_addr *src, char *dst, socklen_t cnt)
+{
 	char tbuf[sizeof("000.000.000.000") + 1];
 	char *wptr;
-	int i;
 
 	if(unlikely(sizeof("1.1.1.1") > (size_t)cnt)) {
 		errno = ENOSPC;
 		return NULL;
 	}
 
-	u.a = src->s_addr;
-	wptr = tbuf;
-	*wptr++ = '\0';
-	for(i = 4; i--;) {
-		wptr = put_dec_8bit(wptr, u.c[i]);
-		*wptr++ = '.';
-	}
+	tbuf[0] = '\0';
+	wptr = print_ipv4_c_rev(src, tbuf + 1);
 	if((socklen_t)(wptr - tbuf) > cnt) {
 		errno = ENOSPC;
 		return NULL;
 	}
-	return strcpyreverse_l(dst, tbuf, wptr - 2) - 1;
+	return strcpyreverse_l(dst, tbuf, wptr - 1) - 1;
 }
 
 static const char *print_ipv4(const struct in_addr *src, char *dst, socklen_t cnt)
@@ -148,31 +153,20 @@ static const char *print_ipv4(const struct in_addr *src, char *dst, socklen_t cn
 	return NULL;
 }
 
-static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
+static char *print_ipv6_c_rev(const struct in6_addr *src, char *dst)
 {
-	char *wptr;
 	struct { int start, len; } cur = {-1, -1}, best = {0, 0};
-	char tbuf[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")];
 	int i;
 
-	if(unlikely((str_size("::1")) > (size_t)cnt)) {
-		errno = ENOSPC;
-		return NULL;
-	}
-
 	if(unlikely(IN6_IS_ADDR_V4MAPPED(src))) {
-		if(unlikely((str_size("::ffff:1.1.1.1")) > (size_t)cnt)) {
-			errno = ENOSPC;
-			return NULL;
-		}
-		return print_ipv4_c((const struct in_addr *)&src->s6_addr32[3],
-		                    strplitcpy(dst, "::ffff:"), cnt - str_size("::ffff:"));
+		dst = print_ipv4_c_rev((const struct in_addr *)&src->s6_addr32[3], dst);
+		return strplitcpy(dst, ":ffff::");
 	}
 
 	/* find run of zeros */
 	for(i = 0; i < INET6_ADDRLEN/2; i++)
 	{
-		uint16_t a_word = src->s6_addr[i * 2] | (src->s6_addr[i * 2 + 1] << 8);
+		uint16_t a_word = get_unaligned_be16(&src->s6_addr[i * 2]);
 		if(!a_word) {
 			if(-1 == cur.start)
 				cur.start = i, cur.len = 1;
@@ -196,29 +190,55 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 		best.start = -1;
 
 	/* print it */
-	for(i = 0, wptr = tbuf; i < INET6_ADDRLEN/2; i++)
+	if(-1 != best.start && INET6_ADDRLEN/2 == (best.start + best.len))
+		*dst++ = ':';
+	for(i = INET6_ADDRLEN/2; i--;)
 	{
 		uint16_t a_word;
 		if(-1 != best.start &&
 		   i >= best.start &&
 		   i < (best.start + best.len)) {
 			if(i == best.start)
-				*wptr++ = ':';
+				*dst++ = ':';
 			continue;
 		}
+		a_word = get_unaligned_be16(&src->s6_addr[i * 2]);
+		do {
+			*dst++ = "0123456789abcdefghijkl"[a_word % 16];
+			a_word /= 16;
+		} while(a_word);
 		if(i)
-			*wptr++ = ':';
-		a_word = src->s6_addr[i * 2] | (src->s6_addr[i * 2 + 1] << 8);
-		wptr = ustoxa(wptr, htons(a_word));
+			*dst++ = ':';
 	}
-	if(-1 != best.start && INET6_ADDRLEN/2 == (best.start + best.len))
-		*wptr++ = ':';
-	*wptr++ = '\0';
+	return dst;
+}
+
+static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
+{
+	char *wptr;
+	char tbuf[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")];
+
+	if(unlikely((str_size("::1")) > (size_t)cnt)) {
+		errno = ENOSPC;
+		return NULL;
+	}
+
+	if(unlikely(IN6_IS_ADDR_V4MAPPED(src))) {
+		if(unlikely((str_size("::ffff:1.1.1.1")) > (size_t)cnt)) {
+			errno = ENOSPC;
+			return NULL;
+		}
+		return print_ipv4_c((const struct in_addr *)&src->s6_addr32[3],
+		                    strplitcpy(dst, "::ffff:"), cnt - str_size("::ffff:"));
+	}
+
+	tbuf[0] = '\0';
+	wptr = print_ipv6_c_rev(src, tbuf + 1);
 	if((socklen_t)(wptr - tbuf) > cnt) {
 		errno = ENOSPC;
 		return NULL;
 	}
-	return (char *)my_mempcpy(dst, tbuf, wptr - tbuf) - 1;
+	return strcpyreverse_l(dst, tbuf, wptr - 1) - 1;
 }
 
 static const char *print_ipv6(const struct in6_addr *src, char *dst, socklen_t cnt)
@@ -247,6 +267,17 @@ char *inet_ntop_c(int af, const void *src, char *dst, socklen_t cnt)
 		return print_ipv4_c(src, dst, cnt);
 	else if(AF_INET6 == af)
 		return print_ipv6_c(src, dst, cnt);
+	errno = EAFNOSUPPORT;
+	return NULL;
+}
+
+char *inet_ntop_c_rev(int af, const void *src, char *dst)
+{
+// TODO: change when IPv6 is famous
+	if(likely(AF_INET == af))
+		return print_ipv4_c_rev(src, dst);
+	else if(AF_INET6 == af)
+		return print_ipv6_c_rev(src, dst);
 	errno = EAFNOSUPPORT;
 	return NULL;
 }

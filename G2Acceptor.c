@@ -1130,21 +1130,24 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 				if(khl_num)
 				{
+					char *cp_ret_st;
 					cp_ret = strplitcpy(buffer_start(*to_con->send), X_TRY_HUB_KEY ": ");
+					cp_ret_st = cp_ret;
 					while(khl_num--)
 					{
+						*cp_ret++ = ' ';
+						*cp_ret++ = ',';
+						cp_ret += print_ts_rev(cp_ret, 20, &khl_e[khl_num].when);
+						*cp_ret++ = ' ';
+						cp_ret = put_dec_trunc(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
+						*cp_ret++ = ':';
 						if(AF_INET6 == khl_e[khl_num].na.s.fam)
 							*cp_ret++ = '[';
-						cp_ret = combo_addr_print_c(&khl_e[khl_num].na, cp_ret, INET6_ADDRSTRLEN);
+						cp_ret = combo_addr_print_c_rev(&khl_e[khl_num].na, cp_ret);
 						if(AF_INET6 == khl_e[khl_num].na.s.fam)
 							*cp_ret++ = ']';
-						*cp_ret++ = ':';
-						cp_ret = ustoa_trunc(cp_ret, ntohs(combo_addr_port(&khl_e[khl_num].na)));
-						*cp_ret++ = ' ';
-						cp_ret += print_ts(cp_ret, 20, &khl_e[khl_num].when);
-						*cp_ret++ = ',';
-						*cp_ret++ = ' ';
 					}
+					strreverse_l(cp_ret_st, cp_ret - 1);
 					cp_ret -= 2;
 					*cp_ret++ = '\r'; *cp_ret++ = '\n';
 					to_con->send->pos += cp_ret - buffer_start(*to_con->send);

@@ -83,6 +83,7 @@
  * WARNING: does not obey n ATM
  */
 size_t print_ts(char *buf, size_t n, const time_t *t);
+size_t print_ts_rev(char *buf, size_t n, const time_t *t);
 
 /*
  * print_lts: print a timestamp to a buffer in the format
@@ -252,48 +253,7 @@ static noinline GCC_ATTR_FASTCALL char *put_dec_8bit_2fix(char *buf, unsigned q)
 	return buf;
 }
 
-static void strreverse_l(char *begin, char *end)
-{
-	char tchar;
-
-	if(sizeof(size_t) > 4)
-	{
-		for(; unlikely(end - 15 > begin); end -= 8, begin += 8)
-		{
-			uint64_t tll1 = get_unaligned((uint64_t *)(end - 7));
-			uint64_t tll2 = get_unaligned((uint64_t *)begin);
-			tll1 = __swab64(tll1);
-			tll2 = __swab64(tll2);
-			put_unaligned(tll1, (uint64_t *)begin);
-			put_unaligned(tll2, (uint64_t *)(end - 7));
-		}
-	}
-	for(; end - 7 > begin; end -= 4, begin += 4)
-	{
-		uint32_t tl1 = get_unaligned((uint32_t *)(end - 3));
-		uint32_t tl2 = get_unaligned((uint32_t *)begin);
-		tl1 = __swab32(tl1);
-		tl2 = __swab32(tl2);
-		put_unaligned(tl1, (uint32_t *)begin);
-		put_unaligned(tl2, (uint32_t *)(end - 3));
-	}
-	if(end - 3 > begin)
-	{
-		uint16_t t1 = get_unaligned((uint16_t *)(end - 1));
-		uint16_t t2 = get_unaligned((uint16_t *)begin);
-		t1 = __swab16(t1);
-		t2 = __swab16(t2);
-		put_unaligned(t1, (uint16_t *)begin);
-		put_unaligned(t2, (uint16_t *)(end - 1));
-		end   -= 2;
-		begin += 2;
-	}
-
-	while(end > begin)
-		tchar = *end, *end-- = *begin, *begin++ = tchar;
-}
-
-size_t print_ts(char *buf, size_t n, const time_t *t)
+size_t print_ts_rev(char *buf, size_t n, const time_t *t)
 {
 	struct dfields f;
 	char *wptr;
@@ -302,7 +262,6 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 		return 0;
 
 	wptr = buf;
-	*wptr++ = '\0';
 	*wptr++ = 'Z';
 	wptr = put_dec_8bit_2fix(wptr, f.minute);
 	*wptr++ = ':';
@@ -313,8 +272,19 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 	wptr = put_dec_8bit_2fix(wptr, f.month);
 	*wptr++ = '-';
 	wptr = put_dec_trunc(wptr, f.year); /* will keep us afloat till 99,999 */
-	strreverse_l(buf, wptr - 1);
-	return (wptr - 1) - buf;
+	return wptr - buf;
+}
+
+size_t print_ts(char *buf, size_t n, const time_t *t)
+{
+	size_t res;
+
+	res = print_ts_rev(buf + 1, n, t);
+	if(res) {
+		buf[0] = '\0';
+		strreverse_l(buf, buf + res--);
+	}
+	return res;
 }
 
 size_t print_lts(char *buf, size_t n, const time_t *t)

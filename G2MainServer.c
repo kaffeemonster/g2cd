@@ -83,6 +83,9 @@
 #else
 # define DAVE_NULL "/dev/null"
 #endif
+#ifndef O_BINARY
+# define O_BINARY 0
+#endif
 
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
@@ -1033,7 +1036,7 @@ static void init_prng(void)
 	 * HQ (and prop. slow, some bytes a sec...) someone will be angry
 	 * we eat 4k of best entropy.
 	 */
-	fin = open(server.settings.entropy_source, O_RDONLY|O_NOCTTY);
+	fin = open(server.settings.entropy_source, O_RDONLY|O_NOCTTY|O_BINARY);
 	if(0 > fin) {
 		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
 		            server.settings.entropy_source);

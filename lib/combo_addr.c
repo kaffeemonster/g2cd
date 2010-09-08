@@ -253,6 +253,7 @@ bool combo_addr_is_public(const union combo_addr *addr)
 		return false;
 	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
 		return false;
+	/* APNIC provided documentation prefixes */
 	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
 		return false;
 	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
@@ -318,6 +319,7 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 		return true; /* only sinks, not source */
 	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
 		return true;
+	/* APNIC provided documentation prefixes */
 	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
 		return true;
 	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */

@@ -236,6 +236,9 @@ STRNPCPYSRC = \
 	$(MPL)/generic/strnpcpy.c \
 	$(MPL)/x86/strnpcpy.c \
 	$(MPL)/ppc/strnpcpy.c
+STRREVERSE_LSRC = \
+	$(MPL)/generic/strreverse_l.c \
+	$(MPL)/x86/strreverse_l.c
 TO_BASE16SRC = \
 	$(MPL)/generic/to_base16.c \
 	$(MPL)/arm/to_base16.c \
@@ -299,6 +302,7 @@ LIBASRCS = \
 	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
+	$(STRREVERSE_LSRC) \
 	$(TO_BASE16SRC) \
 	$(TO_BASE32SRC) \
 	$(TSTRLENSRC) \
@@ -350,6 +354,7 @@ LIBSRCS = \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
 	$(MPL)/strnpcpy.c \
+	$(MPL)/strreverse_l.c \
 	$(MPL)/to_base16.c \
 	$(MPL)/to_base32.c \
 	$(MPL)/tstrlen.c \
@@ -383,6 +388,7 @@ BITOPOBJS = \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
 	$(MPL)/strnpcpy.o \
+	$(MPL)/strreverse_l.o\
 	$(MPL)/to_base16.o \
 	$(MPL)/to_base32.o \
 	$(MPL)/my_bitops.o
@@ -500,6 +506,7 @@ $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
+$(MPL)/strreverse_l.o: $(STRREVERSE_LSRC)
 $(MPL)/to_base16.o: $(TO_BASE16SRC)
 $(MPL)/to_base32.o: $(TO_BASE32SRC)
 $(MPL)/tstrlen.o: $(TSTRLENSRC)
@@ -515,7 +522,7 @@ $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/guid.o: $(MPL)/guid.h $(MPL)/aes.h $(MPL)/ansi_prng.h $(MPL)/hthash.h
-$(MPL)/inet_ntop.o: $(MPL)/combo_addr.h $(MPL)/itoa.h
+$(MPL)/inet_ntop.o: $(MPL)/combo_addr.h
 $(MPL)/inet_pton.o: $(MPL)/combo_addr.h
 $(MPL)/combo_addr.o: $(MPL)/combo_addr.h $(MPL)/other.h $(MPL)/hthash.h
 $(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h

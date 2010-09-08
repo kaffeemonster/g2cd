@@ -100,6 +100,8 @@ static inline void strreverse(char *begin, char *end)
 		tchar = *end, *end-- = *begin, *begin++ = tchar;
 }
 
+LIB_MY_BITOPS_EXTRN(void strreverse_l(char *begin, char *end));
+
 static inline char *strcpyreverse(char *dst, const char *begin, const char *end)
 {
 	while(end >= begin)
