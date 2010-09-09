@@ -151,7 +151,7 @@ static always_inline long leaps_thru_end_of(long year)
 struct dfields
 {
 	unsigned long year;
-	unsigned short month, day, hour, minute, seconds;
+	unsigned month, day, hour, minute, seconds;
 };
 
 static noinline bool calc_dfields(struct dfields *f, const time_t *t)
@@ -170,11 +170,11 @@ static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 	 * situation.
 	 * And needs an overhaul if years turn 5 digits
 	 */
-	if(unlikely(*t < 0 || *t / SECONDS_PER_DAY > LONG_MAX))
+	if(unlikely(*t < 0 || (unsigned long)*t / SECONDS_PER_DAY > LONG_MAX))
 		return false;
 
-	tdays      =  *t / SECONDS_PER_DAY;
-	rem        =  *t % SECONDS_PER_DAY;
+	tdays      = (unsigned long)*t / SECONDS_PER_DAY;
+	rem        = (unsigned long)*t % SECONDS_PER_DAY;
 	f->hour    = rem / SECONDS_PER_HOUR;
 	rem        = rem % SECONDS_PER_HOUR;
 	f->minute  = rem / SECONDS_PER_MIN;

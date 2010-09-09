@@ -190,6 +190,7 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 			"ldrex	%0, %4\n\t"
 			"mov	%1, #0\n\t"
 			"teq	%0, %3\n\t"
+			"it	eq\n\t"
 			"strexeq	%1, %5, %4\n\t"
 			: /* %0 */ "=&r" (prev),
 			/* gcc < 3 needs this, "+m" will not work reliable */
@@ -214,6 +215,7 @@ static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr
 			"ldrex	%0, %4\n\t"
 			"mov	%1, #0\n\t"
 			"teq	%0, %3\n\t"
+			"it	eq\n\t"
 			"strexeq	%1, %5, %4\n\t"
 			: /* %0 */ "=&r" (prev),
 			/* gcc < 3 needs this, "+m" will not work reliable */

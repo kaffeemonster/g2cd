@@ -66,6 +66,6 @@ size_t strlen(const char *s)
 
 static char const rcsid_slar[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../genric/strlen.c"
+# include "../generic/strlen.c"
 #endif
 /* EOF */

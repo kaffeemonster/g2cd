@@ -43,6 +43,8 @@
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/strreverse_l.c"
+# elif defined(__arm__)
+#  include "arm/strreverse_l.c"
 # else
 #  include "generic/strreverse_l.c"
 # endif

@@ -66,6 +66,6 @@ size_t tstrlen(const tchar_t *s)
 
 static char const rcsid_tslar[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../genric/tstrlen.c"
+# include "../generic/tstrlen.c"
 #endif
 /* EOF */
