@@ -152,6 +152,7 @@ static int read_ipv6(const char *src, struct in6_addr *dst)
 		{
 			if(0 > zero_point)
 				return 0;
+// TODO: Does this work with BEHAVE/96 addresses like with MAPPED?
 			if((tbuf + (INET6_ADDRLEN/2)) - (tbuf + hextets) >= 4)
 			{
 				int ret_val = read_ipv4(src, (struct in_addr *)&tbuf[hextets]);

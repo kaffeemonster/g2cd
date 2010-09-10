@@ -129,12 +129,44 @@ struct sockaddr_in6
 	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
 # endif /* HAVE_IPV6 */
 
+/* official documentation prefix */
 # define IN6_IS_ADDR_DOCU(a) \
 	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
+/*
+ * instead to test for fc::/7 it's faster to fest for both
+ * possible vals, fc::/8 && fd::/8
+ */
 # define IN6_IS_ADDR_UNIQUELOCAL_A(a) \
 	(((const uint8_t *)(a))[0] == 0xfc)
 # define IN6_IS_ADDR_UNIQUELOCAL_B(a) \
 	(((const uint8_t *)(a))[0] == 0xfd)
+/* IPv6 Benchmark net RFC5180 */
+# define IN6_IS_ADDR_BMWG(a) \
+	 (((const uint32_t *)(a))[0] == htonl(0x20010002) && \
+	 (((const uint32_t *)(a))[1] &  htonl(0xFFFF0000)) == 0)
+/*
+ * ORCHID RFC4843, assigned till 2014
+ * Some wonky non routable, but still valid IPv6 addr.
+ * Like a hash to uniquely identify a host. Applications
+ * can pass it into the socket API, as identifier to
+ * magically address and reach the other end. But both
+ * ends first have to agree on some kind of mapping,
+ * so when we get such an address passed (like as an
+ * KHL), we can do nothing with it, it is not reachable
+ * on the pure IP level.
+ */
+# define IN6_IS_ADDR_ORCHID(a) \
+	((((const uint32_t *)(a))[0] & htonl(0xFFFFFFF0)) == htonl(0x20010010))
+/*
+ * well known prefix for BEHAVE draft
+ * There can/will be provider specific prefixes for
+ * BEHAVE translation, which would need similar
+ * treatment...
+ */
+# define IN6_IS_ADDR_V4BEHAVE(a) \
+	((((const uint32_t *)(a))[0] == 0) && \
+	 (((const uint32_t *)(a))[1] == 0) && \
+	 (((const uint32_t *)(a))[2] == htonl(0x0064FF9B)))
 
 # if HAVE_DECL_INET6_ADDRSTRLEN != 1
 /*

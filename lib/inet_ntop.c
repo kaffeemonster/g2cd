@@ -223,6 +223,7 @@ static char *print_ipv6_c(const struct in6_addr *src, char *dst, socklen_t cnt)
 		return NULL;
 	}
 
+// TODO: handle BEHAVE prefix same as MAPPED
 	if(unlikely(IN6_IS_ADDR_V4MAPPED(src))) {
 		if(unlikely((str_size("::ffff:1.1.1.1")) > (size_t)cnt)) {
 			errno = ENOSPC;

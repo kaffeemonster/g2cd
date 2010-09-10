@@ -168,6 +168,7 @@ uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
 # define SLASH15 htonl(0xFFFE0000)
 # define SLASH16 htonl(0xFFFF0000)
 # define SLASH24 htonl(0xFFFFFF00)
+# define SLASH28 htonl(0xFFFFFFF0)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
 
@@ -210,9 +211,17 @@ bool combo_addr_is_public(const union combo_addr *addr)
 			return false;
 		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return false;
+		if(unlikely(IN6_IS_ADDR_BMWG(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_ORCHID(a6)))
+			return false;
+		/* the compat range (::0/96) is deprecated,
+		 * do not talk to it till it gets reassigned */
+		if(IN6_IS_ADDR_V4COMPAT(a6))
+			return false;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
-		   IN6_IS_ADDR_V4COMPAT(a6))
+		   IN6_IS_ADDR_V4BEHAVE(a6))
 			a = a6->s6_addr32[3];
 		else
 			goto out;
@@ -284,9 +293,17 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 			return true;
 		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return true;
+		if(unlikely(IN6_IS_ADDR_BMWG(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_ORCHID(a6)))
+			return false;
+		/* the compat range (::0/96) is deprecated,
+		 * do not talk to it till it gets reassigned */
+		if(IN6_IS_ADDR_V4COMPAT(a6))
+			return false;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
-		   IN6_IS_ADDR_V4COMPAT(a6))
+		   IN6_IS_ADDR_V4BEHAVE(a6))
 			a = a6->s6_addr32[3];
 		else
 			goto out;
