@@ -26,6 +26,9 @@
 #include "x86_features.h"
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+static size_t mempopcnt_AVX(const void *s, size_t len);
+# endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__)
 static size_t mempopcnt_SSE4A(const void *s, size_t len);
 # endif
@@ -55,6 +58,8 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 #endif
 #define CSA_SETUP 1
 
+static const uint8_t lut_st[16] GCC_ATTR_ALIGNED(16) =
+	{0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
 static const uint8_t reg_num_mask[16] GCC_ATTR_ALIGNED(16) =
 		{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
 static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
@@ -67,11 +72,317 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 	{0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff}
 };
 
-//TODO: write AVX/XOP version
 //TODO: pimp for 64 bit (more regs)
 //TODO: using popcnt && SSE parallel?
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+static size_t mempopcnt_AVX(const void *s, size_t len)
+{
+	size_t ret, cnt1, cnt2;
+
+//TODO: does this work?
+	asm(
+		"prefetchnta	(%3)\n\t"
+		"prefetchnta	0x20(%3)\n\t"
+		"prefetchnta	0x70(%3)\n\t"
+		"movdqa	%5, %%xmm7\n\t" /*  */
+		"movdqa	32+%8, %%xmm6\n\t" /* 0x0f0f0f0f0f */
+		"pxor	%%xmm5, %%xmm5\n\t"
+		"movdqa	%7, %%xmm1\n\t"
+		"mov	$16, %0\n\t"
+		"mov	%3, %1\n\t"
+		"and	$-16, %3\n\t"
+		"movdqa	(%3), %%xmm0\n\t"
+		"sub	%3, %1\n\t"
+		"sub	%1, %0\n\t"
+		"imul	$0x01010101, %1\n\t"
+		"movd	%1, %%xmm2\n\t"
+		"mov	%6, %1\n\t"
+		"pshufd	$0, %%xmm2, %%xmm2\n\t"
+		"pcmpgtb	%%xmm2, %%xmm1\n\t"
+		"pand	%%xmm1, %%xmm0\n\t"
+		"sub	%0, %1\n\t"
+		"mov	%1, %0\n\t"
+		"jbe	9f\n\t"
+		"shr	$5, %1\n"
+		"jz	7f\n\t"
+		"add	$16, %3\n\t"
+		"call	ssse3_full_popcnt\n\t"
+#  if CSA_SETUP == 1
+/*=======================*/
+		"test	$31, %3\n\t"
+		"jz	12f\n\t"
+		"movdqa	(%3), %%xmm0\n\t"
+		"add	$16, %3\n\t"
+		"sub	$16, %0\n\t"
+		"mov	%0, %1\n\t"
+		"call	ssse3_full_popcnt\n\t"
+		"shr	$5, %1\n\t"
+		"jz	7f\n"
+		"12:\n\t"
+		"cmp	$8, %1\n\t"
+		"jb	1f\n\t"
+		"push	%0\n\t"
+		"sub	$(32+16), "SP"\n\t"
+		"lea	15("SP"), %0\n\t"
+		"and	$-16, %0\n\t"
+		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"
+		"vmovdqu	%%xmm5, 16+16("SP")\n\t"
+		"vpcmpeqd	%%xmm1, %%xmm1, %%xmm1\n\t"
+		"vinsertf128	$1, %%xmm1, %%ymm1, %%ymm1\n\t"
+		"vmovdqa	%%ymm1, %%ymm3\n\t"
+		"vmovdqa	%%ymm1, %%ymm5\n\t"
+/*************************/
+		"11:\n\t"
+		"vmovdqa	%%xmm7, (%0)\n\t"
+		"mov	$124, %2\n\t"
+		"cmp	%2, %1\n\t"
+		"cmovb	%1, %2\n\t"
+		"and	$-8, %2\n\t"
+		"sub	%2, %1\n\t"
+		"shr	$3, %2\n\t"
+		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"
+		".p2align 2\n"
+		"33:\n\t"
+/*&&&&&&&&&&&&&&&&&&&&&*/
+		"vmovdqa	(%3), %%ymm6\n\t"
+		"vxorpd	%%ymm6, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm6, %%ymm6\n\t"
+		"vmovdqa	32(%3), %%ymm0\n\t"
+		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
+		"vorpd	%%ymm0, %%ymm6, %%ymm6\n\t"
+		"vmovdqa	64(%3), %%ymm4\n\t"
+		"vxorpd	%%ymm4, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm4, %%ymm4\n\t"
+		"vmovdqa	96(%3), %%ymm0\n\t"
+		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
+		"vorpd	%%ymm0, %%ymm4, %%ymm4\n\t"
+
+		"vxorpd	%%ymm6, %%ymm3, %%ymm3\n\t"
+		"vandpd	%%ymm3, %%ymm6, %%ymm6\n\t"
+		"vxorpd	%%ymm4, %%ymm3, %%ymm3\n\t"
+		"vandpd	%%ymm3, %%ymm4, %%ymm4\n\t"
+		"vorpd	%%ymm4, %%ymm6, %%ymm6\n\t"
+
+		"vmovdqa	128(%3), %%ymm2\n\t"
+		"vxorpd	%%ymm2, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm2, %%ymm2\n\t"
+		"vmovdqa	160(%3), %%ymm0\n\t"
+		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
+		"vorpd	%%ymm0, %%ymm2, %%ymm2\n\t"
+		"vmovdqa	192(%3), %%ymm0\n\t"
+		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
+		"vmovdqa	224(%3), %%ymm4\n\t"
+		"vxorpd	%%ymm4, %%ymm1, %%ymm1\n\t"
+		"vandpd	%%ymm1, %%ymm4, %%ymm4\n\t"
+		"vorpd	%%ymm4, %%ymm0, %%ymm0\n\t"
+
+		"add	$256, %3\n\t"
+		"prefetchnta	0x70(%3)\n\t"
+		"vbroadcastf128	32+%8, %%ymm4\n\t" /* 0x0f0f0f0f0f */
+
+		"vxorpd	%%ymm2, %%ymm3, %%ymm3\n\t"
+		"vandpd	%%ymm3, %%ymm2, %%ymm2\n\t"
+		"vxorpd	%%ymm0, %%ymm3, %%ymm3\n\t"
+		"vandpd	%%ymm3, %%ymm0, %%ymm0\n\t"
+		"vorpd	%%ymm0, %%ymm2, %%ymm2\n\t"
+
+		"vxorpd	%%ymm6, %%ymm5, %%ymm5\n\t"
+		"vandpd	%%ymm5, %%ymm6, %%ymm6\n\t"
+		"vxorpd	%%ymm2, %%ymm5, %%ymm5\n\t"
+		"vandpd	%%ymm5, %%ymm2, %%ymm2\n\t"
+		"vorpd	%%ymm2, %%ymm6, %%ymm6\n\t"
+
+		"dec	%2\n\t"
+
+		"vmovdqa	%5, %%xmm2\n\t" /*  */
+
+		"vandpd	%%ymm4, %%ymm6, %%ymm0\n\t"
+		"vandnpd	%%ymm4, %%ymm6, %%ymm6\n\t"
+		"vpshufb	%%xmm2, %%xmm0, %%xmm4\n\t"
+		"vextractf128	$1, %%ymm0, %%xmm0\n\t"
+		"vpshufb	%%xmm2, %%xmm0, %%xmm0\n\t"
+		"vpaddb	%%xmm4, %%xmm7, %%xmm7\n\t"
+		"vpaddb	%%xmm0, %%xmm7, %%xmm7\n\t"
+
+		"vpsrlw	$4, %%xmm6, %%xmm4\n\t"
+		"vextractf128	$1, %%ymm6, %%xmm6\n\t"
+		"vpsrlw	$4, %%xmm6, %%xmm6\n\t"
+		"vpshufb	%%xmm2, %%xmm4, %%xmm0\n\t"
+		"vpshufb	%%xmm2, %%xmm6, %%xmm4\n\t"
+		"vpaddb	%%xmm0, %%xmm7, %%xmm7\n\t"
+		"vpaddb	%%xmm4, %%xmm7, %%xmm7\n\t"
+		"jnz	33b\n\t"
+/*&&&&&&&&&&&&&&&&&&&&*/
+		"vmovdqa	(%0), %%xmm6\n\t"
+		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"vpsadbw	%%xmm0, %%xmm7, %%xmm7\n\t"
+		"vpaddq	%%xmm6, %%xmm7, %%xmm7\n\t"
+		"cmp	$8, %1\n\t"
+		"jae	11b\n\t"
+/*************************/
+#   ifdef __ELF__
+		".subsection 2\n\t"
+#   else
+		"jmp	99f\n\t"
+#   endif
+		".p2align 2\n"
+		"avx_wrap:\n\t"
+		"vandpd	%%ymm4, %%ymm5, %%ymm0\n\t"
+		"vandnpd	%%ymm4, %%ymm5, %%ymm2\n\t"
+		"vpshufb	%%xmm6, %%xmm0, %%xmm5\n\t"
+		"vextractf128	$1, %%ymm0, %%xmm0\n\t"
+		"vpshufb	%%xmm6, %%xmm0, %%xmm0\n\t"
+		"vpaddb	%%xmm0, %%xmm5, %%xmm5\n\t"
+
+		"vpsrlw	$4, %%xmm2, %%xmm0\n\t"
+		"vextractf128	$1, %%ymm2, %%xmm2\n\t"
+		"vpsrlw	$4, %%xmm2, %%xmm2\n\t"
+		"vpshufb	%%xmm6, %%xmm0, %%xmm0\n\t"
+		"vpshufb	%%xmm6, %%xmm2, %%xmm2\n\t"
+		"vpaddb	%%xmm0, %%xmm5, %%xmm5\n\t"
+		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"vpaddb	%%xmm2, %%xmm5, %%xmm5\n\t"
+		"vpsadbw	%%xmm0, %%xmm5, %%xmm5\n\t"
+		"ret\n\t"
+#   ifdef __ELF__
+		".previous\n\t"
+#   else
+		"99:\n\t"
+#   endif
+		"vmovdqa	%%xmm2, %%xmm6\n\t"
+		"vbroadcastf128	32+%8, %%ymm4\n\t" /* 0x0f0f0f0f0f */
+		"call	avx_wrap\n\t"
+		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
+		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
+		"vmovdqa	%%ymm3, %%ymm5\n\t"
+		"vbroadcastf128	32+%8, %%ymm3\n\t" /* 0x0f0f0f0f0f */
+		"vmovdqa	%%ymm3, %%ymm4\n\t"
+		"call	avx_wrap\n\t"
+		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
+		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
+		"vmovdqa	%%ymm1, %%ymm5\n\t"
+		"vmovdqa	%%ymm3, %%ymm4\n\t"
+		"call	avx_wrap\n\t"
+		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
+		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
+		"vmovdqa	64+%8, %%xmm2\n\t"
+//TODO: This needs another constant
+		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
+		/* twice as much bits, twice the constant??? */
+		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
+/*~~~~~~~~ cleanup ~~~~~~*/
+		"vmovdqu	16+16("SP"), %%xmm5\n\t"
+		"add	$(32+16), "SP"\n\t"
+		"pop	%0\n\t"
+		"test	%1, %1\n\t"
+		"vpaddq	%%xmm7, %%xmm5, %%xmm5\n\t"
+		"vmovdqa	%%xmm6, %%xmm7\n\t" /*  */
+		"vmovdqa	%%xmm3, %%xmm6\n\t" /* 0x0f0f0f0f0f */
+		"jz	5f\n\t"
+/*=======================*/
+#  endif
+		"1:\n\t"
+		"mov	$15, %2\n\t"
+		"cmp	%2, %1\n\t"
+		"cmovb	%1, %2\n\t"
+		"sub	%2, %1\n\t"
+		"pxor	%%xmm4, %%xmm4\n\t"
+		"2:\n\t"
+		"prefetchnta	0x70(%3)\n\t"
+		"movdqa	(%3), %%xmm0\n"
+		"movdqa	%%xmm6, %%xmm1\n\t"
+		"pandn	%%xmm0, %%xmm1\n\t"
+		"pand	%%xmm6, %%xmm0\n\t"
+		"psrlw	$4, %%xmm1\n\t"
+		"movdqa	%%xmm7, %%xmm3\n\t"
+		"movdqa	%%xmm7, %%xmm2\n\t"
+		"pshufb	%%xmm0, %%xmm3\n\t"
+		"movdqa	16(%3), %%xmm0\n\t"
+		"add	$32, %3\n\t"
+		"pshufb	%%xmm1, %%xmm2\n\t"
+		"movdqa	%%xmm6, %%xmm1\n\t"
+		"paddb	%%xmm3, %%xmm4\n\t"
+		"pandn	%%xmm0, %%xmm1\n\t"
+		"movdqa	%%xmm7, %%xmm3\n\t"
+		"paddb	%%xmm2, %%xmm4\n\t"
+		"movdqa	%%xmm7, %%xmm2\n\t"
+		"dec	%2\n\t"
+		"pand	%%xmm6, %%xmm0\n\t"
+		"psrlw	$4, %%xmm1\n\t"
+		"pshufb	%%xmm0, %%xmm3\n\t"
+		"pshufb	%%xmm1, %%xmm2\n\t"
+		"paddb	%%xmm3, %%xmm4\n\t"
+		"paddb	%%xmm2, %%xmm4\n\t"
+		"jnz	2b\n\t"
+		"pxor	%%xmm0, %%xmm0\n\t"
+		"psadbw	%%xmm0, %%xmm4\n\t"
+		"paddq %%xmm4, %%xmm5\n\t"
+		"test	%1, %1\n\t"
+		"jnz	1b\n\t"
+		"jmp	5f\n"
+		"7:\n\t"
+		"and	$31, %0\n\t"
+		"jz	4f\n\t"
+		"jmp	8f\n"
+		"9:\n\t"
+		"add	$16, %0\n\t"
+		"jmp	3f\n\t"
+		"5:\n\t"
+		"and	$31, %0\n\t"
+		"jz	4f\n\t"
+		"cmp	$16, %0\n\t"
+		"jb	6f\n\t"
+		"movdqa	(%3), %%xmm0\n"
+		"8:\n\t"
+		"add	$16, %3\n\t"
+		"call	ssse3_full_popcnt\n\t"
+		"6:\n\t"
+		"and	$15, %0\n\t"
+		"jz	4f\n\t"
+		"mov	%0, %1\n\t"
+		"movdqa	(%3), %%xmm0\n"
+		"3:\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"
+		"movdqa	%7, %%xmm0\n\t"
+		"imul	$0x01010101, %0\n\t"
+		"movd	%0, %%xmm2\n\t"
+		"pshufd	$0, %%xmm2, %%xmm2\n\t"
+		"pcmpgtb	%%xmm2, %%xmm0\n\t"
+		"pandn	%%xmm1, %%xmm0\n\t"
+		"call	ssse3_full_popcnt\n\t"
+		"4:\n\t"
+		"movdqa	%%xmm5, %%xmm0\n\t"
+		"punpckhqdq	%%xmm0, %%xmm0\n\t"
+		"paddq	%%xmm5, %%xmm0\n\t"
+#  ifdef __x86_64__
+		"movq	%%xmm0, %0\n\t"
+#  else
+		"movd	%%xmm0, %0\n\t"
+#  endif
+	: /* %0 */ "="CL"r" (ret),
+	  /* %1 */ "="CL"r" (cnt1),
+	  /* %2 */ "="CL"r" (cnt2),
+	  /* %3 */ "="CL"r" (s)
+	: /* %4 */ "3" (s),
+	  /* %5 */ "m" (*lut_st),
+	  /* %6 */ CO  (len),
+	  /* %7 */ "m" (*reg_num_mask),
+	  /* %8 */ "m" (**vals)
+#  ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#  endif
+	);
+
+	return ret;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__)
 /*
  * Only use on 64 bit, SSE2 is faster on 32 bit (for
@@ -114,7 +425,7 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 		len -= SOST - shift;
 		sum += popcountst_intSSE4(r);
 
-#ifdef __x86_64__
+#  ifdef __x86_64__
 		r = len / (SOST * 8);
 		if(likely(r))
 		{
@@ -167,18 +478,18 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 		case 0:
 			break;
 		}
-#else
+#  else
 		r = len / (SOST * 4);
 		if(r)
 		{
 			size_t t1, t2;
-#  ifndef __PIC__
+#   ifndef __PIC__
 			size_t t3;
-#  endif
+#   endif
 			asm (
-#  ifdef __PIC__
+#   ifdef __PIC__
 				"push	"BX"\n"
-#  endif
+#   endif
 				".p2align	2\n\t"
 				"1:\n\t"
 				"prefetchnta	0x60(%1)\n\t"
@@ -193,19 +504,19 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 				"dec	%0\n\t"
 				"lea	4*"DI"(%1), %1\n\t"
 				"jnz	1b\n\t"
-#  ifdef __PIC__
+#   ifdef __PIC__
 				"pop "BX"\n\t"
-#  endif
+#   endif
 				: /* %0 */ "=r" (r),
 				  /* %1 */ "=r" (p),
 				  /* %2 */ "=r" (sum),
 				  /* %3 */ "=r" (t1),
-#  ifndef __PIC__
+#   ifndef __PIC__
 				  /* %4 */ "=r" (t2),
 				  /* %5 */ "=b" (t3)
-#  else
+#   else
 				  /* %4 */ "=r" (t2)
-#  endif
+#   endif
 				: /* %6 */ "0" (r),
 				  /* %7 */ "2" (sum),
 				  /* %8 */ "1" (p)
@@ -226,7 +537,7 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 		case 0:
 			break;
 		}
-#endif
+#  endif
 		len %= SOST;
 		if(len)
 			r = *(const size_t *)p;
@@ -242,19 +553,17 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 # if HAVE_BINUTILS >= 217
 static size_t mempopcnt_SSSE3(const void *s, size_t len)
 {
-	static const uint8_t lut_st[16] GCC_ATTR_ALIGNED(16) =
-		{0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
 	size_t ret, cnt1, cnt2;
 
 	asm(
 		"prefetchnta	(%3)\n\t"
 		"prefetchnta	0x20(%3)\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-#ifdef __ELF__
+#  ifdef __ELF__
 		".subsection 2\n\t"
-#else
+#  else
 		"jmp	88f\n\t"
-#endif
+#  endif
 		".p2align 2\n"
 		"ssse3_full_popcnt:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
@@ -271,11 +580,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"psadbw	%%xmm0, %%xmm2\n\t"
 		"paddq %%xmm2, %%xmm5\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#  ifdef __ELF__
 		".previous\n\t"
-#else
+#  else
 		"88:\n\t"
-#endif
+#  endif
 		"movdqa	%5, %%xmm7\n\t" /*  */
 		"movdqa	32+%8, %%xmm6\n\t" /* 0x0f0f0f0f0f */
 		"pxor	%%xmm5, %%xmm5\n\t"
@@ -299,7 +608,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"jz	7f\n\t"
 		"add	$16, %3\n\t"
 		"call	ssse3_full_popcnt\n\t"
-#if CSA_SETUP == 1
+#  if CSA_SETUP == 1
 /*=======================*/
 		"cmp	$4, %1\n\t"
 		"jb	1f\n\t"
@@ -400,11 +709,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"cmp	$4, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#ifdef __ELF__
+#   ifdef __ELF__
 		".subsection 2\n\t"
-#else
+#   else
 		"jmp	99f\n\t"
-#endif
+#   endif
 		".p2align 2\n"
 		"ssse3_wrap:\n\t"
 		"movdqa	%%xmm5, %%xmm0\n\t"
@@ -419,11 +728,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"psadbw	%%xmm0, %%xmm5\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#   ifdef __ELF__
 		".previous\n\t"
-#else
+#   else
 		"99:\n\t"
-#endif
+#   endif
 		"movdqa	%%xmm2, %%xmm6\n\t"
 		"movdqa	32+%8, %%xmm4\n\t" /* 0x0f0f0f0f0f */
 		"call	ssse3_wrap\n\t"
@@ -436,6 +745,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"paddq	%%xmm7, %%xmm7\n\t"
 		"psubq	%%xmm5, %%xmm7\n\t"
 		"movdqa	%%xmm1, %%xmm5\n\t"
+		"movdqa	%%xmm3, %%xmm4\n\t"
 		"call	ssse3_wrap\n\t"
 		"paddq	%%xmm7, %%xmm7\n\t"
 		"psubq	%%xmm5, %%xmm7\n\t"
@@ -451,7 +761,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	%%xmm3, %%xmm6\n\t" /* 0x0f0f0f0f0f */
 		"jz	5f\n\t"
 /*=======================*/
-#endif
+#  endif
 		"1:\n\t"
 		"mov	$15, %2\n\t"
 		"cmp	%2, %1\n\t"
@@ -525,11 +835,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	%%xmm5, %%xmm0\n\t"
 		"punpckhqdq	%%xmm0, %%xmm0\n\t"
 		"paddq	%%xmm5, %%xmm0\n\t"
-#ifdef __x86_64__
+#  ifdef __x86_64__
 		"movq	%%xmm0, %0\n\t"
-#else
+#  else
 		"movd	%%xmm0, %0\n\t"
-#endif
+#  endif
 	: /* %0 */ "="CL"r" (ret),
 	  /* %1 */ "="CL"r" (cnt1),
 	  /* %2 */ "="CL"r" (cnt2),
@@ -1519,6 +1829,9 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))mempopcnt_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+# endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__)
 	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_POPCNT},
 	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_SSE4A},

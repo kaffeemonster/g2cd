@@ -56,7 +56,7 @@
 /*
  * looks like you get your mips in weakly ordered and strong
  * ordered.  And they even can come without a sync.
- * I hate those synthesize-sourself-a-risc chips. The same
+ * I hate those synthesize-yourself-a-risc chips. The same
  * shit with ppc, arm, you name it.
  * You know what: kiss my shiny metal ass. We sync, better
  * safe than sorry.
