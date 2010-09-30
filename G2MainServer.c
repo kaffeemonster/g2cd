@@ -1005,11 +1005,18 @@ static void setup_resources(void)
 	 * when mem is tight, shoot us first, we are unimportant
 	 * and mem hungry...
 	 */
-	my_snprintf(buf, sizeof(buf), "/proc/%u/oom_adj", getpid());
+	my_snprintf(buf, sizeof(buf), "/proc/%u/oom_score_adj", getpid());
 	fd = open(buf, O_WRONLY|O_NOCTTY);
 	if(0 > fd)
-		return;
-	if(sizeof("15\n") != write(fd, "15\n", sizeof("15\n"))) {
+	{
+		my_snprintf(buf, sizeof(buf), "/proc/%u/oom_adj", getpid());
+		fd = open(buf, O_WRONLY|O_NOCTTY);
+		if(0 > fd)
+			return;
+		} else if(sizeof("15\n") != write(fd, "15\n", sizeof("15\n"))) {
+			/* yeah, whatever... */
+		}
+	} else if(sizeof("1000\n") != write(fd, "1000\n", sizeof("1000\n"))) {
 		/* yeah, whatever... */
 	}
 	close(fd);
