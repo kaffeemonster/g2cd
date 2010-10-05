@@ -42,6 +42,10 @@
 # include <sys/stat.h>
 # include <sys/wait.h>
 # include <sys/resource.h>
+# include <sys/ioctl.h>
+# ifdef __linux__
+#  include <linux/sockios.h>
+# endif
 # include <pwd.h>
 #endif
 #include <sys/time.h>
@@ -370,7 +374,9 @@ static noinline intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_A
 
 static intptr_t check_con_health(g2_connection_t *con, void *carg)
 {
-	/* con is stuck sending or dead, kill it with fire */
+	int val;
+
+	/* if con is stuck sending or dead, kill it with fire */
 	/*
 	 * The worker threads should normally take down the
 	 * con, but to inject the event, we normally have to go
@@ -383,13 +389,17 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	 * the OS detecting this. Unfortunatly TCP-retries
 	 * and so on totally sink us here, we accumulate
 	 * dead stuff.
-	 * Try to rescue the day by forfully tering the con
+	 * Try to rescue the day by forcefully tearing the con
 	 * down.
 	 * This is scary and propably racy, and whatnot...
 	 */
+#ifdef __linux__
+	if(ioctl(con->com_socket, SIOCOUTQ, &val) < 0)
+#endif
+		val = 0;
 	shortlock_t_lock(&con->pts_lock);
 	if(unlikely(con->flags.dismissed ||
-	  (!list_empty(&con->packets_to_send) &&
+	  ((val || !list_empty(&con->packets_to_send)) &&
 	    local_time_now >= con->last_send + (3 * HANDLER_ACTIVE_TIMEOUT))))
 	{
 		struct bounce_to_timer *btt;
@@ -1013,7 +1023,7 @@ static void setup_resources(void)
 		fd = open(buf, O_WRONLY|O_NOCTTY);
 		if(0 > fd)
 			return;
-		} else if(sizeof("15\n") != write(fd, "15\n", sizeof("15\n"))) {
+		else if(sizeof("15\n") != write(fd, "15\n", sizeof("15\n"))) {
 			/* yeah, whatever... */
 		}
 	} else if(sizeof("1000\n") != write(fd, "1000\n", sizeof("1000\n"))) {
