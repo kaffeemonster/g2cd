@@ -55,6 +55,125 @@
 # define MOD4(a) a %= BASE
 #endif
 
+static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, uint32_t *s2, unsigned k)
+{
+	uint32_t t;
+	unsigned n = k % 16;
+	buf += n;
+	k = (k / 16) + 1;
+
+	asm(
+#  ifdef __i386__
+#   ifndef __PIC__
+#    define CLOB
+		"lea	1f(,%5,8), %4\n\t"
+#   else
+#    define CLOB "&"
+		"call	i686_get_pc\n\t"
+		"lea	1f-.(%4,%5,8), %4\n\t"
+		".subsection 2\n"
+		"i686_get_pc:\n\t"
+		"movl	(%%esp), %4\n\t"
+		"ret\n\t"
+		".previous\n\t"
+#   endif
+		"jmp	*%4\n\t"
+#  else
+#   define CLOB "&"
+		"lea	1f(%%rip), %q4\n\t"
+		"lea	(%q4,%q5,8), %q4\n\t"
+		"jmp	*%q4\n\t"
+#  endif
+		".p2align 1\n"
+		"2:\n\t"
+#  ifdef __i386
+		".byte 0x3e\n\t"
+#  endif
+		"add	$0x10, %2\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+	/* 128 */
+		"movzbl	-16(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/* 120 */
+		"movzbl	-15(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/* 112 */
+		"movzbl	-14(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/* 104 */
+		"movzbl	-13(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  96 */
+		"movzbl	-12(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  88 */
+		"movzbl	-11(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  80 */
+		"movzbl	-10(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  72 */
+		"movzbl	 -9(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  64 */
+		"movzbl	 -8(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  56 */
+		"movzbl	 -7(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  48 */
+		"movzbl	 -6(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  40 */
+		"movzbl	 -5(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  32 */
+		"movzbl	 -4(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  24 */
+		"movzbl	 -3(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*  16 */
+		"movzbl	 -2(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*   8 */
+		"movzbl	 -1(%2), %4\n\t"	/* 4 */
+		"add	%4, %0\n\t"	/* 2 */
+		"add	%0, %1\n\t"	/* 2 */
+	/*   0 */
+		"dec	%3\n\t"
+		"jnz	2b"
+	: /* %0 */ "=R" (*s1),
+	  /* %1 */ "=R" (*s2),
+	  /* %2 */ "=abdSD" (buf),
+	  /* %3 */ "=c" (k),
+	  /* %4 */ "="CLOB"R" (t)
+	: /* %5 */ "r" (16 - n),
+	  /*    */ "0" (*s1),
+	  /*    */ "1" (*s2),
+	  /*    */ "2" (buf),
+	  /*    */ "3" (k)
+	);
+
+	return buf;
+}
+
 #if 0
 		/*
 		 * Will XOP processors have SSSE3/AVX??
@@ -121,6 +240,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
 
+	/* initial Adler-32 value */
 	if(!buf)
 		return 1L;
 
@@ -133,6 +253,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		{
 			static const char vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 			unsigned l;
+// TODO: also add reduce trick
 			asm(
 				"prefetchnta	16(%0)\n\t"
 				"movdqa	%5, %%xmm5\n\t"
@@ -198,121 +319,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		}
 
 		if(unlikely(k))
-		{
-			uint32_t t;
-			unsigned n = k % 16;
-			buf += n;
-			k = (k / 16) + 1;
-
-			asm(
-#  ifdef __i386__
-#   ifndef __PIC__
-#    define CLOB
-				"lea	1f(,%5,8), %4\n\t"
-#   else
-#    define CLOB "&"
-				"call	i686_get_pc\n\t"
-				"lea	1f-.(%4,%5,8), %4\n\t"
-				".subsection 2\n"
-				"i686_get_pc:\n\t"
-				"movl	(%%esp), %4\n\t"
-				"ret\n\t"
-				".previous\n\t"
-#   endif
-				"jmp	*%4\n\t"
-#  else
-#   define CLOB "&"
-				"lea	1f(%%rip), %q4\n\t"
-				"lea	(%q4,%q5,8), %q4\n\t"
-				"jmp	*%q4\n\t"
-#  endif
-				".p2align 1\n"
-				"2:\n\t"
-#  ifdef __i386
-				".byte 0x3e\n\t"
-#  endif
-				"add	$0x10, %2\n\t"
-				".p2align 1\n"
-				"1:\n\t"
-			/* 128 */
-				"movzbl	-16(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 120 */
-				"movzbl	-15(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 112 */
-				"movzbl	-14(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 104 */
-				"movzbl	-13(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  96 */
-				"movzbl	-12(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  88 */
-				"movzbl	-11(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  80 */
-				"movzbl	-10(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  72 */
-				"movzbl	 -9(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  64 */
-				"movzbl	 -8(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  56 */
-				"movzbl	 -7(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  48 */
-				"movzbl	 -6(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  40 */
-				"movzbl	 -5(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  32 */
-				"movzbl	 -4(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  24 */
-				"movzbl	 -3(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  16 */
-				"movzbl	 -2(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   8 */
-				"movzbl	 -1(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   0 */
-				"dec	%3\n\t"
-				"jnz	2b"
-			: /* %0 */ "=R" (s1),
-			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=abdSD" (buf),
-			  /* %3 */ "=c" (k),
-			  /* %4 */ "="CLOB"R" (t)
-			: /* %5 */ "r" (16 - n),
-			  /*    */ "0" (s1),
-			  /*    */ "1" (s2),
-			  /*    */ "2" (buf),
-			  /*    */ "3" (k)
-			);
-		}
+			buf = adler32_jumped(buf, &s1, &s2, k);
 		MOD(s1);
 		MOD(s2);
 	}
@@ -323,197 +330,118 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 
 static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 {
+	static const short vord_l[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9};
+	static const short vord_h[] GCC_ATTR_ALIGNED(16) = {8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
 
 	/* initial Adler-32 value */
-	if(buf == NULL)
+	if(!buf)
 		return 1L;
 
-	while(likely(len))
-	{
-		k = len < NMAX ? len : NMAX;
-		len -= k;
+	k    = ALIGN_DIFF(buf, 16);
+	len -= k;
+	if(k)
+		buf = adler32_jumped(buf, &s1, &s2, k);
 
-		if(k >= 16)
-		{
-			static const short vord_l[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9};
-			static const short vord_h[] GCC_ATTR_ALIGNED(16) = {8,7,6,5,4,3,2,1};
+	asm(
+		"mov	%7, %3\n\t"
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"
+		"sub	%3, %4\n\t"
+		"cmp	$16, %3\n\t"
+		"jb	88f\n\t"
+		"prefetchnta	16(%0)\n\t"
+		"pxor	%%xmm7, %%xmm7\n\t"
+		"movdqa	%5, %%xmm6\n\t"
+		"movdqa	%6, %%xmm5\n\t"
+		"movd	%1, %%xmm4\n\t"
+		"movd	%2, %%xmm3\n\t"
+#  ifdef __ELF__
+		".subsection 2\n\t"
+#  else
+		"jmp	77f\n\t"
+#  endif
+		".p2align 2\n"
+		"sse2_reduce:\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"
+		"pslld	$16, %%xmm1\n\t"
+		"psrld	$16, %%xmm0\n\t"
+		"psrld	$16, %%xmm1\n\t"
+		"psubd	%%xmm0, %%xmm1\n\t"
+		"pslld	$4, %%xmm0\n\t"
+		"paddd	%%xmm1, %%xmm0\n\t"
+		"ret\n\t"
+#  ifdef __ELF__
+		".previous\n\t"
+#  else
+		"77:\n\t"
+#  endif
+		".p2align 3,,3\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"prefetchnta	32(%0)\n\t"
+		"movdqa	(%0), %%xmm1\n\t"
+		"sub	$16, %3\n\t"
+		"movdqa	%%xmm4, %%xmm2\n\t"
+		"add	$16, %0\n\t"
+		"movdqa	%%xmm1, %%xmm0\n\t"
+		"cmp	$15, %3\n\t"
+		"pslld	$4, %%xmm2\n\t"
+		"paddd	%%xmm3, %%xmm2\n\t"
+		"psadbw	%%xmm7, %%xmm0\n\t"
+		"paddd	%%xmm0, %%xmm4\n\t"
+		"movdqa	%%xmm1, %%xmm0\n\t"
+		"punpckhbw	%%xmm7, %%xmm1\n\t"
+		"punpcklbw	%%xmm7, %%xmm0\n\t"
+		"movdqa	%%xmm1, %%xmm3\n\t"
+		"pmaddwd	%%xmm6, %%xmm0\n\t"
+		"paddd	%%xmm2, %%xmm0\n\t"
+		"pmaddwd	%%xmm5, %%xmm3\n\t"
+		"paddd	%%xmm0, %%xmm3\n\t"
+		"jg	1b\n\t"
+		"movdqa	%%xmm3, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"call	sse2_reduce\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"movdqa	%%xmm4, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"movdqa	%%xmm0, %%xmm4\n\t"
+		"add	%3, %4\n\t"
+		"mov	%7, %3\n\t"
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"
+		"sub	%3, %4\n\t"
+		"cmp	$15, %3\n\t"
+		"jg	1b\n\t"
+		"pshufd	$0xEE, %%xmm3, %%xmm0\n\t"
+		"pshufd	$0xEE, %%xmm4, %%xmm1\n\t"
+		"paddd	%%xmm3, %%xmm0\n\t"
+		"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
+		"paddd	%%xmm4, %%xmm1\n\t"
+		"movd	%%xmm1, %1\n\t"
+		"paddd	%%xmm0, %%xmm2\n\t"
+		"movd	%%xmm2, %2\n\t"
+		"88:"
+	: /* %0 */ "=r" (buf),
+	  /* %1 */ "=r" (s1),
+	  /* %2 */ "=r" (s2),
+	  /* %3 */ "=r" (k),
+	  /* %4 */ "=r" (len)
+	: /* %5 */ "m" (vord_l[0]),
+	  /* %6 */ "m" (vord_h[0]),
+	  /* %7 */ "i" (NMAX + NMAX/3),
+	  /*    */ "0" (buf),
+	  /*    */ "1" (s1),
+	  /*    */ "2" (s2),
+	  /*    */ "4" (len)
+	);
 
-			asm(
-				"prefetchnta	16(%0)\n\t"
-				"movdqa	%4, %%xmm6\n\t"
-				"movdqa	%5, %%xmm5\n\t"
-				"movd	%1, %%xmm4\n\t"
-				"movd	%2, %%xmm3\n\t"
-				"pxor	%%xmm7, %%xmm7\n\t"
-				".p2align 3,,3\n\t"
-				".p2align 2\n"
-				"1:\n\t"
-				"prefetchnta	32(%0)\n\t"
-				"movdqu	(%0), %%xmm1\n\t"
-				"sub	$16, %3\n\t"
-				"movdqa	%%xmm4, %%xmm2\n\t"
-				"add	$16, %0\n\t"
-				"movdqa	%%xmm1, %%xmm0\n\t"
-				"cmp	$15, %3\n\t"
-				"pslld	$4, %%xmm2\n\t"
-				"paddd	%%xmm3, %%xmm2\n\t"
-				"psadbw	%%xmm7, %%xmm0\n\t"
-				"paddd	%%xmm0, %%xmm4\n\t"
-				"movdqa	%%xmm1, %%xmm0\n\t"
-				"punpckhbw	%%xmm7, %%xmm1\n\t"
-				"punpcklbw	%%xmm7, %%xmm0\n\t"
-				"movdqa	%%xmm1, %%xmm3\n\t"
-				"pmaddwd	%%xmm6, %%xmm0\n\t"
-				"paddd	%%xmm2, %%xmm0\n\t"
-				"pmaddwd	%%xmm5, %%xmm3\n\t"
-				"paddd	%%xmm0, %%xmm3\n\t"
-				"jg	1b\n\t"
-				"pshufd	$0xEE, %%xmm3, %%xmm0\n\t"
-				"pshufd	$0xEE, %%xmm4, %%xmm1\n\t"
-				"paddd	%%xmm3, %%xmm0\n\t"
-				"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
-				"paddd	%%xmm4, %%xmm1\n\t"
-				"movd	%%xmm1, %1\n\t"
-				"paddd	%%xmm0, %%xmm2\n\t"
-				"movd	%%xmm2, %2\n\t"
-			: /* %0 */ "=r" (buf),
-			  /* %1 */ "=r" (s1),
-			  /* %2 */ "=r" (s2),
-			  /* %3 */ "=r" (k)
-			: /* %4 */ "m" (vord_l[0]),
-			  /* %5 */ "m" (vord_h[0]),
-			  /*    */ "0" (buf),
-			  /*    */ "1" (s1),
-			  /*    */ "2" (s2),
-			  /*    */ "3" (k)
-#ifdef __SSE__
-			: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
-#endif
-			);
-		}
-
-		if(unlikely(k))
-		{
-			uint32_t t;
-			unsigned n = k % 16;
-			buf += n;
-			k = (k / 16) + 1;
-
-			asm(
-#ifdef __i386__
-# ifndef __PIC__
-# define CLOB
-				"lea	1f(,%5,8), %4\n\t"
-# else
-# define CLOB "&"
-				"call	i686_get_pc\n\t"
-				"lea	1f-.(%4,%5,8), %4\n\t"
-				".subsection 2\n"
-				"i686_get_pc:\n\t"
-				"movl	(%%esp), %4\n\t"
-				"ret\n\t"
-				".previous\n\t"
-# endif
-				"jmp	*%4\n\t"
-#else
-# define CLOB "&"
-				"lea	1f(%%rip), %q4\n\t"
-				"lea	(%q4,%q5,8), %q4\n\t"
-				"jmp	*%q4\n\t"
-#endif
-				".p2align 1\n"
-				"2:\n\t"
-#ifdef __i386
-				".byte 0x3e\n\t"
-#endif
-				"add	$0x10, %2\n\t"
-				".p2align 1\n"
-				"1:\n\t"
-			/* 128 */
-				"movzbl	-16(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 120 */
-				"movzbl	-15(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 112 */
-				"movzbl	-14(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 104 */
-				"movzbl	-13(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  96 */
-				"movzbl	-12(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  88 */
-				"movzbl	-11(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  80 */
-				"movzbl	-10(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  72 */
-				"movzbl	 -9(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  64 */
-				"movzbl	 -8(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  56 */
-				"movzbl	 -7(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  48 */
-				"movzbl	 -6(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  40 */
-				"movzbl	 -5(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  32 */
-				"movzbl	 -4(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  24 */
-				"movzbl	 -3(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  16 */
-				"movzbl	 -2(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   8 */
-				"movzbl	 -1(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   0 */
-				"dec	%3\n\t"
-				"jnz	2b"
-			: /* %0 */ "=R" (s1),
-			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=abdDS" (buf),
-			  /* %3 */ "=c" (k),
-			  /* %4 */ "="CLOB"R" (t)
-			: /* %5 */ "r" (16 - n),
-			  /*    */ "0" (s1),
-			  /*    */ "1" (s2),
-			  /*    */ "2" (buf),
-			  /*    */ "3" (k)
-			);
-		}
-		MOD(s1);
-		MOD(s2);
-	}
+	if(unlikely(k))
+		buf = adler32_jumped(buf, &s1, &s2, k);
+	MOD(s1);
+	MOD(s2);
 	return (s2 << 16) | s1;
 }
 
@@ -598,121 +526,7 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		}
 
 		if(unlikely(k))
-		{
-			uint32_t t;
-			unsigned n = k % 16;
-			buf += n;
-			k = (k / 16) + 1;
-
-			asm(
-#ifdef __i386__
-# ifndef __PIC__
-# define CLOB
-				"lea	1f(,%5,8), %4\n\t"
-# else
-# define CLOB "&"
-				"call	i686_get_pc\n\t"
-				"lea	1f-.(%4,%5,8), %4\n\t"
-				".subsection 2\n"
-				"i686_get_pc:\n\t"
-				"movl	(%%esp), %4\n\t"
-				"ret\n\t"
-				".previous\n\t"
-# endif
-				"jmp	*%4\n\t"
-#else
-# define CLOB "&"
-				"lea	1f(%%rip), %q4\n\t"
-				"lea	(%q4,%q5,8), %q4\n\t"
-				"jmp	*%q4\n\t"
-#endif
-				".p2align 1\n"
-				"2:\n\t"
-# ifdef __i386
-				".byte 0x3e\n\t"
-# endif
-				"add	$0x10, %2\n\t"
-				".p2align 1\n"
-				"1:\n\t"
-			/* 128 */
-				"movzbl	-16(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 120 */
-				"movzbl	-15(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 112 */
-				"movzbl	-14(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/* 104 */
-				"movzbl	-13(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  96 */
-				"movzbl	-12(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  88 */
-				"movzbl	-11(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  80 */
-				"movzbl	-10(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  72 */
-				"movzbl	 -9(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  64 */
-				"movzbl	 -8(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  56 */
-				"movzbl	 -7(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  48 */
-				"movzbl	 -6(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  40 */
-				"movzbl	 -5(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  32 */
-				"movzbl	 -4(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  24 */
-				"movzbl	 -3(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*  16 */
-				"movzbl	 -2(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   8 */
-				"movzbl	 -1(%2), %4\n\t"	/* 4 */
-				"add	%4, %0\n\t"	/* 2 */
-				"add	%0, %1\n\t"	/* 2 */
-			/*   0 */
-				"dec	%3\n\t"
-				"jnz	2b"
-			: /* %0 */ "=R" (s1),
-			  /* %1 */ "=R" (s2),
-			  /* %2 */ "=abdSD" (buf),
-			  /* %3 */ "=c" (k),
-			  /* %4 */ "="CLOB"R" (t)
-			: /* %5 */ "r" (16 - n),
-			  /*    */ "0" (s1),
-			  /*    */ "1" (s2),
-			  /*    */ "2" (buf),
-			  /*    */ "3" (k)
-			);
-		}
+			buf = adler32_jumped(buf, &s1, &s2, k);
 		MOD(s1);
 		MOD(s2);
 	}
@@ -796,7 +610,7 @@ static const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))adler32_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = NULL},
 # endif
 #endif
-	{.func = (void (*)(void))adler32_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))adler32_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
 #ifndef __x86_64__
 	{.func = (void (*)(void))adler32_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
 #endif
@@ -864,7 +678,7 @@ static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsi
 
 uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	if(len < 16)
+	if(len < 32)
 		return adler32_common(adler, buf, len);
 	return adler32_ptr(adler, buf, len);
 }

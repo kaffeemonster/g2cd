@@ -203,7 +203,9 @@ static void print_tree_dot_w(struct rb_node *node, FILE *out, unsigned *nil_coun
 	{
 		struct timeout *n = container_of(node, struct timeout, rb);
 		fprintf(out, "\"%p\" [label=\"%p\"];\n", node, rb_parent(node));
-		fprintf(out, "\t\"%p\" [label=\"%p\\n%u.%lu\",style=filled,color=\"%s\",fontcolor=\"%s\"]\n", node, node, (unsigned) n->t.tv_sec, n->t.tv_nsec, rb_is_red(node) ? "red" : "black", rb_is_red(node) ? "black" : "red");
+		fprintf(out, "\t\"%p\" [label=\"%p\\n%u.%lu\\nd:%p f:%p\\nr:%i\",style=filled,color=\"%s\",fontcolor=\"%s\"]\n",
+			 node, node, (unsigned) n->t.tv_sec, n->t.tv_nsec, n->data, n->fun, n->rearm_in_progress,
+			 rb_is_red(node) ? "red" : "black", rb_is_red(node) ? "black" : "red");
 		fprintf(out, "\t\"%p\" -> ", node);
 		print_tree_dot_w(node->rb_right, out, nil_count);
 		fprintf(out, "\t\"%p\" -> ", node);
@@ -226,7 +228,7 @@ static void print_tree_dot(struct rb_root *root GCC_ATTR_UNUSED_PARAM, const cha
 	fputs("digraph G {\n", out); //\n\tsize=\"20,20\"", out);
 	fprintf(out, "\t\"root\" -> ");
 	print_tree_dot_w(root->rb_node, out, &nil_count);
-	fprintf(out, "\nlabel=\"%s\"\n}", when);
+	fprintf(out, "\nlabel=\"%s\"\nrankdir=LR\n}", when);
 	fclose(out);
 #endif
 }
@@ -323,7 +325,8 @@ retry:
 		goto retry;
 	}
 
-	if(!RB_EMPTY_NODE(&who_to_cancel->rb)) {
+	if(!RB_EMPTY_NODE(&who_to_cancel->rb))
+	{
 		logg_develd_old("%u canceling %p\n", gettid(), who_to_cancel);
 		print_tree_dot(&wakeup.tree, "cancel_before_erase");
 		rb_erase(&who_to_cancel->rb, &wakeup.tree);
@@ -342,7 +345,7 @@ void timeout_timer_task_abort(void)
 	wakeup.abort = true;
 #ifdef DRD_ME
 	/*
-	 * We do not lock this mutex by purpose
+	 * We do not lock this mutex by purpose:
 	 * this may be forbidden, racy, whatever.
 	 * But:
 	 * this is only called by the main thread to
