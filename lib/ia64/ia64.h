@@ -1,6 +1,6 @@
 /*
  * ia64.h
- * some instructions for ia66
+ * some instructions for ia64
  *
  * Copyright (c) 2009-2010 Jan Seiffert
  *
@@ -43,6 +43,14 @@ static inline unsigned long long shrp(unsigned long long r2, unsigned long long 
 #endif
 	return res;
 }
+
+static inline unsigned long long psub4(unsigned long long r2, unsigned long long r3)
+{
+	unsigned long long res;
+	asm("psub4	%0=%r1, %r2" : "=r" (res) : "rO" (r2) , "rO" (r3));
+	return res;
+}
+
 static inline unsigned long long psad1(unsigned long long r2, unsigned long long r3)
 {
 	unsigned long long res;

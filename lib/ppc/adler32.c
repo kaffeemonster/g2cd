@@ -58,7 +58,8 @@
 # define MOD4(a) a %= BASE
 #endif
 
-#define VNMAX (NMAX + NMAX/3)
+/* can be propably more, since we do not have the x86 psadbw 64 bit sum */
+#define VNMAX (6*NMAX)
 
 static inline vector unsigned int vector_reduce(vector unsigned int x)
 {
@@ -160,10 +161,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				buf += SOVUC;
 				k -= SOVUC;
 			} while (k >= SOVUC);
+			/* reduce vs1 round sum before multiplying by 16 */
+			vs1_r = vector_reduce(vs1_r);
 			/* add all vs1 for 16 times */
 			vs2 += vec_sl(vs1_r, vsh);
 			/* reduce the vectors to something in the range of BASE */
-			vs2 = vector_reduce(vs2);
 			vs2 = vector_reduce(vs2);
 			vs1 = vector_reduce(vs1);
 			len += k;
@@ -209,7 +211,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 * around BASE, they still need the final proper mod, but we can
 		 * stay on the vector unit and do not overflow
 		 *
-		 * we could stay 133% times NMAX in the loops above and
+		 * we could stay more than NMAX in the loops above and
 		 * fill the first uint32_t near overflow.
 		 * Then we have to make the modulus on all vector elements.
 		 * there is only one problem:

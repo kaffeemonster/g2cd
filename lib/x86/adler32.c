@@ -236,6 +236,7 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 # if HAVE_BINUTILS >= 217
 static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 {
+	static const char vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
@@ -244,85 +245,101 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	if(!buf)
 		return 1L;
 
-	while(likely(len))
-	{
-		k = len < NMAX ? len : NMAX;
-		len -= k;
+	k    = ALIGN_DIFF(buf, 16);
+	len -= k;
+	if(k)
+		buf = adler32_jumped(buf, &s1, &s2, k);
 
-		if(k >= 16)
-		{
-			static const char vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
-			unsigned l;
-// TODO: also add reduce trick
-			asm(
-				"prefetchnta	16(%0)\n\t"
-				"movdqa	%5, %%xmm5\n\t"
-				"movd %2, %%xmm2\n\t"
-				"movd %1, %%xmm3\n\t"
-				"pxor	%%xmm4, %%xmm4\n\t"
-				"pxor	%%xmm7, %%xmm7\n\t"
-				".p2align 3,,3\n\t"
-				".p2align 2\n"
-				"2:\n\t"
-				"mov	$128, %4\n\t"
-				"cmp	%4, %3\n\t"
-				"cmovb	%3, %4\n\t"
-				"and	$-16, %4\n\t"
-				"sub	%4, %3\n\t"
-				"shr	$4, %4\n\t"
-				"pxor	%%xmm6, %%xmm6\n\t"
-				".p2align 3,,3\n\t"
-				".p2align 2\n"
-				"1:\n\t"
-				"lddqu	(%0), %%xmm0\n\t"
-				"prefetchnta	64(%0)\n\t"
-				"paddd	%%xmm3, %%xmm7\n\t"
-				"add	$16, %0\n\t"
-				"dec	%4\n\t"
-				"movdqa	%%xmm0, %%xmm1\n\t"
-				"pmaddubsw %%xmm5, %%xmm0\n\t"
-				"psadbw	%%xmm4, %%xmm1\n\t"
-				"paddw	%%xmm0, %%xmm6\n\t"
-				"paddd	%%xmm1, %%xmm3\n\t"
-				"jnz	1b\n\t"
-				"movdqa	%%xmm6, %%xmm0\n\t"
-				"punpckhwd	%%xmm4, %%xmm0\n\t"
-				"punpcklwd	%%xmm4, %%xmm6\n\t"
-				"paddd	%%xmm0, %%xmm2\n\t"
-				"paddd	%%xmm6, %%xmm2\n\t"
-				"cmp	$15, %3\n\t"
-				"jg	2b\n\t"
-				"pslld	$4, %%xmm7\n\t"
-				"paddd	%%xmm7, %%xmm2\n\t"
-				"pshufd	$0xEE, %%xmm3, %%xmm1\n\t"
-				"pshufd	$0xEE, %%xmm2, %%xmm0\n\t"
-				"paddd	%%xmm3, %%xmm1\n\t"
-				"paddd	%%xmm2, %%xmm0\n\t"
-				"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
-				"paddd	%%xmm0, %%xmm2\n\t"
-				"movd	%%xmm1, %1\n\t"
-				"movd	%%xmm2, %2\n\t"
-			: /* %0 */ "=r" (buf),
-			  /* %1 */ "=r" (s1),
-			  /* %2 */ "=r" (s2),
-			  /* %3 */ "=r" (k),
-			  /* %4 */ "=r" (l)
-			: /* %5 */ "m" (vord[0]),
-			  /*    */ "0" (buf),
-			  /*    */ "1" (s1),
-			  /*    */ "2" (s2),
-			  /*    */ "3" (k)
+	asm(
+		"mov	%6, %3\n\t"
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"
+		"sub	%3, %4\n\t"
+		"cmp	$16, %3\n\t"
+		"jb	88f\n\t"
+		"prefetchnta	16(%0)\n\t"
+		"movdqa	%5, %%xmm5\n\t"
+		"movd %2, %%xmm2\n\t"
+		"movd %1, %%xmm3\n\t"
+		"pxor	%%xmm4, %%xmm4\n"
+		"3:\n\t"
+		"pxor	%%xmm7, %%xmm7\n\t"
+		".p2align 3,,3\n\t"
+		".p2align 2\n"
+		"2:\n\t"
+		"mov	$128, %1\n\t"
+		"cmp	%1, %3\n\t"
+		"cmovb	%3, %1\n\t"
+		"and	$-16, %1\n\t"
+		"sub	%1, %3\n\t"
+		"shr	$4, %1\n\t"
+		"pxor	%%xmm6, %%xmm6\n\t"
+		".p2align 3,,3\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"movdqa	(%0), %%xmm0\n\t"
+		"prefetchnta	64(%0)\n\t"
+		"paddd	%%xmm3, %%xmm7\n\t"
+		"add	$16, %0\n\t"
+		"dec	%1\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"
+		"pmaddubsw %%xmm5, %%xmm0\n\t"
+		"psadbw	%%xmm4, %%xmm1\n\t"
+		"paddw	%%xmm0, %%xmm6\n\t"
+		"paddd	%%xmm1, %%xmm3\n\t"
+		"jnz	1b\n\t"
+		"movdqa	%%xmm6, %%xmm0\n\t"
+		"punpckhwd	%%xmm4, %%xmm0\n\t"
+		"punpcklwd	%%xmm4, %%xmm6\n\t"
+		"paddd	%%xmm0, %%xmm2\n\t"
+		"paddd	%%xmm6, %%xmm2\n\t"
+		"cmp	$15, %3\n\t"
+		"jg	2b\n\t"
+		"movdqa	%%xmm7, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"pslld	$4, %%xmm0\n\t"
+		"paddd	%%xmm2, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"movdqa	%%xmm0, %%xmm2\n\t"
+		"movdqa	%%xmm3, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"add	%3, %4\n\t"
+		"mov	%6, %3\n\t"
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"
+		"sub	%3, %4\n\t"
+		"cmp	$15, %3\n\t"
+		"jg	3b\n\t"
+		"pshufd	$0xEE, %%xmm3, %%xmm1\n\t"
+		"pshufd	$0xEE, %%xmm2, %%xmm0\n\t"
+		"paddd	%%xmm3, %%xmm1\n\t"
+		"paddd	%%xmm2, %%xmm0\n\t"
+		"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
+		"paddd	%%xmm0, %%xmm2\n\t"
+		"movd	%%xmm1, %1\n\t"
+		"movd	%%xmm2, %2\n\t"
+		"88:"
+	: /* %0 */ "=r" (buf),
+	  /* %1 */ "=r" (s1),
+	  /* %2 */ "=r" (s2),
+	  /* %3 */ "=r" (k),
+	  /* %4 */ "=r" (len)
+	: /* %5 */ "m" (vord[0]),
+	  /* %6 */ "i" (6*NMAX),
+	  /*    */ "0" (buf),
+	  /*    */ "1" (s1),
+	  /*    */ "2" (s2),
+	  /*    */ "4" (len)
 #  ifdef __SSE__
-			: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #  endif
-			);
-		}
+	);
 
-		if(unlikely(k))
-			buf = adler32_jumped(buf, &s1, &s2, k);
-		MOD(s1);
-		MOD(s2);
-	}
+	if(unlikely(k))
+		buf = adler32_jumped(buf, &s1, &s2, k);
+	MOD(s1);
+	MOD(s2);
 	return (s2 << 16) | s1;
 }
 # endif
@@ -607,7 +624,7 @@ static const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))adler32_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = NULL},
+	{.func = (void (*)(void))adler32_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},
 # endif
 #endif
 	{.func = (void (*)(void))adler32_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},

@@ -57,7 +57,20 @@
 # define MOD4(a) a %= BASE
 #endif
 
-#define VNMAX (NMAX + NMAX/3)
+/* since we do not have the 64bit psadbw sum, we could prop. do a little more */
+#define VNMAX (6*NMAX)
+
+static inline uint32x4_t vector_reduce(uint32x4_t x)
+{
+	uint32x4_t y;
+
+	y = vshlq_n_u32(x, 16);
+	x = vshrq_n_u32(x, 16);
+	y = vshrq_n_u32(y, 16);
+	y = vsubq_u32(y, x);
+	x = vaddq_u32(y, vshlq_n_u32(x, 4));
+	return x;
+}
 
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -68,7 +81,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	uint32x2_t v_tsum;
 	uint8x16_t in16;
 	uint32_t s1, s2;
-	unsigned k, o_k;
+	unsigned k;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
@@ -101,17 +114,18 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		vs1 = v0_32;
 		vs2 = v0_32;
 		/*
-		 * s2 grows very fast (quadratic?), even if we accumulate
-		 * in 4 dwords, more rounds means nonlinear growth.
-		 * Since we have to prepare for the worst (qht all 0xff),
-		 * only do 133% times the work.
-		 * NEON is the only SIMD unit which can do the modulus so
-		 * cheap and instead save an expensive coprocessor->cpu
-		 * move...
-		 * (Other archs also want to save the move and stay longer
-		 * in the loop, but missing goodies make it not worthwhile)
+		 * the accumulating of s1 for every round grows very fast
+		 * (quadratic?), even if we accumulate in 4 dwords, more
+		 * rounds means nonlinear growth.
+		 * We already split it out of s2, normaly it would be in
+		 * s2 times 16... and even grow faster.
+		 * Thanks to this split and vector reduction, we can stay
+		 * longer in the loops. But we have to prepare for the worst
+		 * (qht all 0xff), only do 6 times the work.
+		 * (we could prop. stay a little longer since we have 4 sums,
+		 * not 2 like on x86).
 		 */
-		o_k = k = len < VNMAX ? (unsigned)len : VNMAX;
+		k = len < VNMAX ? (unsigned)len : VNMAX;
 		len -= k;
 		/* insert scalar start somewhere */
 		vs1 = vsetq_lane_u32(s1, vs1, 0);
@@ -141,42 +155,53 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		buf += SOVUCQ;
 		k -= n;
 
-restart_loop:
-// TODO: make work in inner loop more tight
-		/*
-		 * decompose partial sums, so we do less instructions and
-		 * build loops around it to do acc and so on only from time
-		 * to time.
-		 * This is hard with NEON, because the instruction are nice
-		 * we have the stuff in widening and with acc (practicaly
-		 * for free...)
-		 */
 		if(likely(k >= SOVUCQ)) do
 		{
+			uint32x4_t vs1_r = v0_32;
+			do
+			{
+				/* add vs1 for this round */
+				vs1_r = vaddq_u32(vs1_r, vs1);
+
+				/* get input data */
+				in16 = *(const uint8x16_t *)buf;
+
+// TODO: make work in inner loop more tight
+				/*
+				 * decompose partial sums, so we do less instructions and
+				 * build loops around it to do acc and so on only from time
+				 * to time.
+				 * This is hard with NEON, because the instruction are nice:
+				 * we have the stuff in widening and with acc (practicaly
+				 * for free...)
+				 */
+				/* pairwise add bytes and long, pairwise add word long acc */
+				vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
+				/* apply order, add words, pairwise add word long acc */
+				vs2 = vpadalq_u16(vs2,
+					vmlal_u8(
+						vmull_u8(vget_low_u8(in16), vget_low_u8(vord)),
+						vget_high_u8(in16), vget_high_u8(vord)
+					)
+				);
+
+				buf += SOVUCQ;
+				k -= SOVUCQ;
+			} while (k >= SOVUCQ);
+			/* reduce vs1 round sum before multiplying by 16 */
+			vs1_r = vector_reduce(vs1_r);
 			/* add vs1 for this round (16 times) */
 			/* they have shift right and accummulate, where is shift left and acc?? */
-			vs2 = vaddq_u32(vs2, vshlq_n_u32(vs1, 4));
+			vs2 = vaddq_u32(vs2, vshlq_n_u32(vs1_r, 4));
+			/* reduce both vectors to something within 17 bit */
+			vs2 = vector_reduce(vs2);
+			vs1 = vector_reduce(vs1);
+			len += k;
+			k = len < VNMAX ? (unsigned) len : VNMAX;
+			len -= k;
+		} while(likely(len && k >= SOVUC));
 
-			/* get input data */
-			in16 = *(const uint8x16_t *)buf;
-
-			/* pairwise add bytes and long, pairwise add word long acc */
-			vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
-			/* apply order, add words, pairwise add word long acc */
-			vs2 = vpadalq_u16(vs2,
-				vmlal_u8(
-					vmull_u8(vget_low_u8(in16), vget_low_u8(vord)),
-					vget_high_u8(in16), vget_high_u8(vord)
-				)
-			);
-
-			buf += SOVUCQ;
-			k -= SOVUCQ;
-		} while (k >= SOVUCQ);
-
-		len += k;
-		o_k -= k;
-		if(unlikely(len < SOVUCQ) && k)
+		if(likely(k))
 		{
 			/*
 			 * handle trailer
@@ -204,54 +229,7 @@ restart_loop:
 			);
 
 			buf += k;
-			o_k += k;
-			len -= k;
 			k -= k;
-		}
-		if(o_k > NMAX)
-		{
-			/*
-			 * we can stay 133% times NMAX in the loops above and
-			 * fill the first uint32_t of s2 near overflow.
-			 * Then we have to take the modulus on all vector elements.
-			 * There is only one problem:
-			 * No divide.
-			 *
-			 * This is not really a problem, there is the trick to
-			 * multiply by the "magic reciprocal". GCC does the same even
-			 * in scalar code to prevent a divide (modern CPUs:
-			 * mul 8 cycles, div still 44 cycles).
-			 */
-			uint32x2_t v_rec;
-			v_rec = vset_lane_u32(0x080078071, vget_low_u32((uint32x4_t)v0), 0);
-			v_rec = vset_lane_u32(0xFFF1, v_rec, 1);
-			vs1 = vmlsq_lane_u32(vs1,
-				vcombine_u32(               /* magic reciprocal --v        take high word, adjust */
-					vshrn_n_u64(vmull_lane_u32(vget_high_u32(vs1), v_rec, 0), 64 - (32 + 15)),
-					vshrn_n_u64(vmull_lane_u32(vget_low_u32(vs1), v_rec, 0), 64 - (32 + 15))
-				),
-				v_rec /* multiply by base again and substract, voila, modulus */, 1);
-			vs2 = vmlsq_lane_u32(vs2,
-				vcombine_u32(
-					vshrn_n_u64(vmull_lane_u32(vget_high_u32(vs2), v_rec, 0), 64 - (32 + 15)),
-					vshrn_n_u64(vmull_lane_u32(vget_low_u32(vs2), v_rec, 0), 64 - (32 + 15))
-				),
-				v_rec, 1);
-			/*
-			 * only 5 vector ops per vector ~ 10 in total + constant mov
-			 *
-			 * But the register alocator (or those get_high/low/combine)
-			 * sucks and inserts some moves, and this in 3 op code...
-			 *
-			 * Hint: after building the horizontal sum, you have to
-			 * do the mod dance again, then in scalar code.
-			 */
-			o_k = 0;
-		}
-		if(len) {
-			o_k += k = len < VNMAX ? (unsigned)len : VNMAX;
-			len -= k;
-			goto restart_loop;
 		}
 
 		/* add horizontal */

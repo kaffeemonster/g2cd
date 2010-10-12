@@ -55,166 +55,289 @@
 #  define MOD4(a) a %= BASE
 # endif
 
+/* for safety, we reduce the rounds a little bit */
+#define VNMAX (5*NMAX)
+
+static inline unsigned long long reduce(unsigned long long x)
+{
+	unsigned long long y;
+
+	y = x & 0x0000FFFF0000FFFFull;
+	x = (x >> 16) & 0x0000FFFF0000FFFFull;
+	y = psub4(y, x);
+	x = x << 4;
+	x = x + y;
+	return x;
+}
+
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	unsigned long long scale_order_lo;
-	unsigned long long scale_order_hi;
-	unsigned long long vs1, vs2, vs1s;
-	unsigned long long in8;
 	uint32_t s1, s2;
-	unsigned k;
 
 	if(!buf)
 		return 1L;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
-	if(!HOST_IS_BIGENDIAN) {
-		scale_order_lo = 0x0005000600070008ULL;
-		scale_order_hi = 0x0001000200030004ULL;
-	} else {
-		scale_order_lo = 0x0004000300020001ULL;
-		scale_order_hi = 0x0008000700060005ULL;
-	}
 
-	while(likely(len))
+	if(likely(len >= 4*SOULL))
 	{
-		k = len < NMAX ? (unsigned)len : NMAX;
-		len -= k;
+		unsigned long long scale_order_lo;
+		unsigned long long scale_order_hi;
+		unsigned long long vs1, vs2;
+		unsigned long long in8;
+		unsigned f, n, k;
+		const uint8_t *o_buf;
 
-		if(likely(k >= SOULL))
-		{
-			unsigned f, n;
-			const uint8_t *o_buf;
-
-			/* align hard down */
-			f = (unsigned) ALIGN_DOWN_DIFF(buf, SOULL);
-			o_buf = buf;
-			buf = (const uint8_t *)ALIGN_DOWN(buf, SOULL);
-			n = SOULL - f;
-
-			/* add n times s1 to s2 for start round */
-			s2 += s1 * n;
-
-			/* insert scalar start somewhere */
-			vs1 = s1;
-			vs2 = s2;
-			/* get input data */
-			in8 = *(const unsigned long long *)buf;
-			{
-				unsigned long long vs2l, vs2h;
-
-				/* get input data */
-				in8 = *(const unsigned long long *)buf;
-				if(f)
-				{
-					if(!HOST_IS_BIGENDIAN) {
-						in8 >>= f * BITS_PER_CHAR;
-						in8 <<= f * BITS_PER_CHAR;
-					} else {
-						in8 <<= f * BITS_PER_CHAR;
-						in8 >>= f * BITS_PER_CHAR;
-					}
-				}
-
-				/* add 8 byte horizontal and add to old dword */
-				vs1 += psad1(in8, 0);
-				/* apply order, widen to 32 bit */
-				vs2l = unpack1l(0, in8);
-				vs2h = unpack1h(0, in8);
-				vs2l = pmpy2r(vs2l, scale_order_lo) + pmpy2l(vs2l, scale_order_lo);
-				vs2h = pmpy2r(vs2h, scale_order_hi) + pmpy2l(vs2h, scale_order_hi);
-
-				vs2 += vs2l + vs2h;
-			}
-
-			buf += SOULL;
-			k -= n;
-
-			vs1s = 0;
-			if(likely(k >= SOULL)) do
-			{
-				unsigned long long vs2l_sum, vs2h_sum;
-				unsigned long long vs2l, vs2h;
-				unsigned j;
-
-				j = k / SOULL;
-				k -= j * SOULL;
-				vs2l_sum = vs2h_sum = 0;
-				do
-				{
-					/* add vs1 for this round */
-					vs1s += vs1;
-					/* get input data */
-					in8 = *(const unsigned long long *)buf;
-					/* add 8 byte horizontal and add to old dword */
-					vs1 += psad1(in8, 0);
-					/* apply order, widen to 32 bit */
-					vs2l = unpack1l(0, in8);
-					vs2h = unpack1h(0, in8);
-					vs2l_sum += pmpy2r(vs2l, scale_order_lo) + pmpy2l(vs2l, scale_order_lo);
-					vs2h_sum += pmpy2r(vs2h, scale_order_hi) + pmpy2l(vs2h, scale_order_hi);
-					buf += SOULL;
-				} while(--j);
-
-// TODO: signed overflow?
-				/*
-				 * we do not use the 32 bit cleanly as packed,
-				 * since Intel in it's fscking wisdom again forgot
-				 * instructions...
-				 * Since we are cleanly calculating till 32 bit,
-				 * and ia64 is 64 bit, does it matter when the high
-				 * sum turns > 0x8000000?
-				 */
-				vs2 += vs2l_sum + vs2h_sum;
-			} while (k >= SOULL);
-			vs2 += vs1s * 8;
-
-			if(likely(k))
-			{
-				unsigned long long vs2l, vs2h;
-				/* get input data */
-				in8 = *(const unsigned long long *)buf;
-
-				/* swizzle data in place */
-				if(!HOST_IS_BIGENDIAN) {
-					in8 <<= k * BITS_PER_CHAR;
-					in8 >>= k * BITS_PER_CHAR;
-				} else {
-					in8 >>= k * BITS_PER_CHAR;
-					in8 <<= k * BITS_PER_CHAR;
-				}
-
-				/* add k times vs1 for this trailer */
-				vs2 += vs1 * k;
-
-				/* add 8 byte horizontal and add to old dword */
-				vs1 += psad1(in8, 0);
-				/* apply order, widen to 32 bit */
-				vs2l = unpack1l(0, in8);
-				vs2h = unpack1h(0, in8);
-				vs2l = pmpy2r(vs2l, scale_order_lo) + pmpy2l(vs2l, scale_order_lo);
-				vs2h = pmpy2r(vs2h, scale_order_hi) + pmpy2l(vs2h, scale_order_hi);
-				vs2 += vs2l + vs2h;
-
-				buf += k;
-				k -= k;
-			}
-
-			/* vs1 is one giant 64 bit sum, but we only calc to 32 bit */
-			s1 = vs1;
-			/* add both vs2 sums */
-			s2 = unpack4h(0, vs2) + unpack4l(0, vs2);
+		if(!HOST_IS_BIGENDIAN) {
+			scale_order_lo = 0x0005000600070008ULL;
+			scale_order_hi = 0x0001000200030004ULL;
+		} else {
+			scale_order_lo = 0x0004000300020001ULL;
+			scale_order_hi = 0x0008000700060005ULL;
 		}
 
-		if(unlikely(k)) do {
-			s1 += *buf++;
-			s2 += s1;
-		} while (--k);
-		MOD(s1);
-		MOD(s2);
+		/* align hard down */
+		f = (unsigned) ALIGN_DOWN_DIFF(buf, SOULL);
+		o_buf = buf;
+		buf = (const uint8_t *)ALIGN_DOWN(buf, SOULL);
+		n = SOULL - f;
+
+		/* add n times s1 to s2 for start round */
+		s2 += s1 * n;
+
+		k = len < VNMAX ? (unsigned)len : VNMAX;
+		len -= k;
+
+		/* insert scalar start somewhere */
+		vs1 = s1;
+		vs2 = s2;
+		/* get input data */
+		in8 = *(const unsigned long long *)buf;
+		{
+			unsigned long long vs2l, vs2h;
+
+			/* get input data */
+			in8 = *(const unsigned long long *)buf;
+			if(f)
+			{
+				if(!HOST_IS_BIGENDIAN) {
+					in8 >>= f * BITS_PER_CHAR;
+					in8 <<= f * BITS_PER_CHAR;
+				} else {
+					in8 <<= f * BITS_PER_CHAR;
+					in8 >>= f * BITS_PER_CHAR;
+				}
+			}
+
+			/* add 8 byte horizontal and add to old dword */
+			vs1 += psad1(in8, 0);
+			/* apply order, widen to 32 bit */
+			vs2l = unpack1l(0, in8);
+			vs2h = unpack1h(0, in8);
+			vs2l = pmpy2r(vs2l, scale_order_lo) + pmpy2l(vs2l, scale_order_lo);
+			vs2h = pmpy2r(vs2h, scale_order_hi) + pmpy2l(vs2h, scale_order_hi);
+
+			vs2 += vs2l + vs2h;
+		}
+
+		buf += SOULL;
+		k -= n;
+
+		if(likely(k >= 2*SOULL)) do
+		{
+			unsigned long long vs1l_s = 0, vs1h_s = 0;
+			unsigned long long vs1l_sum = vs1, vs1h_sum = 0;
+			unsigned long long vs2l_sum = 0, vs2h_sum = 0;
+			unsigned long long a, b, c, x, y;
+			unsigned j;
+
+			j = k / 2*SOULL;
+			k -= j * 2*SOULL;
+			do
+			{
+				unsigned long long in8_1, in8_2;
+
+				vs1l_s += vs1l_sum;
+				vs1h_s += vs1h_sum;
+				in8_1 = *(const unsigned long long *)buf;
+				buf += SOULL;
+				in8_2 = *(const unsigned long long *)buf;
+				buf += SOULL;
+				asm(
+					"psad1	%4=%9, %8\n\t"
+					"unpack1.l	%6=%8, %9;;\n\t"
+
+					"add	%0=%0, %4\n\t"
+					"unpack1.h	%7=%8, %9\n\t"
+					"pmpy2.r	%3=%6, %10;;\n\t"
+
+					"add	%1=%1, %3\n\t"
+					"pmpy2.r	%5=%7, %11\n\t"
+					"pmpy2.l	%4=%6, %10;;\n\t"
+
+					"add	%2=%2, %5\n\t"
+					"pmpy2.l	%3=%7, %11\n\t"
+					"add	%1=%1, %4\n\t"
+				: /* %0 */ "=&r" (vs1l_sum),
+				  /* %1 */ "=&r" (vs2l_sum),
+				  /* %2 */ "=&r" (vs2h_sum),
+				  /* %3 */ "=&r" (a),
+				  /* %4 */ "=&r" (b),
+				  /* %5 */ "=&r" (c),
+				  /* %6 */ "=&r" (x),
+				  /* %7 */ "=&r" (y)
+				: /* %8 */ "r" (0),
+				  /* %9 */ "r" (in8_1),
+				  /* %10 */ "r" (scale_order_lo),
+				  /* %11 */ "r" (scale_order_hi),
+				  /*  */ "0" (vs1l_sum),
+				  /*  */ "1" (vs2l_sum),
+				  /*  */ "2" (vs2h_sum)
+				);
+// TODO: melt into one asm
+				vs2h_sum += a;
+				asm(
+					"psad1	%4=%9, %8\n\t"
+					"unpack1.l	%6=%8, %9;;\n\t"
+
+					"add	%0=%0, %4\n\t"
+					"unpack1.h	%7=%8, %9\n\t"
+					"pmpy2.r	%3=%6, %10;;\n\t"
+
+					"add	%1=%1, %3\n\t"
+					"pmpy2.r	%5=%7, %11\n\t"
+					"pmpy2.l	%4=%6, %10;;\n\t"
+
+					"add	%2=%2, %5\n\t"
+					"pmpy2.l	%3=%7, %11\n\t"
+					"add	%1=%1, %4\n\t"
+				: /* %0 */ "=&r" (vs1h_sum),
+				  /* %1 */ "=&r" (vs2l_sum),
+				  /* %2 */ "=&r" (vs2h_sum),
+				  /* %3 */ "=&r" (a),
+				  /* %4 */ "=&r" (b),
+				  /* %5 */ "=&r" (c),
+				  /* %6 */ "=&r" (x),
+				  /* %7 */ "=&r" (y)
+				: /* %8 */ "r" (0),
+				  /* %9 */ "r" (in8_2),
+				  /* %10 */ "r" (scale_order_lo),
+				  /* %11 */ "r" (scale_order_hi),
+				  /*  */ "0" (vs1h_sum),
+				  /*  */ "1" (vs2l_sum),
+				  /*  */ "2" (vs2h_sum)
+				);
+				vs2h_sum += a;
+			} while(--j);
+
+// TODO: signed overflow?
+			/*
+			 * we do not use the 32 bit cleanly as packed,
+			 * since Intel in it's fscking wisdom again forgot
+			 * instructions...
+			 * Since we are cleanly calculating till 32 bit,
+			 * and ia64 is 64 bit, does it matter when the high
+			 * sum turns > 0x8000000?
+			 */
+			/* reduce round sum */
+			vs1l_s = reduce(vs1l_s);
+			vs1h_s = reduce(vs1h_s);
+			/* add round sum *16 to vs2 */
+			vs2 += (vs1l_s << 4) + (vs1h_s << 4);
+			vs2 += vs2l_sum;
+			vs2 += vs2h_sum;
+// TODO: are the reduce placed right?
+			vs2 = reduce(vs2);
+			vs1 = reduce(vs1l_sum) + reduce(vs1h_sum);
+			len += k;
+			k = len < VNMAX ? (unsigned)len : VNMAX;
+			len -= k;
+		} while(likely(len && k >= 2*SOULL));
+
+		if(k >= SOULL)
+		{
+			unsigned long long a, b, c, x, y;
+
+			in8 = *(const unsigned long long *)buf;
+			asm(
+				"shladd	%1=%0,3,%1\n\t"
+				"psad1	%3=%8, %7\n\t"
+				"unpack1.l	%5=%7, %8;;\n\t"
+
+				"add	%0=%0, %3\n\t"
+				"unpack1.h	%6=%7, %8\n\t"
+				"pmpy2.r	%2=%5, %9;;\n\t"
+
+				"add	%1=%1, %2\n\t"
+				"pmpy2.r	%4=%6, %10\n\t"
+				"pmpy2.l	%3=%5, %9;;\n\t"
+
+				"add	%1=%1, %4\n\t"
+				"pmpy2.l	%3=%6, %10;;\n\t"
+				"add	%1=%1, %3\n\t"
+			: /* %0 */ "=&r" (vs1),
+			  /* %1 */ "=&r" (vs2),
+			  /* %2 */ "=&r" (a),
+			  /* %3 */ "=&r" (b),
+			  /* %4 */ "=&r" (c),
+			  /* %5 */ "=&r" (x),
+			  /* %6 */ "=&r" (y)
+			: /* %7 */ "r" (0),
+			  /* %8 */ "r" (in8),
+			  /* %9 */ "r" (scale_order_lo),
+			  /* %10 */ "r" (scale_order_hi),
+			  /*  */ "0" (vs1),
+			  /*  */ "1" (vs2)
+			);
+			vs2 += a;
+			buf += SOULL;
+			k   -= SOULL;
+		}
+
+		if(likely(k))
+		{
+			unsigned long long vs2l, vs2h;
+			/* get input data */
+			in8 = *(const unsigned long long *)buf;
+
+			/* swizzle data in place */
+			if(!HOST_IS_BIGENDIAN) {
+				in8 <<= k * BITS_PER_CHAR;
+				in8 >>= k * BITS_PER_CHAR;
+			} else {
+				in8 >>= k * BITS_PER_CHAR;
+				in8 <<= k * BITS_PER_CHAR;
+			}
+
+			/* add k times vs1 for this trailer */
+			vs2 += vs1 * k;
+
+			/* add 8 byte horizontal and add to old dword */
+			vs1 += psad1(in8, 0);
+			/* apply order, widen to 32 bit */
+			vs2l = unpack1l(0, in8);
+			vs2h = unpack1h(0, in8);
+			vs2l = pmpy2r(vs2l, scale_order_lo) + pmpy2l(vs2l, scale_order_lo);
+			vs2h = pmpy2r(vs2h, scale_order_hi) + pmpy2l(vs2h, scale_order_hi);
+			vs2 += vs2l + vs2h;
+
+			buf += k;
+			k -= k;
+		}
+
+		/* vs1 is one giant 64 bit sum, but we only calc to 32 bit */
+		s1 = vs1;
+		/* add both vs2 sums */
+		s2 = unpack4h(0, vs2) + unpack4l(0, vs2);
 	}
 
+	if(unlikely(len)) do {
+		s1 += *buf++;
+		s2 += s1;
+	} while (--len);
+	MOD(s1);
+	MOD(s2);
 	return s2 << 16 | s1;
 }
 
