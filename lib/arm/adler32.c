@@ -14,17 +14,17 @@
  * original, please go to zlib.net.
  */
 
-#if defined(__ARM_NEON__)
-# include <arm_neon.h>
-# include "my_neon.h"
+#if defined(__ARM_NEON__) || defined(__ARM_ARCH_6__)  || \
+    defined(__ARM_ARCH_6J__)  || defined(__ARM_ARCH_6Z__) || \
+    defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_7A__)
 
-#define BASE 65521UL    /* largest prime smaller than 65536 */
+# define BASE 65521UL    /* largest prime smaller than 65536 */
 /* NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1 */
-#define NMAX 5552
+# define NMAX 5552
 
 /* use NO_DIVIDE if your processor does not do division in hardware */
-#ifdef NO_DIVIDE
-# define MOD(a) \
+# ifdef NO_DIVIDE
+#  define MOD(a) \
 	do { \
 		if (a >= (BASE << 16)) a -= (BASE << 16); \
 		if (a >= (BASE << 15)) a -= (BASE << 15); \
@@ -44,7 +44,7 @@
 		if (a >= (BASE << 1)) a -= (BASE << 1); \
 		if (a >= BASE) a -= BASE; \
 	} while (0)
-# define MOD4(a) \
+#  define MOD4(a) \
 	do { \
 		if (a >= (BASE << 4)) a -= (BASE << 4); \
 		if (a >= (BASE << 3)) a -= (BASE << 3); \
@@ -52,13 +52,17 @@
 		if (a >= (BASE << 1)) a -= (BASE << 1); \
 		if (a >= BASE) a -= BASE; \
 	} while (0)
-#else
-# define MOD(a) a %= BASE
-# define MOD4(a) a %= BASE
-#endif
+# else
+#  define MOD(a) a %= BASE
+#  define MOD4(a) a %= BASE
+# endif
+
+# if defined(__ARM_NEON__)
+#  include <arm_neon.h>
+#  include "my_neon.h"
 
 /* since we do not have the 64bit psadbw sum, we could prop. do a little more */
-#define VNMAX (6*NMAX)
+#  define VNMAX (6*NMAX)
 
 static inline uint32x4_t vector_reduce(uint32x4_t x)
 {
@@ -199,7 +203,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			len += k;
 			k = len < VNMAX ? (unsigned) len : VNMAX;
 			len -= k;
-		} while(likely(len && k >= SOVUC));
+		} while(likely(k >= SOVUC));
 
 		if(likely(k))
 		{
@@ -250,6 +254,109 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 	return s2 << 16 | s1;
 }
+static char const rcsid_a32n[] GCC_ATTR_USED_VAR = "$Id: $";
+
+# else
+/* ARM v6 or better */
+#  define SOU32 (sizeof(uint32_t))
+#  define SOVUCQ (4 * SOU32)
+static inline uint32_t reduce(uint32_t x)
+{
+	uint32_t y = x & 0x0000ffff;
+	x >>= 16;
+	y -= x;
+	x <<= 4;
+	return x + y;
+}
+
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	uint32_t s1, s2;
+	unsigned k;
+
+	s1 = adler & 0xffff;
+	s2 = (adler >> 16) & 0xffff;
+
+	if(!buf)
+		return 1L;
+
+	k    = ALIGN_DIFF(buf, SOU32);
+	len -= k;
+	if(k) do {
+		s1 += *buf++;
+		s2 += s1;
+	} while (--k);
+
+	if(likely(len >= 4*SOU32))
+	{
+		uint32_t vs1 = s1, vs2 = s2;
+		uint32_t order_lo, order_hi;
+
+// TODO: byte order?
+		if(HOST_IS_BIGENDIAN) {
+			order_lo = 0x00030001;
+			order_hi = 0x00040002;
+		} else {
+			order_lo = 0x00020004;
+			order_hi = 0x00010003;
+		}
+		k = len < NMAX ? (unsigned) len : NMAX;
+		len -= k;
+
+		do
+		{
+			uint32_t vs1_r = 0;
+			do
+			{
+				uint32_t t21, t22, in;
+				/* add vs1 for this round */
+				vs1_r += vs1;
+
+				/* get input data */
+				in = *(const uint32_t *)buf;
+
+				/* add horizontal and acc */
+				asm("usada8 %0, %1, %2, %3" : "=r" (vs1) : "r" (in), "r" (0), "r" (vs1));
+				/* widen bytes to words, apply order, add and acc */
+				asm("uxtb16 %0, %1" : "=r" (t21) : "r" (in));
+				asm("uxtb16 %0, %1, ror #8" : "=r" (t22) : "r" (in));
+				asm("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (t21) , "r" (order_lo), "r" (vs2));
+				asm("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (t22) , "r" (order_hi), "r" (vs2));
+
+				buf += SOU32;
+				k -= SOU32;
+			} while (k >= SOU32);
+			/* reduce vs1 round sum before multiplying by 4 */
+			vs1_r = reduce(vs1_r);
+			/* add vs1 for this round (4 times) */
+			vs2 += vs1_r * 4;
+			/* reduce both sums to something within 17 bit */
+			vs2 = reduce(vs2);
+			vs1 = reduce(vs1);
+			len += k;
+			k = len < NMAX ? (unsigned) len : NMAX;
+			len -= k;
+		} while(likely(k >= SOU32));
+		len += k;
+		s1 = vs1;
+		s2 = vs2;
+	}
+
+	if(unlikely(len)) do {
+		s1 += *buf++;
+		s2 += s1;
+	} while (--len);
+// TODO: compiler creates calls to umodsi4
+	/* v6 has umull, to create a 64Bit mul result, the compiler could
+	 * create a "mull by invers", but doesn't. Try with reduce
+	 * + if(s > BASE) s -= BASE; ? */
+	MOD(s1);
+	MOD(s2);
+
+	return s2 << 16 | s1;
+}
+static char const rcsid_a32v6[] GCC_ATTR_USED_VAR = "$Id: $";
+# endif
 
 /* ========================================================================= */
 static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsigned len)
@@ -291,8 +398,6 @@ uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
 		return adler32_common(adler, buf, len);
 	return adler32_vec(adler, buf, len);
 }
-
-static char const rcsid_a32g[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "../generic/adler32.c"
 #endif

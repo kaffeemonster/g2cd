@@ -253,7 +253,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			len += k;
 			k = len < VNMAX ? (unsigned)len : VNMAX;
 			len -= k;
-		} while(likely(len && k >= 2*SOULL));
+		} while(likely(k >= 2*SOULL));
 
 		if(k >= SOULL)
 		{
