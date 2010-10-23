@@ -110,11 +110,18 @@ static inline unsigned long zapnot(unsigned long a, unsigned long mask)
 # ifdef __alpha_max__
 #  if _GNUC_PREREQ(3, 3)
 #   define unpkbw	__builtin_alpha_unpkbw
+#   define perr	__builtin_alpha_perr
 #  else
 static inline unsigned long unpkbw(unsigned long a)
 {
 	unsigned long r;
 	asm (".arch ev6; unpkbw	%r1, %0" : "=r" (r) : "rJ" (a));
+	return r;
+}
+static inline unsigned long perr(unsigned long a, unsigned long b)
+{
+	unsigned long r;
+	asm (".arch ev6; perr	%r1, %r2, %0" : "=r" (r) : "rJ" (a), "rJ" (b));
 	return r;
 }
 #  endif

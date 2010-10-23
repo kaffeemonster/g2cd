@@ -271,6 +271,7 @@ TSTRNCMPSRC = \
 	$(MPL)/generic/tstrncmp.c
 ADLER32SRC = \
 	$(MPL)/generic/adler32.c \
+	$(MPL)/alpha/adler32.c \
 	$(MPL)/arm/adler32.c \
 	$(MPL)/ia64/adler32.c \
 	$(MPL)/sparc/adler32.c \

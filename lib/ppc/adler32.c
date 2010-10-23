@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   ppc implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009 Jan Seiffert
+ * Copyright (C) 2009-2010 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -13,50 +13,18 @@
  * but a heavily modified version. If you are looking for the
  * original, please go to zlib.net.
  */
+#if defined(__ALTIVEC__) && defined(__GNUC__)
+# define HAVE_ADLER32_VEC
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+# define MIN_WORK 16
+#endif
+
+#include "../generic/adler32.c"
 
 #if defined(__ALTIVEC__) && defined(__GNUC__)
 /* We use the GCC vector internals, to make things simple for us. */
 # include <altivec.h>
 # include "ppc_altivec.h"
-
-#define BASE 65521UL    /* largest prime smaller than 65536 */
-/* NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1 */
-#define NMAX 5552
-
-/* use NO_DIVIDE if your processor does not do division in hardware */
-#ifdef NO_DIVIDE
-# define MOD(a) \
-	do { \
-		if (a >= (BASE << 16)) a -= (BASE << 16); \
-		if (a >= (BASE << 15)) a -= (BASE << 15); \
-		if (a >= (BASE << 14)) a -= (BASE << 14); \
-		if (a >= (BASE << 13)) a -= (BASE << 13); \
-		if (a >= (BASE << 12)) a -= (BASE << 12); \
-		if (a >= (BASE << 11)) a -= (BASE << 11); \
-		if (a >= (BASE << 10)) a -= (BASE << 10); \
-		if (a >= (BASE << 9)) a -= (BASE << 9); \
-		if (a >= (BASE << 8)) a -= (BASE << 8); \
-		if (a >= (BASE << 7)) a -= (BASE << 7); \
-		if (a >= (BASE << 6)) a -= (BASE << 6); \
-		if (a >= (BASE << 5)) a -= (BASE << 5); \
-		if (a >= (BASE << 4)) a -= (BASE << 4); \
-		if (a >= (BASE << 3)) a -= (BASE << 3); \
-		if (a >= (BASE << 2)) a -= (BASE << 2); \
-		if (a >= (BASE << 1)) a -= (BASE << 1); \
-		if (a >= BASE) a -= BASE; \
-	} while (0)
-# define MOD4(a) \
-	do { \
-		if (a >= (BASE << 4)) a -= (BASE << 4); \
-		if (a >= (BASE << 3)) a -= (BASE << 3); \
-		if (a >= (BASE << 2)) a -= (BASE << 2); \
-		if (a >= (BASE << 1)) a -= (BASE << 1); \
-		if (a >= BASE) a -= BASE; \
-	} while (0)
-#else
-# define MOD(a) a %= BASE
-# define MOD4(a) a %= BASE
-#endif
 
 /* can be propably more, since we do not have the x86 psadbw 64 bit sum */
 #define VNMAX (6*NMAX)
@@ -84,9 +52,6 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
-
-	if(!buf)
-		return 1L;
 
 	if(likely(len >= 2*SOVUC))
 	{
@@ -281,49 +246,6 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	return s2 << 16 | s1;
 }
 
-/* ========================================================================= */
-static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsigned len)
-{
-	/* split Adler-32 into component sums */
-	uint32_t sum2 = (adler >> 16) & 0xffff;
-	adler &= 0xffff;
-
-	/* in case user likes doing a byte at a time, keep it fast */
-	if(len == 1)
-	{
-		adler += buf[0];
-		if(adler >= BASE)
-			adler -= BASE;
-		sum2 += adler;
-		if(sum2 >= BASE)
-			sum2 -= BASE;
-		return adler | (sum2 << 16);
-	}
-
-	/* initial Adler-32 value (deferred check for len == 1 speed) */
-	if(buf == NULL)
-		return 1L;
-
-	/* in case short lengths are provided, keep it somewhat fast */
-	while(len--) {
-		adler += *buf++;
-		sum2 += adler;
-	}
-	if(adler >= BASE)
-		adler -= BASE;
-	MOD4(sum2);	/* only added so many BASE's */
-	return adler | (sum2 << 16);
-}
-
-uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
-{
-	if(len < SOVUC)
-		return adler32_common(adler, buf, len);
-	return adler32_vec(adler, buf, len);
-}
-
-static char const rcsid_a32g[] GCC_ATTR_USED_VAR = "$Id: $";
-#else
-# include "../generic/adler32.c"
+static char const rcsid_a32ppc[] GCC_ATTR_USED_VAR = "$Id: $";
 #endif
 /* EOF */

@@ -27,6 +27,8 @@
 #  include "sparc/adler32.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/adler32.c"
+# elif defined(__alpha__)
+#  include "alpha/adler32.c"
 # elif defined(__arm__)
 #  include "arm/adler32.c"
 # elif defined(__ia64__)
