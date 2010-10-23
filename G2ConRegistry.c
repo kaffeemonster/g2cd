@@ -259,7 +259,7 @@ static pthread_rwlock_t neighbour_hubs_lock;
 static uint32_t ht_seed;
 
 /* Funcs */
-static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct g2_ht_bucket *from, struct g2_ht_chain **from_c, unsigned level)
+static noinline __init struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill, struct g2_ht_bucket *from, struct g2_ht_chain **from_c, unsigned level)
 {
 	unsigned i = 0;
 
@@ -297,7 +297,7 @@ static noinline struct g2_ht_bucket *init_alloc_bucket(struct g2_ht_bucket *fill
 	return from;
 }
 
-void g2_conreg_init(void)
+void __init g2_conreg_init(void)
 {
 	size_t count_b = 0, count_c = 0, i = 0;
 	struct g2_ht_chain *tc;

@@ -153,7 +153,7 @@ static __thread struct big_buff *udp_lcbuffer;
 static void udp_init(void) GCC_ATTR_CONSTRUCT;
 static void udp_deinit(void) GCC_ATTR_DESTRUCT;
 
-static void udp_init(void)
+static __init void udp_init(void)
 {
 	size_t i;
 #ifndef HAVE___THREAD

@@ -120,7 +120,7 @@ static struct
 } profile;
 
 /* Internal prototypes */
-static noinline bool startup(int, char **);
+static noinline __init bool startup(int, char **);
 static noinline bool clutch_logfile(void);
 static noinline void clean_up_m(void);
 static intptr_t check_con_health(g2_connection_t *con, void *carg);
@@ -493,7 +493,7 @@ static noinline bool clutch_logfile(void)
 	return true;
 }
 
-static void parse_cmdl_args(int argc, char **args)
+static __init void parse_cmdl_args(int argc, char **args)
 {
 	/* seeking our options */
 	while(true)
@@ -531,7 +531,7 @@ static void parse_cmdl_args(int argc, char **args)
 	}	
 }
 
-static void fork_to_background(void)
+static __init void fork_to_background(void)
 {
 #ifdef WIN32
 	/* Windows can not fork. do something else */
@@ -638,7 +638,7 @@ static const struct config_item conf_opts[] =
 	CONF_ITEM("bind_v6",              &server.settings.bind.ip6,                 config_parser_handle_ip),
 };
 
-static void handle_config(void)
+static __init void handle_config(void)
 {
 	uint16_t s_lat, s_long;
 	double d_lat, d_long;
@@ -802,7 +802,7 @@ static void handle_config(void)
 	return;
 }
 
-static void change_the_user(void)
+static __init void change_the_user(void)
 {
 #ifdef WIN32
 	/*
@@ -876,7 +876,7 @@ static void change_the_user(void)
 #endif /* __CYGWIN__ */
 }
 
-static void setup_resources(void)
+static __init void setup_resources(void)
 {
 	size_t i;
 
@@ -1034,7 +1034,7 @@ static void setup_resources(void)
 #endif
 }
 
-static void init_prng(void)
+static __init void init_prng(void)
 {
 	/*
 	 * WARNING: even if the compiler cries and valgrind screems:
@@ -1154,7 +1154,7 @@ static void read_uprofile(void)
 	return;
 }
 
-static void adjust_our_niceness(int adjustment)
+static __init void adjust_our_niceness(int adjustment)
 {
 	int cur_nice;
 
@@ -1169,7 +1169,7 @@ static void adjust_our_niceness(int adjustment)
 		logg_errno(LOGF_NOTICE, "adjusting niceness failed, continueing, reason");
 }
 
-static noinline bool startup(int argc, char **args)
+static noinline __init bool startup(int argc, char **args)
 {
 	struct sigaction old_sas, new_sas;
 

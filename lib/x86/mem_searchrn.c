@@ -490,7 +490,7 @@ void *mem_searchrn_x86(void *s, size_t len)
 	return NULL;
 }
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -514,7 +514,7 @@ static void *(*mem_searchrn_ptr)(void *s, size_t len) = mem_searchrn_runtime_sw;
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void mem_searchrn_select(void)
+static GCC_ATTR_CONSTRUCT __init void mem_searchrn_select(void)
 {
 	mem_searchrn_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -524,7 +524,7 @@ static GCC_ATTR_CONSTRUCT void mem_searchrn_select(void)
  *
  * this is inherent racy, we only provide it if the constructer fails
  */
-static void *mem_searchrn_runtime_sw(void *s, size_t len)
+static __init void *mem_searchrn_runtime_sw(void *s, size_t len)
 {
 	mem_searchrn_select();
 	return mem_searchrn_ptr(s, len);

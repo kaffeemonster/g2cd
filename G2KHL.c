@@ -208,7 +208,7 @@ static void put_boot_gwc_in_cache(void)
 /*
  * Functs
  */
-bool g2_khl_init(void)
+bool __init g2_khl_init(void)
 {
 	struct khl_entry *e;
 	uint32_t *signature;

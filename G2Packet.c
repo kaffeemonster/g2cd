@@ -4252,7 +4252,7 @@ out_free:
 }
 
 static pthread_mutex_t crawl_s_lock;
-GCC_ATTR_CONSTRUCT static void init_crawl_lock(void)
+static GCC_ATTR_CONSTRUCT __init void init_crawl_lock(void)
 {
 	if(pthread_mutex_init(&crawl_s_lock, NULL))
 		diedie("could not init crawl lock");
@@ -4601,7 +4601,7 @@ static void g2_packet_free_lorg(void *to_f)
 }
 #endif
 
-static void g2_packet_cinit(void)
+static __init void g2_packet_cinit(void)
 {
 	size_t i;
 

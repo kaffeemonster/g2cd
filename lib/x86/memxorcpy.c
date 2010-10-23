@@ -104,7 +104,7 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 /*
  * needed features
  */
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -139,7 +139,7 @@ static void *(*memxorcpy_ptr)(void *dst, const void *src1, const void *src2, siz
  * constructor
  */
 static void memxorcpy_select(void) GCC_ATTR_CONSTRUCT;
-static void memxorcpy_select(void)
+static __init void memxorcpy_select(void)
 {
 	memxorcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -149,7 +149,7 @@ static void memxorcpy_select(void)
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len)
+static __init void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len)
 {
 	memxorcpy_select();
 	return memxorcpy_ptr(dst, src1, src2, len);

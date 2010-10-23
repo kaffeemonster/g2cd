@@ -41,7 +41,7 @@ static size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_SSE4(size_t n)
 #define ARCH_NAME_SUFFIX _generic
 #include "../generic/popcountst.c"
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -63,7 +63,7 @@ static size_t (*popcountst_ptr)(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL = pop
  * constructor
  */
 static void popcountst_select(void) GCC_ATTR_CONSTRUCT;
-static void popcountst_select(void)
+static __init void popcountst_select(void)
 {
 	popcountst_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -73,7 +73,7 @@ static void popcountst_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_runtime_sw(size_t n)
+static __init size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_runtime_sw(size_t n)
 {
 	popcountst_select();
 	return popcountst(n);

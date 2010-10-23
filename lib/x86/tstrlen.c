@@ -279,7 +279,7 @@ static size_t tstrlen_x86(const tchar_t *s)
 }
 
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -303,7 +303,7 @@ static size_t (*tstrlen_ptr)(const tchar_t *s) = tstrlen_runtime_sw;
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void tstrlen_select(void)
+static GCC_ATTR_CONSTRUCT __init void tstrlen_select(void)
 {
 	tstrlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -313,7 +313,7 @@ static GCC_ATTR_CONSTRUCT void tstrlen_select(void)
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static size_t tstrlen_runtime_sw(const tchar_t *s)
+static __init size_t tstrlen_runtime_sw(const tchar_t *s)
 {
 	tstrlen_select();
 	return tstrlen_ptr(s);

@@ -29,7 +29,7 @@
 
 #ifndef HAVE_DBUS
 # include "lib/log_facility.h"
-bool idbus_init(void)
+bool __init idbus_init(void)
 {
 	/* nop */
 	logg(LOGF_NOTICE, "Warning: you wanted dbus, but it's not compiled in\n");
@@ -328,7 +328,7 @@ static DBusHandlerResult message_handler(DBusConnection *con, DBusMessage *msg, 
 	return DBUS_HANDLER_RESULT_HANDLED;
 }
 
-bool idbus_init(void)
+bool __init idbus_init(void)
 {
 	static const struct DBusObjectPathVTable bp_vtable = {.message_function = message_handler};
 	DBusError dbus_error;

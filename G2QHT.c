@@ -119,7 +119,7 @@ static void qht_dump(void *, void *, size_t);
 #endif
 
 /* tls thingies */
-static void qht_init(void)
+static __init void qht_init(void)
 {
 	qht_dump_init();
 	if(pthread_key_create(&key2qht_zpad, free))

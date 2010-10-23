@@ -67,7 +67,7 @@ bool hzp_alloc(void)
 }
 
 static pthread_mutex_t hzp_free_lock;
-GCC_ATTR_CONSTRUCT static void init_hzp_free_lock(void)
+GCC_ATTR_CONSTRUCT __init static void init_hzp_free_lock(void)
 {
 #ifdef DRD_ME
 	DRD_IGNORE_VAR(nr_free);
@@ -122,7 +122,7 @@ static struct hzp *hzp_alloc_intern(void);
  * returns: nothing
  * exit() on failure
  */
-static void hzp_init(void) 
+static __init void hzp_init(void) 
 {
 	if(pthread_key_create(&key2hzp, hzp_free_int))
 		diedie("couldn't create TLS key for hzp");

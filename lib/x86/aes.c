@@ -611,7 +611,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 #define ARCH_NAME_SUFFIX _generic
 #include "../generic/aes.c"
 
-static const struct test_cpu_feature key_feat[] =
+static __init_cdata const struct test_cpu_feature key_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -622,7 +622,7 @@ static const struct test_cpu_feature key_feat[] =
 	{.func = (void (*)(void))aes_encrypt_key128_generic, .flags_needed = -1 },
 };
 
-static const struct test_cpu_feature enc_feat[] =
+static __init_cdata const struct test_cpu_feature enc_feat[] =
 {
 	{.func = (void (*)(void))aes_ecb_encrypt_padlock, .flags_needed = CFEATURE_PL_ACE_E},
 #ifdef HAVE_BINUTILS
@@ -648,7 +648,7 @@ static void (*aes_ecb_encrypt_ptr)(const struct aes_encrypt_ctx *ctx, void *out,
  * constructor
  */
 static void aes_select(void) GCC_ATTR_CONSTRUCT;
-static void aes_select(void)
+static __init void aes_select(void)
 {
 	aes_encrypt_key128_ptr = test_cpu_feature(key_feat, anum(key_feat));
 	aes_ecb_encrypt_ptr = test_cpu_feature(enc_feat, anum(enc_feat));
@@ -659,13 +659,13 @@ static void aes_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in)
+static __init void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	aes_select();
 	aes_encrypt_key128(ctx, in);
 }
 
-static void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+static __init void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	aes_select();
 	aes_ecb_encrypt(ctx, out, in);

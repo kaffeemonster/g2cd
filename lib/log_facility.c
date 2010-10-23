@@ -76,7 +76,7 @@ static int logg_tls_ready;
 static void logg_init(void) GCC_ATTR_CONSTRUCT;
 static void logg_deinit(void) GCC_ATTR_DESTRUCT;
 
-static void logg_init(void)
+static __init void logg_init(void)
 {
 	/* set a default log level till config comes up */
 	server.settings.logging.act_loglevel = LOGF_ERR;

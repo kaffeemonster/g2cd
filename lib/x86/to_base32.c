@@ -626,7 +626,7 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 }
 #endif
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -654,7 +654,7 @@ static unsigned char *(*to_base32_ptr)(unsigned char *dst, const unsigned char *
  * constructor
  */
 static void to_base32_select(void) GCC_ATTR_CONSTRUCT;
-static void to_base32_select(void)
+static __init void to_base32_select(void)
 {
 	to_base32_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -664,7 +664,7 @@ static void to_base32_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
+static __init unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	to_base32_select();
 	return to_base32(dst, src, len);

@@ -106,7 +106,7 @@ static void *DFUNC_NAME(memand, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 /*
  * needed features
  */
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -143,7 +143,7 @@ static void *(*memand_ptr)(void *dst, const void *src, size_t len) = memand_runt
  * constructor
  */
 static void memand_select(void) GCC_ATTR_CONSTRUCT;
-static void memand_select(void)
+static __init void memand_select(void)
 {
 	memand_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -153,7 +153,7 @@ static void memand_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static void *memand_runtime_sw(void *dst, const void *src, size_t len)
+static __init void *memand_runtime_sw(void *dst, const void *src, size_t len)
 {
 	memand_select();
 	return memand_ptr(dst, src, len);

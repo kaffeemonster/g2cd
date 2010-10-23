@@ -85,7 +85,7 @@ static struct {
 /*
  * Functs
  */
-bool g2_guid_init(void)
+bool __init g2_guid_init(void)
 {
 	struct guid_entry *e;
 	uint32_t *signature;

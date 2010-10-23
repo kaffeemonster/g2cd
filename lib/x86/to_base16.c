@@ -202,7 +202,7 @@ static unsigned char *to_base16_SSSE3(unsigned char *dst, const unsigned char *s
 # endif
 #endif
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -226,7 +226,7 @@ static unsigned char *(*to_base16_ptr)(unsigned char *s, const unsigned char *sr
  * constructor
  */
 static void to_base16_select(void) GCC_ATTR_CONSTRUCT;
-static void to_base16_select(void)
+static __init void to_base16_select(void)
 {
 	to_base16_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -236,7 +236,7 @@ static void to_base16_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
+static __init unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	to_base16_select();
 	return to_base16(dst, src, len);

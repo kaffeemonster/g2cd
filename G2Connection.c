@@ -109,7 +109,7 @@ static inline g2_connection_t *g2_con_to_init(g2_connection_t *c)
 
 #ifndef VALGRIND_ME_CON
 	/* constructor */
-static void g2_con_init(void)
+static __init void g2_con_init(void)
 {
 	size_t i;
 	/* memory for free_cons */

@@ -189,7 +189,7 @@ void noinline random_bytes_get(void *ptr, size_t len)
 	pthread_mutex_unlock(&ctx.lock);
 }
 
-void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
+void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 {
 	union dvector td;
 	struct timeval now;

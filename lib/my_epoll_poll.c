@@ -111,7 +111,7 @@ static int realloc_fddata(int new_max)
 static void my_epoll_init(void) GCC_ATTR_CONSTRUCT;
 static void my_epoll_deinit(void) GCC_ATTR_DESTRUCT;
 
-static void my_epoll_init(void)
+static __init void my_epoll_init(void)
 {
 	int tmp_fd;
 	struct poll_data *tmp_ptr;

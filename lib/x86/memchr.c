@@ -415,7 +415,7 @@ static void *memchr_x86(const void *s, int c, size_t n)
 }
 
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #if 0
 // TODO: advanced code is buggy ATM
@@ -444,7 +444,7 @@ static void *(*memchr_ptr)(const void *s, int c, size_t n) = memchr_runtime_sw;
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void memchr_select(void)
+static GCC_ATTR_CONSTRUCT __init void memchr_select(void)
 {
 	memchr_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -454,7 +454,7 @@ static GCC_ATTR_CONSTRUCT void memchr_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static void *memchr_runtime_sw(const void *s, int c, size_t n)
+static __init void *memchr_runtime_sw(const void *s, int c, size_t n)
 {
 	memchr_select();
 	return memchr_ptr(s, c, n);

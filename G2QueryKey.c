@@ -234,7 +234,7 @@ static noinline void check_salt_vals(unsigned j)
 	}
 }
 
-void g2_qk_init(void)
+void __init g2_qk_init(void)
 {
 	unsigned i;
 
@@ -330,7 +330,7 @@ bool g2_qk_check(const union combo_addr *source, uint32_t key)
 
 /********************* Query Key Cache funcs ********************/
 
-static void qk_init(void)
+static __init void qk_init(void)
 {
 	size_t i;
 

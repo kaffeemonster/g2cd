@@ -574,7 +574,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 	return (s2 << 16) | s1;
 }
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -597,7 +597,7 @@ static uint32_t (*adler32_ptr)(uint32_t adler, const uint8_t *buf, unsigned len)
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void adler32_select(void)
+static GCC_ATTR_CONSTRUCT __init void adler32_select(void)
 {
 	adler32_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -607,7 +607,7 @@ static GCC_ATTR_CONSTRUCT void adler32_select(void)
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static uint32_t adler32_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len)
+static __init uint32_t adler32_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	adler32_select();
 	return adler32_ptr(adler, buf, len);

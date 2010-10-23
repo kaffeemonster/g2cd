@@ -425,7 +425,7 @@ CPY_NEXT:
 	return dst;
 }
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -449,7 +449,7 @@ static char *(*strnpcpy_ptr)(char *dst, const char *src, size_t maxlen) = strnpc
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void strnpcpy_select(void)
+static GCC_ATTR_CONSTRUCT __init void strnpcpy_select(void)
 {
 	strnpcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -459,7 +459,7 @@ static GCC_ATTR_CONSTRUCT void strnpcpy_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
+static __init char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
 {
 	strnpcpy_select();
 	return strnpcpy_ptr(dst, src, maxlen);

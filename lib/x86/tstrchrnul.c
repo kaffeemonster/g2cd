@@ -353,7 +353,7 @@ static tchar_t *tstrchrnul_x86(const tchar_t *s, tchar_t c)
 }
 
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -377,7 +377,7 @@ static tchar_t *(*tstrchrnul_ptr)(const tchar_t *s, tchar_t c) = tstrchrnul_runt
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void tstrchrnul_select(void)
+static GCC_ATTR_CONSTRUCT __init void tstrchrnul_select(void)
 {
 	tstrchrnul_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -387,7 +387,7 @@ static GCC_ATTR_CONSTRUCT void tstrchrnul_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static tchar_t *tstrchrnul_runtime_sw(const tchar_t *s, tchar_t c)
+static __init tchar_t *tstrchrnul_runtime_sw(const tchar_t *s, tchar_t c)
 {
 	tstrchrnul_select();
 	return tstrchrnul_ptr(s, c);

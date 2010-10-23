@@ -68,7 +68,7 @@ static struct
 } wakeup;
 
 
-GCC_ATTR_CONSTRUCT static void init_timeout_system(void)
+GCC_ATTR_CONSTRUCT __init static void init_timeout_system(void)
 {
 	if(pthread_mutex_init(&wakeup.mutex, NULL))
 		diedie("failed to setup timeout mutex");

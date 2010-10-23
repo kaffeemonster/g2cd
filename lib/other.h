@@ -95,6 +95,18 @@ static inline int isblank(int c)
 # define GCC_ATTR_USED_VAR
 #endif /* _GNUC_PREREQ (3,3) */
 
+#if _GNUC_PREREQ (4,3)
+# define GCC_ATTR_COLD GCC_ATTRIB(__cold__)
+#else
+# define GCC_ATTR_COLD
+#endif /* _GNUC_PREREQ (4,3) */
+
+#if _GNUC_PREREQ (4,3)
+# define GCC_ATTR_HOT GCC_ATTRIB(__hot__)
+#else
+# define GCC_ATTR_HOT
+#endif /* _GNUC_PREREQ (4,3) */
+
 #if _GNUC_PREREQ (4,4)
 # define GCC_ATTR_OPTIMIZE(x) GCC_ATTRIB(__optimize__ (x))
 #else
@@ -239,6 +251,15 @@ static inline int isblank(int c)
 #else
 # define SECTION_GOT
 #endif
+
+/*
+ * maybe we can unmap our init code
+ * But for now, wimply mark it cold, because it is run exactly
+ * one time
+ */
+#define __init GCC_ATTR_COLD
+#define __init_data
+#define __init_cdata
 
 /*
  * if we are on a SMP-System (also HT) take a spinlock for

@@ -1826,7 +1826,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 #define NEED_GEN_POPER
 #include "../generic/mempopcnt.c"
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -1860,7 +1860,7 @@ static size_t (*mempopcnt_ptr)(const void *s, size_t n) = mempopcnt_runtime_sw;
  * constructor
  */
 static void mempopcnt_select(void) GCC_ATTR_CONSTRUCT;
-static void mempopcnt_select(void)
+static __init void mempopcnt_select(void)
 {
 	mempopcnt_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -1870,7 +1870,7 @@ static void mempopcnt_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static size_t mempopcnt_runtime_sw(const void *s, size_t n)
+static __init size_t mempopcnt_runtime_sw(const void *s, size_t n)
 {
 	mempopcnt_select();
 	return mempopcnt(s, n);

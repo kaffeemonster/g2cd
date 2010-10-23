@@ -207,7 +207,7 @@ static inline bool cpu_feature(int f)
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
 }
 
-static void identify_cpu(void)
+static __init void identify_cpu(void)
 {
 	union cpuid_regs a;
 	size_t i;
@@ -524,13 +524,13 @@ static void identify_cpu(void)
 	return;
 }
 
-static int cmp_vendor(const char *str1, const char *str2)
+static __init int cmp_vendor(const char *str1, const char *str2)
 {
 	const uint32_t *v1 = (const uint32_t *)str1, *v2 = (const uint32_t *)str2;
 	return v1[0] == v2[0] && v1[1] == v2[1] && v1[2] == v2[2];
 }
 
-static void identify_vendor(struct cpuinfo *cpu)
+static __init void identify_vendor(struct cpuinfo *cpu)
 {
 	char *s = cpu->vendor_str.s;
 	if(cmp_vendor(s, "GenuineIntel"))
@@ -574,12 +574,12 @@ void emit_emms(void)
 /*
  * Callback test if we have 3dNow
  */
-int test_cpu_feature_3dnow_callback(void)
+int __init test_cpu_feature_3dnow_callback(void)
 {
 	return cpu_feature(CFEATURE_3DNOW);
 }
 
-int test_cpu_feature_3dnowprf_callback(void)
+int __init test_cpu_feature_3dnowprf_callback(void)
 {
 	return cpu_feature(CFEATURE_3DNOWPRE);
 }
@@ -587,7 +587,7 @@ int test_cpu_feature_3dnowprf_callback(void)
 /*
  * Callback test if we have CMOV (thanks VIA)
  */
-int test_cpu_feature_cmov_callback(void)
+int __init test_cpu_feature_cmov_callback(void)
 {
 	return cpu_feature(CFEATURE_CMOV);
 }
@@ -755,7 +755,7 @@ int test_cpu_feature_cmov_callback(void)
 #define XFEATURE_ENABLED_MASK_R 0
 #define XFEATURE_XMM_STATE_SAVE (1<<1)
 #define XFEATURE_YMM_STATE_SAVE (1<<2)
-int test_cpu_feature_avx_callback(void)
+int __init test_cpu_feature_avx_callback(void)
 {
 	uint32_t low, high;
 
@@ -799,7 +799,7 @@ int test_cpu_feature_avx_callback(void)
 /*
  * Test a feature on a x86-CPU and change function pointer
  */
-void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
+__init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
 	size_t i;
 	identify_cpu();

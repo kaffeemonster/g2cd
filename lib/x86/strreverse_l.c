@@ -304,7 +304,7 @@ static void strreverse_l_SSE(char *begin, char *end)
 }
 #endif
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -332,7 +332,7 @@ static void (*strreverse_l_ptr)(char *begin, char *end) = strreverse_l_runtime_s
  * constructor
  */
 static void strreverse_l_select(void) GCC_ATTR_CONSTRUCT;
-static void strreverse_l_select(void)
+static __init void strreverse_l_select(void)
 {
 	strreverse_l_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -342,7 +342,7 @@ static void strreverse_l_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static void strreverse_l_runtime_sw(char *begin, char *end)
+static __init void strreverse_l_runtime_sw(char *begin, char *end)
 {
 	strreverse_l_select();
 	strreverse_l_ptr(begin, end);

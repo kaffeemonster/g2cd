@@ -217,7 +217,7 @@ static GCC_ATTR_FASTCALL void *memcpy_medium_MMX(void *restrict dst, const void 
 # endif
 #endif
 
-static const struct test_cpu_feature t_feat_med[] =
+static __init_cdata const struct test_cpu_feature t_feat_med[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -238,7 +238,7 @@ static const struct test_cpu_feature t_feat_med[] =
 	{.func = (void (*)(void))memcpy_small, .flags_needed = -1 },
 };
 
-static const struct test_cpu_feature t_feat_big[] =
+static __init_cdata const struct test_cpu_feature t_feat_big[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -270,13 +270,13 @@ static GCC_ATTR_FASTCALL void *(*memcpy_big_ptr)(void *restrict dst, const void 
  * constructor
  */
 static void memcpy_select(void) GCC_ATTR_CONSTRUCT;
-static void memcpy_select(void)
+static __init void memcpy_select(void)
 {
 	memcpy_medium_ptr = test_cpu_feature(t_feat_med, anum(t_feat_med));
 	memcpy_big_ptr = test_cpu_feature(t_feat_big, anum(t_feat_big));
 }
 
-static GCC_ATTR_FASTCALL void *memcpy_runtime_sw(void *restrict dst, const void *restrict src, size_t len)
+static GCC_ATTR_FASTCALL __init void *memcpy_runtime_sw(void *restrict dst, const void *restrict src, size_t len)
 {
 	memcpy_select();
 	if(likely(len < 256 * 1024))

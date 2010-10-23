@@ -99,7 +99,7 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 # endif
 #endif
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -132,7 +132,7 @@ static void *(*memneg_ptr)(void *dst, const void *src, size_t len) = memneg_runt
  * constructor
  */
 static void memneg_select(void) GCC_ATTR_CONSTRUCT;
-static void memneg_select(void)
+static __init void memneg_select(void)
 {
 	memneg_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -142,7 +142,7 @@ static void memneg_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static void *memneg_runtime_sw(void *dst, const void *src, size_t len)
+static __init void *memneg_runtime_sw(void *dst, const void *src, size_t len)
 {
 	memneg_select();
 	return memneg_ptr(dst, src, len);

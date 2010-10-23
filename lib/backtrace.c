@@ -28,7 +28,7 @@
 #include "backtrace.h"
 
 #ifndef WANT_BACKTRACES
-void backtrace_init(void)
+void __init backtrace_init(void)
 {
 	/* nop */
 }
@@ -135,7 +135,7 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 	return buf;
 }
 
-static void sig_segv_print(int signr, siginfo_t *si, void *vuc)
+static GCC_ATTR_COLD void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 {
 #if defined(__alpha__)
 	static unsigned long greg_space[NGREG];
@@ -495,7 +495,7 @@ out:
 	}
 }
 
-void backtrace_init(void)
+void __init backtrace_init(void)
 {
 	struct sigaction sas;
 

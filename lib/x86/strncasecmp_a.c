@@ -497,7 +497,7 @@ LOOP_AGAIN:
 }
 
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -522,7 +522,7 @@ static int (*strncasecmp_a_ptr)(const char *s1, const char *s2, size_t n) = strn
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void strncasecmp_a_select(void)
+static GCC_ATTR_CONSTRUCT __init void strncasecmp_a_select(void)
 {
 	strncasecmp_a_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -532,7 +532,7 @@ static GCC_ATTR_CONSTRUCT void strncasecmp_a_select(void)
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
+static __init int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
 {
 	strncasecmp_a_select();
 	return strncasecmp_a_ptr(s1, s2, n);

@@ -41,7 +41,7 @@ static shortlock_t gen_atomic_lock[ATOMIC_HASH_SIZE];
 
 /* you better not remove this prototype... */
 static void gen_atomic_init(void) GCC_ATTR_CONSTRUCT;
-static void gen_atomic_init(void)
+static __init void gen_atomic_init(void)
 {
 	int i = ATOMIC_HASH_SIZE - 1;
 	do

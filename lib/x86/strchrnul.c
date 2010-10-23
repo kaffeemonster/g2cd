@@ -418,7 +418,7 @@ static char *strchrnul_x86(const char *s, int c)
 }
 
 
-static const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -445,7 +445,7 @@ static char *(*strchrnul_ptr)(const char *s, int c) = strchrnul_runtime_sw;
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT void strchrnul_select(void)
+static GCC_ATTR_CONSTRUCT __init void strchrnul_select(void)
 {
 	strchrnul_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
@@ -455,7 +455,7 @@ static GCC_ATTR_CONSTRUCT void strchrnul_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static char *strchrnul_runtime_sw(const char *s, int c)
+static __init char *strchrnul_runtime_sw(const char *s, int c)
 {
 	strchrnul_select();
 	return strchrnul_ptr(s, c);

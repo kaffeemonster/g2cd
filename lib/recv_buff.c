@@ -60,7 +60,7 @@ static pthread_key_t key2lrecv;
  *
  * exit() on failure
  */
-static void recv_buff_init(void)
+static __init void recv_buff_init(void)
 {
 	size_t i;
 
