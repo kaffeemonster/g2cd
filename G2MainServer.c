@@ -123,6 +123,8 @@ static struct
 static noinline __init bool startup(int, char **);
 static noinline bool clutch_logfile(void);
 static noinline void clean_up_m(void);
+static void next_HAW_helper(void);
+static void next_health_helper(void);
 static intptr_t check_con_health(g2_connection_t *con, void *carg);
 static my_pollfd *sock_com_create_pfd(my_pollfd *pfd, unsigned *num, unsigned *len);
 
@@ -208,14 +210,8 @@ int main(int argc, char **args)
 				/* clean up udp reassambly cache */
 				g2_udp_reas_timeout();
 				/* time to send a HAW again? */
-				if(last_HAW < local_time_now - (5 * 60)) {
-					g2_conreg_random_hub(NULL, send_HAW_callback, NULL);
-					last_HAW = local_time_now;
-				}
-				if(last_full_check < local_time_now - (60)) {
-					g2_conreg_all_con(check_con_health, NULL);
-					last_full_check = local_time_now;
-				}
+				next_HAW_helper();
+				next_health_helper();
 				if(reopen_logfile) {
 					if(!clutch_logfile())
 						server_running = false;
@@ -322,6 +318,26 @@ int main(int argc, char **args)
 	fsync(STDOUT_FILENO);
 #endif
 	return EXIT_SUCCESS;
+}
+
+static void next_HAW_helper(void)
+{
+	long tdiff = local_time_now - last_HAW;
+	tdiff = tdiff >= 0 ? tdiff : -tdiff;
+	if(tdiff >= (5 * 60)) {
+		g2_conreg_random_hub(NULL, send_HAW_callback, NULL);
+		last_HAW = local_time_now;
+	}
+}
+
+static void next_health_helper(void)
+{
+	long tdiff = local_time_now - last_full_check;
+	tdiff = tdiff >= 0 ? tdiff : -tdiff;
+	if(tdiff >= (60)) {
+		g2_conreg_all_con(check_con_health, NULL);
+		last_full_check = local_time_now;
+	}
 }
 
 #define FIRST_GRACE_TIME (5 * 60)
@@ -597,7 +613,7 @@ static __init void fork_to_background(void)
 #endif
 }
 
-static const struct config_item conf_opts[] =
+static __init_cdata const struct config_item conf_opts[] =
 {
 	CONF_ITEM("max_connection_sum",   &server.settings.max_connection_sum,       config_parser_handle_int),
 	CONF_ITEM("max_hub_sum",          &server.settings.max_hub_sum,              config_parser_handle_int),

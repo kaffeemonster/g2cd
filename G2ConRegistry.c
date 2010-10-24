@@ -400,54 +400,71 @@ static struct g2_ht_chain *g2_conreg_find_chain(const union combo_addr *addr)
 	return b->d.c[h & LEVEL_MASK];
 }
 
-static struct g2_ht_chain *g2_conreg_find_chain_and_mark_dirty(const union combo_addr *addr)
+static void find_chain_and_mark_dirty_rec(struct g2_ht_bucket *b, void (*callback)(struct g2_ht_chain *, g2_connection_t *), g2_connection_t *connec, unsigned i, uint32_t h)
 {
-	struct g2_ht_bucket *b = &ht_root;
-	uint32_t h = combo_addr_hash_ip(addr, ht_seed);
-	unsigned i = 0;
+	if(i < (LEVEL_COUNT-1))
+		find_chain_and_mark_dirty_rec(b->d.b[h & LEVEL_MASK], callback, connec, i+1, h >> LEVEL_SHIFT);
+	else
+		callback(b->d.c[h & LEVEL_MASK], connec);
+	/*
+	 * Mark dirty when ascending from recursion.
+	 * This is important to set the dirtyness in a "sticky"
+	 * fashion since we race with the scrubbing.
+	 */
+	b->dirty = true;
+// TODO: we maybe need a MB here...
+}
 
-	for(b->dirty = true; i < (LEVEL_COUNT-1); i++, h >>= LEVEL_SHIFT, b->dirty = true)
-		b = b->d.b[h & LEVEL_MASK];
-	return b->d.c[h & LEVEL_MASK];
+static void g2_conreg_find_chain_and_mark_dirty(g2_connection_t *connec, void (*callback)(struct g2_ht_chain *, g2_connection_t *))
+{
+	find_chain_and_mark_dirty_rec(&ht_root, callback, connec, 0, combo_addr_hash_ip(&connec->remote_host, ht_seed));
+}
+
+static void chain_callback_dirty(struct g2_ht_chain *c, g2_connection_t *connec GCC_ATTR_UNUSED_PARAM)
+{
+	pthread_rwlock_rdlock(&c->lock);
+	c->dirty = true;
+	/* MB: the lock should build a barrier here */
+	pthread_rwlock_unlock(&c->lock);
 }
 
 void g2_conreg_mark_dirty(g2_connection_t *connec)
 {
-	struct g2_ht_chain  *c;
-
 	if(unlikely(hlist_unhashed(&connec->registry)))
 		return;
 
-	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	/*
-	 * MB:
-	 * the lock should build a barrier here
-	 */
-	pthread_rwlock_rdlock(&c->lock);
+	g2_conreg_find_chain_and_mark_dirty(connec, chain_callback_dirty);
+}
+
+static void chain_callback_add(struct g2_ht_chain *c, g2_connection_t *connec)
+{
+	pthread_rwlock_wrlock(&c->lock);
+	hlist_add_head(&connec->registry, &c->list);
 	c->dirty = true;
+	/* MB: the lock should build a barrier here */
 	pthread_rwlock_unlock(&c->lock);
 }
 
 bool g2_conreg_add(g2_connection_t *connec)
 {
-	struct g2_ht_chain  *c;
-
 	if(unlikely(!hlist_unhashed(&connec->registry)))
 		return false;
 
-	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	pthread_rwlock_wrlock(&c->lock);
-	c->dirty = true;
-	hlist_add_head(&connec->registry, &c->list);
-	pthread_rwlock_unlock(&c->lock);
-
+	g2_conreg_find_chain_and_mark_dirty(connec, chain_callback_add);
 	return true;
+}
+
+static void chain_callback_remove(struct g2_ht_chain *c, g2_connection_t *connec)
+{
+	pthread_rwlock_wrlock(&c->lock);
+	hlist_del(&connec->registry);
+	c->dirty = true;
+	/* MB: the lock should build a barrier here */
+	pthread_rwlock_unlock(&c->lock);
 }
 
 bool g2_conreg_remove(g2_connection_t *connec)
 {
-	struct g2_ht_chain  *c;
-
 	if(unlikely(hlist_unhashed(&connec->registry)))
 		return false;
 
@@ -460,14 +477,9 @@ bool g2_conreg_remove(g2_connection_t *connec)
 		atomic_dec(&server.status.act_hub_sum);
 		INIT_LIST_HEAD(&connec->hub_list);
 	}
-	c = g2_conreg_find_chain_and_mark_dirty(&connec->remote_host);
-	pthread_rwlock_wrlock(&c->lock);
-	c->dirty = true;
-	hlist_del(&connec->registry);
-	pthread_rwlock_unlock(&c->lock);
+	g2_conreg_find_chain_and_mark_dirty(connec, chain_callback_remove);
 
 	INIT_HLIST_NODE(&connec->registry);
-
 	return true;
 }
 
@@ -907,20 +919,33 @@ void g2_qht_global_update(void)
 	static time_t last_update;
 	long tdiff;
 
-	/* only one updater at a time */
-	if(unlikely(pthread_mutex_lock(&global_update_lock)))
-		return;
-
+	/* catch updates to last_update */
+	rmb();
 	tdiff = local_time_now - last_update;
 	tdiff = tdiff >= 0 ? tdiff : -tdiff;
-	if(tdiff >= UPDATE_INTERVAL) {
-		rmb(); /* catch the dirty marks to this point */
-		do_global_update(NULL, &ht_root, 0);
-		wmb(); /* put all qht writes into "place" */
-		last_update = local_time_now;
-// TODO: When the QHT gets updated, push change activly to other hubs
-	}
+	if(tdiff < UPDATE_INTERVAL)
+		return;
 
+	/* only one updater at a time */
+	if(pthread_mutex_trylock(&global_update_lock))
+		return;
+	/* catch updates to last_update, the lock being the MB */
+
+	/* since we now have the lock, recheck last_update now race free */
+	tdiff = local_time_now - last_update;
+	tdiff = tdiff >= 0 ? tdiff : -tdiff;
+	if(tdiff < UPDATE_INTERVAL)
+		goto OUT_UNLOCK;
+
+	last_update = local_time_now;
+	/* flush out last_update */
+	mb();
+	/* catch the dirty marks to this point */
+	do_global_update(NULL, &ht_root, 0);
+	wmb(); /* put all qht writes into "place" */
+// TODO: When the QHT gets updated, push change activly to other hubs
+
+OUT_UNLOCK:
 	if(unlikely(pthread_mutex_unlock(&global_update_lock)))
 		diedie("Huuarg, ConReg update lock stuck, bye!");
 }
