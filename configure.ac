@@ -678,7 +678,7 @@ AC_CHECK_DECLS([INET6_ADDRSTRLEN, IPV6_V6ONLY, IP_RECVIF, IP_RECVDSTADDR, IP_SEN
 # include <winsock2.h>
 # include <ws2tcpip.h>
 #endif]])
-AC_CHECK_DECLS([TCP_CORK, TCP_THIN_LINEAR_TIMEOUTS, TCP_THIN_DUPACK], [], [], [[#ifndef WIN32
+AC_CHECK_DECLS([TCP_CORK, TCP_THIN_LINEAR_TIMEOUTS, TCP_THIN_DUPACK, TCP_USER_TIMEOUT], [], [], [[#ifndef WIN32
 # include <netinet/tcp.h>
 #else
 # include <winsock2.h>

@@ -87,6 +87,7 @@
 #define DEFAULT_HUB_ENC_IN	ENC_DEFLATE
 #define DEFAULT_HUB_ENC_OUT	ENC_DEFLATE
 
+#define DEFAULT_TCP_SEND_TIMEOUT	180000
 /* real constants, should not be run-time configurable */
 #define NORM_BUFF_CAPACITY	(4096 - (3 * sizeof(size_t)))
 #define NORM_HZP_THRESHOLD	5

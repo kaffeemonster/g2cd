@@ -89,6 +89,8 @@ _G2MAIN_EXTRNVAR(struct
 			enum g2_connection_encodings hub_out_encoding;
 			uint8_t our_guid[16];
 			unsigned max_g2_packet_length;
+			unsigned tcp_send_timeout;
+			bool have_tcp_send_timeout;
 			struct
 			{
 				const char *name;

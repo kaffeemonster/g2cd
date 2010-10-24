@@ -71,6 +71,7 @@
 #include "G2KHL.h"
 #include "G2GUIDCache.h"
 #include "G2QueryKey.h"
+#include "G2Acceptor.h"
 #include "lib/my_epoll.h"
 #include "lib/sec_buffer.h"
 #include "lib/log_facility.h"
@@ -330,16 +331,6 @@ static void next_HAW_helper(void)
 	}
 }
 
-static void next_health_helper(void)
-{
-	long tdiff = local_time_now - last_full_check;
-	tdiff = tdiff >= 0 ? tdiff : -tdiff;
-	if(tdiff >= (60)) {
-		g2_conreg_all_con(check_con_health, NULL);
-		last_full_check = local_time_now;
-	}
-}
-
 #define FIRST_GRACE_TIME (5 * 60)
 #define SECOND_GRACE_TIME (30 * 60)
 #define FIRST_MIN_LEAF 5
@@ -386,6 +377,20 @@ static noinline intptr_t check_hub_health(g2_connection_t *con, void *carg GCC_A
 		gup_con_mark_write(con);
 	}
 	return 0;
+}
+
+static void next_health_helper(void)
+{
+	long tdiff = local_time_now - last_full_check;
+	tdiff = tdiff >= 0 ? tdiff : -tdiff;
+	if(tdiff >= (60))
+	{
+		last_full_check = local_time_now;
+		if(server.settings.have_tcp_send_timeout)
+			g2_conreg_all_hub(NULL, check_hub_health, NULL);
+		else
+			g2_conreg_all_con(check_con_health, NULL);
+	}
 }
 
 static intptr_t check_con_health(g2_connection_t *con, void *carg)
@@ -620,6 +625,7 @@ static __init_cdata const struct config_item conf_opts[] =
 	CONF_ITEM("nice_adjust",          &server.settings.nice_adjust,              config_parser_handle_int),
 	CONF_ITEM("num_threads",          &server.settings.num_threads,              config_parser_handle_int),
 	CONF_ITEM("max_g2_packet_length", &server.settings.max_g2_packet_length,     config_parser_handle_int),
+	CONF_ITEM("tcp_send_timeout",     &server.settings.tcp_send_timeout,         config_parser_handle_int),
 	CONF_ITEM("qht_max_promille",     &server.settings.qht.max_promille,         config_parser_handle_int),
 	CONF_ITEM("default_port",         &server.settings.bind.default_port,        config_parser_handle_int),
 	CONF_ITEM("data_root_dir",        &server.settings.data_root_dir,            config_parser_handle_string),
@@ -689,6 +695,7 @@ static __init void handle_config(void)
 	server.settings.max_connection_sum             = DEFAULT_CON_MAX;
 	server.settings.max_hub_sum                    = DEFAULT_HUB_MAX;
 	server.settings.max_g2_packet_length           = DEFAULT_PCK_LEN_MAX;
+	server.settings.tcp_send_timeout               = DEFAULT_TCP_SEND_TIMEOUT;
 	server.settings.profile.want_2_send            = DEFAULT_SEND_PROFILE;
 	server.settings.khl.gwc_boot_url               = DEFAULT_GWC_BOOT;
 	server.settings.khl.gwc_cache_fname            = DEFAULT_GWC_DB;
@@ -769,6 +776,13 @@ static __init void handle_config(void)
 
 	if(server.settings.qht.max_promille > 1000)
 		server.settings.qht.max_promille = 1000;
+
+	if(server.settings.tcp_send_timeout >= (20 * 60 * 1000)) {
+		logg(LOGF_NOTICE, "You want to set the tcp send timout to %ums, which is to high.\n"
+		     "I cowardly refuse to do so and set it to %ums\n",
+		     server.settings.tcp_send_timeout, DEFAULT_TCP_SEND_TIMEOUT);
+		server.settings.tcp_send_timeout = DEFAULT_TCP_SEND_TIMEOUT;
+	}
 
 	emit_emms();
 	errno = 0;
@@ -952,6 +966,8 @@ static __init void setup_resources(void)
 		logg_errno(LOGF_WARN, "getting FD-limit");
 #endif
 
+	server.settings.have_tcp_send_timeout = check_tcp_send_timeout();
+
 	if(pthread_attr_init(&server.settings.t_def_attr)) {
 		logg_errno(LOGF_CRIT, "initialising pthread_attr");
 		exit(EXIT_FAILURE);
@@ -1003,28 +1019,32 @@ static __init void setup_resources(void)
 #ifdef __linux__
 	{
 	char buf[64];
-	int fd = open("/proc/sys/net/ipv4/tcp_retries2", O_RDONLY|O_NOCTTY);
-	if(0 <= fd)
+	int fd;
+	if(!server.settings.have_tcp_send_timeout)
 	{
-		memset(buf, 0, sizeof(buf));
-		if(read(fd, buf, sizeof(buf) - 1) > 0)
+		fd = open("/proc/sys/net/ipv4/tcp_retries2", O_RDONLY|O_NOCTTY);
+		if(0 <= fd)
 		{
-			int num = atoi(buf);
-			unsigned bt = 1, bt1 = 1, bt2 = 1;
-			for(i = num - 1; i; i--) {
-				bt *= 2;
-				bt1 += bt > 60 ? 60 : bt;
-				bt2 += bt;
+			memset(buf, 0, sizeof(buf));
+			if(read(fd, buf, sizeof(buf) - 1) > 0)
+			{
+				int num = atoi(buf);
+				unsigned bt = 1, bt1 = 1, bt2 = 1;
+				for(i = num - 1; i; i--) {
+					bt *= 2;
+					bt1 += bt > 60 ? 60 : bt;
+					bt2 += bt;
+				}
+				bt1 = DIV_ROUNDUP(bt1, 60);
+				bt2 /= 60;
+				if(num > 7)
+					logg(LOGF_WARN, "Warning: Your \"/proc/sys/net/ipv4/tcp_retries2\" is high (%i), this can lead to a lot of stuck\n"
+					                "         dead connection due to long timeouts (approx. %u minutes, up to %u minutes). Please refer\n"
+					                "         to the README, section 2.1.2 what this is about!\n", num, bt1, bt2
+					);
 			}
-			bt1 = DIV_ROUNDUP(bt1, 60);
-			bt2 /= 60;
-			if(num > 7)
-				logg(LOGF_WARN, "Warning: Your \"/proc/sys/net/ipv4/tcp_retries2\" is high (%i), this can lead to a lot of stuck\n"
-				                "         dead connection due to long timeouts (approx. %u minutes, up to %u minutes). Please refer\n"
-				                "         to the README, section 2.1.2 what this is about!\n", num, bt1, bt2
-				);
+			close(fd);
 		}
-		close(fd);
 	}
 
 	/*

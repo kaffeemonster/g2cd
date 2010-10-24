@@ -370,7 +370,7 @@ COMMENTC
 COMMENTC QHT-too-full ignore threshold.
 COMMENTC A too full QHT is bad, because it matches too much, and lets the
 COMMENTC false positives skyrocket. This creates a lot of search hits and
-COMMENTC forwards (traffic) but no usefull results.
+COMMENTC forwards (traffic) but creates no usefull results.
 COMMENTC This can be seen as spam. This happens when either someone
 COMMENTC shares too much files or there is really a spammer.
 COMMENTC While one maybe want one of the files from the "shares to much"-
@@ -388,4 +388,43 @@ COMMENTC What is the maximal accepted packet size?
 COMMENTC You should _NEVER_ raise this value, dragons be there...
 COMMENTC
 COMMENT max_g2_packet_length = DEFAULT_PCK_LEN_MAX
+
+COMMENTC
+COMMENTC Flaky TCP connections from home grade internet connections
+COMMENTC (NAT, cheap CPE, filter/personel FW, overloaded BW, etc.) are
+COMMENTC a constant pain. We need to purge them when they die on us, fast.
+COMMENTC
+COMMENTC Unfortunatly TCP was build to be relaible, resending packets and
+COMMENTC not simply reseting/forgetting the connection for a long time.
+COMMENTC This long time was fine in the 70's, and maybe lets you talk IP
+COMMENTC to the moon and back, but is to large for our needs.
+COMMENTC
+COMMENTC Unfortunatly on most OS one cannot normally influence the general
+COMMENTC TCP timeout behavior on a finegrained, per connection basis.
+COMMENTC Which is sad, RFC793 talks about "user timeout" but defines no
+COMMENTC means to set it (out of scope of the RFC, it's assumed to be "there",
+COMMENTC passed by send and open). But the classic BSD socket API contains
+COMMENTC no timeout parameter on those calls. Also other means to get something
+COMMENTC equivalent (ex.: setting retries per connection) are "rare", or for
+COMMENTC other TCP-timeouts (FIN wait, etc) and non-std.
+COMMENTC The important part here is "per connection", not an global kernel
+COMMENTC tunable, also hosing your ssh & backup connections.
+COMMENTC
+COMMENTC Please also refer to the README 2.1.2 on that matter.
+COMMENTC
+COMMENTC So we have to normally "poll" ourself to detect a hung state
+COMMENTC early and close the connection, which sucks, esp. since the
+COMMENTC OS already knows the connection is troubled (the retransmit
+COMMENTC timers fired, etc.)
+COMMENTC
+COMMENTC But RFC5482 to the rescue: it made a per connection timeout
+COMMENTC option more official in 2009.
+COMMENTC Linux gained support for this in 2.6.37
+COMMENTC
+COMMENTC This option sets the timeout for the TCP_USER_TIMEOUT option
+COMMENTC if your system does support it, otherwise it is a nop.
+COMMENTC
+COMMENTC On Linux the unit is milli seconds.
+COMMENTC
+COMMENT tcp_send_timeout = DEFAULT_TCP_SEND_TIMEOUT
 

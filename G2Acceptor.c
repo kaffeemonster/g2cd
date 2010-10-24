@@ -326,23 +326,17 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 	 * (at least i think so). This switch is only to _enable_ this
 	 * automagic at all.
 	 */
-#ifdef __linux__
-# if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 0
-#  define TCP_THIN_LINEAR_TIMEOUTS 16
-#  undef  HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS
-#  define HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS 1
-# endif
-# if HAVE_DECL_TCP_THIN_DUPACK == 0
-#  define TCP_THIN_DUPACK 17
-#  undef  HAVE_DECL_TCP_THIN_DUPACK
-#  define HAVE_DECL_TCP_THIN_DUPACK 1
-# endif
-#endif
 #if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 1
 	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_LINEAR_TIMEOUTS, &yes, sizeof(yes));
 #endif
 #if HAVE_DECL_TCP_THIN_DUPACK == 1
 	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_DUPACK, &yes, sizeof(yes));
+#endif
+#if HAVE_DECL_TCP_THIN_DUPACK == 1
+	if(server.settings.have_tcp_send_timeout) {
+		yes = server.settings.tcp_send_timeout;
+		my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_USER_TIMEOUT, &yes, sizeof(yes));
+	}
 #endif
 
 	/* No EINTR in epoll_ctl according to manpage :-/ */
@@ -1365,6 +1359,20 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 	logg_develd_old("%p pos: %u lim: %u\n", (void*)buffer_start(*to_con->recv), to_con->recv->pos, to_con->recv->limit);
 	return ret_val;
+}
+
+bool __init check_tcp_send_timeout(void)
+{
+#if HAVE_DECL_TCP_USER_TIMEOUT == 1
+	int fd = my_epoll_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(0 <= fd) {
+		int t = 0;
+		int ret = my_epoll_setsockopt(fd, SOL_TCP, TCP_USER_TIMEOUT, &t, sizeof(t));
+		my_epoll_close(fd);
+		return ret == 0;
+	}
+#endif
+	return false;
 }
 
 static char const rcsid_a[] GCC_ATTR_USED_VAR = "$Id: G2Acceptor.c,v 1.19 2005/08/21 22:59:12 redbully Exp redbully $";

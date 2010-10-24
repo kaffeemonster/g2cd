@@ -355,5 +355,23 @@ typedef void (*sighandler_t)(int);
 #define DFUNC_NAME(fname, add) DFUNC_NAME2(fname, add)
 #define DVAR_NAME(fname, add) DFUNC_NAME2(fname, add)
 
+#ifdef __linux__
+# if HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS == 0
+#  define TCP_THIN_LINEAR_TIMEOUTS 16
+#  undef  HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS
+#  define HAVE_DECL_TCP_THIN_LINEAR_TIMEOUTS 1
+# endif
+# if HAVE_DECL_TCP_THIN_DUPACK == 0
+#  define TCP_THIN_DUPACK 17
+#  undef  HAVE_DECL_TCP_THIN_DUPACK
+#  define HAVE_DECL_TCP_THIN_DUPACK 1
+# endif
+# if HAVE_DECL_TCP_USER_TIMEOUT == 0
+#  define TCP_USER_TIMEOUT 18
+#  undef  HAVE_DECL_TCP_USER_TIMEOUT
+#  define HAVE_DECL_TCP_USER_TIMEOUT 1
+# endif
+#endif
+
 #endif /* _OTHER_H */
 /* EOF */

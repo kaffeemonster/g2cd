@@ -44,6 +44,7 @@ _G2ACC_EXTRN(void clean_up_accept(void));
 _G2ACC_EXTRN(bool handle_accept_abnorm(struct simple_gup *, struct epoll_event *, some_fd));
 _G2ACC_EXTRN(bool handle_accept_in(struct simple_gup *, void *, some_fd)); /* put a g2_connection_t in for void * */
 _G2ACC_EXTRN(void handle_con_a(struct epoll_event *, struct norm_buff *[MULTI_RECV_NUM], some_fd));
+_G2ACC_EXTRN(bool check_tcp_send_timeout(void));
 
 #endif /* G2ACCEPTOR_H */
 /* EOF */
