@@ -32,17 +32,28 @@ void strreverse_l(char *begin, char *end)
 {
 	char tchar;
 
-#ifdef __ARM__NEON__
-	for(; end - ((2*SOVUC)-1) > begin; begin += SOVUC)
+#ifdef __ARM_NEON__
+	for(; end - ((2*SOVUCQ)-1) > begin; end -= SOVUCQ, begin += SOVUCQ)
+	{
+		uint8x16_t te, tb;
+		tb = vld1q_u8((const unsigned char *)begin);
+		te = vld1q_u8((const unsigned char *)end - (SOVUCQ - 1));
+		tb = vrev64q_u8(tb);
+		te = vrev64q_u8(te);
+		asm("vswp %e0, %f0" : "=w" (tb) : "0" (tb));
+		asm("vswp %e0, %f0" : "=w" (te) : "0" (te));
+		vst1q_u8((unsigned char *)begin, te);
+		vst1q_u8((unsigned char *)end - (SOVUCQ - 1), tb);
+	}
+	for(; end - ((2*SOVUC)-1) > begin; end -= SOVUC, begin += SOVUC)
 	{
 		uint8x8_t te, tb;
-		end -= SOVUC;
-		tb = vld1_u8(begin);
-		te = vld1_u8(end);
+		tb = vld1_u8((const unsigned char *)begin);
+		te = vld1_u8((const unsigned char *)end - (SOVUC - 1));
 		tb = vrev64_u8(tb);
 		te = vrev64_u8(te);
-		vst1_u8(begin, te);
-		vst1_u8(end, tb);
+		vst1_u8((unsigned char *)begin, te);
+		vst1_u8((unsigned char *)end - (SOVUC - 1), tb);
 	}
 #endif
 	/*
@@ -79,14 +90,14 @@ void strreverse_l(char *begin, char *end)
 	{
 		char t1, t2, t3, t4;
 		end -= 4;
-		t4 = end[0];
-		t3 = end[1];
-		t2 = end[2];
-		t1 = end[3];
-		end[3] = begin[0];
-		end[2] = begin[1];
-		end[1] = begin[2];
-		end[0] = begin[3];
+		t4 = end[1];
+		t3 = end[2];
+		t2 = end[3];
+		t1 = end[4];
+		end[4] = begin[0];
+		end[3] = begin[1];
+		end[2] = begin[2];
+		end[1] = begin[3];
 		begin[0] = t1;
 		begin[1] = t2;
 		begin[2] = t3;

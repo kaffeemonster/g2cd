@@ -238,6 +238,7 @@ STRNPCPYSRC = \
 	$(MPL)/ppc/strnpcpy.c
 STRREVERSE_LSRC = \
 	$(MPL)/generic/strreverse_l.c \
+	$(MPL)/ppc/strreverse_l.c \
 	$(MPL)/arm/strreverse_l.c \
 	$(MPL)/x86/strreverse_l.c
 TO_BASE16SRC = \

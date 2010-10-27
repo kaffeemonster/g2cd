@@ -87,11 +87,9 @@ unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned 
 	}
 	else
 	{
-		unsigned d_diff;
 		vector unsigned char low, high, w_mask;
 		vector unsigned char w_perm_r, w_perm_l;
 
-		d_diff = ALIGN_DOWN_DIFF(dst, SOVUC);
 		w_perm_r = vec_lvsr(0, dst);
 		w_perm_l = vec_lvsl(0, dst);
 		w_mask = vec_perm(v_0, (vector unsigned char)vec_splat_s8(-1), w_perm_r);

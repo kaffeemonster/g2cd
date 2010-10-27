@@ -36,7 +36,7 @@ static inline vector unsigned char vec_identl(unsigned level)
 	return vec_lvsl(0, (const unsigned char *)(uintptr_t)level);
 }
 
-static inline vector unsigned char vec_ident_rev()
+static inline vector unsigned char vec_ident_rev(void)
 {
 	return vec_xor(vec_lvsl(0, (const unsigned char *)0), vec_splat_u8(15));
 }
