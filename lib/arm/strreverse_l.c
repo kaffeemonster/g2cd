@@ -23,10 +23,28 @@
  * $Id: $
  */
 
+#ifdef __ARM_NEON__
+# include <arm_neon.h>
+# include "my_neon.h"
+#endif
+
 void strreverse_l(char *begin, char *end)
 {
 	char tchar;
 
+#ifdef __ARM__NEON__
+	for(; end - ((2*SOVUC)-1) > begin; begin += SOVUC)
+	{
+		uint8x8_t te, tb;
+		end -= SOVUC;
+		tb = vld1_u8(begin);
+		te = vld1_u8(end);
+		tb = vrev64_u8(tb);
+		te = vrev64_u8(te);
+		vst1_u8(begin, te);
+		vst1_u8(end, tb);
+	}
+#endif
 	/*
 	 * ARM is a little special challanged, by being "the" RISC
 	 * arch and having the "magic" shifter.
