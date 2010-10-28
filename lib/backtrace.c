@@ -152,7 +152,8 @@ static GCC_ATTR_COLD void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
 	void **buffer = (void **) path;
 # endif
-	int stderrfd = fileno(stderr), ret_val = 0, i;
+	int stderrfd = fileno(stderr), ret_val = 0;
+	unsigned i;
 
 	if(-1 == stderrfd) {
 		/*
@@ -346,6 +347,10 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 # elif defined(__ia64__)
 #  define NGREG 52
 	greg_iter = (unsigned long *)&uc->uc_mcontext.sc_ip;
+# elif defined(__hppa__)
+#  undef NGREG
+#  define NGREG (sizeof(uc->uc_mcontext)/sizeof(unsigned long))
+	greg_iter = (unsigned long *)&uc->uc_mcontext.sc_flags;
 # else
 	greg_iter = (unsigned long *)&uc->uc_mcontext.gregs[0];
 # endif

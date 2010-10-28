@@ -1,6 +1,6 @@
 /*
  * strnlen.c
- * strnlen for non-GNU platforms, ia64 implementation
+ * strnlen for non-GNU platforms, parisc implementation
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -23,12 +23,12 @@
  * $Id: $
  */
 
-#include "ia64.h"
+#include "parisc.h"
 
 size_t strnlen(const char *s, size_t maxlen)
 {
 	const char *p;
-	unsigned long long r, t;
+	unsigned long r, t;
 	long f, k;
 	prefetch(s);
 
@@ -44,47 +44,60 @@ size_t strnlen(const char *s, size_t maxlen)
 	 * Even this beeing strNlen, this n can be seen as a "hint"
 	 * We can overread and underread, but should cut the result.
 	 */
-	f = ALIGN_DOWN_DIFF(s, SOULL);
-	k = SOULL - f - (long)maxlen;
+	f = ALIGN_DOWN_DIFF(s, SOUL);
+	k = SOUL - f - (long)maxlen;
 	k = k > 0 ? k  : 0;
 
-	p = (const char *)ALIGN_DOWN(s, SOULL);
-	r = *(const unsigned long long *)p;
+	p = (const char *)ALIGN_DOWN(s, SOUL);
+	r = *(const unsigned long *)p;
 	if(!HOST_IS_BIGENDIAN) {
-		r |= (~0ULL) >> ((SOULL - f) * BITS_PER_CHAR);
-		r |= (~0ULL) << ((SOULL - k) * BITS_PER_CHAR);
+		r |= (~0ULL) >> ((SOUL - f) * BITS_PER_CHAR);
+		r |= (~0ULL) << ((SOUL - k) * BITS_PER_CHAR);
 	} else {
-		r |= (~0ULL) << ((SOULL - f) * BITS_PER_CHAR);
-		r |= (~0ULL) >> ((SOULL - k) * BITS_PER_CHAR);
+		r |= (~0ULL) << ((SOUL - f) * BITS_PER_CHAR);
+		r |= (~0ULL) >> ((SOUL - k) * BITS_PER_CHAR);
 	}
-	r = czx1(r);
-	if(r < SOULL)
-		return r - f < maxlen ? r - f : maxlen;
+	t = pa_is_z(r);
+	if(t) {
+		t = pa_find_z(r);
+		return t - f < maxlen ? t - f : maxlen;
+	}
 	else if(k)
 		return maxlen;
 
-	maxlen -= SOULL - f;
-	do
-	{
-		p += SOULL;
-		t = *(const unsigned long long *)p;
-		if(maxlen <= SOULL)
-			break;
-		r = czx1(t);
-		if(r < SOULL)
-			return p - s + r;
-		maxlen -= SOULL;
-	} while(r == SOULL);
-	k = SOULL - (long)maxlen;
+	maxlen -= SOUL - f;
+	asm(
+		"1:\n\t"
+		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
+		"cmpib,>>=	3, %2, 2f\n\t"
+		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
+		"b	2f\n\t"
+		"b	1b\n\t"
+		"addi	-"PA_TZ", %2, %2\n"
+		"2:"
+		: "=r" (p),
+		  "=r" (r),
+		  "=r" (maxlen)
+		: "0" (p),
+		  "2" (maxlen)
+	);
+	k = SOUL - (long)maxlen;
 	k = k > 0 ? k : 0;
-	if(!HOST_IS_BIGENDIAN)
-		t |= (~0ULL) << ((SOULL - k) * BITS_PER_CHAR);
-	else
-		t |= (~0ULL) >> ((SOULL - k) * BITS_PER_CHAR);
-	r = czx1(t);
-	r = r < SOULL ? r : maxlen;
+	if(k)
+	{
+		if(!HOST_IS_BIGENDIAN)
+			r |= (~0ULL) << ((SOUL - k) * BITS_PER_CHAR);
+		else
+			r |= (~0ULL) >> ((SOUL - k) * BITS_PER_CHAR);
+	}
+	t = pa_is_z(r);
+	if(t) {
+		t = pa_find_z(r);
+		t = t < maxlen ? t : maxlen;
+	} else
+		t = maxlen;
 	return p - s + r;
 }
 
-static char const rcsid_snlia64[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_snlpa[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

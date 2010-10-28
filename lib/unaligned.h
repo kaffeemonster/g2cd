@@ -24,6 +24,8 @@
 #  include "arm/unaligned.h"
 # elif defined(__ia64__)
 #  include "ia64/unaligned.h"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/unaligned.h"
 # elif defined(__alpha__)
 #  include "alpha/unaligned.h"
 # else

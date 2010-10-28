@@ -57,6 +57,8 @@ char *strchrnul(const char *s, int c);
 #  include "arm/strchrnul.c"
 # elif defined(__ia64__)
 #  include "ia64/strchrnul.c"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/strchrnul.c"
 # else
 #  include "generic/strchrnul.c"
 # endif

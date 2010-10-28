@@ -34,6 +34,7 @@ TARED_DIRS += \
 	$(MPL)/x86 \
 	$(MPL)/mips \
 	$(MPL)/ppc \
+	$(MPL)/parisc \
 	$(MPL)/sparc \
 	$(MPL)/ia64 \
 	$(MPL)/alpha \
@@ -79,6 +80,7 @@ LIBHEADS = \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
 	$(MPL)/ppc/ppc.h \
+	$(MPL)/parisc/parisc.h \
 	$(MPL)/sparc/sparc_vis.h \
 	$(MPL)/ia64/ia64.h \
 	$(MPL)/generic/little_endian.h \
@@ -91,6 +93,7 @@ UNALIGNEDSRC = \
 	$(MPL)/ia64/unaligned.h \
 	$(MPL)/mips/unaligned.h \
 	$(MPL)/ppc/unaligned.h \
+	$(MPL)/parisc/unaligned.h \
 	$(MPL)/sparc/unaligned.h \
 	$(MPL)/x86/unaligned.h \
 	$(MPL)/generic/unaligned.h \
@@ -209,6 +212,7 @@ STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
 	$(MPL)/alpha/strnlen.c \
 	$(MPL)/arm/strnlen.c \
+	$(MPL)/parisc/strnlen.c \
 	$(MPL)/ia64/strnlen.c \
 	$(MPL)/x86/strnlen.c \
 	$(MPL)/ppc/strnlen.c
@@ -217,6 +221,7 @@ STRLENSRC = \
 	$(MPL)/alpha/strlen.c \
 	$(MPL)/arm/strlen.c \
 	$(MPL)/ia64/strlen.c \
+	$(MPL)/parisc/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
 STRCHRNULSRC = \
@@ -224,6 +229,7 @@ STRCHRNULSRC = \
 	$(MPL)/alpha/strchrnul.c \
 	$(MPL)/arm/strchrnul.c \
 	$(MPL)/ia64/strchrnul.c \
+	$(MPL)/parisc/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
 STRNCASECMP_ASRC = \

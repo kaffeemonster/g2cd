@@ -1,6 +1,6 @@
 /*
  * strchrnul.c
- * strchrnul for non-GNU platforms, ia64 implementation
+ * strchrnul for non-GNU platforms, parisc implementation
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -23,13 +23,14 @@
  * $Id: $
  */
 
-#include "ia64.h"
+#include "parisc.h"
 
 char *strchrnul(const char *s, int c)
 {
 	const char *p;
-	unsigned long long r1, r2, mask, x1, x2;
+	unsigned long mask, x1, x2;
 	unsigned shift;
+	int t1, t2;
 	prefetch(s);
 
 	/*
@@ -41,35 +42,47 @@ char *strchrnul(const char *s, int c)
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
-	mask = (((size_t)c) & 0xFF) * 0x0101010101010101ULL;
-	p  = (const char *)ALIGN_DOWN(s, SOULL);
-	shift = ALIGN_DOWN_DIFF(s, SOULL);
-	x1 = *(const unsigned long long *)p;
+	mask = (((size_t)c) & 0xFF) * MK_C(0x01010101);
+	p  = (const char *)ALIGN_DOWN(s, SOUL);
+	shift = ALIGN_DOWN_DIFF(s, SOUL);
+	x1 = *(const unsigned long *)p;
 	x2 = x1 ^ mask;
 	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
+		x1 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
 	} else {
-		x1 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+		x1 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
 	}
-	r1 = czx1(x1);
-	r2 = czx1(x2);
-	r1 = r1 < r2 ? r1 : r2;
-	if(r1 < SOULL)
-		return (char *)(uintptr_t)p + r1;
+	t1 = pa_is_z(x1);
+	t2 = pa_is_z(x2);
+	if(t1 || t2)
+		goto OUT;
 
-	do
-	{
-		p += SOULL;
-		x1 = *(const unsigned long long *)p;
-		x2 = x1 ^ mask;
-		r1 = czx1(x1);
-		r2 = czx1(x2);
-	} while(r1 == SOULL && r2 == SOULL);
-	r1 = r1 < r2 ? r1 : r2;
-	return (char *)(uintptr_t)p + r1;
+	asm(
+		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
+		"1:\n\t"
+		"uxor,"PA_NBZ"	%1, %4, %2\n\t"
+		"b	2f\n\t"
+		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
+		"b,n	2f\n\t"
+		"b	1b\n\t"
+		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
+		"2:"
+		: "=&r" (p),
+		  "=&r" (x1),
+		  "=&r" (x2)
+		: "0" (p),
+		  "r" (mask)
+	);
+	t1 = pa_is_z(x1);
+	t2 = pa_is_z(x2);
+OUT:
+	t1 = t1 ? pa_find_z(x1) : (int)SOUL;
+	t2 = t2 ? pa_find_z(x2) : (int)SOUL;
+	t1 = t1 < t2 ? t1 : t2;
+	return (char *)(uintptr_t)p + t1;
 }
 
-static char const rcsid_scnia64[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_scnpa[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */
