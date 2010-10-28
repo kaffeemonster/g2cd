@@ -81,11 +81,8 @@ START_LOOP:
 			last_rr = (vector bool char)vec_sld(v0, (vector unsigned char)rr, 1);
 			rn = (vector bool char)vec_sld(v0, (vector unsigned char)rn, 15);
 			rr = vec_and(rr, rn); /* get mask */
-			if(vec_any_ne(rr, v0)) {
-				uint32_t r;
-				r = vec_pmovmskb(rr);
-				return p + __builtin_clz(r) - 16;
-			}
+			if(vec_any_ne(rr, v0))
+				return p + vec_zpos(rr);
 		}
 	} while(k > 0);
 	k = -k;
@@ -101,11 +98,8 @@ K_SHIFT:
 
 	rn = (vector bool char)vec_sld(v0, (vector unsigned char)rn, 15);
 	rr = vec_and(rr, rn); /* get mask */
-	if(vec_any_ne(rr, v0)) {
-		uint32_t r;
-		r = vec_pmovmskb(rr);
-		return p + __builtin_clz(r) - 16;
-	}
+	if(vec_any_ne(rr, v0))
+		return p + vec_zpos(rr);
 
 	return NULL;
 }

@@ -55,8 +55,8 @@ size_t tstrlen(const tchar_t *s)
 		p += SOVUC/sizeof(*p);
 		x = vec_ldl(0, (const vector unsigned short *)p);
 	}
-	r = vec_pmovmskb((vector bool char)vec_cmpeq((vector unsigned char)x, (vector unsigned char)v0));
-	return (p - s + __builtin_clz(r) - 16)/sizeof(tchar_t);
+	r = vec_zpos((vector bool char)vec_cmpeq((vector unsigned char)x, (vector unsigned char)v0));
+	return p - s + r/sizeof(tchar_t);
 }
 
 static char const rcsid_tslp[] GCC_ATTR_USED_VAR = "$Id: $";

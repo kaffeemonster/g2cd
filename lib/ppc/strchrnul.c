@@ -35,7 +35,6 @@ char *strchrnul(const char *s, int c)
 	vector unsigned char v_perm;
 	vector unsigned char x;
 	vector bool char m1, m2;
-	uint32_t r;
 	char *p;
 
 	prefetch(s);
@@ -68,8 +67,7 @@ char *strchrnul(const char *s, int c)
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
-	r = vec_pmovmskb(m1);
-	return (char *)(uintptr_t)p + __builtin_clz(r) - 16;
+	return (char *)(uintptr_t)p + vec_zpos(m1);
 }
 
 static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";

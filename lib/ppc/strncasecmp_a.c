@@ -113,7 +113,7 @@ LOOP_AGAIN:
 			if(likely(vec_any_ne(v_mask, v_0)))
 			{
 				unsigned r;
-				r = vec_pmovmskb(v_mask);
+				r = vec_zpos(vec_cmpgt((vector unsigned char)v_mask, v_0));
 				cycles = (((cycles - i)) / SOVUC) * SOVUC;
 				n -= cycles;
 				r = r < n - 1 ? r : n - 1;

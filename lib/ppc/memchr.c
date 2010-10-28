@@ -34,7 +34,6 @@ void *my_memchr(const void *s, int c, size_t n)
 	vector unsigned char v_c;
 	vector unsigned char v_perm;
 	vector unsigned char x;
-	uint32_t r;
 	ssize_t f, k;
 	const unsigned char *p;
 
@@ -99,8 +98,7 @@ void *my_memchr(const void *s, int c, size_t n)
 	if(!vec_any_ne(x, v0))
 		return NULL;
 OUT:
-	r = vec_pmovmskb((vector bool char)x);
-	return (char *)(uintptr_t)p + __builtin_clz(r) - 16;
+	return (char *)(uintptr_t)p + vec_zpos((vector bool char)x);
 }
 
 static char const rcsid_mc[] GCC_ATTR_USED_VAR = "$Id: $";

@@ -98,8 +98,7 @@ OUT_STORE:
 	if(!r) /* did we hit maxlen? */
 		u = maxlen - 1;
 	else {
-		r = vec_pmovmskb(vec_cmpeq(c, v0)); /* get mask && transfer */
-		u = __builtin_clz(r) - 16; /* get index */
+		u = vec_zpos(vec_cmpeq(c, v0)); /* get index */
 		r = 1;
 	}
 

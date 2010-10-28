@@ -111,6 +111,45 @@ static inline uint32_t vec_pmovmskb(vector bool char vr)
 	return r;
 }
 
+static inline uint32_t vec_zpos(vector bool char vr)
+{
+#if 0
+	/*
+	 * Create a bit mask, move to main CPU and count leading zeros
+	 *
+	 * this creates less instructions, but:
+	 * - those are some compl. vector inst
+	 * - contains a move over the stack
+	 * - may be broken
+	 */
+	uint32_t r = vec_pmovmskb(vr);
+	return __builtin_clz(r) - 16;
+#else
+	/*
+	 * Bisect the guilty byte.
+	 * This creates more instructions, and some cond. jump but:
+	 * - simple vector ops
+	 * - direct info path over compare instructions
+	 */
+	vector bool char v0 = (vector bool char)vec_splat_s8(0);
+	vector bool char v1 = (vector bool char)vec_splat_s8(-1);
+	vector bool char vt;
+	vector unsigned char vswz;
+	unsigned r = 8;
+
+	vswz = vec_lvsl(r, (unsigned char *)0);
+	vt = vec_perm(v1, vr, vswz);
+	r += vec_any_eq(vt, v0) ? -4 : 4;
+	vswz = vec_lvsl(r, (unsigned char *)0);
+	vt = vec_perm(v1, vr, vswz);
+	r += vec_any_eq(vt, v0) ? -2 : 2;
+	vswz = vec_lvsl(r, (unsigned char *)0);
+	vt = vec_perm(v1, vr, vswz);
+	r += vec_any_eq(vt, v0) ? -1 : 1;
+	return r;
+#endif
+}
+
 #if 0
 	ident_rev =
 		{   15,    14,   13,   12,   11,   10,   9,   8,   7,  6,  5,  4, 3, 2, 1, 0};

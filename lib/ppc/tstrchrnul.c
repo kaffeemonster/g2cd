@@ -35,7 +35,6 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	vector unsigned char v_perm;
 	vector unsigned short x;
 	vector bool short m1, m2;
-	uint32_t r;
 	char *p;
 
 	prefetch(s);
@@ -66,8 +65,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
-	r = vec_pmovmskb((vector bool char)m1);
-	return ((tchar_t *)(uintptr_t)p) + (__builtin_clz(r) - 16) / 2;
+	return ((tchar_t *)(uintptr_t)p) + vec_zpos((vector bool char)m1)/sizeof(tchar_t);
 }
 
 static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";

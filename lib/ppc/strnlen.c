@@ -34,7 +34,6 @@ size_t strnlen(const char *s, size_t maxlen)
 	vector unsigned char v1;
 	vector unsigned char v_perm;
 	vector unsigned char c;
-	size_t r;
 	ssize_t f, k;
 	char *p;
 
@@ -84,8 +83,7 @@ size_t strnlen(const char *s, size_t maxlen)
 		c = vec_perm(c, v0, v_perm);
 	}
 OUT:
-	r = vec_pmovmskb(vec_cmpeq(c, v0));
-	return p - s + __builtin_clz(r) - 16;
+	return p - s + vec_zpos(vec_cmpeq(c, v0));
 }
 
 static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";
