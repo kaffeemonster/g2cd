@@ -58,10 +58,10 @@ size_t strlen(const char *s)
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 		"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
 		"b	1b\n\t"
-		"nop"
-		: "=r" (p),
-		  "=r" (r)
-		: "0" (p)
+		PREFETCH("32(%0)")
+		: /* %0 */ "=r" (p),
+		  /* %1 */ "=r" (r)
+		: /* %2 */ "0" (p)
 	);
 OUT:
 	t = pa_find_z(r);

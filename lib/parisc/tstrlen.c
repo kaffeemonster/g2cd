@@ -1,6 +1,6 @@
 /*
- * strchrnul.c
- * strchrnul for non-GNU platforms, parisc implementation
+ * tstrlen.c
+ * tstrlen, parisc implementation
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -25,12 +25,12 @@
 
 #include "parisc.h"
 
-char *strchrnul(const char *s, int c)
+size_t tstrlen(const tchar_t *s)
 {
 	const char *p;
-	unsigned long mask, x1, x2;
+	unsigned long r;
 	unsigned shift;
-	int t1, t2;
+	int t;
 	prefetch(s);
 
 	/*
@@ -42,47 +42,31 @@ char *strchrnul(const char *s, int c)
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
-	mask = (((size_t)c) & 0xFF) * MK_C(0x01010101);
-	p  = (const char *)ALIGN_DOWN(s, SOUL);
+	p = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
-	x1 = *(const unsigned long *)p;
-	x2 = x1 ^ mask;
-	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
-	} else {
-		x1 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
-	}
-	t1 = pa_is_z(x1);
-	t2 = pa_is_z(x2);
-	if(t1 || t2)
+	r = *(const unsigned long *)p;
+	if(!HOST_IS_BIGENDIAN)
+		r |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+	else
+		r |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+	t = pa_is_zw(r);
+	if(t)
 		goto OUT;
 
 	asm(
-		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 		"1:\n\t"
-		"uxor,"PA_NBZ"	%1, %4, %2\n\t"
-		"b	2f\n\t"
-		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
-		"b,n	2f\n\t"
-		"b	1b\n\t"
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
-		"2:"
-		: /* %0 */ "=&r" (p),
-		  /* %1 */ "=&r" (x1),
-		  /* %2 */ "=&r" (x2)
-		: /* %3 */ "0" (p),
-		  /* %4 */ "r" (mask)
+		"uxor,"PA_SHZ"	%1, %%r0, %%r0\n\t"
+		"b	1b\n\t"
+		PREFETCH("32(%0)")
+		: /* %0 */ "=r" (p),
+		  /* %1 */ "=r" (r)
+		: /* %2 */ "0" (p)
 	);
-	t1 = pa_is_z(x1);
-	t2 = pa_is_z(x2);
 OUT:
-	t1 = t1 ? pa_find_z(x1) : (int)SOUL;
-	t2 = t2 ? pa_find_z(x2) : (int)SOUL;
-	t1 = t1 < t2 ? t1 : t2;
-	return (char *)(uintptr_t)p + t1;
+	t = pa_find_zw(r);
+	return (const tchar_t *)p - s + t;
 }
 
-static char const rcsid_scnpa[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tslpa[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

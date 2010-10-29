@@ -29,15 +29,25 @@
 # define SOUL (sizeof(unsigned long))
 # define SOULM1 (SOUL-1)
 
+# ifdef _PA_RISC2_0
+#  define PREFETCH(x) "ldw " x ", %%r0\n\t"
+# else
+#  define PREFETCH(x) "nop\n\t"
+# endif
+
 # ifdef  __hppa64__
 #  define PA_LD "ldd"
 #  define PA_SBZ "*sbz"
+#  define PA_SHZ "*shz"
 #  define PA_NBZ "*nbz"
+#  define PA_NHZ "*nhz"
 #  define PA_TZ "8"
 # else
 #  define PA_LD "ldw"
 #  define PA_SBZ "sbz"
+#  define PA_SHZ "shz"
 #  define PA_NBZ "nbz"
+#  define PA_NHZ "nhz"
 #  define PA_TZ "4"
 # endif
 
@@ -48,11 +58,11 @@ static inline int pa_find_z(unsigned long x)
 
 	if(HOST_IS_BIGENDIAN)
 	{
-		x = (x << 8) | (x >> (SOULM1 * BITS_PER_CHAR));
+		x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
 		do {
 			t = x & 0xff;
 			r++;
-			x = (x << 8) | (x >> (SOULM1 * BITS_PER_CHAR));
+			x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
 		} while(t);
 	}
 	else
@@ -60,7 +70,32 @@ static inline int pa_find_z(unsigned long x)
 		do {
 			t = x & 0xff;
 			r++;
-			x >>= 8;
+			x >>= BITS_PER_CHAR;
+		} while(t);
+	}
+	return r;
+}
+
+static inline int pa_find_zw(unsigned long x)
+{
+	int r = -1;
+	unsigned long t;
+
+	if(HOST_IS_BIGENDIAN)
+	{
+		x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
+		do {
+			t = x & 0xff;
+			r++;
+			x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
+		} while(t);
+	}
+	else
+	{
+		do {
+			t = x & 0xff;
+			r++;
+			x >>= BITS_PER_TCHAR;
 		} while(t);
 	}
 	return r;
@@ -71,6 +106,22 @@ static inline int pa_is_z(unsigned long x)
 	int r;
 	asm(
 		"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
+		"b,n	1f\n\t"
+		"ldi	-1, %0\n"
+		"1:"
+		: "=r" (r)
+		: "r" (x),
+		  "0" (0)
+	);
+// TODO: jump label support?
+	return r;
+}
+
+static inline int pa_is_zw(unsigned long x)
+{
+	int r;
+	asm(
+		"uxor,"PA_SHZ"	%1, %%r0, %%r0\n\t"
 		"b,n	1f\n\t"
 		"ldi	-1, %0\n"
 		"1:"

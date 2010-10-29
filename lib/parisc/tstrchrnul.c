@@ -1,6 +1,6 @@
 /*
- * strchrnul.c
- * strchrnul for non-GNU platforms, parisc implementation
+ * tstrchrnul.c
+ * tstrchrnul for non-GNU platforms, parisc implementation
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -25,7 +25,7 @@
 
 #include "parisc.h"
 
-char *strchrnul(const char *s, int c)
+char *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
 	unsigned long mask, x1, x2;
@@ -42,7 +42,7 @@ char *strchrnul(const char *s, int c)
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
 	 */
-	mask = (((size_t)c) & 0xFF) * MK_C(0x01010101);
+	mask = (((size_t)c) & 0xFFFF) * MK_C(0x00010001);
 	p  = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x1 = *(const unsigned long *)p;
@@ -54,17 +54,17 @@ char *strchrnul(const char *s, int c)
 		x1 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
 		x2 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
 	}
-	t1 = pa_is_z(x1);
-	t2 = pa_is_z(x2);
+	t1 = pa_is_zw(x1);
+	t2 = pa_is_zw(x2);
 	if(t1 || t2)
 		goto OUT;
 
 	asm(
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 		"1:\n\t"
-		"uxor,"PA_NBZ"	%1, %4, %2\n\t"
+		"uxor,"PA_NHZ"	%1, %4, %2\n\t"
 		"b	2f\n\t"
-		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
+		"uxor,"PA_NHZ"	%1, %%r0, %%r0\n\t"
 		"b,n	2f\n\t"
 		"b	1b\n\t"
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
@@ -75,14 +75,14 @@ char *strchrnul(const char *s, int c)
 		: /* %3 */ "0" (p),
 		  /* %4 */ "r" (mask)
 	);
-	t1 = pa_is_z(x1);
-	t2 = pa_is_z(x2);
+	t1 = pa_is_zw(x1);
+	t2 = pa_is_zw(x2);
 OUT:
-	t1 = t1 ? pa_find_z(x1) : (int)SOUL;
-	t2 = t2 ? pa_find_z(x2) : (int)SOUL;
+	t1 = t1 ? pa_find_zw(x1) : (int)(SOUL/SOTC);
+	t2 = t2 ? pa_find_zw(x2) : (int)(SOUL/SOTC);
 	t1 = t1 < t2 ? t1 : t2;
-	return (char *)(uintptr_t)p + t1;
+	return (tchar_t *)(uintptr_t)p + t1;
 }
 
-static char const rcsid_scnpa[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscnpa[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

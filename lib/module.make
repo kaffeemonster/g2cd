@@ -265,6 +265,7 @@ TSTRLENSRC = \
 	$(MPL)/alpha/tstrlen.c \
 	$(MPL)/arm/tstrlen.c \
 	$(MPL)/ia64/tstrlen.c \
+	$(MPL)/parisc/tstrlen.c \
 	$(MPL)/x86/tstrlen.c \
 	$(MPL)/ppc/tstrlen.c
 TSTRCHRNULSRC = \
@@ -272,6 +273,7 @@ TSTRCHRNULSRC = \
 	$(MPL)/alpha/tstrchrnul.c \
 	$(MPL)/arm/tstrchrnul.c \
 	$(MPL)/ia64/tstrchrnul.c \
+	$(MPL)/parisc/tstrchrnul.c \
 	$(MPL)/x86/tstrchrnul.c \
 	$(MPL)/ppc/tstrchrnul.c
 TSTRNCMPSRC = \

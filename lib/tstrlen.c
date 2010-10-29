@@ -24,7 +24,7 @@
  */
 
 /*
- * tstrlen - strlen, you know...
+ * tstrlen - strlen, for tchar, you know...
  * s: string you need the length
  *
  * return value: the string length in tchars
@@ -49,6 +49,8 @@
 #  include "arm/tstrlen.c"
 # elif defined(__ia64__)
 #  include "ia64/tstrlen.c"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/tstrlen.c"
 # else
 #  include "generic/tstrlen.c"
 # endif

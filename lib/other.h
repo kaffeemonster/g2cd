@@ -308,6 +308,9 @@ typedef void (*sighandler_t)(int);
 # define BITS_PER_CHAR CHAR_BIT
 #endif /* __CHAR_BIT__ */
 
+#define SOTC (sizeof(uint16_t))
+#define BITS_PER_TCHAR (SOTC*BITS_PER_CHAR)
+
 #include <stddef.h>
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 #define anum(x) (sizeof((x))/sizeof(*(x)))
