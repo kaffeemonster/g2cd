@@ -69,6 +69,8 @@
 #  include "alpha/strncasecmp_a.c"
 # elif defined(__ia64__)
 #  include "ia64/strncasecmp_a.c"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/strncasecmp_a.c"
 # else
 #  include "generic/strncasecmp_a.c"
 # endif

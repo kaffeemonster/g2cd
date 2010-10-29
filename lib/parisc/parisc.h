@@ -109,9 +109,9 @@ static inline int pa_is_z(unsigned long x)
 		"b,n	1f\n\t"
 		"ldi	-1, %0\n"
 		"1:"
-		: "=r" (r)
-		: "r" (x),
-		  "0" (0)
+		: /* %0 */ "=r" (r)
+		: /* %1 */ "r" (x),
+		  /* %2 */ "0" (0)
 	);
 // TODO: jump label support?
 	return r;
@@ -125,11 +125,36 @@ static inline int pa_is_zw(unsigned long x)
 		"b,n	1f\n\t"
 		"ldi	-1, %0\n"
 		"1:"
-		: "=r" (r)
-		: "r" (x),
-		  "0" (0)
+		: /* %0 */ "=r" (r)
+		: /* %1 */ "r" (x),
+		  /* %2 */ "0" (0)
 	);
 // TODO: jump label support?
+	return r;
+}
+
+static inline unsigned long pcmp1gt(unsigned long a, unsigned long b)
+{
+	unsigned long r;
+	asm(
+		"uaddcm	%1, %2, %%r0\n\t"
+		"dcor,i	%%r0, %0\n\t"
+		: /* %0 */ "=&r" (r)
+		: /* %1 */ "r" (a),
+		  /* %2 */ "r" (b)
+	);
+	/*
+	 * Sigh, parisc has 8/16 nibble carrys, for BCD arith.
+	 * And all this uxor,sbz works with these "excess" carry.
+	 * The problem is to "get" them, for a mask, since
+	 * there are no real "use these carrys" instructions.
+	 * Ecxept: dcor. Which is to correct BCD arith.
+	 * dcor gave us a 6 in every nibble which overflowed,
+	 * now we have to create a byte wise carry...
+	 * Lets only take the upper carry. If there would be
+	 * a wiring diagram how "some byte carry" works.
+	 */
+	r = (r >> 5) & MK_C(0x01010101UL);
 	return r;
 }
 

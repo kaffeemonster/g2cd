@@ -236,6 +236,7 @@ STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
 	$(MPL)/alpha/strncasecmp_a.c \
 	$(MPL)/ia64/strncasecmp_a.c \
+	$(MPL)/parisc/strncasecmp_a.c \
 	$(MPL)/x86/strncasecmp_a.c \
 	$(MPL)/ppc/strncasecmp_a.c
 STRNPCPYSRC = \

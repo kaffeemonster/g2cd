@@ -25,7 +25,7 @@
 
 #include "parisc.h"
 
-char *tstrchrnul(const tchar_t *s, tchar_t c)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
 	unsigned long mask, x1, x2;
@@ -48,11 +48,11 @@ char *tstrchrnul(const tchar_t *s, tchar_t c)
 	x1 = *(const unsigned long *)p;
 	x2 = x1 ^ mask;
 	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
 	} else {
-		x1 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
 	}
 	t1 = pa_is_zw(x1);
 	t2 = pa_is_zw(x2);

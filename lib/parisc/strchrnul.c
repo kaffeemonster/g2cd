@@ -48,11 +48,11 @@ char *strchrnul(const char *s, int c)
 	x1 = *(const unsigned long *)p;
 	x2 = x1 ^ mask;
 	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
 	} else {
-		x1 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
 	}
 	t1 = pa_is_z(x1);
 	t2 = pa_is_z(x2);
