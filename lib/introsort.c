@@ -51,22 +51,28 @@ static inline void exchange_u32(uint32_t *a, uint32_t *b)
 /*
  * heap sort as worst case fallback
  */
+// TODO: this could be rewritten (Floyd??)
+/*
+ * this way we get fewer compares, but "walk" the array 3 times...
+ * so the question is how this hits the caches, esp. since
+ * this should only be the fallback on deep recursion, so small
+ * array sizes
+ */
 static void downheap_u32(uint32_t a[], size_t i, size_t n)
 {
 	uint32_t d = a[i - 1];
 	size_t child;
 
-	while(i <= n / 2)
+	while((child = i * 2) <= n)
 	{
-		child = 2 * i;
-		if(child < n && a[child - 1] < a [child])
+		if(child < n && a[child - 1] < a[child])
 			child++;
 		if(!(d < a[child - 1]))
 			break;
 		a[i - 1] = a[child - 1];
 		i = child;
 	}
-	a[i - 1] = d ;
+	a[i - 1] = d;
 }
 
 static void heapsort_u32(uint32_t a[], size_t n)
@@ -104,8 +110,7 @@ static size_t insertionsort_u32_c(uint32_t a[], size_t n)
 start_loop:
 		j = k;
 		t = a[i];
-		while(j && t < a[j - 1])
-		{
+		while(j && t < a[j - 1]) {
 			a[j] = a[j - 1];
 			j--;
 		}
@@ -144,21 +149,48 @@ static size_t partition_u32(uint32_t a[], size_t j, uint32_t x)
 
 static void introsort_loop_u32(uint32_t a[], size_t n, unsigned depth_limit)
 {
+	size_t p, n_s, n_b;
+	uint32_t *a_s, *a_b;
+
 	/*
 	 * only pre sort, where quick sort is most effective,
 	 * final run will be something else
 	 */
-	while(n > SIZE_THRESHOLD)
+	if(n <= SIZE_THRESHOLD)
+		return;
+
+	/* throttle it? */
+	if(unlikely(!depth_limit))
 	{
-		size_t p;
-		if(!depth_limit) {
-			heapsort_u32(a, n); /* we prop. hit the worst case */
-			return;
-		}
-		p = partition_u32(a, n, medianof3_u32(a, n));
-		introsort_loop_u32(a + p, n - p, depth_limit - 1);
-		n = p;
+		/*
+		 * we left the "optimal" recursion depth, so we are prop. heading
+		 * for the worst case, quickly switch to some other sorting
+		 * alg. for this partition
+		 */
+		heapsort_u32(a, n);
+		return;
 	}
+
+	p = partition_u32(a, n, medianof3_u32(a, n));
+	/*
+	 * recurse into the smaller partition first (costs _real_
+	 * stack), 'cause it should be easier to sort, while the
+	 * bigger partition uses the tail recursion eliminated path
+	 */
+	if(n - p < p) {
+		a_s = a + p; n_s = n - p;
+		a_b = a;     n_b = p;
+	} else {
+		a_s = a;     n_s = p;
+		a_b = a + p; n_b = n - p;
+	}
+	introsort_loop_u32(a_s, n_s, depth_limit - 1);
+	/*
+	 * we could write a loop, but keep tail recursion for simplycity
+	 * the compiler should be able to eliminate it
+	 * this way we also do keep track of the depth limit
+	 */
+	introsort_loop_u32(a_b, n_b, depth_limit - 1);
 }
 
 size_t introsort_u32(uint32_t a[], size_t n)

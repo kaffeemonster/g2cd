@@ -399,42 +399,51 @@ static void gwc_kick(struct gwc *gwc)
 	free(url);
 }
 
-static bool gwc_switch(void)
+static bool gwc_get_rand(datum *key, datum *value)
 {
 	int retry_count = 0;
 	unsigned cycling;
-	char *url;
-	datum key, value;
 
 retry:
 	retry_count++;
 	cycling = (unsigned)((((unsigned long long)rand())*8)/((unsigned long long)RAND_MAX));
 	do
 	{
-		key = dbm_nextkey(gwc_db);
-		if(!key.dptr)
-			key = dbm_firstkey(gwc_db);
-		if(!key.dptr) {
+		*key = dbm_nextkey(gwc_db);
+		if(!key->dptr)
+			*key = dbm_firstkey(gwc_db);
+		if(!key->dptr) {
 			/* uhm, no key? this should not happen */
 			return false;
 		}
 	} while(cycling--);
 
-	value = dbm_fetch(gwc_db, key);
-	if(!value.dptr) { /* huh? key but no data? */
+	*value = dbm_fetch(gwc_db, *key);
+	if(!value->dptr) { /* huh? key but no data? */
 		if(5 < retry_count)
 			return false;
 		goto retry;
 	}
-	if(sizeof(struct gwc) != value.dsize)
+	if(sizeof(struct gwc) != value->dsize)
 	{
 		/* what to do on error? */
-		if(dbm_delete(gwc_db, key))
+		if(dbm_delete(gwc_db, *key))
 			logg_errno(LOGF_WARN, "not able to remove broken GWC from db");
 		if(5 < retry_count)
 			return false;
 		goto retry;
 	}
+
+	return true;
+}
+
+static bool gwc_switch(void)
+{
+	char *url;
+	datum key, value;
+
+	if(!gwc_get_rand(&key, &value))
+		return false;
 
 	gwc_clean();
 
@@ -450,39 +459,10 @@ retry:
 
 const char *g2_khl_get_url(void)
 {
-	int retry_count = 0;
-	unsigned cycling;
 	datum key, value;
 
-retry:
-	retry_count++;
-	cycling = (unsigned)((((unsigned long long)rand())*8)/((unsigned long long)RAND_MAX));
-	do
-	{
-		key = dbm_nextkey(gwc_db);
-		if(!key.dptr)
-			key = dbm_firstkey(gwc_db);
-		if(!key.dptr) {
-			/* uhm, no key? this should not happen */
-			return NULL;
-		}
-	} while(cycling--);
-
-	value = dbm_fetch(gwc_db, key);
-	if(!value.dptr) { /* huh? key but no data? */
-		if(5 < retry_count)
-			return NULL;
-		goto retry;
-	}
-	if(sizeof(struct gwc) != value.dsize)
-	{
-		/* what to do on error? */
-		if(dbm_delete(gwc_db, key))
-			logg_errno(LOGF_WARN, "not able to remove broken GWC from db");
-		if(5 < retry_count)
-			return NULL;
-		goto retry;
-	}
+	if(!gwc_get_rand(&key, &value))
+		return NULL;
 
 // TODO: is this save? or will the db remove the data? and when?
 	return key.dptr;
