@@ -771,7 +771,7 @@ static bool write_sna_to_packet_endian(g2_packet_t *target, union combo_addr *so
 	}
 	if(port) {
 		if(!b_endian)
-			port = __fswab16(port);
+			port = __swab16(port);
 		put_unaligned(port, p_ptr);
 	}
 

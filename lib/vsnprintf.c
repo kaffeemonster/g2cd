@@ -152,7 +152,7 @@ struct format_spec
 	size_t maxlen;
 	unsigned precision;
 	unsigned width;
-	union {unsigned u; unsigned long long ull; } t_store;
+	union {unsigned u; unsigned long long ull; void *v; } t_store;
 	union
 	{
 		struct
@@ -1651,14 +1651,137 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 }
 
 /*
+ * pointer helper
+ */
+static noinline const char *f_p_guid(char *buf, const char *fmt, struct format_spec *spec)
+{
+	uint64_t d4;
+	char *wptr;
+	unsigned char *g = spec->t_store.v;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	size_t len = 8+4+4+4+12+4;
+	uint32_t d1;
+	unsigned i;
+	uint16_t d2, d3;
+
+	if(spec->u.flags.alternate)
+		len += 2;
+	if(len > sav) {
+		buf += len;
+		goto OUT_MORE;
+	}
+
+	/*
+	 * guids come from windows systems, their format
+	 * has a plattform endian touch (first 3 fields),
+	 * but that plattform is "always" intel...
+	 */
+// TODO: GUIDs and enianess?
+	d1 = get_unaligned_le32(g); g += 4;
+	d2 = get_unaligned_le16(g); g += 2;
+	d3 = get_unaligned_le16(g); g += 2;
+	d4 = get_unaligned_be64(g);
+
+	if(spec->u.flags.alternate)
+		*buf++ = '{';
+
+	wptr = buf = buf + 8+4+4+4+12+4;
+	for(i = 0; i < 12; i++, d4 >>= 4)
+		*--wptr = HEXUC_STRING[d4 & 0x0F];
+	*--wptr = '-';
+	for(i = 0; i < 4; i++, d4 >>= 4)
+		*--wptr = HEXUC_STRING[d4 & 0x0F];
+	*--wptr = '-';
+	for(i = 0; i < 4; i++, d3 >>= 4)
+		*--wptr = HEXUC_STRING[d3 & 0x0F];
+	*--wptr = '-';
+	for(i = 0; i < 4; i++, d2 >>= 4)
+		*--wptr = HEXUC_STRING[d2 & 0x0F];
+	*--wptr = '-';
+	for(i = 0; i < 8; i++, d1 >>= 4)
+		*--wptr = HEXUC_STRING[d1 & 0x0F];
+
+	if(spec->u.flags.alternate)
+		*buf++ = '}';
+#if 0
+	for(i = 0; i < 16; i++) {
+		*buf++ = HEXUC_STRING[(g[i] >> 4) & 0x0F];
+		*buf++ = HEXUC_STRING[ g[i]       & 0x0F];
+		if(spec->u.flags.alternate)
+		*buf++ = ':';
+	}
+	buf--;
+#endif
+
+OUT_MORE:
+	spec->len += len;
+	return end_format(buf, fmt, spec);
+}
+
+static noinline const char *f_p_ip(char *buf, const char *fmt, struct format_spec *spec)
+{
+	union combo_addr *addr = spec->t_store.v;
+	char *ret_val;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	size_t len = 0;
+
+	if(!addr) {
+		mempcpy(buf, "<null>", str_size("<null>") < sav ? str_size("<null>") : sav);
+		buf += str_size("<null>");
+		len  = str_size("<null>");
+		goto OUT_MORE;
+	}
+
+	if(spec->u.flags.alternate && AF_INET6 == addr->s.fam && len++ <= sav)
+		*buf++ = '[';
+
+	ret_val = combo_addr_print_c(addr, buf, sav);
+	if(!ret_val) {
+		if(sav <= INET6_ADDRSTRLEN)
+			len += INET6_ADDRSTRLEN;
+		else
+			ret_val = buf;
+	}
+	len += ret_val - buf;
+	buf = ret_val;
+	if(spec->u.flags.alternate)
+	{
+		if(AF_INET6 == addr->s.fam && len++ <= sav)
+			*buf++ = ']';
+		if(len++ <= sav)
+			*buf++ = ':';
+		ret_val = put_dec_trunc(spec->conv_buf, ntohs(combo_addr_port(addr)));
+		ret_val = strncpyrev(buf, ret_val - 1, spec->conv_buf, len < sav ? sav - len : 0);
+		len += ret_val - buf;
+		buf = ret_val;
+	}
+
+OUT_MORE:
+	spec->len += len;
+	return end_format(buf, fmt, spec);
+}
+
+static noinline const char *f_p_p(char *buf, const char *fmt, struct format_spec *spec)
+{
+	void *ptr = spec->t_store.v;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	size_t len;
+
+	if((sizeof(void *) * 2) + 2 > sav)
+		len = (sizeof(void *) * 2) + 2;
+	else
+		len = ptoa(buf, ptr) - buf;
+	buf += len;
+	spec->len += len;
+	return end_format(buf, fmt, spec);
+}
+
+/*
  * POINTER
  */
 static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 {
 	void *ptr = va_arg(spec->ap, void *);
-	char *ret_val;
-	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-	size_t len = 0;
 	char c;
 
 	for(c = *fmt++; '#' == c || 'I' == c || 'G' == c; c = *fmt++)
@@ -1672,111 +1795,13 @@ static const char *f_p(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	fmt--;
 
+	spec->t_store.v = ptr;
 	if(spec->u.flags.guid)
-	{
-		len = 8+4+4+4+12+4;
-		if(spec->u.flags.alternate)
-			len += 2;
-		if(len <= sav)
-		{
-			uint64_t d4;
-			char *wptr;
-			unsigned char *g = ptr;
-			uint32_t d1;
-			unsigned i;
-			uint16_t d2, d3;
-
-			/*
-			 * guids come from windows systems, their format
-			 * has a plattform endian touch (first 3 fields),
-			 * but that plattform is "always" intel...
-			 */
-// TODO: GUIDs and enianess?
-			d1 = get_unaligned_le32(g); g += 4;
-			d2 = get_unaligned_le16(g); g += 2;
-			d3 = get_unaligned_le16(g); g += 2;
-			d4 = get_unaligned_be64(g);
-
-			if(spec->u.flags.alternate)
-				*buf++ = '{';
-
-			wptr = buf = buf + 8+4+4+4+12+4;
-			for(i = 0; i < 12; i++, d4 >>= 4)
-				*--wptr = HEXUC_STRING[d4 & 0x0F];
-			*--wptr = '-';
-			for(i = 0; i < 4; i++, d4 >>= 4)
-				*--wptr = HEXUC_STRING[d4 & 0x0F];
-			*--wptr = '-';
-			for(i = 0; i < 4; i++, d3 >>= 4)
-				*--wptr = HEXUC_STRING[d3 & 0x0F];
-			*--wptr = '-';
-			for(i = 0; i < 4; i++, d2 >>= 4)
-				*--wptr = HEXUC_STRING[d2 & 0x0F];
-			*--wptr = '-';
-			for(i = 0; i < 8; i++, d1 >>= 4)
-				*--wptr = HEXUC_STRING[d1 & 0x0F];
-
-			if(spec->u.flags.alternate)
-				*buf++ = '}';
-#if 0
-			for(i = 0; i < 16; i++) {
-				*buf++ = HEXUC_STRING[(g[i] >> 4) & 0x0F];
-				*buf++ = HEXUC_STRING[ g[i]       & 0x0F];
-				if(spec->u.flags.alternate)
-					*buf++ = ':';
-			}
-			buf--;
-#endif
-		}
-		else
-			buf += len;
-	}
+		return f_p_guid(buf, fmt, spec);
 	else if(spec->u.flags.ip)
-	{
-		union combo_addr *addr = ptr;
-		if(!addr) {
-			mempcpy(buf, "<null>", str_size("<null>") < sav ? str_size("<null>") : sav);
-			buf += str_size("<null>");
-			len  = str_size("<null>");
-			goto OUT_MORE;
-		}
-
-		if(spec->u.flags.alternate && AF_INET6 == addr->s.fam && len++ <= sav)
-			*buf++ = '[';
-
-		ret_val = combo_addr_print_c(addr, buf, sav);
-		if(!ret_val) {
-			if(sav <= INET6_ADDRSTRLEN)
-				len += INET6_ADDRSTRLEN;
-			else
-				ret_val = buf;
-		}
-		len += ret_val - buf;
-		buf = ret_val;
-		if(spec->u.flags.alternate)
-		{
-			if(AF_INET6 == addr->s.fam && len++ <= sav)
-				*buf++ = ']';
-			if(len++ <= sav)
-				*buf++ = ':';
-			ret_val = put_dec_trunc(spec->conv_buf, ntohs(combo_addr_port(addr)));
-			ret_val = strncpyrev(buf, ret_val - 1, spec->conv_buf, len < sav ? sav - len : 0);
-			len += ret_val - buf;
-			buf = ret_val;
-		}
-	}
+		return f_p_ip(buf, fmt, spec);
 	else
-	{
-		if((sizeof(void *) * 2) + 2 > sav)
-			len = (sizeof(void *) * 2) + 2;
-		else
-			len = ptoa(buf, ptr) - buf;
-		buf += len;
-	}
-
-OUT_MORE:
-	spec->len += len;
-	return end_format(buf, fmt, spec);
+		return f_p_p(buf, fmt, spec);
 }
 
 /************************************************************************
@@ -1927,6 +1952,7 @@ static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 	spec->len++;
 	return end_format(buf, fmt, spec);
 }
+
 static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
 	void *n = va_arg(spec->ap, void *);
@@ -1949,6 +1975,7 @@ static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	return end_format(buf, fmt, spec);
 }
+
 /*
  * Jump table
  *

@@ -36,11 +36,15 @@
 	___constant_swab16(x) :			\
 	__fswab16(x))
 
+# if _GNUC_PREREQ (4,3)
+#  define __swab32(x) __builtin_bswap32(x)
+#  define __swab64(x) __builtin_bswap64(x)
+# else
 /**
  * __swab32 - return a byteswapped 32-bit value
  * @x: value to byteswap
  */
-# define __swab32(x)				\
+#  define __swab32(x)				\
 	(GCC_CONSTANT_P((uint32_t)(x)) ?	\
 	___constant_swab32(x) :			\
 	__fswab32(x))
@@ -49,10 +53,11 @@
  * __swab64 - return a byteswapped 64-bit value
  * @x: value to byteswap
  */
-# define __swab64(x)				\
+#  define __swab64(x)				\
 	(GCC_CONSTANT_P((uint64_t)(x)) ?	\
 	___constant_swab64(x) :			\
 	__fswab64(x))
+# endif
 
 # ifdef HAVE_BYTESWAP_H
 #  include <byteswap.h>
@@ -75,30 +80,38 @@ static inline GCC_ATTR_CONST uint16_t __fswab16(uint16_t val)
 
 static inline GCC_ATTR_CONST uint32_t __fswab32(uint32_t val)
 {
-# ifdef HAVE_BYTESWAP_H
-	return bswap_32(val);
+# if _GNUC_PREREQ (4,3)
+	return __builtin_bswap32(val);
 # else
+#  ifdef HAVE_BYTESWAP_H
+	return bswap_32(val);
+#  else
 	return ___constant_swab32(val);
+#  endif
 # endif
 }
 
 static inline GCC_ATTR_CONST uint64_t __fswab64(uint64_t val)
 {
-# ifdef HAVE_BYTESWAP_H
-#  if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ < 8
+# if _GNUC_PREREQ (4,3)
+	return __builtin_bswap64(val);
+# else
+#  ifdef HAVE_BYTESWAP_H
+#   if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ < 8
 	uint32_t h = val >> 32;
 	uint32_t l = val & ((1ULL << 32) - 1);
 	return (((uint64_t)bswap_32(l)) << 32) | ((uint64_t)(bswap_32(h)));
-#  else
+#   else
 	return bswap_64(val);
-#  endif
-# else
-#  if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ < 8
+#   endif
+#  else
+#   if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ < 8
 	uint32_t h = val >> 32;
 	uint32_t l = val & ((1ULL << 32) - 1);
 	return (((uint64_t)___constant_swab32(l)) << 32) | ((uint64_t)(___constant_swab32(h)));
-#  else
+#   else
 	return ___constant_swab64(val);
+#   endif
 #  endif
 # endif
 }
