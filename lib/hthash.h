@@ -271,46 +271,54 @@ static inline uint32_t hthash32_mod(const uint32_t *key, size_t len, uint32_t se
 
 /* Jenkins hash support.
  *
- * Copyright (C) 1996 Bob Jenkins (bob_jenkins@burtleburtle.net)
+ * Copyright (C) 2006. Bob Jenkins (bob_jenkins@burtleburtle.net)
  *
  * http://burtleburtle.net/bob/hash/
  *
  * These are the credits from Bob's sources:
  *
- * lookup2.c, by Bob Jenkins, December 1996, Public Domain.
- * hash(), hash2(), hash3, and mix() are externally useful functions.
- * Routines to test the hash are included if SELF_TEST is defined.
- * You can use this free for any purpose.  It has no warranty.
+ * lookup3.c, by Bob Jenkins, May 2006, Public Domain.
  *
- * Copyright (C) 2003 David S. Miller (davem@redhat.com)
+ * These are functions for producing 32-bit hashes for hash table lookup.
+ * hashword(), hashlittle(), hashlittle2(), hashbig(), mix(), and final()
+ * are externally useful functions.  Routines to test the hash are included
+ * if SELF_TEST is defined.  You can use this free for any purpose.  It's in
+ * the public domain.  It has no warranty.
  *
- * I've modified Bob's hash to be useful in the Linux kernel, and
- * any bugs present are surely my fault.  -DaveM
- *
- * And i even munched i some more to fit into g2cd, so the mentioned
- * people above are innocent - Jan
+ * I munched it some more to fit into g2cd, so bugs are my fault - Jan
  */
 
-/* NOTE: Arguments are modified. */
+#  define rol32(x, k) (((x)<<(k)) | ((x)>>(32-(k))))
+
+/* __jhash_mix -- mix 3 32-bit values reversibly. */
 #  define __jhash_mix(a, b, c) \
 { \
-  a -= b; a -= c; a ^= (c >> 13); \
-  b -= c; b -= a; b ^= (a <<  8); \
-  c -= a; c -= b; c ^= (b >> 13); \
-  a -= b; a -= c; a ^= (c >> 12); \
-  b -= c; b -= a; b ^= (a << 16); \
-  c -= a; c -= b; c ^= (b >>  5); \
-  a -= b; a -= c; a ^= (c >>  3); \
-  b -= c; b -= a; b ^= (a << 10); \
-  c -= a; c -= b; c ^= (b >> 15); \
+ a -= c;  a ^= rol32(c, 4);  c += b; \
+ b -= a;  b ^= rol32(a, 6);  a += c; \
+ c -= b;  c ^= rol32(b, 8);  b += a; \
+ a -= c;  a ^= rol32(c, 16); c += b; \
+ b -= a;  b ^= rol32(a, 19); a += c; \
+ c -= b;  c ^= rol32(b, 4);  b += a; \
 }
 
-/* The golden ration: an arbitrary value */
-#  define JHASH_GOLDEN_RATIO	0x9e3779b9
+/* __jhash_final - final mixing of 3 32-bit values (a,b,c) into c */
+#define __jhash_final(a, b, c) \
+{ \
+ c ^= b; c -= rol32(b, 14); \
+ a ^= c; a -= rol32(c, 11); \
+ b ^= a; b -= rol32(a, 25); \
+ c ^= b; c -= rol32(b, 16); \
+ a ^= c; a -= rol32(c, 4);  \
+ b ^= a; b -= rol32(a, 14); \
+ c ^= b; c -= rol32(b, 24); \
+}
 
-static inline void __hthash32_u(uint32_t w[3], const uint32_t *key, size_t len)
+/* Some initval: an arbitrary value */
+#  define JHASH_INITVAL	0x9e3779b9
+
+static inline size_t __hthash32_u(uint32_t w[3], const uint32_t *key, size_t len)
 {
-	while (len >= 3)
+	while(len > 3)
 	{
 		w[0] += get_unaligned(&key[0]);
 		w[1] += get_unaligned(&key[1]);
@@ -318,11 +326,12 @@ static inline void __hthash32_u(uint32_t w[3], const uint32_t *key, size_t len)
 		__jhash_mix(w[0], w[1], w[2]);
 		key += 3; len -= 3;
 	}
+	return len;
 }
 
-static inline void __hthash32(uint32_t w[3], const uint32_t *key, size_t len)
+static inline size_t __hthash32(uint32_t w[3], const uint32_t *key, size_t len)
 {
-	while (len >= 3)
+	while(len > 3)
 	{
 		w[0] += key[0];
 		w[1] += key[1];
@@ -330,24 +339,7 @@ static inline void __hthash32(uint32_t w[3], const uint32_t *key, size_t len)
 		__jhash_mix(w[0], w[1], w[2]);
 		key += 3; len -= 3;
 	}
-}
-
-static inline uint32_t hthash32(const uint32_t *key, size_t len, uint32_t seed)
-{
-	uint32_t w[3];
-
-	w[0] = w[1] = JHASH_GOLDEN_RATIO;
-	w[2] = seed;
-	__hthash32(w, key, len);
-
-	w[3] += len * 4;
-	switch(len % 3) {
-	case 2 : w[1] += key[len - 2];
-	case 1 : w[0] += key[len - 1];
-	};
-	__jhash_mix(w[0], w[1], w[2]);
-
-	return w[2];
+	return len;
 }
 
 static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
@@ -355,44 +347,29 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 	const unsigned char *data = key;
 	size_t o_len = len;
 	uint32_t w[3];
-	unsigned align = ALIGN_DOWN_DIFF(key, SO32);
 
-	w[0] = w[1] = JHASH_GOLDEN_RATIO;
-	w[2] = seed;
-
-	if(!align || UNALIGNED_OK)
+	w[0] = w[1] = w[2] = JHASH_INITVAL + seed + len;
+	if(len > SO32 * 3)
 	{
-		if(len >= SO32 * 3)
-		{
-			if(align)
-				__hthash32_u(w, key, len / SO32);
-			else
-				__hthash32(w, key, len / SO32);
-			data = &data[len & ~((SO32 * 3) - 1)];
-			len %= SO32 * 3;
-		}
-	}
-	else
-	{
-		while (len >= 12)
-		{
-			w[0] += get_unaligned((const uint32_t *)&data[0]);
-			w[1] += get_unaligned((const uint32_t *)&data[4]);
-			w[2] += get_unaligned((const uint32_t *)&data[8]);
+		unsigned align = ALIGN_DOWN_DIFF(key, SO32);
+		size_t t_len, r_len;
 
-			__jhash_mix(w[0], w[1], w[2]);
-			data += 12;
-			len  -= 12;
-		}
+		if(align)
+			t_len = __hthash32_u(w, key, len / SO32);
+		else
+			t_len = __hthash32(w, key, len / SO32);
+		r_len = len - (((len / SO32) - t_len) * SO32);
+		data = &data[len - r_len];
+		len = r_len;
 	}
 
-	w[2] += o_len;
 	switch (len)
 	{
 // TODO: bring into cpu endianess
-	case 11: w[2] += (uint32_t)data[10] << 24;
-	case 10: w[2] += (uint32_t)data[ 9] << 16;
-	case 9 : w[2] += (uint32_t)data[ 8] <<  8;
+	case 12: w[2] += (uint32_t)data[11] << 24;
+	case 11: w[2] += (uint32_t)data[10] << 16;
+	case 10: w[2] += (uint32_t)data[ 9] <<  8;
+	case 9 : w[2] += (uint32_t)data[ 8];
 	case 8 : w[1] += (uint32_t)data[ 7] << 24;
 	case 7 : w[1] += (uint32_t)data[ 6] << 16;
 	case 6 : w[1] += (uint32_t)data[ 5] <<  8;
@@ -401,94 +378,109 @@ static inline uint32_t hthash(const void *key, size_t len, uint32_t seed)
 	case 3 : w[0] += (uint32_t)data[ 2] << 16;
 	case 2 : w[0] += (uint32_t)data[ 1] <<  8;
 	case 1 : w[0] +=           data[ 0];
+		__jhash_final(w[0], w[1], w[2]);
+	case 0 : break; /* Nothing left to add */
 	};
-	__jhash_mix(w[0], w[1], w[2]);
 
 	return w[2];
 }
 
 static inline uint32_t hthash_6words(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e, uint32_t f, uint32_t seed)
 {
-	a += JHASH_GOLDEN_RATIO;
-	b += JHASH_GOLDEN_RATIO;
-	c += seed;
+	uint32_t x = JHASH_INITVAL + seed + (6 << 2);
+	a += x;
+	b += x;
+	c += x;
 	__jhash_mix(a, b, c);
 
 	a += d;
 	b += e;
 	c += f;
-	__jhash_mix(a, b, c);
-
-	c += 6 * 4;
-	__jhash_mix(a, b, c);
+	__jhash_final(a, b, c);
 	return c;
 }
 
 static inline uint32_t hthash_5words(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e, uint32_t seed)
 {
-	a += JHASH_GOLDEN_RATIO;
-	b += JHASH_GOLDEN_RATIO;
-	c += seed;
+	uint32_t x = JHASH_INITVAL + seed + (5 << 2);
+	a += x;
+	b += x;
+	c += x;
 	__jhash_mix(a, b, c);
 
 	a += d;
 	b += e;
-	c += 5 * 4;
-	__jhash_mix(a, b, c);
+	__jhash_final(a, b, c);
 	return c;
 }
 
 static inline uint32_t hthash_4words(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t seed)
 {
-	a += JHASH_GOLDEN_RATIO;
-	b += JHASH_GOLDEN_RATIO;
-	c += seed;
+	uint32_t x = JHASH_INITVAL + seed + (4 << 2);
+	a += x;
+	b += x;
+	c += x;
 	__jhash_mix(a, b, c);
 
 	a += d;
-	c += 4 * 4;
-	__jhash_mix(a, b, c);
+	__jhash_final(a, b, c);
 	return c;
 }
 
 static inline uint32_t hthash_3words(uint32_t a, uint32_t b, uint32_t c, uint32_t seed)
 {
-	a += JHASH_GOLDEN_RATIO;
-	b += JHASH_GOLDEN_RATIO;
-	c += seed;
-	__jhash_mix(a, b, c);
+	uint32_t x = JHASH_INITVAL + seed + (3 << 2);
+	a += x;
+	b += x;
+	c += x;
+	__jhash_final(a, b, c);
 	return c;
 }
 
 static inline uint32_t hthash_2words(uint32_t a, uint32_t b, uint32_t seed)
 {
-	return ht_hash_3words(a, b, 0, seed);
+	uint32_t c = JHASH_INITVAL + seed + (2 << 2);
+	a += c;
+	b += c;
+	__jhash_final(a, b, c);
+	return c;
 }
 
 static inline uint32_t hthash_1words(uint32_t a, uint32_t seed)
 {
-	return ht_hash_3words(a, 0, 0, seed);
+	uint32_t c = JHASH_INITVAL + seed + (1 << 2), b;
+	a += c;
+	b = c;
+	__jhash_final(a, b, c);
+	return c;
 }
 
 static inline uint32_t hthash32_mod(const uint32_t *key, size_t len, uint32_t seed, uint32_t rat)
 {
 	uint32_t w[3];
 
-	w[0] = w[1] = rat;
-	w[2] = seed;
-	__hthash32(w, key, len);
+	w[0] = w[1] = w[2] = rat + seed + (len << 2);
+	len = __hthash32(w, key, len);
 
-	w[3] += len * 4;
-	switch(len % 3) {
-	case 2 : w[1] += key[len - 2];
-	case 1 : w[0] += key[len - 1];
+	switch(len) {
+	case 3: w[2] += key[2];
+	case 2: w[1] += key[1];
+	case 1: w[0] += key[0];
+		__jhash_final(w[0], w[1], w[2]);
+	case 0 : break; /* Nothing left to add */
 	};
-	__jhash_mix(w[0], w[1], w[2]);
 
 	return w[2];
 }
 
+static inline uint32_t hthash32(const uint32_t *key, size_t len, uint32_t seed)
+{
+	return hthash32_mod(key, len, seed, JHASH_INITVAL);
+}
+
 #  undef __jhash_mix
-#  undef JHASH_GOLDEN_RATIO
+#  undef __jhash_final
+#  undef rol32
+#  undef JHASH_INITVAL
 # endif
 #endif
