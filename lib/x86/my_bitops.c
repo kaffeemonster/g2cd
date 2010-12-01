@@ -132,7 +132,7 @@ static always_inline void write_flags(size_t f)
 	asm volatile (
 		"push %0\n\t"
 		"popf\n\t"
-		: : "r" (f) : "cc"
+		: : "ri" (f) : "cc"
 	);
 }
 
@@ -173,15 +173,14 @@ static inline bool toggle_eflags_test(const size_t mask)
 {
 	size_t f;
 
+	/*
+	 * This is a single toggle test, inspired by wine.
+	 * A more pushf/popf generating "on-check-off-check"
+	 * test is in the vcs, if one toggle is to "short".
+	 */
 	f = read_flags();
-	write_flags(f | mask);
-	f = read_flags() & mask;
-	if (unlikely(!f))
-		return false;
-	f = read_flags() & ~mask;
-	write_flags(f);
-	f = read_flags() & mask;
-	if (unlikely(f))
+	write_flags(f ^ mask);
+	if(unlikely(!((f ^ read_flags()) & mask)))
 		return false;
 
 	return true;
@@ -234,6 +233,7 @@ static __init void identify_cpu(void)
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
 
+	i = read_flags();
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
 	{
@@ -242,7 +242,10 @@ static __init void identify_cpu(void)
 		 * which can switch off cpuid in firmware...
 		 */
 		 /* distinguish 386 from 486, same trick for EFLAGS bit 18 */
-		if(is_486()) {
+		bool t = is_486();
+		write_flags(i);
+		barrier();
+		if(t) {
 			strlitcpy(our_cpu.vendor_str.s, "486?");
 			our_cpu.family = 4;
 		} else {
@@ -255,6 +258,8 @@ static __init void identify_cpu(void)
 #endif
 		return;
 	}
+	write_flags(i);
+	barrier();
 
 	/* get vendor string */
 	cpuids(&a, 0x00000000);
@@ -322,7 +327,7 @@ static __init void identify_cpu(void)
 		our_cpu.features[3] = a.r.ecx;
 	}
 
-	/* Hmmm, do we have a extended model string? */
+	/* Hmmm, do we have an extended model string? */
 	if(our_cpu.max_ext >= 0x80000004)
 	{
 		char *p, *q;
@@ -395,6 +400,18 @@ static __init void identify_cpu(void)
 	 *      1 - MOVU  movu{dp|ps|pd} is prefered over movl/movh{ps|pd}
 	 */
 
+	if(our_cpu.vendor == X86_VENDOR_AMD && our_cpu.max_ext >= 0x80000008) {
+		cpuids(&a, 0x80000008UL);
+		our_cpu.num_cores = ((uint32_t)a.r.ecx & 0xFF) + 1;
+		our_cpu.count = our_cpu.num_cores;
+	} if(our_cpu.vendor == X86_VENDOR_INTEL && our_cpu.max_basic >= 0x0B) {
+//TODO: crazy banging on topology leaf
+		/* i don't whant to know the apic ids, but... */
+		our_cpu.num_cores = 1;
+	}
+	else /* no core info, estimate... */
+		our_cpu.num_cores = 1;
+
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
 	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)
@@ -436,21 +453,20 @@ static __init void identify_cpu(void)
 	 *   first place -> goto 1).
 	 * - Always crying wolf is also not very fruitfull...
 	 */
-	if(our_cpu.max_ext >= 0x80000008) {
-		cpuids(&a, 0x80000008UL);
-		our_cpu.num_cores = ((uint32_t)a.r.ecx & 0xFF) + 1;
-		if(1 == our_cpu.num_cores)
-			return;
-		our_cpu.count = our_cpu.num_cores;
-// TODO: count total CPU count
-		/* maybe single core, but multi cpu */
-	}
-	else
-	{
-		/* no core info, estimate... */
+
+	/* lets ask the OS */
+	our_cpu.count = get_cpus_online();
 #ifdef __linux__
 #  define S_STR "\nprocessor"
 #  define S_SIZE (sizeof(S_STR)-1)
+	/*
+	 * on linux, since we know there is /proc/cpuinfo,
+	 * we do not trust the query API if it says single
+	 * core, just in case. This is important and we do
+	 * not want to get fooled by cpusets or something
+	 * like that.
+	 */
+	if(1 == our_cpu.count)
 	{
 		FILE *f;
 		/* parsing something in /proc is always bad... */
@@ -474,13 +490,14 @@ static __init void identify_cpu(void)
 			fclose(f);
 			if(0 == our_cpu.count) /* something went wrong... */
 				our_cpu.count = 1;
-			/* if we only have 1 CPU, no problem */
-			if(1 == our_cpu.count)
-				return;
 		}
 	}
 #endif
-	}
+
+	/* if we only have 1 CPU, no problem */
+	if(1 == our_cpu.count && 1 == our_cpu.num_cores)
+		return;
+
 	/*
 	 * Early AMD Opterons and everything remotely derived from them
 	 * seem to drop the ball on read-modify-write instructions _directly
@@ -719,8 +736,8 @@ int __init test_cpu_feature_cmov_callback(void)
  * someone is lost in hoping their needed (missing) instruction
  * will show up if he has no billion dollar business plan and a
  * platinium Intel support contract...
- * So additions once in a while can be seen as the "new green" and
- * be very likely. (Until politics change again...)
+ * So additions once in a while can be seen as the "new green"
+ * and be very likely. (Until politics change again...)
  *
  * You can mask out the saving of the new stuff, but that would
  * mean: no AVX for you. (or Extension 08/15)

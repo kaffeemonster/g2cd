@@ -146,6 +146,14 @@ static inline int isblank(int c)
 # define GCC_ATTR_MALLOC
 #endif
 
+#if _GNUC_PREREQ (4,3)
+# define GCC_ATTR_ALLOC_SIZE(x) GCC_ATTRIB(__alloc_size__(x))
+# define GCC_ATTR_ALLOC_SIZE2(x, y) GCC_ATTRIB(__alloc_size__(x, y))
+#else
+# define GCC_ATTR_ALLOC_SIZE(x)
+# define GCC_ATTR_ALLOC_SIZE2(x, y)
+#endif
+
 #if _GNUC_PREREQ (2,3) && !defined(WIN32)
 # define GCC_ATTR_PRINTF(str_ind, to_check) GCC_ATTRIB(format (__printf__ , (str_ind), (to_check)))
 #else

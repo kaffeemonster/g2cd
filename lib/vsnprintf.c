@@ -63,7 +63,7 @@
  * No, its not that bad ^^
  *
  * Since all those *printf-familiy functions are hell to implement,
- * normaly a libc goes the way of stdio-boxing.
+ * mere mortals fear to treat, and libc's go the way of stdio-boxing.
  *
  * Write vfprintf one time, all other just feed into this function.
  * All you need most of the time is a little argument swizzle,
@@ -279,30 +279,25 @@ char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned q)
 
 static noinline char *put_dec(char *buf, unsigned num)
 {
-	do
-	{
-		unsigned rem;
-		if(likely(num < 100000))
-			return put_dec_trunc(buf, num);
-		rem  = num % 100000;
+	/* larger numbers are a more unlikely, or: small numbers are common */
+	while(unlikely(num >= 100000)) {
+		unsigned rem = num % 100000;
 		num /= 100000;
 		buf  = put_dec_full5(buf, rem);
-	} while(true);
+	}
+	return put_dec_trunc(buf, num);
 }
 
 static noinline char *put_dec_ll(char *buf, unsigned long long num)
 {
 	if(sizeof(size_t) == sizeof(num))
 	{
-		do
-		{
-			unsigned rem;
-			if(likely(num < 100000))
-				return put_dec_trunc(buf, num);
-			rem  = num % 100000;
+		while(unlikely(num >= 100000)) {
+			unsigned rem = num % 100000;
 			num /= 100000;
 			buf  = put_dec_full5(buf, rem);
-		} while(true);
+		}
+		return put_dec_trunc(buf, num);
 	}
 	else
 	{
@@ -499,7 +494,7 @@ static inline char *hex_insert_alternate(char *buf, size_t count)
 	return buf;
 }
 
-static noinline const char *hex_finish(char *buf, const char *fmt, struct format_spec *spec)
+static noinline const char *hex_finish_real(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t len = spec->wptr - spec->conv_buf;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
@@ -542,17 +537,65 @@ OUT_CPY:
 	return end_format(buf, fmt, spec);
 }
 
+static char *put_hex(char *buf, unsigned num, const char *hexchar)
+{
+	do {
+		*buf++ = hexchar[num % 16];
+		num /= 16;
+	} while(num);
+	return buf;
+}
+
+static char *put_hex_ll(char *buf, unsigned long long num, const char *hexchar)
+{
+	if(sizeof(size_t) == sizeof(num))
+	{
+		do {
+			*buf++ = hexchar[num % 16];
+			num /= 16;
+		} while(num);
+	}
+	else
+	{
+		do {
+			unsigned t = num & 0xFFFFFFFF;
+			num >>= 32;
+			buf = put_hex(buf, t, hexchar);
+		} while(num);
+	}
+	return buf;
+}
+
+static noinline const char *hex_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->wptr = put_hex(spec->conv_buf, spec->t_store.u, 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING);
+	return hex_finish_real(buf, fmt, spec);
+}
+
+static noinline const char *hex_finish_ull(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->wptr = put_hex_ll(spec->conv_buf, spec->t_store.ull, 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING);
+	return hex_finish_real(buf, fmt, spec);
+}
+
 #define MAKE_XFUNC(prfx, type) \
 static const char *v##prfx##toxa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
 	type n = va_arg(spec->ap, type); \
-	const char *hexchar = 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING; \
-	char *wptr; \
-	wptr = spec->conv_buf; \
-	do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
-	spec->wptr = wptr; \
-	return hex_finish(buf, fmt, spec); \
-} \
+	if(sizeof(unsigned) == sizeof(n)) { \
+		spec->t_store.u = n; \
+		return hex_finish(buf, fmt, spec); \
+	} else if(sizeof(unsigned long long) == sizeof(n)) { \
+		spec->t_store.ull = n; \
+		return hex_finish_ull(buf, fmt, spec); \
+	} else { \
+		const char *hexchar = 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING; \
+		char *wptr = spec->conv_buf; \
+		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
+		spec->wptr = wptr; \
+		return hex_finish_real(buf, fmt, spec); \
+	} \
+}
 
 MAKE_XFUNC(  u, unsigned)
 MAKE_XFUNC( ul, unsigned long)
@@ -564,17 +607,71 @@ MAKE_XFUNC( ut, ptrdiff_t)
 /*
  * OCTAL
  */
+static char *put_octal(char *buf, unsigned num)
+{
+	do {
+		*buf++ = (num % 8) + '0';
+		num /= 8;
+	} while(num);
+	return buf;
+}
+
+static char *put_octal_ll(char *buf, unsigned long long num)
+{
+	if(sizeof(size_t) == sizeof(num))
+	{
+		do {
+			*buf++ = (num % 8) + '0';
+			num /= 8;
+		} while(num);
+	}
+	else
+	{
+		do {
+			unsigned t = num & 0xFFFFFFFF;
+			num >>= 32;
+			buf = put_octal(buf, t);
+		} while(num);
+	}
+	return buf;
+}
+
+static noinline const char *octal_finish(char *buf, const char *fmt, struct format_spec *spec)
+{
+	char *wptr = put_octal(spec->conv_buf, spec->t_store.u);
+	if(spec->u.flags.alternate && '0' != *(wptr-1))
+		*wptr++ = '0';
+	spec->wptr = wptr;
+	return decimal_finish(buf, fmt, spec);
+}
+
+static noinline const char *octal_finish_ull(char *buf, const char *fmt, struct format_spec *spec)
+{
+	char *wptr = put_octal_ll(spec->conv_buf, spec->t_store.ull);
+	if(spec->u.flags.alternate && '0' != *(wptr-1))
+		*wptr++ = '0';
+	spec->wptr = wptr;
+	return decimal_finish(buf, fmt, spec);
+}
+
 #define MAKE_OFUNC(prfx, type) \
 static const char *v##prfx##tooa(char *buf, const char *fmt, struct format_spec *spec) \
 { \
 	type n = va_arg(spec->ap, type); \
-	char *wptr; \
-	wptr = spec->conv_buf; \
-	do { *wptr++ = (n % 8) + '0'; n /= 8; } while(n); \
-	if(spec->u.flags.alternate && '0' != *(wptr-1)) \
-		*wptr++ = '0'; \
-	spec->wptr = wptr; \
-	return decimal_finish(buf, fmt, spec); \
+	if(sizeof(unsigned) == sizeof(n)) { \
+		spec->t_store.u = n; \
+		return octal_finish(buf, fmt, spec); \
+	} else if(sizeof(unsigned long long) == sizeof(n)) { \
+		spec->t_store.ull = n; \
+		return octal_finish_ull(buf, fmt, spec); \
+	} else { \
+		char *wptr = spec->conv_buf; \
+		do { *wptr++ = (n % 8) + '0'; n /= 8; } while(n); \
+		if(spec->u.flags.alternate && '0' != *(wptr-1)) \
+			*wptr++ = '0'; \
+		spec->wptr = wptr; \
+		return decimal_finish(buf, fmt, spec); \
+	} \
 } \
 
 MAKE_OFUNC(  u, unsigned)

@@ -102,7 +102,7 @@ static pthread_key_t key2qht_scratch2;
 	/* do not remove this proto, our it won't work... */
 static void qht_init(void) GCC_ATTR_CONSTRUCT;
 static void qht_deinit(void) GCC_ATTR_DESTRUCT;
-static void *qht_zpad_alloc(void *, unsigned int, unsigned int) GCC_ATTR_MALLOC;
+static void *qht_zpad_alloc(void *, unsigned int, unsigned int) GCC_ATTR_MALLOC GCC_ATTR_ALLOC_SIZE2(2, 3);
 static void qht_zpad_free(void *, void *);
 static inline void qht_zpad_merge(struct zpad_heap *);
 static void g2_qht_free_hzp(void *);
@@ -177,6 +177,7 @@ static void *qht_zpad_alloc(void *opaque, unsigned int num, unsigned int size)
 		goto err_record;
 	bsize = num * size;
 
+//TODO: ALIGN_SIZE may overflow it...
 	/* bsize should afterwards have the LSB cleared */
 	bsize = ALIGN_SIZE(bsize, sizeof(void *));
 
