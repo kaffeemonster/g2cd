@@ -291,7 +291,7 @@ static GCC_ATTR_FASTCALL __init void *memcpy_runtime_sw(void *restrict dst, cons
   4) 2MB plus use MOVNTDQ or other non-temporal stores.
 */
 
-noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
+static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
 {
 	/* trick gcc to generate lean stack frame and do a tailcail */
 	if(likely(len < 512))
@@ -309,6 +309,9 @@ void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 	/* trick gcc to generate lean stack frame and do a tailcail */
 	return memcpy_big(dst, src, len);
 }
+void *my_memcpy_fwd(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
+
+#include "../generic/memcpy_rev.c"
 
 static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

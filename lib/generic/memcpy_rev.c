@@ -1,6 +1,6 @@
 /*
- * memmove.c
- * memmove
+ * memcpy_rev.c
+ * memcpy_rev
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -23,7 +23,12 @@
  * $Id: $
  */
 
-static noinline GCC_ATTR_FASTCALL void *memcpy_rev(void *dst, const void *src, size_t len)
+/*
+ * a generic reverse memcpy.
+ * It is important this thing copies in reverse! No matter whats
+ * better for your HW!
+ */
+void *my_memcpy_rev(void *dst, const void *src, size_t len)
 {
 	size_t i;
 	char *dst_c = (char *)dst + len;
@@ -98,19 +103,5 @@ alignment_failed:
 	return dst;
 }
 
-void *my_memmove(void *dst, const void *src, size_t len)
-{
-	/* we know we have a forward copying memcpy */
-	if(likely(dst <= src) || (const char *)src + len < (char *)dst) {
-		if(unlikely(len < 16))
-			return cpy_rest_o(dst, src, len);
-		else
-			return memcpy_big(dst, src, len);
-	}
-
-	/* trick gcc to generate lean stack frame and do a tailcail */
-	return memcpy_rev(dst, src, len);
-}
-
-static char const rcsid_mvg[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mcrg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

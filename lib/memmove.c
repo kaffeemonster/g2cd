@@ -39,13 +39,25 @@
 #include "my_bitops.h"
 #include "my_bitopsm.h"
 
-#ifdef I_LIKE_ASM
-#  include "generic/memmove.c"
-#else
-# include "generic/memmove.c"
-#endif
+void *my_memmove(void *dst, const void *src, size_t len)
+{
+	/* trick gcc to generate lean stack frame and do a tailcail */
+	if(likely(dst <= src)) {
+		if((char *)dst < (const char *)src - len)
+			return my_memcpy(dst, src, len);
+		else
+			return my_memcpy_fwd(dst, src, len);
+	} else {
+		if((const char *)src < (char *)dst - len)
+			return my_memcpy(dst, src, len);
+		else
+			return my_memcpy_rev(dst, src, len);
+	}
+}
 
 /* memmove as a macro... yeah */
 #undef memmove
 void *memmove(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memmove");
+
+static char const rcsid_mvg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

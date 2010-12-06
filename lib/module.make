@@ -185,8 +185,8 @@ MEMCPYSRC = \
 MEMPCPYSRC = \
 	$(MPL)/generic/mempcpy.c \
 	$(MPL)/sparc/mempcpy.c
-MEMMOVESRC = \
-	$(MPL)/generic/memmove.c
+MEMCPY_REV_SRC = \
+	$(MPL)/generic/memcpy_rev.c
 MEMCHRSRC = \
 	$(MPL)/generic/memchr.c \
 	$(MPL)/alpha/memchr.c \
@@ -305,7 +305,7 @@ LIBASRCS = \
 	$(MEMNEGSRC) \
 	$(MEMCPYSRC) \
 	$(MEMPCPYSRC) \
-	$(MEMMOVESRC) \
+	$(MEMCPY_REV_SRC) \
 	$(MEMCHRSRC) \
 	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
@@ -507,9 +507,8 @@ $(MPL)/cpy_rest.o: $(CPY_RESTSRC)
 $(MPL)/memxorcpy.o: $(MEMXORCPYSRC)
 $(MPL)/memand.o: $(MEMANDSRC)
 $(MPL)/memneg.o: $(MEMNEGSRC)
-$(MPL)/memcpy.o: $(MEMCPYSRC)
+$(MPL)/memcpy.o: $(MEMCPYSRC) $(MEMCPY_REV_SRC)
 $(MPL)/mempcpy.o: $(MEMPCPYSRC)
-$(MPL)/memmove.o: $(MEMMOVESRC)
 $(MPL)/memchr.o: $(MEMCHRSRC)
 $(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)

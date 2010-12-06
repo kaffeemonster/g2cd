@@ -29,8 +29,7 @@
  * and propaply still better than strcpys and strcats
  * normaly used in this situation.
  */
-
-noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
+static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const void *restrict src, size_t len)
 {
 	size_t i;
 	char *restrict dst_c = dst;
@@ -114,6 +113,9 @@ void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 	/* trick gcc to generate lean stack frame and do a tailcail */
 	return memcpy_big(dst, src, len);
 }
+void *my_memcpy_fwd(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
+
+#include "memcpy_rev.c"
 
 static char const rcsid_mcg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */
