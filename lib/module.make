@@ -232,6 +232,8 @@ STRCHRNULSRC = \
 	$(MPL)/parisc/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
+STRRCHRSRC = \
+	$(MPL)/generic/strrchr.c
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
 	$(MPL)/alpha/strncasecmp_a.c \
@@ -311,6 +313,7 @@ LIBASRCS = \
 	$(MEM_SEARCHRNSRC) \
 	$(STRNLENSRC) \
 	$(STRCHRNULSRC) \
+	$(STRRCHRSRC) \
 	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
 	$(STRNPCPYSRC) \
@@ -362,6 +365,7 @@ LIBSRCS = \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
 	$(MPL)/strchr.c \
+	$(MPL)/strrchr.c \
 	$(MPL)/strchrnul.c \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
@@ -396,6 +400,7 @@ BITOPOBJS = \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
 	$(MPL)/strchr.o \
+	$(MPL)/strrchr.o \
 	$(MPL)/strchrnul.o \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
@@ -515,6 +520,7 @@ $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
 $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
+$(MPL)/strrchr.o: $(STRRCHRSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
 $(MPL)/strnpcpy.o: $(STRNPCPYSRC)
 $(MPL)/strreverse_l.o: $(STRREVERSE_LSRC)

@@ -697,7 +697,7 @@ alignment_size_t:
 #if defined(__i386__) && defined(__PIC__)
 			/* fuck -fpic */
 			"mov	%2, %0\n\t"
-			"push	"PICREC"\n\t"
+			"push	"PICREG"\n\t"
 			"mov	%0, "PICREG"\n\t"
 #endif
 			"test	%3, %3\n\t"

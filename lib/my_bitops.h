@@ -84,6 +84,10 @@ size_t strlen(const char *s) GCC_ATTR_PURE;
 char *strchrnul(const char *s, int c) GCC_ATTR_PURE;
 #  define STRCHRNUL_DEFINED
 # endif
+# ifndef HAVE_STRRCHR
+char *strrchr(const char *s, int c) GCC_ATTR_PURE;
+#  define STRRCHR_DEFINED
+# endif
 
 # define strlitcmp(x, y)	(memcmp((x), (y), str_size(y)))
 # define strlitcpy(x, y)	(memcpy((x), (y), str_size(y)))

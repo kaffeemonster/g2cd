@@ -87,13 +87,11 @@ char *strchr(const char *s, int c);
 
 char *strchr(const char *s, int c)
 {
-	char *ret_val;
-	if(unlikely(!c))
-		return (char *)(intptr_t)s + strlen(s);
-	ret_val = strchrnul(s, c);
-	return likely('\0' != *ret_val) ? ret_val : NULL;
+	char *ret_val = strchrnul(s, c);
+	return likely((c & 0xff) == (*ret_val & 0xff)) ? ret_val : NULL;
 }
 
+char *index(const char *s, int c) GCC_ATTR_ALIAS("strchr");
 /*@unused@*/
 static char const rcsid_sc[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

@@ -36,7 +36,7 @@ static noinline GCC_ATTR_FASTCALL void *mempcpy_big(void *restrict dst, const vo
 	char *restrict dst_c = dst;
 	const char *restrict src_c = src;
 
-#ifndef COMPILER_IS_STUPID
+#if !(defined(COMPILER_IS_STUPID) || defined(restrict))
 	/* if the compiler is good, he will do the right thing(TM) */
 	for(i = (len/16)*16; i; i--)
 		*dst_c++ = *src_c++;

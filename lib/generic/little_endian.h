@@ -5,10 +5,10 @@
 
 # define HOST_IS_BIGENDIAN  0
 # if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
-#  define nul_byte_index32(x) (__builtin_ctz(x)/BITS_PER_CHAR)
-#  define nul_byte_index(x) (__builtin_ctzl(x)/BITS_PER_CHAR)
-#  define nul_word_index32(x) (__builtin_ctz(x)/(BITS_PER_CHAR * 2))
-#  define nul_word_index(x) (__builtin_ctzl(x)/(BITS_PER_CHAR * 2))
+#  define nul_byte_index32(x) ((unsigned)__builtin_ctz(x)/BITS_PER_CHAR)
+#  define nul_byte_index(x) ((unsigned)__builtin_ctzl(x)/BITS_PER_CHAR)
+#  define nul_word_index32(x) ((unsigned)__builtin_ctz(x)/(BITS_PER_CHAR * 2))
+#  define nul_word_index(x) ((unsigned)__builtin_ctzl(x)/(BITS_PER_CHAR * 2))
 # else
 #  define nul_byte_index32(x) nul_byte_index_l32(x)
 #  define nul_byte_index(x) (4 >= sizeof(x) ? nul_byte_index_l32(x) : nul_byte_index_l64(x))
