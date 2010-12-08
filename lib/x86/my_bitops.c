@@ -69,7 +69,7 @@ struct cpuinfo
 	uint32_t max_ext;
 	int count;
 	int num_cores;
-	uint32_t features[6];
+	uint32_t features[7];
 	unsigned short clflush_size;
 	bool init_done;
 };
@@ -358,7 +358,7 @@ static __init void identify_cpu(void)
 		our_cpu.features[4] = a.r.ebx;
 	}
 
-	/* poke on the centauer extendet feature flags */
+	/* poke on the centauer extended feature flags */
 // TODO: only do this on centauer?
 	cpuids(&a, 0xC0000000UL);
 	if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
@@ -393,18 +393,20 @@ static __init void identify_cpu(void)
 		our_cpu.stepping, our_cpu.model_str.s);
 #endif
 
-	/*
-	 * AMD performance hints?
-	 * 0x8000001A
-	 * EAX: 0 - FP128 full 128 bit pipeline
-	 *      1 - MOVU  movu{dp|ps|pd} is prefered over movl/movh{ps|pd}
-	 */
+	/* AMD performance hints */
+	if(our_cpu.vendor == X86_VENDOR_AMD)
+	{
+		if(our_cpu.max_ext >= 0x8000001A) {
+			cpuids(&a, 0x8000001AUL);
+			our_cpu.features[6] = a.r.eax;
+		}
+	}
 
 	if(our_cpu.vendor == X86_VENDOR_AMD && our_cpu.max_ext >= 0x80000008) {
 		cpuids(&a, 0x80000008UL);
 		our_cpu.num_cores = ((uint32_t)a.r.ecx & 0xFF) + 1;
 		our_cpu.count = our_cpu.num_cores;
-	} if(our_cpu.vendor == X86_VENDOR_INTEL && our_cpu.max_basic >= 0x0B) {
+	} else if(our_cpu.vendor == X86_VENDOR_INTEL && our_cpu.max_basic >= 0x0B) {
 //TODO: crazy banging on topology leaf
 		/* i don't whant to know the apic ids, but... */
 		our_cpu.num_cores = 1;

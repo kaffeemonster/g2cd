@@ -233,7 +233,12 @@ STRCHRNULSRC = \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
 STRRCHRSRC = \
-	$(MPL)/generic/strrchr.c
+	$(MPL)/generic/strrchr.c \
+	$(MPL)/alpha/strrchr.c \
+	$(MPL)/arm/strrchr.c \
+	$(MPL)/parisc/strrchr.c \
+	$(MPL)/ia64/strrchr.c \
+	$(MPL)/ppc/strrchr.c
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
 	$(MPL)/alpha/strncasecmp_a.c \

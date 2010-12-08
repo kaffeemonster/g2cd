@@ -32,6 +32,7 @@
 # define FEATURE4(x,y,z) ENUM_CMD(x, (y +  96))
 # define FEATURE5(x,y,z) ENUM_CMD(x, (y + 128))
 # define FEATURE6(x,y,z) ENUM_CMD(x, (y + 160))
+# define FEATURE7(x,y,z) ENUM_CMD(x, (y + 192))
 # define X86_CPU_FEATURE_ENUM \
 	FEATURE1( FPU       ,  0, "FPU on chip"                       ), \
 	FEATURE1( VME       ,  1, "Virtual-8086 Mode Extensions"      ), \
@@ -66,7 +67,7 @@
 	FEATURE1( IA64      , 30, "IA-64, Itanium in x86 mode"        ), \
 	FEATURE1( PBE       , 31, "Pending Break Enable"              ), \
 	FEATURE2( SSE3      ,  0, "SSE3 Extensions"                   ), \
-	FEATURE2( PCLMULQDQ ,  1, "PCLMULQDQ avail.(Intel:Res.Mar-09)"), \
+	FEATURE2( PCLMULQDQ ,  1, "PCLMULQDQ avail."                  ), \
 	FEATURE2( DTES64    ,  2, "64-Bit Debug Store"                ), \
 	FEATURE2( MONITOR   ,  3, "MONITOR avail."                    ), \
 	FEATURE2( DSCPL     ,  4, "CPL Qualified Debug Store"         ), \
@@ -134,7 +135,7 @@
 	FEATURE4( SVM       ,  2, "Secure Virtual Machine"            ), \
 	FEATURE4( EAPIC     ,  3, "Extended APIC space"               ), \
 	FEATURE4( AMOVCR    ,  4, "CR8 in 32Bit mode"                 ), \
-	FEATURE4( ABM       ,  5, "Advanced bit manipulation"         ), \
+	FEATURE4( ABM       ,  5, "Advanced bit manipulation"/*lzcnt*/), \
 	FEATURE4( SSE4A     ,  6, "SSE4a Extensions"                  ), \
 	FEATURE4( MASSE     ,  7, "Misaligned SSE mode"               ), \
 	FEATURE4( 3DNOWPRE  ,  8, "3DNow! Prefetch instructions"      ), \
@@ -143,13 +144,16 @@
 	FEATURE4( XOP       , 11, "XOP Extensions"                    ), \
 	FEATURE4( SKINIT    , 12, "SKINIT avail."                     ), \
 	FEATURE4( WDT       , 13, "Watchdog timer"                    ), \
+	FEATURE4( RES_4_14  , 14, "Reserved"                          ), \
 	FEATURE4( LWP       , 15, "Lightweight Profiling"             ), \
 	FEATURE4( FMA4      , 16, "FMA AMD-Style"                     ), \
-	FEATURE4( CVT16     , 18, "Half Float extention"              ), \
+	FEATURE4( RES_4_17  , 17, "Reserved"                          ), \
+	FEATURE4( CVT16     , 18, "Half Float extention (obsolete?)"  ), \
 	FEATURE4( NODEID_MSR, 19, "NodeID MSR"                        ), \
 	FEATURE4( TBM       , 21, "Trailing bit manipulation"         ), \
 	FEATURE4( TOPOEXT   , 22, "Topology ext. CPUID leafs"         ), \
 	FEATURE5( FGSBASE   ,  0, "User Baseregister manipulation"    ), \
+	FEATURE5( BMI       ,  3, "Bit manipulation inst." /*tzcnt*/  ), \
 	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
@@ -159,7 +163,9 @@
 	FEATURE6( PL_PHE    , 10, "Padlock Hashing Engine"            ), \
 	FEATURE6( PL_PHE_E  , 11, "Padlock HE enabled"                ), \
 	FEATURE6( PL_PMM    , 12, "Padlock Montgommery Multiplier"    ), \
-	FEATURE6( PL_PMM_E  , 13, "Padlock MM enabled"                ),
+	FEATURE6( PL_PMM_E  , 13, "Padlock MM enabled"                ), \
+	FEATURE7( AP_FP128  ,  0, "SSE is 128 bit wide"               ), \
+	FEATURE7( AP_MOVU   ,  1, "Movu instr. better then movl/movh" )
 
 # define ENUM_CMD(x,y) CFEATURE_##x = y
 enum x86_cpu_features

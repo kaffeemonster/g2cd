@@ -44,7 +44,19 @@ char *strrchr(const char *s, int c);
 #endif
 
 #ifdef I_LIKE_ASM
+# if defined(__alpha__)
+#  include "alpha/strrchr.c"
+# elif defined(__arm__)
+#  include "arm/strrchr.c"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/strrchr.c"
+# elif defined(__ia64__)
+#  include "ia64/strrchr.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/strrchr.c"
+# else
 #  include "generic/strrchr.c"
+# endif
 #else
 # include "generic/strrchr.c"
 #endif
