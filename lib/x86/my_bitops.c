@@ -43,8 +43,8 @@ enum cpu_vendor
 	X86_VENDOR_CENTAUR, /* today better known as VIA (C3, C7) */
 	X86_VENDOR_TRANSMETA,
 	X86_VENDOR_SIS,
-	X86_VENDOR_NSC,
-	X86_VENDOR_CYRIX,
+	X86_VENDOR_NSC,     /* some own old 386, afterwards some relabeled Cyrix? */
+	X86_VENDOR_CYRIX,   /* bought by Centauer? */
 	X86_VENDOR_NEXGEN,
 	X86_VENDOR_UMC,
 };
@@ -201,9 +201,49 @@ static inline void cpu_feature_clear(int f)
 	our_cpu.features[f / 32] &= ~(1 << (f % 32));
 }
 
+static inline void cpu_feature_set(int f)
+{
+	our_cpu.features[f / 32] |= 1 << (f % 32);
+}
+
 static inline bool cpu_feature(int f)
 {
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
+}
+
+static bool detect_old_cyrix(void)
+{
+	/*
+	 * Perform the Cyrix 5/2 test. A Cyrix won't change
+	 * the flags, while other 486 chips will.
+	 * PPro and PII will also do so, but they have CPUID
+	 */
+	unsigned int test;
+	bool result;
+
+	asm volatile (
+		"sahf\n\t"    /* set flags to 0x0005) */
+		"div %b2\n\t" /* divide 5 by 2 */
+		"lahf"        /* load result flags into %ah */
+		: "=a" (test)
+	 	: "0" (5), "q" (2)
+		: "cc"
+	);
+
+	/* AH is 0x02 on Cyrix after the divide.. */
+	result = (unsigned char)(test >> 8) == 0x02;
+	if(result)
+	{
+		strlitcpy(our_cpu.vendor_str.s, "CyrixInstead");
+		our_cpu.vendor = X86_VENDOR_CYRIX;
+		/*
+		 * we could bang on port 22/23 to get some kind of MSR, and
+		 * better identify this CPU.
+		 * Or we could save us the pain (we are a userspace
+		 * process...).
+		 */
+	}
+	return result;
 }
 
 static __init void identify_cpu(void)
@@ -237,6 +277,7 @@ static __init void identify_cpu(void)
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
 	{
+		int ologlevel;
 		/*
 		 * No? *cough* Ok, maybe rare/exotic chip like Geode
 		 * which can switch off cpuid in firmware...
@@ -245,6 +286,8 @@ static __init void identify_cpu(void)
 		bool t = is_486();
 		write_flags(i);
 		barrier();
+		ologlevel = server.settings.logging.act_loglevel;
+		server.settings.logging.act_loglevel = LOGF_WARN;
 		if(t) {
 			strlitcpy(our_cpu.vendor_str.s, "486?");
 			our_cpu.family = 4;
@@ -252,10 +295,20 @@ static __init void identify_cpu(void)
 			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
+		if(detect_old_cyrix()) {
+			/* we may run before main, other thread impl. do not like an print so early */
 #ifdef __linux__
-		/* we may run before main, other thread impl. do not like an print so early */
-		logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
+			if(4 == our_cpu.family)
+				logg_pos(LOGF_WARN, "This seems to be some Cyrix/NSC/Geode CPU."
+				         "Please enable CPUID if possible (BIOS, whatever)\n");
 #endif
+		} else {
+#ifdef __linux__
+			/* we may run before main, other thread impl. do not like an print so early */
+			logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
+#endif
+		}
+		server.settings.logging.act_loglevel = ologlevel;
 		return;
 	}
 	write_flags(i);
@@ -358,14 +411,6 @@ static __init void identify_cpu(void)
 		our_cpu.features[4] = a.r.ebx;
 	}
 
-	/* poke on the centauer extended feature flags */
-// TODO: only do this on centauer?
-	cpuids(&a, 0xC0000000UL);
-	if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
-		cpuids(&a, 0xC0000001UL);
-		our_cpu.features[5] = a.r.edx;
-	}
-
 	/*
 	 * First gen. x86-64 left out the "legacy" lahf/sahf instruction
 	 * in 64 bit mode.
@@ -375,14 +420,68 @@ static __init void identify_cpu(void)
 	 * MSR for the affected processors.
 	 * But no BIOS without bugs: Some BIOS _always_ enable it, even
 	 * if the underlying CPU does not support it...
-	 * Since we do not need lahf/sahf, only document this.
-#ifdef(__x86_64__)
+	 */
+#ifdef __x86_64__
 	if(our_cpu.vendor == X86_VENDOR_AMD &&
 	   our_cpu.family == 0x0F &&
 	   our_cpu.model  <  0x14)
 		cpu_feature_clear(CFEATURE_LAHF);
 #endif
-	 */
+	if(our_cpu.vendor == X86_VENDOR_CYRIX)
+	{
+		/* Cyrix mirrors the 3DNow flag into the base plane */
+		cpu_feature_clear(CFEATURE_PBE);
+		/* Cyrix uses Bit 24 in the extended plane for their MMX extentions */
+		if(cpu_feature(CFEATURE_MIR_FXSR))
+			cpu_feature_set(CFEATURE_CX_MMX);
+		cpu_feature_clear(CFEATURE_MIR_FXSR);
+		/*
+		 * Cyrix 6x86    == 486
+		 * Cyrix 6x86L   -> DE, CX8
+		 * Cyrix 6x86MX  -> TSC, MSR, CMOV, PGE
+		 * Cyrix MediaGX == 486
+		 * Cyrix MediaGXm -> CX8, TSC, MSR, CMOV, MMX
+		 * -> bought by Centauer
+		 * MCR instead of MTRR
+		 */
+	}
+	if(our_cpu.vendor == X86_VENDOR_CENTAUR)
+	{
+		/*
+		 * Winchip 1 like Cyrix 6x86L + MCE
+		 * -> bought by VIA
+		 * Winchip 2/VIA C3 -> PGE, MTRR
+		 * Nehemiah  -> +SSE -3DNow, PSE CMOV
+		 *  Stepping 8 -> VME, SEP, PAT
+		 */
+		/* Centauer mirrors the 3DNow flag into the base plane */
+		cpu_feature_clear(CFEATURE_PBE);
+		if(5 == our_cpu.family) {
+			/* the tsc on early chips is buggy */
+			if(4 == our_cpu.model)
+				cpu_feature_clear(CFEATURE_TSC);
+			cpu_feature_set(CFEATURE_CX8);
+			/* Winchip2 and above have 3DNow! */
+			if(our_cpu.model >= 8)
+				cpu_feature_set(CFEATURE_3DNOW);
+		} else if(5 < our_cpu.family) {
+			/* poke on the centauer extended feature flags */
+			cpuids(&a, 0xC0000000UL);
+			if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
+				cpuids(&a, 0xC0000001UL);
+				our_cpu.features[5] = a.r.edx;
+			}
+			/*
+			 * we could set CX8 here, but it has to be enabled in
+			 * some MSR, so don't.
+			 */
+			/* Before Nehemiah, the C3's had 3DNow! */
+			if (our_cpu.model >= 6 && our_cpu.model < 9)
+				cpu_feature_set(CFEATURE_3DNOW);
+		}
+	}
+	/* Rise mP6 -> TSC, CX8, MMX */
+	/* Transmeta -> MMX, CMOV, later SEP */
 
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
 #ifdef __linux__

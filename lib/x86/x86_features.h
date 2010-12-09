@@ -164,6 +164,7 @@
 	FEATURE6( PL_PHE_E  , 11, "Padlock HE enabled"                ), \
 	FEATURE6( PL_PMM    , 12, "Padlock Montgommery Multiplier"    ), \
 	FEATURE6( PL_PMM_E  , 13, "Padlock MM enabled"                ), \
+	FEATURE6( CX_MMX    , 31, "Cyrix MMX Ext." /* F3(MIR_FXSR) */ ), \
 	FEATURE7( AP_FP128  ,  0, "SSE is 128 bit wide"               ), \
 	FEATURE7( AP_MOVU   ,  1, "Movu instr. better then movl/movh" )
 
