@@ -585,8 +585,10 @@ static int act_str_cmp(const void *a, const void *b)
 	const action_string *key = a, *ent = b;
 	logg_develd_old("%zu, \"%.*s\", %zu, \"%s\"\n", key->length, key->length,
 	                key->txt, ent->length, ent->txt);
-	if(key->length - ent->length)
-		return key->length - ent->length;
+	/*
+	 * we do not check the length, we only search the area of the
+	 * array where length matches
+	 */
 	return strncasecmp_a(key->txt, ent->txt, ent->length);
 }
 
@@ -619,8 +621,17 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 		goto out_fixup;
 
 	f_key.length = (size_t)f_dist;
-	f_found = bsearch(&f_key, KNOWN_HEADER_FIELDS, KNOWN_HEADER_FIELDS_SUM,
-	                  sizeof(KNOWN_HEADER_FIELDS[0]), act_str_cmp);
+	if(likely(LONGEST_HEADER_FIELD >= f_dist &&
+	          KNOWN_HEADER_FIELDS_INDEX[f_dist - 1].num))
+	{
+		f_found =
+			bsearch(&f_key,
+			        KNOWN_HEADER_FIELDS + KNOWN_HEADER_FIELDS_INDEX[f_dist - 1].index,
+			        KNOWN_HEADER_FIELDS_INDEX[f_dist - 1].num,
+			        sizeof(KNOWN_HEADER_FIELDS[0]), act_str_cmp);
+	}
+	else
+		f_found = NULL;
 
 	if(unlikely(!f_found)) {
 		logg_develd("unknown field:\t\"%.*s\"\tcontent:\n",

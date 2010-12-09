@@ -44,7 +44,7 @@
 # define ENC_LZO_S         "lzo"
 # define ENC_MAX_S           ENC_DEFLATE_S
 
-# define KNOWN_HEADER_FIELDS_SUM  36
+# define LONGEST_HEADER_FIELD     25
 /* headerfields */
 # define ACCEPT_KEY        "Accept"
 # define UAGENT_KEY        "User-Agent"

@@ -188,6 +188,12 @@ typedef struct
 	const char  *txt;
 } action_string;
 
+typedef struct
+{
+	unsigned char index;
+	unsigned char num;
+} action_index;
+
 # define MAX_HEADER_LENGTH        (NORM_BUFF_CAPACITY/2)
 
 # include "G2HeaderStrings.h"
@@ -201,7 +207,8 @@ typedef struct
 # endif /* _G2CONNECTION_C */
 
 _G2CON_EXTRNVAR(const action_string *KNOWN_ENCODINGS[];)
-_G2CON_EXTRNVAR(const action_string KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM];)
+_G2CON_EXTRNVAR(const action_index  KNOWN_HEADER_FIELDS_INDEX[LONGEST_HEADER_FIELD];)
+_G2CON_EXTRNVAR(const action_string KNOWN_HEADER_FIELDS[];)
 
 # define g2_con_clear(x) _g2_con_clear((x), 0);
 # ifdef DEBUG_CON_ALLOC

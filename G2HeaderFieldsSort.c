@@ -40,6 +40,11 @@ typedef struct
 	const char *txt;
 } action_string;
 
+typedef struct
+{
+	unsigned char index, num;
+} action_index;
+
 static const action_string h_as00 = {"accept_what",    "ACCEPT_KEY",       ACCEPT_KEY};
 static const action_string h_as01 = {"uagent_what",    "UAGENT_KEY",       UAGENT_KEY};
 static const action_string h_as02 = {"a_encoding_what","ACCEPT_ENC_KEY",   ACCEPT_ENC_KEY};
@@ -113,10 +118,10 @@ static int acstr_cmp(const void *a, const void *b)
 int main(int argc, char *argv[])
 {
 	unsigned i;
-	size_t max_f_name = 0, max_ktxt = 0;
+	size_t max_f_name = 0, max_ktxt = 0, max_txt = 0, o_len = 0;
 	time_t now;
 	struct tm *now_tm, a_tm;
-
+	action_index *aci;
 
 	qsort(hdr_fields, anum(hdr_fields), sizeof(hdr_fields[0]), acstr_cmp);
 
@@ -126,9 +131,26 @@ int main(int argc, char *argv[])
 		max_f_name = max_f_name > t ? max_f_name : t;
 		t = strlen(hdr_fields[i]->ktxt);
 		max_ktxt = max_ktxt > t ? max_ktxt : t;
+		t = strlen(hdr_fields[i]->txt);
+		max_txt = max_txt > t ? max_txt : t;
 	}
 	max_f_name++;
 	max_ktxt++;
+	aci = calloc(max_txt, sizeof(*aci));
+	if(!aci) {
+		perror("error allocating index storage");
+		return 1;
+	}
+
+	for(i = 0; i < anum(hdr_fields); i++)
+	{
+		size_t t = strlen(hdr_fields[i]->txt);
+		if(t != o_len) {
+			aci[t-1].index = i;
+			o_len = t;
+		}
+		aci[t-1].num++;
+	}
 
 	now = time(NULL);
 	if(!(now_tm = gmtime(&now))) {
@@ -184,14 +206,20 @@ int main(int argc, char *argv[])
 			now_tm->tm_year + 1900
 		);
 
-		fputs("const action_string KNOWN_HEADER_FIELDS[KNOWN_HEADER_FIELDS_SUM] GCC_ATTR_VIS(\"hidden\") =\n{\n", out);
+		fputs("/* This file is generated automatically, do not edit */\n\n"
+		      "const action_index KNOWN_HEADER_FIELDS_INDEX[LONGEST_HEADER_FIELD] GCC_ATTR_VIS(\"hidden\") =\n{\n", out);
+		for(i = 0; i < max_txt; i++)
+		{
+			fprintf(out, "\t{%3u, %2u}, /* %2u */\n", aci[i].index, aci[i].num, i+1);
+		}
+
+		fputs("};\n\nconst action_string KNOWN_HEADER_FIELDS[] GCC_ATTR_VIS(\"hidden\") =\n{\n", out);
 		for(i = 0; i < anum(hdr_fields); i++)
 		{
 			fprintf(out, "\t{%*s, str_size(%*s), %*s }, /* %s */\n",
 			       (int)max_f_name, hdr_fields[i]->f_name, (int)max_ktxt, hdr_fields[i]->ktxt,
 			       (int)max_ktxt, hdr_fields[i]->ktxt, hdr_fields[i]->txt);
 		}
-
 		fputs("};\n\n/* EOF */\n", out);
 		if(f_name != df_name)
 			fclose(out);
