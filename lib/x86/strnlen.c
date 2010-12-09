@@ -361,15 +361,15 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))strnlen_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))strnlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2),  [0] = CFB(CFEATURE_CMOV)}},
 # endif
 #endif
-	{.func = (void (*)(void))strnlen_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))strnlen_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},
-	{.func = (void (*)(void))strnlen_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))strnlen_SSE,   .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))strnlen_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT), [0] = CFB(CFEATURE_CMOV)}},
 #endif
-	{.func = (void (*)(void))strnlen_x86, .flags_needed = -1, .callback = NULL},
+	{.func = (void (*)(void))strnlen_x86, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static size_t strnlen_runtime_sw(const char *s, size_t maxlen);

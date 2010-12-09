@@ -421,18 +421,18 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 // TODO: advanced code is buggy ATM
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))memchr_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))memchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2), [0] = CFB(CFEATURE_CMOV)}},
 # endif
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))memchr_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))memchr_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
 # endif
 #endif
-	{.func = (void (*)(void))memchr_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))memchr_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))memchr_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))memchr_SSE,   .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV}},
 #endif
 #endif
-	{.func = (void (*)(void))memchr_x86, .flags_needed = -1, .callback = NULL},
+	{.func = (void (*)(void))memchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
 static void *memchr_runtime_sw(const void *s, int c, size_t n);

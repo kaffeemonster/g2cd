@@ -116,20 +116,20 @@ static inline char *strcpyreverse(char *dst, const char *begin, const char *end)
 
 LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src, size_t len));
 
+# define CFB(x) (1 << ((x)%32))
+# define CFF_DEFAULT (1 << 0)
+# define CFF_AVX_TST (1 << 1)
 struct test_cpu_feature
 {
 	void (*func)(void);
-	int (*callback)(void);
-	long flags_needed;
+	long flags;
+# if defined(__i386__) || defined(__x86_64__)
+	uint32_t features[7];
+# endif
 };
 
-LIB_MY_BITOPS_EXTRN(unsigned get_cpus_online(void));
-
 LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
-LIB_MY_BITOPS_EXTRN(int test_cpu_feature_avx_callback(void));
-LIB_MY_BITOPS_EXTRN(int test_cpu_feature_3dnow_callback(void));
-LIB_MY_BITOPS_EXTRN(int test_cpu_feature_3dnowprf_callback(void));
-LIB_MY_BITOPS_EXTRN(int test_cpu_feature_cmov_callback(void));
 LIB_MY_BITOPS_EXTRN(void emit_emms(void));
+LIB_MY_BITOPS_EXTRN(unsigned get_cpus_online(void));
 
 # endif

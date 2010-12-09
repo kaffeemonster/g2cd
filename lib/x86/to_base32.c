@@ -630,18 +630,18 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))to_base32_SSE41, .flags_needed = CFEATURE_SSE4_1},
+	{.func = (void (*)(void))to_base32_SSE41,   .features = {[1] = CFB(CFEATURE_SSE4_1)}},
 # endif
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))to_base32_SSE3, .flags_needed = CFEATURE_SSE3},
+	{.func = (void (*)(void))to_base32_SSE3,    .features = {[1] = CFB(CFEATURE_SSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))to_base32_SSE2, .flags_needed = CFEATURE_SSE2},
+	{.func = (void (*)(void))to_base32_SSE2,    .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))to_base32_SSE, .flags_needed = CFEATURE_SSE},
-	{.func = (void (*)(void))to_base32_SSE, .flags_needed = CFEATURE_MMXEXT},
+	{.func = (void (*)(void))to_base32_SSE,     .features = {[0] = CFB(CFEATURE_SSE)}},
+	{.func = (void (*)(void))to_base32_SSE,     .features = {[2] = CFB(CFEATURE_MMXEXT)}},
 #endif
-	{.func = (void (*)(void))to_base32_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))to_base32_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);

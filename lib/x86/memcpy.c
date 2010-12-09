@@ -221,42 +221,42 @@ static __init_cdata const struct test_cpu_feature t_feat_med[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE3, .flags_needed = CFEATURE_SSE3},
+	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_medium_SSE3,       .features = {[1] = CFB(CFEATURE_SSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE2, .flags_needed = CFEATURE_SSE2},
+	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_medium_SSE2,       .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_medium_SSE, .flags_needed = CFEATURE_SSE},
-	{.func = (void (*)(void))memcpy_medium_MMX, .flags_needed = CFEATURE_MMX},
+	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_medium_SSE,        .features = {[0] = CFB(CFEATURE_SSE)}},
+	{.func = (void (*)(void))memcpy_medium_MMX,        .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))memcpy_small, .flags_needed = -1 },
+	{.func = (void (*)(void))memcpy_small,             .features = {}, .flags = CFF_DEFAULT},
 };
 
 static __init_cdata const struct test_cpu_feature t_feat_big[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_big_SSE3, .flags_needed = CFEATURE_SSE3},
+	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_big_SSE3,       .features = {[1] = CFB(CFEATURE_SSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_big_SSE2, .flags_needed = CFEATURE_SSE2},
+	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_big_SSE2,       .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))memcpy_big_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memcpy_big_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memcpy_big_SSE, .flags_needed = CFEATURE_SSE},
-	{.func = (void (*)(void))memcpy_medium_MMX, .flags_needed = CFEATURE_MMX},
+	{.func = (void (*)(void))memcpy_big_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memcpy_big_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memcpy_big_SSE,        .features = {[0] = CFB(CFEATURE_SSE)}},
+	{.func = (void (*)(void))memcpy_medium_MMX,     .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))memcpy_small, .flags_needed = -1 },
+	{.func = (void (*)(void))memcpy_small,          .features = {}, .flags = CFF_DEFAULT},
 };
 
 static GCC_ATTR_FASTCALL void *memcpy_runtime_sw(void *restrict dst, const void *restrict src, size_t len);

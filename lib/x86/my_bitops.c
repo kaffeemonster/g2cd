@@ -591,27 +591,6 @@ void emit_emms(void)
 }
 
 /*
- * Callback test if we have 3dNow
- */
-int __init test_cpu_feature_3dnow_callback(void)
-{
-	return cpu_feature(CFEATURE_3DNOW);
-}
-
-int __init test_cpu_feature_3dnowprf_callback(void)
-{
-	return cpu_feature(CFEATURE_3DNOWPRE);
-}
-
-/*
- * Callback test if we have CMOV (thanks VIA)
- */
-int __init test_cpu_feature_cmov_callback(void)
-{
-	return cpu_feature(CFEATURE_CMOV);
-}
-
-/*
  * Callback test if AVX can be used
  *
  * Unfortunatly Intel *always* fucks it up...
@@ -774,7 +753,7 @@ int __init test_cpu_feature_cmov_callback(void)
 #define XFEATURE_ENABLED_MASK_R 0
 #define XFEATURE_XMM_STATE_SAVE (1<<1)
 #define XFEATURE_YMM_STATE_SAVE (1<<2)
-int __init test_cpu_feature_avx_callback(void)
+static int __init test_cpu_feature_avx_callback(void)
 {
 	uint32_t low, high;
 
@@ -816,20 +795,24 @@ int __init test_cpu_feature_avx_callback(void)
 }
 
 /*
- * Test a feature on a x86-CPU and change function pointer
+ * Test a feature mask on a x86-CPU and change function pointer
  */
 __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
-	size_t i;
+	size_t i, j, f;
 	identify_cpu();
+
 	for(i = 0; i < l; i++)
 	{
-		if(-1 == t[i].flags_needed ||
-		   cpu_feature(t[i].flags_needed)) {
-			if(t[i].callback && !t[i].callback())
-				continue;
+		if(t[i].flags & CFF_DEFAULT)
 			return t[i].func;
-		}
+		for(f = 0, j = 0; j < anum(t[i].features); j++)
+			f |= (our_cpu.features[j] & t[i].features[j]) ^ t[i].features[j];
+		if(f)
+			continue;
+		if(t[i].flags & CFF_AVX_TST && !test_cpu_feature_avx_callback())
+			continue;
+		return t[i].func;
 	}
 	return NULL; /* whoever fucked it up, die! */
 }

@@ -45,12 +45,12 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))popcountst_SSE4, .flags_needed = CFEATURE_POPCNT},
-	{.func = (void (*)(void))popcountst_SSE4, .flags_needed = CFEATURE_SSE4A},
-	{.func = (void (*)(void))popcountst_SSE4, .flags_needed = CFEATURE_SSE4_2},
+	{.func = (void (*)(void))popcountst_SSE4,    .features = {[1] = CFB(CFEATURE_POPCNT)}},
+	{.func = (void (*)(void))popcountst_SSE4,    .features = {[3] = CFB(CFEATURE_SSE4A)}},
+	{.func = (void (*)(void))popcountst_SSE4,    .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif
 #endif
-	{.func = (void (*)(void))popcountst_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))popcountst_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static size_t popcountst_runtime_sw(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL;

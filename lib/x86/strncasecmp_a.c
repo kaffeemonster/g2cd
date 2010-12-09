@@ -501,15 +501,15 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))strncasecmp_a_SSE42, .flags_needed = CFEATURE_SSE4_2, .callback = NULL},
+	{.func = (void (*)(void))strncasecmp_a_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif
 #endif
-	{.func = (void (*)(void))strncasecmp_a_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
+	{.func = (void (*)(void))strncasecmp_a_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))strncasecmp_a_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
-	{.func = (void (*)(void))strncasecmp_a_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = NULL},
+	{.func = (void (*)(void))strncasecmp_a_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
+	{.func = (void (*)(void))strncasecmp_a_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT)}},
 #endif
-	{.func = (void (*)(void))strncasecmp_a_x86, .flags_needed = -1, .callback = NULL},
+	{.func = (void (*)(void))strncasecmp_a_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
 #if 1

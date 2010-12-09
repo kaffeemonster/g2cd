@@ -615,23 +615,23 @@ static __init_cdata const struct test_cpu_feature key_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))aes_encrypt_key128_SSEAES, .flags_needed = CFEATURE_AES},
-	{.func = (void (*)(void))aes_encrypt_key128_SSSE3, .flags_needed = CFEATURE_SSSE3},
+	{.func = (void (*)(void))aes_encrypt_key128_SSEAES,  .features = {[1] = CFB(CFEATURE_AES)}},
+	{.func = (void (*)(void))aes_encrypt_key128_SSSE3,   .features = {[0] = CFB(CFEATURE_SSSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))aes_encrypt_key128_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static __init_cdata const struct test_cpu_feature enc_feat[] =
 {
-	{.func = (void (*)(void))aes_ecb_encrypt_padlock, .flags_needed = CFEATURE_PL_ACE_E},
+	{.func = (void (*)(void))aes_ecb_encrypt_padlock,  .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))aes_ecb_encrypt_SSEAES, .flags_needed = CFEATURE_AES},
-	{.func = (void (*)(void))aes_ecb_encrypt_SSSE3, .flags_needed = CFEATURE_SSSE3},
+	{.func = (void (*)(void))aes_ecb_encrypt_SSEAES,   .features = {[1] = CFB(CFEATURE_AES)}},
+	{.func = (void (*)(void))aes_ecb_encrypt_SSSE3,    .features = {[0] = CFB(CFEATURE_SSSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))aes_ecb_encrypt_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))aes_ecb_encrypt_generic,  .features = {}, .flags = CFF_DEFAULT},
 };
 
 

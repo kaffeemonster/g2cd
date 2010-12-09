@@ -1830,24 +1830,24 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
-	{.func = (void (*)(void))mempopcnt_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+	{.func = (void (*)(void))mempopcnt_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__)
-	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_POPCNT},
-	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_SSE4A},
-	{.func = (void (*)(void))mempopcnt_SSE4A, .flags_needed = CFEATURE_SSE4_2},
+	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_POPCNT)}},
+	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[3] = CFB(CFEATURE_SSE4A)}},
+	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))mempopcnt_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))mempopcnt_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
 # endif
 #endif
-	{.func = (void (*)(void))mempopcnt_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))mempopcnt_SSE2,    .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))mempopcnt_SSE, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_cmov_callback},
-	{.func = (void (*)(void))mempopcnt_SSE, .flags_needed = CFEATURE_MMXEXT, .callback = test_cpu_feature_cmov_callback},
-	{.func = (void (*)(void))mempopcnt_MMX, .flags_needed = CFEATURE_MMX},
+	{.func = (void (*)(void))mempopcnt_SSE,     .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))mempopcnt_SSE,     .features = {[2] = CFB(CFEATURE_MMXEXT), [0] = CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))mempopcnt_MMX,     .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))mempopcnt_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))mempopcnt_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static size_t mempopcnt_runtime_sw(const void *s, size_t n);

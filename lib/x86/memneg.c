@@ -103,23 +103,25 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
-	{.func = (void (*)(void))memneg_AVX, .flags_needed = CFEATURE_AVX, .callback = test_cpu_feature_avx_callback},
+	{.func = (void (*)(void))memneg_AVX,        .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))memneg_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memneg_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memneg_SSE3,       .features = {[1] = CFB(CFEATURE_SSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memneg_SSE3_3DNOW, .flags_needed = CFEATURE_SSE3, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memneg_SSE3, .flags_needed = CFEATURE_SSE3, .callback = NULL},
-	{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memneg_SSE2_3DNOW, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memneg_SSE2, .flags_needed = CFEATURE_SSE2, .callback = NULL},
-	{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnowprf_callback},
-	{.func = (void (*)(void))memneg_SSE_3DNOW, .flags_needed = CFEATURE_SSE, .callback = test_cpu_feature_3dnow_callback},
-	{.func = (void (*)(void))memneg_SSE, .flags_needed = CFEATURE_SSE, .callback = NULL},
+	{.func = (void (*)(void))memneg_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memneg_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memneg_SSE2,       .features = {[0] = CFB(CFEATURE_SSE2)}},
+	{.func = (void (*)(void))memneg_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [3] = CFB(CFEATURE_3DNOWPRE)}},
+	{.func = (void (*)(void))memneg_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memneg_SSE,        .features = {[0] = CFB(CFEATURE_SSE)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))memneg_MMX_3DNOW, .flags_needed = CFEATURE_3DNOW, .callback = NULL},
-	{.func = (void (*)(void))memneg_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+	{.func = (void (*)(void))memneg_MMX_3DNOW,  .features = {[0] = CFB(CFEATURE_MMX),  [2] = CFB(CFEATURE_3DNOW)}},
+	{.func = (void (*)(void))memneg_MMX,        .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))memneg_x86, .flags_needed = -1, .callback = NULL},
+	{.func = (void (*)(void))memneg_x86,        .features = {}, .flags = CFF_DEFAULT},
 };
 
 static void *memneg_runtime_sw(void *dst, const void *src, size_t len);

@@ -578,14 +578,14 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))adler32_SSSE3, .flags_needed = CFEATURE_SSSE3, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))adler32_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
 # endif
 #endif
-	{.func = (void (*)(void))adler32_SSE2, .flags_needed = CFEATURE_SSE2, .callback = test_cpu_feature_cmov_callback},
+	{.func = (void (*)(void))adler32_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))adler32_MMX, .flags_needed = CFEATURE_MMX, .callback = NULL},
+	{.func = (void (*)(void))adler32_MMX,   .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))adler32_x86, .flags_needed = -1, .callback = NULL},
+	{.func = (void (*)(void))adler32_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
 static uint32_t adler32_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len);

@@ -9,6 +9,7 @@
 	# vars
 		KNOWN_ENCODINGS;
 		KNOWN_HEADER_FIELDS;
+		KNOWN_HEADER_FIELDS_INDEX;
 		g2_ptype_names;
 		g2_ptype_names_length;
 		local_time_now;

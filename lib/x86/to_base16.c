@@ -206,14 +206,14 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))to_base16_SSSE3, .flags_needed = CFEATURE_SSSE3},
+	{.func = (void (*)(void))to_base16_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))to_base16_SSE2, .flags_needed = CFEATURE_SSE2},
+	{.func = (void (*)(void))to_base16_SSE2,    .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))to_base16_MMX, .flags_needed = CFEATURE_MMX},
+	{.func = (void (*)(void))to_base16_MMX,     .features = {[0] = CFB(CFEATURE_MMX)}},
 #endif
-	{.func = (void (*)(void))to_base16_generic, .flags_needed = -1 },
+	{.func = (void (*)(void))to_base16_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
 static unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);
