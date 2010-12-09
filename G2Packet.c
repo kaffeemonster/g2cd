@@ -2044,8 +2044,10 @@ static bool handle_PI(struct ptype_action_args *parg)
 		po->big_endian = HOST_IS_BIGENDIAN;
 
 		g2_packet_add2target(po, parg->target, parg->target_lock);
-		if(connec)
+		if(connec) {
+			connec->u.handler.z_flush = true; /* make sure the PO goes on the wire */
 			connec->u.handler.send_stamps.PI = local_time_now;
+		}
 		ret_val = true;
 	}
 
