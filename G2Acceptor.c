@@ -299,7 +299,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 	/*
 	 * Our streams are basically "thin", here and there a packet every
 	 * odd second (only the sum makes the traffic). But thin streams
-	 * are a little proplematic because  they do not trigger proper
+	 * are a little problematic because  they do not trigger proper
 	 * TCP optimitiations, for example because a stable RTT can not
 	 * be mesured.
 	 * Linux >= 2.6.34 has some magic to handle them better (faster
@@ -332,7 +332,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 #if HAVE_DECL_TCP_THIN_DUPACK == 1
 	my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_THIN_DUPACK, &yes, sizeof(yes));
 #endif
-#if HAVE_DECL_TCP_THIN_DUPACK == 1
+#if HAVE_DECL_TCP_USER_TIMEOUT == 1
 	if(server.settings.have_tcp_send_timeout) {
 		yes = server.settings.tcp_send_timeout;
 		my_epoll_setsockopt(work_entry->com_socket, SOL_TCP, TCP_USER_TIMEOUT, &yes, sizeof(yes));
