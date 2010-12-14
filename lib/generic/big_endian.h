@@ -5,15 +5,23 @@
 
 # define HOST_IS_BIGENDIAN 1
 # if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
-#  define nul_byte_index32(x) (__builtin_clz(x)/BITS_PER_CHAR)
-#  define nul_byte_index(x) (__builtin_clzl(x)/BITS_PER_CHAR)
-#  define nul_word_index32(x) (__builtin_clz(x)/(BITS_PER_CHAR * 2))
-#  define nul_word_index(x) (__builtin_clzl(x)/(BITS_PER_CHAR * 2))
+#  define nul_byte_index32(x) ((unsigned)__builtin_clz(x)/BITS_PER_CHAR)
+#  define nul_byte_index(x) ((unsigned)__builtin_clzl(x)/BITS_PER_CHAR)
+#  define nul_word_index32(x) ((unsigned)__builtin_clz(x)/(BITS_PER_CHAR * 2))
+#  define nul_word_index(x) ((unsigned)__builtin_clzl(x)/(BITS_PER_CHAR * 2))
+#  define nul_byte_index32_last(x) (3u-((unsigned)__builtin_ctz(x)/BITS_PER_CHAR))
+#  define nul_byte_index_last(x) ((sizeof(x)-1u)-((unsigned)__builtin_ctzl(x)/BITS_PER_CHAR))
+#  define nul_word_index32_last(x) (1u-((unsigned)__builtin_ctz(x)/(BITS_PER_CHAR * 2)))
+#  define nul_word_index_last(x) (((sizeof(x)-1u)/2)-((unsigned)__builtin_ctzl(x)/(BITS_PER_CHAR * 2)))
 # else
 #  define nul_byte_index32(x) nul_byte_index_b32(x)
 #  define nul_byte_index(x) (4 >= sizeof(x) ? nul_byte_index_b32(x) : nul_byte_index_b64(x))
 #  define nul_word_index32(x) nul_word_index_b32(x)
 #  define nul_word_index(x) (4 >= sizeof(x) ? nul_word_index_b32(x) : nul_word_index_b64(x))
+#  define nul_byte_index32_last(x) (3u-nul_byte_index_l32(x))
+#  define nul_byte_index_last(x) ((sizeof(x)-1u)-(4 >= sizeof(x) ? nul_byte_index_l32(x) : nul_byte_index_l64(x)))
+#  define nul_word_index32_last(x) (1u-nul_word_index_l32(x))
+#  define nul_word_index_last(x) (((sizeof(x)-1u)/2)-(4 >= sizeof(x) ? nul_word_index_l32(x) : nul_word_index_l64(x)))
 # endif
 
 #define cpu_to_le64(x) (( __le64)__swab64((x)))

@@ -27,6 +27,15 @@
 	(((uint64_t)(x) & (uint64_t)0x00ff000000000000ULL) >> 40) |	\
 	(((uint64_t)(x) & (uint64_t)0xff00000000000000ULL) >> 56)))
 
+extern void __bad_swab_type_size(void);
+#define __swabxx(ptr) ((typeof(val))({			\
+	__builtin_choose_expr(sizeof(val) == 1, val,			\
+	__builtin_choose_expr(sizeof(val) == 2, __swab16(val),	\
+	__builtin_choose_expr(sizeof(val) == 4, __swab32(val),	\
+	__builtin_choose_expr(sizeof(val) == 8, __swab64(val),	\
+	__bad_swab_type_size()))));					\
+	}))
+
 /**
  * __swab16 - return a byteswapped 16-bit value
  * @x: value to byteswap

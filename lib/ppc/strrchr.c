@@ -41,7 +41,6 @@ char *strrchr(const char *s, int c)
 	vector unsigned char x;
 	vector bool char m1, m2, l_m;
 	char *p, *l_match;
-	uint32_t m;
 
 	prefetch(s);
 
@@ -68,7 +67,7 @@ char *strrchr(const char *s, int c)
 	m2 = (vector bool char)vec_perm(v0, (vector unsigned char)m2, v_perm);
 
 	l_match = p;
-	l_m = m2;
+	l_m = (vector bool char)v0;
 
 	while(vec_all_eq(m1, v0))
 	{
@@ -81,16 +80,19 @@ char *strrchr(const char *s, int c)
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 	}
-	if(unlikely(vec_all_eq(m2, v0) && vec_all_eq(l_m, v0)))
-		return NULL;
-	if(vec_any_ne(m2, v0)) {
+	if(vec_any_ne(m2, v0))
+	{
+		vector unsigned char v1 = (vector unsigned char)vec_splat_s8(-1);
 		uint32_t r = vec_zpos(m1);
-		m = vec_zpos(m2);
-		if(m < r)
-			return (char *)(uintptr_t)p + m;
+		v_perm = vec_lvsr(r, (unsigned char *)0);
+		m1 = (vector bool char)vec_perm(v1, v0, v_perm);
+		m2 = vec_sel((vector bool char)v0, m2, m1);
+		if(vec_any_ne(m2, v0))
+			return (char *)(uintptr_t)p + vec_zpos_last(m2);
 	}
-	m = vec_zpos(l_m);
-	return (char *)(uintptr_t)l_match + m;
+	if(vec_any_ne(l_m, v0))
+		return (char *)(uintptr_t)l_match + vec_zpos_last(l_m);
+	return NULL;
 }
 
 static char const rcsid_srcp[] GCC_ATTR_USED_VAR = "$Id: $";

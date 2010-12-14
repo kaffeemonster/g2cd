@@ -88,6 +88,7 @@ static inline size_t ctlz(unsigned long a)
 
 # define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
 # define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << SOULM1 * BITS_PER_CHAR) : cttz((x)))
+# define alpha_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (7u-cttz((x))) : (7u-ctlz((x) << SOULM1 * BITS_PER_CHAR)))
 
 # define cmpbeqz(a) (cmpbge(0, a))
 # if _GNUC_PREREQ(3, 3)

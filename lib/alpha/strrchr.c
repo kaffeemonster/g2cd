@@ -72,7 +72,7 @@ char *strrchr(const char *s, int c)
 		m >>= shift + SOULM1 * BITS_PER_CHAR;
 	}
 	l_match.p = p;
-	l_match.m = m;
+	l_match.m = 0;
 
 	while(!r)
 	{
@@ -86,16 +86,23 @@ char *strrchr(const char *s, int c)
 		x ^= mask;
 		m  = cmpbeqz(x);
 	}
-	if(unlikely(!(m || l_match.m)))
-		return NULL;
 	if(m) {
 		r = alpha_nul_byte_index_e(r);
-		m = alpha_nul_byte_index_e(m);
-		if(m < r)
-			return (char *)(uintptr_t)p + m;
+		if(!HOST_IS_BIGENDIAN) {
+			r  = 1u << ((r * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			r |= r - 1u;
+		} else {
+			r  = 1u << (((SOSTM1-r) * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			r |= r - 1u;
+			r  = ~r;
+		}
+		m &= r;
+		if(m)
+			return (char *)(uintptr_t)p + alpha_nul_byte_index_e_last(m);
 	}
-	m = alpha_nul_byte_index_e(l_match.m);
-	return (char *)(uintptr_t)l_match.p + m;
+	if(l_match.m)
+		return (char *)(uintptr_t)l_match.p + alpha_nul_byte_index_e_last(l_match.m);
+	return NULL;
 }
 
 static char const rcsid_srca[] GCC_ATTR_USED_VAR = "$Id: $";

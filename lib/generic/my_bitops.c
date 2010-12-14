@@ -26,13 +26,10 @@
 void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
 	size_t i;
-	for(i = 0; i < l; i++)
-	{
-		if(-1 == t[i].flags_needed) {
-			if(t[i].callback && !t[i].callback)
-				continue;
+
+	for(i = 0; i < l; i++) {
+		if(CFF_DEFAULT & t[i].flags)
 			return t[i].func;
-		}
 	}
 	return NULL; /* die, sucker, die! */
 }

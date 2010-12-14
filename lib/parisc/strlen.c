@@ -49,21 +49,20 @@ size_t strlen(const char *s)
 		r |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
 	else
 		r |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
-	t = pa_is_z(r);
-	if(t)
-		goto OUT;
 
-	asm(
-		"1:\n\t"
-		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
-		"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
-		"b	1b\n\t"
-		PREFETCH("32(%0)")
-		: /* %0 */ "=r" (p),
-		  /* %1 */ "=r" (r)
-		: /* %2 */ "0" (p)
-	);
-OUT:
+	if(likely(!pa_is_z(r)))
+	{
+		asm(
+			"1:\n\t"
+			PA_LD",ma	"PA_TZ"(%0), %1\n\t"
+			"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
+			"b	1b\n\t"
+			PREFETCH("32(%0)")
+			: /* %0 */ "=r" (p),
+			  /* %1 */ "=r" (r)
+			: /* %2 */ "0" (p)
+		);
+	}
 	t = pa_find_z(r);
 	return p - s + t;
 }

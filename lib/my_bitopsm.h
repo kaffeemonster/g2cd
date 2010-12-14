@@ -96,13 +96,13 @@
 # define has_nul_byte(x) \
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
 # define nul_byte_index_l32(x) \
-	((x) & 0x80U ? 0 : (((x) & 0x8000U) ? 1 : ((x) & 0x800000U ? 2 : ((x) & 0x80000000 ? 3 : 0))))
+	((x) & 0x80U ? 0u : (((x) & 0x8000U) ? 1u : ((x) & 0x800000U ? 2u : ((x) & 0x80000000 ? 3u : 0u))))
 # define nul_byte_index_b32(x) \
-	((x) & 0x80000000U ? 0 : (((x) & 0x800000U) ? 1 : ((x) & 0x8000U ? 2 : ((x) & 0x80 ? 3 : 0))))
+	((x) & 0x80000000U ? 0u : (((x) & 0x800000U) ? 1u : ((x) & 0x8000U ? 2u : ((x) & 0x80 ? 3u : 0u))))
 # define nul_byte_index_l64(x) \
-	(0x80808080U & (x) ? nul_byte_index_l32(x) : nul_byte_index_l32((x)>>32) + 4)
+	(0x80808080U & (x) ? nul_byte_index_l32(x) : nul_byte_index_l32((x)>>32) + 4u)
 # define nul_byte_index_b64(x) \
-	(0x80808080U & ((x)>>32) ? nul_byte_index_b32((x)>>32) : nul_byte_index_b32(x) + 4)
+	(0x80808080U & ((x)>>32) ? nul_byte_index_b32((x)>>32) : nul_byte_index_b32(x) + 4u)
 	/*	666655555555554444444444333333333322222222221111111111
 	 *	3210987654321098765432109876543210987654321098765432109876543210
 	 *	1000000010000000100000001000000010000000100000001000000010000000
@@ -110,13 +110,13 @@
 # define has_nul_word(x) \
 	(((x) -  MK_C(0x00010001)) & ~(x) &  MK_C(0x80008000))
 # define nul_word_index_l32(x) \
-	((x) & 0x8000U ? 0 : ((x) & 0x80000000U ? 1 : 0))
+	((x) & 0x8000U ? 0u : ((x) & 0x80000000U ? 1u : 0u))
 # define nul_word_index_b32(x) \
-	((x) & 0x80000000U ? 0 : ((x) & 0x8000U ? 1 : 0))
+	((x) & 0x80000000U ? 0u : ((x) & 0x8000U ? 1u : 0u))
 # define nul_word_index_l64(x) \
-	(0x80008000U & (x) ? nul_word_index_l32(x) : nul_word_index_l32((x)>>32) + 2)
+	(0x80008000U & (x) ? nul_word_index_l32(x) : nul_word_index_l32((x)>>32) + 2u)
 # define nul_word_index_b64(x) \
-	(0x80008000U & ((x)>>32) ? nul_word_index_b32((x)>>32) : nul_word_index_b32(x) + 2)
+	(0x80008000U & ((x)>>32) ? nul_word_index_b32((x)>>32) : nul_word_index_b32(x) + 2u)
 # define packedmask_832(x) \
 	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F);
 # define packedmask_864(x) \

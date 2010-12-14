@@ -155,4 +155,5 @@ static inline unsigned cttz(size_t a)
 
 # define arm_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
 # define arm_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << ACMP_SHL) : cttz((x) >> ACMP_SHR))
+# define arm_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (SOSTM1-cttz((x) >> ACMP_SHR)) : (SOSTM1-ctlz((x) << ACMP_SHL)))
 #endif

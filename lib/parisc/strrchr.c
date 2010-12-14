@@ -35,8 +35,11 @@ char *strrchr(const char *s, int c)
 	const char *p, *l_match;
 	unsigned long mask, x1, x2;
 	unsigned shift;
-	int t1, t2, t_l_m, l_m;
+	int t1, l_m;
 	prefetch(s);
+
+	if(unlikely(!c)) /* make sure we do not compare with 0 */
+		return (char *)(intptr_t)s + strlen(s);
 
 	/*
 	 * Sometimes you need a new perspective, like the altivec
@@ -51,65 +54,65 @@ char *strrchr(const char *s, int c)
 	p  = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x1 = *(const unsigned long *)p;
-	x2 = x1 ^ mask;
+	x2 = x1;
 	if(!HOST_IS_BIGENDIAN) {
 		x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		x2 &= (~0UL) << (shift * BITS_PER_CHAR);
 	} else {
 		x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+		x2 &= (~0UL) >> (shift * BITS_PER_CHAR);
 	}
-	t1 = pa_is_z(x1);
-	t2 = pa_is_z(x2);
-	if(t1)
-	{
-		if(!t2)
-			return NULL;
-		t1 = t1 ? pa_find_z(x1) : (int)SOUL;
-		t2 = t2 ? pa_find_z(x2) : (int)SOUL;
-		if(t1 <= t2)
-			return NULL;
-		return (char *)(uintptr_t)p + t2;
-	}
+	t1  = pa_is_z(x1);
+	x2 ^= mask;
 	l_match = p;
-	l_m = x2;
+	l_m = ~0UL;
 
-	asm(
-		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
-		"1:\n\t"
-		"uxor,"PA_SBZ"	%1, %6, %2\n\t"
-		"b,n	3f\n\t"
-		"copy	%2, %3\n\t"
-		"addi	-"PA_TZ", %0, %4\n"
-		"3:\n\t"
-		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
-		"b,n	2f\n\t"
-		"b	1b\n\t"
-		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
-		"2:"
-		: /* %0 */ "=&r" (p),
-		  /* %1 */ "=&r" (x1),
-		  /* %2 */ "=&r" (x2),
-		  /* %3 */ "=&r" (l_m),
-		  /* %4 */ "=&r" (l_match)
-		: /* %5 */ "0" (p),
-		  /* %6 */ "r" (mask),
-		  /* %7 */ "3" (l_m),
-		  /* %8 */ "4" (l_match)
-	);
-	t2    = pa_is_z(x2);
-	t_l_m = pa_is_z(l_m);
-	if(unlikely(!(t2 || t_l_m)))
-		return NULL;
-	if(t2) {
-		t1 = pa_is_z(x1);
-		t1 = t1 ? pa_find_z(x1) : (int)SOUL;
-		t2 = t2 ? pa_find_z(x2) : (int)SOUL;
-		if(t2 < t1)
-			return (char *)(uintptr_t)p + t2;
+	if(!t1)
+	{
+		asm(
+			PA_LD"	0(%0), %1\n"
+			"1:\n\t"
+			"uxor,"PA_SBZ"	%2, %%r0, %%r0\n\t"
+			"b,n	3f\n\t"
+			"copy	%2, %3\n\t"
+			"addi	-"PA_TZ", %0, %4\n"
+			"3:\n\t"
+			"xor	%1, %6, %2\n\t"
+			"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
+			"b,n	2f\n\t"
+			"b	1b\n\t"
+			PA_LD",ma	"PA_TZ"(%0), %1\n"
+			"2:"
+			: /* %0 */ "=&r" (p),
+			  /* %1 */ "=&r" (x1),
+			  /* %2 */ "=&r" (x2),
+			  /* %3 */ "=&r" (l_m),
+			  /* %4 */ "=&r" (l_match)
+			: /* %5 */ "0" (p + SOUL),
+			  /* %6 */ "r" (mask),
+			  /* %7 */ "3" (l_m),
+			  /* %8 */ "4" (l_match),
+			  /* %9 */ "2" (x2)
+		);
 	}
-	l_m = pa_find_z(l_m);
-	return (char *)(uintptr_t)l_match + l_m;
+	if(pa_is_z(x2))
+	{
+		t1 = pa_find_z(x1);
+		if(!HOST_IS_BIGENDIAN) {
+			t1  = 1u << ((t1 * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			t1 |= t1 - 1u;
+		} else {
+			t1  = 1u << (((SOSTM1-t1) * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			t1 |= t1 - 1u;
+			t1  = ~t1;
+		}
+		x2 |= ~t1;
+		if(pa_is_z(x2))
+			return (char *)(uintptr_t)p + pa_find_z_last(x2);
+	}
+	if(pa_is_z(l_m))
+		return (char *)(uintptr_t)l_match + pa_find_z_last(l_m);
+	return NULL;
 }
 
 static char const rcsid_srcpa[] GCC_ATTR_USED_VAR = "$Id: $";

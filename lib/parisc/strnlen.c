@@ -71,7 +71,7 @@ size_t strnlen(const char *s, size_t maxlen)
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 		"cmpib,>>=	3, %2, 2f\n\t"
 		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
-		"b	2f\n\t"
+		"b,n	2f\n\t"
 		"b	1b\n\t"
 		"addi	-"PA_TZ", %2, %2\n"
 		"2:"

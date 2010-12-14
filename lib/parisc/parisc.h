@@ -76,6 +76,31 @@ static inline int pa_find_z(unsigned long x)
 	return r;
 }
 
+static inline int pa_find_z_last(unsigned long x)
+{
+	int r = -1;
+	unsigned long t;
+
+	if(HOST_IS_BIGENDIAN)
+	{
+		do {
+			t = x & 0xff;
+			r++;
+			x >>= BITS_PER_CHAR;
+		} while(t);
+	}
+	else
+	{
+		x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
+		do {
+			t = x & 0xff;
+			r++;
+			x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
+		} while(t);
+	}
+	return r;
+}
+
 static inline int pa_find_zw(unsigned long x)
 {
 	int r = -1;
@@ -85,7 +110,7 @@ static inline int pa_find_zw(unsigned long x)
 	{
 		x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
 		do {
-			t = x & 0xff;
+			t = x & 0xffff;
 			r++;
 			x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
 		} while(t);
@@ -93,7 +118,7 @@ static inline int pa_find_zw(unsigned long x)
 	else
 	{
 		do {
-			t = x & 0xff;
+			t = x & 0xffff;
 			r++;
 			x >>= BITS_PER_TCHAR;
 		} while(t);
@@ -101,8 +126,46 @@ static inline int pa_find_zw(unsigned long x)
 	return r;
 }
 
+static inline int pa_find_zw_last(unsigned long x)
+{
+	int r = -1;
+	unsigned long t;
+
+	if(HOST_IS_BIGENDIAN)
+	{
+		do {
+			t = x & 0xffff;
+			r++;
+			x >>= BITS_PER_TCHAR;
+		} while(t);
+	}
+	else
+	{
+		x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
+		do {
+			t = x & 0xffff;
+			r++;
+			x = (x << BITS_PER_TCHAR) | (x >> ((SOUL-SOTC) * BITS_PER_CHAR));
+		} while(t);
+	}
+	return r;
+}
+
 static inline int pa_is_z(unsigned long x)
 {
+# if _GNUC_PREREQ (4,5)
+	asm goto (
+		"uxor,"PA_NBZ"	%0, %%r0, %%r0\n\t"
+		"b,n	%l[some_z]\n\t"
+		: /* we can not have outputs */
+		: /* %0 */ "r" (x)
+		: /* clobber */ "cc"
+		: some_z
+	);
+	return 0;
+some_z:
+	return -1;
+# else
 	int r;
 	asm(
 		"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
@@ -113,12 +176,25 @@ static inline int pa_is_z(unsigned long x)
 		: /* %1 */ "r" (x),
 		  /* %2 */ "0" (0)
 	);
-// TODO: jump label support?
 	return r;
+# endif
 }
 
 static inline int pa_is_zw(unsigned long x)
 {
+# if _GNUC_PREREQ (4,5)
+	asm goto (
+		"uxor,"PA_NHZ"	%0, %%r0, %%r0\n\t"
+		"b,n	%l[some_z]\n\t"
+		: /* we can not have outputs */
+		: /* %0 */ "r" (x)
+		: /* clobber */ "cc"
+		: some_z
+	);
+	return 0;
+some_z:
+	return -1;
+# else
 	int r;
 	asm(
 		"uxor,"PA_SHZ"	%1, %%r0, %%r0\n\t"
@@ -129,8 +205,8 @@ static inline int pa_is_zw(unsigned long x)
 		: /* %1 */ "r" (x),
 		  /* %2 */ "0" (0)
 	);
-// TODO: jump label support?
 	return r;
+# endif
 }
 
 static inline unsigned long pcmp1gt(unsigned long a, unsigned long b)

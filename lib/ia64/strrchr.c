@@ -37,6 +37,9 @@ char *strrchr(const char *s, int c)
 	unsigned shift;
 	prefetch(s);
 
+	if(unlikely(!c)) /* make sure we do not compare with 0 */
+		return (char *)(intptr_t)s + strlen(s);
+
 	/*
 	 * Sometimes you need a new perspective, like the altivec
 	 * way of handling things.
@@ -50,40 +53,47 @@ char *strrchr(const char *s, int c)
 	p  = (const char *)ALIGN_DOWN(s, SOULL);
 	shift = ALIGN_DOWN_DIFF(s, SOULL);
 	x1 = *(const unsigned long long *)p;
-	x2 = x1 ^ mask;
+	x2 = x1;
 	if(!HOST_IS_BIGENDIAN) {
 		x1 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
+		x2 &= (~0ULL) << (shift * BITS_PER_CHAR);
 	} else {
 		x1 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
-		x2 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+		x2 &= (~0ULL) >> (shift * BITS_PER_CHAR);
 	}
 	r1 = czx1(x1);
-	r2 = czx1(x2);
-	if(r1 < SOULL) {
-		if(SOULL == r2 || r1 <= r2)
-			return NULL;
-		return (char *)(uintptr_t)p + r2;
-	}
+	r2 = pcmp1eq(x2, mask);
 	l_match = p;
-	l_r = r2;
+	l_r = 0;
 
-	do
+	while(r1 == SOULL)
 	{
-		if(r2 < SOULL) {
+		if(r2) {
 			l_match = p;
 			l_r = r2;
 		}
 		p += SOULL;
 		x1 = *(const unsigned long long *)p;
-		x2 = x1 ^ mask;
+		x2 = x1;
 		r1 = czx1(x1);
-		r2 = czx1(x2);
-	} while(r1 == SOULL);
-	if(r2 < SOULL && r2 < r1)
-		return (char *)(uintptr_t)p + r2;
-	if(l_r < SOULL)
-		return (char *)(uintptr_t)l_match + l_r;
+		r2 = pcmp1eq(x2, mask);
+	};
+	if(r2)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			r1  = 1u << ((r1 * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			r1 |= r1 - 1u;
+		} else {
+			r1  = 1u << (((SOSTM1-r1) * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
+			r1 |= r1 - 1u;
+			r1  = ~r1;
+		}
+		r2 &= r1;
+		if(r2)
+			return (char *)(uintptr_t)p + czx1_last(r2);
+	}
+	if(l_r)
+		return (char *)(uintptr_t)l_match + czx1_last(l_r);
 	return NULL;
 }
 

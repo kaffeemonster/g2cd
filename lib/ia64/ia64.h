@@ -155,4 +155,24 @@ static inline unsigned long long czx2(unsigned long long a)
 	return res;
 }
 
+static inline unsigned long long czx1_last(unsigned long long a)
+{
+	unsigned long long res;
+	if(!HOST_IS_BIGENDIAN)
+		asm("czx1.l	%0=%1" : "=r" (res) : "r" (a));
+	else
+		asm("czx1.r	%0=%1" : "=r" (res) : "r" (a));
+	return SOULLM1 - res;
+}
+
+static inline unsigned long long czx2_last(unsigned long long a)
+{
+	unsigned long long res;
+	if(!HOST_IS_BIGENDIAN)
+		asm("czx2.l	%0=%1" : "=r" (res) : "r" (a));
+	else
+		asm("czx2.r	%0=%1" : "=r" (res) : "r" (a));
+	return (SOULLM1/2) - res;
+}
+
 #endif
