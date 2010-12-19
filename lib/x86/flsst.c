@@ -34,10 +34,10 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 	 *
 	 * The AMD AMD64 handbook says BSF/BSR won't clobber the dest reg if
 	 * find==0;
-	 * The Intel handbooks fall back to the moderate tone inheriated from
+	 * The Intel handbooks fall back to the moderate tone inherited from
 	 * x86_32, the dest reg is undefined if find==0.
 	 *
-	 * But their CPU architect says its value is written to set it to the
+	 * But Intels CPU architects say its value is written to set it to the
 	 * same as before (in the 32 Bit case the top bits would be cleared).
 	 * And they are "unlikely to get away with changing the behaviour.",
 	 * their words...

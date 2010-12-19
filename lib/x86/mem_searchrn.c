@@ -46,7 +46,7 @@
  * instead we "align hard", do one load "under the address",
  * mask the excess info out and afterwards we are fine to go.
  *
- * Even this beeing a mem* function, the lem can be seen as a
+ * Even this beeing a mem* function, the len can be seen as a
  * "hint". We can overread and underread, but should cut the
  * result (and not pass a page boundery, but we cannot because
  * we are aligned).

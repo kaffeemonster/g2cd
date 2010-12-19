@@ -61,7 +61,7 @@ static inline size_t cttz(unsigned long a)
 /*
  * if CIX is not avail... we need a fallback
  *
- * WARNING: the generic functions have limited value range!
+ * WARNING: these generic functions have limited value range!
  * do not call with zero as argument
  * do not use more than the low byte for cttz
  * do not use more than the highest byte for ctlz
@@ -69,8 +69,27 @@ static inline size_t cttz(unsigned long a)
 static inline size_t cttz(unsigned long a)
 {
 	unsigned long r;
+	/* misuse extbl for a table lookup */
 	asm("extbl	%1, %2, %0" : "=r" (r) : "r" (0x0506030704020100UL), "r" ((((a & -a) * 23) & 0xff) >> 5));
 	return r;
+	/*
+	 * This should compile to something like this:
+	 *
+	 *   21 05 e2 43     negq    t1,t0
+	 *   02 00 22 44     and     t0,t1,t1
+	 *   60 05 42 40     s4subq  t1,t1,v0
+	 *   62 07 02 40     s8subq  v0,t1,t1
+	 *   00 00 3d 24     ldah    t0,0(gp)
+	 *   00 f0 5f 44     and     t1,0xff,v0
+	 *   80 b6 00 48     srl     v0,0x5,v0
+	 *   00 00 21 a4     ldq     t0,0(t0)
+	 *   c0 00 20 48     extbl   t0,v0,v0
+	 *
+	 * No condinional branches, no loops, 9 clean instructions.
+	 * Sure, a real cttz is better, but for our usecase (finding
+	 * the evil zero byte, thanks to "cmpbge" already simplified)
+	 * better then a lot of other painful solutions.
+	 */
 }
 
 static inline size_t ctlz(unsigned long a)

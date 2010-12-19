@@ -55,8 +55,8 @@
  * A mostly empty QHT like after you installed Shareaza (only the
  * .exe is shared) compresses to ~122 bytes (1:1074.3)
  *
- * decoding of a nearly empty QHT needs ~70,000 instructions, encoding
- * 270,000 (also 70,000 for x86 and their string instructions). These
+ * decoding of a nearly empty QHT needs ~35,000 instructions, encoding
+ * 270,000 (also ~37,000 for x86 and their string instructions). These
  * values get worse the more the QHT is populated.
  *
  * An QHT with ~3000 files (90% 0xFF, but short runs) compresses to
@@ -66,9 +66,10 @@
  * obvious case of many bytes with more than 2 cleared bits.
  *
  * Another property of this RLE sheme is a bit can still be looked up
- * in the compressed form, no decompression is needed, only a "walk" up
- * to the right bit index. But when the compressed result gets huge this
- * walk may be inefficient (to much to walk).
+ * in the compressed form, no full decompression (of any blocks or
+ * something like that) is needed, only a "walk" up to the right bit
+ * index. But when the compressed result gets huge this walk may be
+ * inefficient (to much to walk).
  *
  * To prevent this and size growth the user should provide a buffer smaller
  * than the input data to stop these functions early and fallback to
@@ -222,6 +223,11 @@
  * Please refer to the general notes about these functions.
  */
 
+#define NUM_SYNC_MASK (0x07)
+#define NUM_SYNC_MAX  4
+#define POL_SHIFT     (4)
+#define POL_MASK      (1 << POL_SHIFT)
+
 #if 1
 struct sync_block
 {
@@ -229,8 +235,6 @@ struct sync_block
 	uint32_t off;
 };
 /* steal first 2 bit for the number of sync blocks */
-#define NUM_SYNC_MASK (0x07)
-#define NUM_SYNC_MAX  4
 
 static unsigned popcnt_8(unsigned v)
 {
@@ -288,8 +292,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 	ssize_t c_len;
 	unsigned cnt, o_row, num_syn = 0, syn_len;
 
-	if(likely(t_len))
-	{
+	if(likely(t_len)) {
 		/* add a flag byte */
 		t_len--;
 		flags = r_wptr++;
@@ -333,75 +336,9 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 
 		if(likely(0xFF == z))
 		{
-			size_t f_row;
-#if defined(I_LIKE_ASM) && (defined(__i386__) || defined(__x86_64__))
-			size_t t, u;
-			asm (
-					"or	$-1, %2\n\t"
-					"xor	%3, %3\n\t"
-					"mov	%4, %0\n\t"
-					"shr	$2, %0\n\t"
-					"jz	1f\n\t"
-					"mov	%0, %3\n\t"
-					"repe scasl\n\t" /* (0x042329E3) execution */
-					"sub	$4, %1\n\t"
-					"inc	%0\n\t"
-					"sub	%0, %3\n\t"
-					"shl	$2, %3\n\t"
-					"sub	%3, %4\n"
-					"1:\n\t"
-					"test	%4, %4\n\t"
-					"jz	2f\n\t"
-					"mov	%4, %0\n\t"
-					"repe scasb\n\t"
-					"je	3f\n\t"
-					"dec	%1\n\t"
-					"inc	%0\n"
-					"3:\n\t"
-					"mov	%4, %2\n\t"
-					"sub	%0, %2\n\t"
-					"sub	%2, %4\n\t"
-					"add	%2, %3\n"
-					"2:\n\t"
-				: /* %0 */ "=c" (t),
-				  /* %1 */ "=D" (data),
-				  /* %2 */ "=a" (u),
-				  /* %3 */ "=r" (f_row),
-				  /* %4 */ "=r" (s_len)
-				: /* %5 */ "4" (s_len),
-				  /* %6 */ "1" (data)
-			);
-#else
-			f_row = 0;
-			if(s_len >= SO32)
-			{
-				size_t shift = SO32 - ALIGN_DOWN_DIFF(data, SO32);
-				const uint32_t *dt_32 = (const uint32_t *)ALIGN_DOWN(data, SO32);
-				uint32_t x;
-
-				x = *dt_32++;
-				if(HOST_IS_BIGENDIAN)
-					x |= 0xFFFFFFFFU << shift * BITS_PER_CHAR;
-				else
-					x |= 0xFFFFFFFFU >> shift * BITS_PER_CHAR;
-				if(likely(0xFFFFFFFFU == x))
-				{
-					s_len -= shift;
-					f_row += shift;
-
-					for(; likely(s_len >= SO32); s_len -= SO32,
-					    dt_32++, f_row += SO32) {
-						if(unlikely(0xFFFFFFFF != *dt_32))
-							break;
-					}
-					data = (const uint8_t *)dt_32;
-				}
-			}
-			for(; s_len; s_len--, data++, f_row++) {
-				if(unlikely(0xFF != *data))
-					break;
-			}
-#endif
+			size_t f_row  = mem_spn_ff(data, s_len); /* (0x042329E3) execution */
+			s_len -= f_row;
+			data  += f_row;
 			if(f_row > 2 * 0x80)
 			{
 				f_row--;
@@ -1089,7 +1026,7 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		return 0;
 	start_bit = *data & 0x80;
 
-	control = (uint8_t)start_bit << 4;
+	control = (uint8_t)start_bit << POL_SHIFT;
 	*res++  = control;
 	t_len--;
 
@@ -1106,10 +1043,40 @@ ssize_t bitfield_encode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		uint8_t z = *data, mask;
 		prefetch(data + 64);
 
+		if(likely(0xff == z))
+		{
+			size_t l;
+			if(unlikely(!st.last_bit)) {
+				if(!elias_delta_enc(&st))
+					continue;
+				st.run_len = 0;
+			}
+			l = mem_spn_ff(data, s_len);
+			if(l > 1) {
+				s_len -= l - 1;
+				data  += l - 1;
+			}
+			st.run_len  += l * BITS_PER_CHAR;
+			st.last_bit  = true;
+			last_add_bit = true;
+			continue;
+		}
+		if(unlikely(0x00 == z))
+		{
+			if(unlikely(st.last_bit)) {
+				if(!elias_delta_enc(&st))
+					continue;
+				st.run_len = 0;
+			}
+			st.run_len  += BITS_PER_CHAR;
+			st.last_bit  = false;
+			last_add_bit = true;
+			continue;
+		}
+
 		for(count = BITS_PER_CHAR, mask = 0x80; count; count--, mask >>= 1)
 		{
-			if(!(last_add_bit = add_bit_enc(&st, !!(z & mask))))
-			{
+			if(!(last_add_bit = add_bit_enc(&st, !!(z & mask)))) {
 				if(!elias_delta_enc(&st))
 					break;
 				st.run_len  = 1;
@@ -1261,7 +1228,7 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 		return 0;
 	control   = *data++;
 	s_len--;
-	start_bit = !!(control & 0x10);
+	start_bit = !!(control & POL_MASK);
 
 	st.res      = res;
 	st.res_len  = t_len;
@@ -1310,13 +1277,244 @@ ssize_t bitfield_decode(uint8_t *res, size_t t_len, const uint8_t *data, size_t 
 	return c_len;
 }
 
+static bool and_bits(struct dec_state *st, unsigned level)
+{
+	size_t n;
+
+	prefetchw(st->res + st->rem);
+#if 0
+	if(st->res_len > 2 * sizeof(size_t))
+	{
+		size_t *t = (size_t *)st->res;
+		*t++ = 0;
+		*t++ = st->n;
+		*t++ = 0;
+		*t++ = st->rem;
+		st->res = (uint8_t *)t;
+		st->res_len -= 2 * sizeof(size_t);
+	}
+	else
+		return false;
+#else
+	if(!st->polarity)
+	{
+		for(n = 0; n < st->rem && st->b_idx >= 0; n++, st->b_idx--)
+			st->b |= (uint8_t)1 << st->b_idx;
+
+		if(st->b_idx < 0)
+		{
+			if(st->res_len) {
+				*st->res++ &= ~st->b;
+				st->res_len--;
+			} else
+				return false;
+			st->b_idx = 7;
+			st->b = 0;
+		}
+
+		if(n < st->rem)
+		{
+			size_t rem_by;
+			st->rem -= n;
+			rem_by = st->rem / BITS_PER_CHAR;
+			if(rem_by) {
+				if(rem_by > st->res_len)
+					return false;
+				memset(st->res, 0x00, rem_by);
+				st->res += rem_by;
+				st->res_len -= rem_by;
+			}
+			st->rem %= BITS_PER_CHAR;
+			if(st->rem)
+				return and_bits(st, level + 1);
+		}
+	}
+	else
+	{
+		for(n = 0; n < st->rem && st->b_idx >= 0; n++, st->b_idx--)
+			/* nothing */;
+
+		if(st->b_idx < 0)
+		{
+			if(st->res_len) {
+				*st->res++ &= ~st->b;
+				st->res_len--;
+			} else
+				return false;
+			st->b_idx = 7;
+			st->b = 0;
+		}
+
+		if(n < st->rem)
+		{
+			size_t rem_by;
+			st->rem -= n;
+			rem_by = st->rem / BITS_PER_CHAR;
+			if(rem_by) {
+				if(rem_by > st->res_len)
+					return false;
+				st->res += rem_by;
+				st->res_len -= rem_by;
+			}
+			st->rem %= BITS_PER_CHAR;
+			if(st->rem)
+				return and_bits(st, level + 1);
+		}
+	}
+#endif
+	return true;
+}
+
 ssize_t bitfield_and(uint8_t *res, size_t t_len, const uint8_t *data, size_t s_len)
 {
-	return -1;
+	size_t c_len;
+	struct dec_state st;
+	uint8_t control;
+	bool start_bit;
+
+	prefetch(data);
+	if(unlikely(!s_len) || unlikely(!t_len))
+		return 0;
+	control   = *data++;
+	s_len--;
+	start_bit = !!(control & POL_MASK);
+
+	st.res      = res;
+	st.res_len  = t_len;
+	st.l        = 0;
+	st.n        = 0;
+	st.n_n      = 0;
+	st.rem      = 0;
+	st.b_idx    = 7;
+	st.b        = 0;
+	st.state    = DEC_START;
+	st.polarity = start_bit;
+	for(; likely(st.res_len) && likely(s_len); s_len--, data++)
+	{
+		unsigned count;
+		uint8_t z = *data, mask;
+
+		for(count = BITS_PER_CHAR, mask = 0x80; count; count--, mask >>= 1)
+		{
+			if(!elias_delta_dec(&st, !!(z & mask)))
+			{
+				if(!and_bits(&st, 0))
+					break;
+				st.l = 0;
+				st.n = 0;
+				st.n_n = 0;
+				st.rem = 0;
+				st.state = DEC_START;
+				st.polarity = !st.polarity;
+			}
+		}
+	}
+	if(st.res_len) {
+		if(st.rem) {
+			if(!and_bits(&st, 0))
+				s_len++;
+		}
+	} else if(st.rem) {
+		s_len++;
+	}
+
+	c_len = st.res - res;
+	if(s_len)
+		c_len = -c_len;
+	return c_len;
 }
 
 int bitfield_lookup(const uint32_t *vals, size_t v_len, const uint8_t *data, size_t s_len)
 {
+	size_t rem_len, bpos, i;
+	struct dec_state st;
+	const uint8_t *dwptr;
+	uint8_t control;
+	bool start_bit, l_match;
+
+	prefetch(data);
+	if(unlikely(!s_len) || unlikely(!v_len))
+		return 0;
+	control   = *data++;
+	s_len--;
+	start_bit = !!(control & POL_MASK);
+
+	st.l        = 0;
+	st.n        = 0;
+	st.n_n      = 0;
+	st.rem      = 0;
+	st.b        = 0;
+	st.b_idx    = 7;
+	st.state    = DEC_START;
+	st.polarity = start_bit;
+	l_match     = false;
+
+	for(i = 0, bpos = 0, rem_len = s_len, dwptr = data; i < v_len; i++)
+	{
+		/*
+		 * when the act. bit index is below the bit pos, we have to
+		 * restart.
+		 * Sort your numbers, kids. Look next door, introsort_u32.
+		 */
+		if(unlikely(vals[i] < bpos))
+		{
+			dwptr       = data;
+			bpos        = 0;
+			rem_len     = s_len;
+			st.b        = 0;
+			st.b_idx    = 7;
+			st.state    = DEC_START;
+			st.polarity = start_bit;
+			l_match     = false;
+		}
+		if(l_match)
+		{
+			if(bpos + st.rem >= vals[i]) {
+				if(!st.polarity)
+					return -1; /* match */
+				continue;
+			}
+			bpos += st.rem;
+			st.polarity = !st.polarity;
+		}
+		st.l = 0;
+		st.n = 0;
+		st.n_n = 0;
+		st.rem = 0;
+		st.state = DEC_START;
+
+		while(likely(rem_len))
+		{
+			if(st.b_idx < 0) {
+				st.b_idx = 7;
+				st.b = *dwptr++;
+				rem_len--;
+			}
+
+			while(st.b_idx >= 0)
+			{
+				bool res = elias_delta_dec(&st, !!(st.b & (1 << st.b_idx)));
+				st.b_idx--;
+				if(res)
+				{
+					if(bpos + st.rem >= vals[i]) {
+						if(!st.polarity)
+							return -1; /* match */
+						goto NEXT_VAL;
+					}
+					bpos += st.rem;
+					st.l = 0;
+					st.n = 0;
+					st.n_n = 0;
+					st.rem = 0;
+					st.state = DEC_START;
+					st.polarity = !st.polarity;
+				}
+			}
+		}
+NEXT_VAL:
+		do { } while(0);
+	}
 	return 0;
 }
 #endif
