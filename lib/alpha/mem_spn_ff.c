@@ -72,7 +72,7 @@ size_t mem_spn_ff(const void *s, size_t len)
 	k = -k;
 	if(likely(0xFFFFFFFFFFFFFFFFul == c))
 	{
-		for(p += SOUL, k -= SOUL; k >= (ssize_t)SOUL;
+		for(p += SOUL; k >= (ssize_t)SOUL;
 		    p += SOUL, k -= SOUL) {
 			c = *(const unsigned long *)p;
 			if(0xFFFFFFFFFFFFFFFFul != c)
