@@ -112,7 +112,49 @@ static size_t strlen_SSE42(const char *s)
 #  endif
 		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
 		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
-#  ifdef __SSE2__
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return len;
+}
+
+static size_t strlen_SSE41(const char *s)
+{
+	size_t len;
+	const char *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	asm (
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"ptest	%%xmm0, %%xmm1\n\t"
+		"jc	1b\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%2, %0\n\t"
+		"2:"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p)
+#  ifdef __i386__
+		: /* %2 */ "m" (s),
+#  else
+		: /* %2 */ "r" (s),
+#  endif
+		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
+		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
+#  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
 	);
@@ -156,7 +198,7 @@ static size_t strlen_SSE2(const char *s)
 #endif
 		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
 		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
-#ifdef __SSE2__
+#ifdef __SSE__
 		: "xmm0", "xmm1"
 #endif
 	);
@@ -195,7 +237,7 @@ static size_t strlen_SSE(const char *s)
 		: /* %2 */ "m" (s),
 		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV8)),
 		  /* %4 */ "1" (ALIGN_DOWN(s, SOV8))
-#ifdef __SSE__
+#ifdef __MMX__
 		: "mm0", "mm1"
 #endif
 	);
@@ -284,6 +326,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
+	{.func = (void (*)(void))strlen_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
 # endif
 #endif
 	{.func = (void (*)(void))strlen_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},

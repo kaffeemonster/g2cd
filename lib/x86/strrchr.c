@@ -68,10 +68,11 @@ static noinline char *strrchr_null(const char *s, int c GCC_ATTR_UNUSED_PARAM)
 {
 	return (char *)(intptr_t)s + strlen(s);
 }
-#if 0
+
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
 #if 0
+/* needs adaption to match the proper last elem */
 static char *strrchr_SSE42(const char *s, int c)
 {
 	char *ret;
@@ -154,6 +155,7 @@ static char *strrchr_SSE42(const char *s, int c)
 	return ret;
 }
 #endif
+
 static char *strrchr_SSE41(const char *s, int c)
 {
 	char *ret;
@@ -180,53 +182,57 @@ static char *strrchr_SSE41(const char *s, int c)
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"pmovmskb	%%xmm0, %3\n\t"
+		"pmovmskb	%%xmm3, %3\n\t"
 		"shr	%b2, %0\n\t"
 		"shr	%b2, %3\n\t"
 		"shl	%b2, %0\n\t"
 		"shl	%b2, %3\n\t"
-		"mov	%3, %2\n\t"
-		"mov	%1, %4\n"
+		"pxor	%%xmm4, %%xmm4\n\t"
+		"mov	%1, %4\n\t"
 		"test	%0, %0\n\t"
-		"jnz	2f\n\t"
-		"movdqa	%%xmm1, %%xmm4\n\t"
-		"jmp	6f\n"
+		"jnz	3f\n\t"
+		"test	%3, %3\n\t"
+		"jz	1f\n\t"
+		"movdqa	%%xmm3, %%xmm4\n"
+		"jmp	1f\n"
+		"6:\n\t"
+		"pmovmskb	%%xmm4, %2\n\t"
+		"test	%2, %2\n\t"
+		"jz	5f\n\t"
+		"bsr	%2, %0\n\t"
+		"mov	%4, %1\n"
+		"jmp	9f\n"
 		"5:\n\t"
 		"xor	%0, %0\n\t"
 		"jmp	10f\n\t"
 		".p2align 1\n"
-		"3:\n\t"
-		"movdqa	%%xmm3, %%xmm4\n\t"
-		"mov	%1, %4\n"
 		"1:\n\t"
-		"ptest	%%xmm0, %%xmm1\n\t"
-		"jnc	7f\n"
-		"6:\n\t"
 		"movdqa	16(%1), %%xmm0\n\t"
 		"movdqa	%%xmm0, %%xmm3\n\t"
 		"add	$16, %1\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
+		"ptest	%%xmm0, %%xmm1\n\t"
+		"jnc	2f\n\t"
 		"ptest	%%xmm3, %%xmm1\n\t"
 		"jc	1b\n\t"
-		"jmp	3b\n"
-		"7:\n\t"
-		"pmovmskb	%%xmm4, %2\n\t"
-		"pmovmskb	%%xmm0, %0\n"
+		"mov	%1, %4\n\t"
+		"movdqa	%%xmm3, %%xmm4\n\t"
+		"jmp	1b\n"
 		"2:\n\t"
-		"test	%2, %2\n\t"
-		"jz	5b\n\t"
-		"cmp	%1, %4\n\t"
-		"jne	4f\n\t"
-		"bsf	%0, %0\n\t"
-		"bsf	%2, %2\n\t"
-		"cmp	%2, %0\n\t"
-		"jna	5b\n\t"
-		"mov	%2, %0\n\t"
-		"jmp	9f\n"
-		"4:\n\t"
-		"bsf	%2, %0\n\t"
-		"mov	%4, %1\n"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"pmovmskb	%%xmm3, %3\n"
+		"3:\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsf	%0, %2\n\t"
+		"sub	$16, %2\n\t"
+		"neg	%2\n\t"
+		"shl	%b2, %w3\n\t"
+		"shr	%b2, %w3\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsr	%3, %0\n\t"
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
@@ -242,7 +248,7 @@ static char *strrchr_SSE41(const char *s, int c)
 		: /* %5 */ "r" (s),
 		  /* %6 */ "r" (c)
 #  endif
-#  ifdef __SSE2__
+#  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
 #  endif
 	);
@@ -277,45 +283,53 @@ static char *strrchr_SSSE3(const char *s, int c)
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"pmovmskb	%%xmm0, %3\n\t"
+		"pmovmskb	%%xmm3, %3\n\t"
 		"shr	%b2, %0\n\t"
 		"shr	%b2, %3\n\t"
 		"shl	%b2, %0\n\t"
 		"shl	%b2, %3\n\t"
-		"jmp	3f\n\t"
+		"xor	%2, %2\n\t"
+		"mov	%1, %4\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"test	%2, %2\n\t"
+		"jz	5f\n\t"
+		"bsr	%2, %0\n\t"
+		"mov	%4, %1\n"
+		"jmp	9f\n"
+		"5:\n\t"
 		"xor	%0, %0\n\t"
 		"jmp	10f\n\t"
 		".p2align 1\n"
-		"3:\n\t"
-		"mov	%3, %2\n\t"
-		"mov	%1, %4\n"
 		"1:\n\t"
-		"test	%0, %0\n\t"
-		"jnz	2f\n\t"
 		"movdqa	16(%1), %%xmm0\n\t"
 		"movdqa	%%xmm0, %%xmm3\n\t"
 		"add	$16, %1\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"pmovmskb	%%xmm3, %3\n\t"
+		"pmovmskb	%%xmm3, %3\n"
+		"3:\n\t"
+		"test	%0, %0\n\t"
+		"jnz	2f\n\t"
 		"test	%3, %3\n\t"
 		"jz	1b\n\t"
-		"jmp	3b\n"
+		"mov	%1, %4\n\t"
+		"mov	%3, %2\n"
+		"jmp	1b\n"
 		"2:\n\t"
-		"test	%2, %2\n\t"
-		"jz	5b\n\t"
-		"cmp	%1, %4\n\t"
-		"jne	4f\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
 		"bsf	%0, %0\n\t"
-		"bsf	%2, %2\n\t"
-		"cmp	%2, %0\n\t"
-		"jna	5b\n\t"
-		"mov	%2, %0\n\t"
-		"jmp	9f\n"
-		"4:\n\t"
-		"bsf	%2, %0\n\t"
-		"mov	%4, %1\n"
+		"sub	$16, %0\n\t"
+		"neg	%0\n\t"
+		"xchg	%0, %2\n\t"
+		"shl	%b2, %w3\n\t"
+		"shr	%b2, %w3\n\t"
+		"mov	%0, %2\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsr	%3, %0\n\t"
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
@@ -331,7 +345,7 @@ static char *strrchr_SSSE3(const char *s, int c)
 		: /* %5 */ "r" (s),
 		  /* %6 */ "r" (c)
 #  endif
-#  ifdef __SSE2__
+#  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3"
 #  endif
 	);
@@ -376,41 +390,48 @@ static char *strrchr_SSE2(const char *s, int c)
 		"shr	%b2, %3\n\t"
 		"shl	%b2, %0\n\t"
 		"shl	%b2, %3\n\t"
+		"xor	%2, %2\n\t"
+		"mov	%1, %4\n\t"
 		"jmp	3f\n"
+		"6:\n\t"
+		"test	%2, %2\n\t"
+		"jz	5f\n"
+		"bsr	%2, %0\n\t"
+		"mov	%4, %1\n\t"
+		"jmp	9f\n"
 		"5:\n\t"
 		"xor	%0, %0\n\t"
 		"jmp	10f\n\t"
 		".p2align 1\n"
-		"3:\n\t"
-		"mov	%3, %2\n\t"
-		"mov	%1, %4\n"
 		"1:\n\t"
-		"test	%0, %0\n\t"
-		"jnz	2f\n\t"
 		"movdqa	16(%1), %%xmm0\n\t"
 		"movdqa	%%xmm0, %%xmm3\n\t"
 		"add	$16, %1\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm2, %%xmm3\n\t"
 		"pmovmskb	%%xmm0, %0\n\t"
-		"pmovmskb	%%xmm3, %3\n\t"
+		"pmovmskb	%%xmm3, %3\n"
+		"3:\n\t"
+		"test	%0, %0\n\t"
+		"jnz	2f\n\t"
 		"test	%3, %3\n\t"
 		"jz	1b\n\t"
-		"jmp	3b\n"
-		"2:"
-		"test	%2, %2\n\t"
-		"jz	5b\n\t"
-		"cmp	%1, %4\n\t"
-		"jne	4f\n\t"
+		"mov	%1, %4\n\t"
+		"mov	%3, %2\n"
+		"jmp	1b\n"
+		"2:\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
 		"bsf	%0, %0\n\t"
-		"bsf	%2, %2\n\t"
-		"cmp	%2, %0\n\t"
-		"jna	5b\n\t"
-		"mov	%2, %0\n\t"
-		"jmp	9f\n"
-		"4:\n\t"
-		"bsf	%2, %0\n\t"
-		"mov	%4, %1\n"
+		"sub	$16, %0\n\t"
+		"neg	%0\n\t"
+		"xchg	%0, %2\n\t"
+		"shl	%b2, %w3\n\t"
+		"shr	%b2, %w3\n\t"
+		"mov	%0, %2\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsr	%3, %0\n\t"
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
@@ -426,7 +447,7 @@ static char *strrchr_SSE2(const char *s, int c)
 		: /* %5 */ "r" (s),
 		  /* %6 */ "r" (c)
 #endif
-#ifdef __SSE2__
+#ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
 	);
@@ -461,41 +482,48 @@ static char *strrchr_SSE(const char *s, int c)
 		"shr	%b2, %3\n\t"
 		"shl	%b2, %0\n\t"
 		"shl	%b2, %3\n\t"
+		"xor	%2, %2\n\t"
+		"mov	%1, %4\n\t"
 		"jmp	3f\n"
+		"6:\n\t"
+		"test	%2, %2\n\t"
+		"jz	5f\n\t"
+		"bsr	%2, %0\n\t"
+		"mov	%4, %1\n"
+		"jmp	9f\n"
 		"5:\n\t"
 		"xor	%0, %0\n\t"
 		"jmp	10f\n\t"
 		".p2align 1\n"
-		"3:\n\t"
-		"mov	%1, %4\n\t"
-		"mov	%3, %2\n"
 		"1:\n\t"
-		"test	%0, %0\n\t"
-		"jnz	2f\n\t"
 		"movq	8(%1), %%mm0\n\t"
 		"movq	%%mm0, %%mm3\n\t"
 		"add	$8, %1\n\t"
 		"pcmpeqb	%%mm1, %%mm0\n\t"
 		"pcmpeqb	%%mm2, %%mm3\n\t"
 		"pmovmskb	%%mm0, %0\n\t"
-		"pmovmskb	%%mm3, %3\n\t"
+		"pmovmskb	%%mm3, %3\n"
+		"3:\n\t"
+		"test	%0, %0\n\t"
+		"jnz	2f\n\t"
 		"test	%3, %3\n\t"
 		"jz	1b\n\t"
-		"jmp	3b\n"
+		"mov	%1, %4\n\t"
+		"mov	%3, %2\n"
+		"jmp	1b\n"
 		"2:\n\t"
-		"test	%2, %2\n\t"
-		"jz	5b\n\t"
-		"cmp	%1, %4\n\t"
-		"jne	4f\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
 		"bsf	%0, %0\n\t"
-		"bsf	%2, %2\n\t"
-		"cmp	%2, %0\n\t"
-		"jna	5b\n\t"
-		"mov	%2, %0\n\t"
-		"jmp	9f\n"
-		"4:\n\t"
-		"bsf	%2, %0\n\t"
-		"mov	%4, %1\n"
+		"sub	$8, %0\n\t"
+		"neg	%0\n\t"
+		"xchg	%0, %2\n\t"
+		"shl	%b2, %b3\n\t"
+		"shr	%b2, %b3\n\t"
+		"mov	%0, %2\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsr	%3, %0\n\t"
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
@@ -506,13 +534,12 @@ static char *strrchr_SSE(const char *s, int c)
 		  /* %4 */ "=r" (p_o)
 		: /* %5 */ "m" (s),
 		  /* %6 */ "m" (c)
-#ifdef __SSE__
+# ifdef __MMX__
 		: "mm0", "mm1", "mm2", "mm3"
-#endif
+# endif
 	);
 	return ret;
 }
-#endif
 #endif
 
 static char *strrchr_x86(const char *s, int c)
@@ -581,10 +608,9 @@ static char *strrchr_x86(const char *s, int c)
 
 static __init_cdata const struct test_cpu_feature t_feat[] =
 {
-#if 0
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-#if 1
+#if 0
 	{.func = (void (*)(void))strrchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 #endif
 	{.func = (void (*)(void))strrchr_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
@@ -597,7 +623,6 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 #ifndef __x86_64__
 	{.func = (void (*)(void))strrchr_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
 	{.func = (void (*)(void))strrchr_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT)}},
-#endif
 #endif
 	{.func = (void (*)(void))strrchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };

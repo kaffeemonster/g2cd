@@ -86,7 +86,8 @@
  * length).
  *
  * Some bulk mesurements on 128k memblocks show the SSE2 version being
- * twice as fast then scas on an Athlon-X2.
+ * twice as fast then scas on an Athlon-X2. It's actually a little better
+ * than twice as fast, so should beat scasq on x86_64.
  */
 
 #include "x86_features.h"
@@ -157,7 +158,7 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 		"add	%7, %1\n"
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
-		"jge	6b\n\t"
+		"jle	6b\n\t"
 		"movdqa	(%1), %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
@@ -263,7 +264,7 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 		"add	%7, %1\n"
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
-		"jge	6b\n\t"
+		"jle	6b\n\t"
 		"movdqa	(%1), %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
@@ -367,7 +368,7 @@ static size_t mem_spn_ff_SSE(const void *s, size_t len)
 		"add	%7, %1\n"
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
-		"jge	6b\n\t"
+		"jle	6b\n\t"
 		"movq	(%1), %%mm0\n\t"
 		"pcmpeqb	%%mm1, %%mm0\n\t"
 		"pxor	%%mm1, %%mm0\n\t" /* invert match */
@@ -387,12 +388,11 @@ static size_t mem_spn_ff_SSE(const void *s, size_t len)
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
 	  /* %3 */ "=&c" (f)
-	:
-	  /* %4 */ "m" (len),
+	: /* %4 */ "m" (len),
 	  /* %5 */ "m" (s),
-	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV8)),
 	  /* %7 */ "i" (SOV16),
-	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV8))
 # ifdef __SSE__
 	: "mm0", "mm1", "mm2"
 # endif

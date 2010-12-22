@@ -65,6 +65,7 @@
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if 0
 # if HAVE_BINUTILS >= 218
 static void *memchr_SSE42(const void *s, int c, size_t n)
 {
@@ -134,6 +135,7 @@ static void *memchr_SSE42(const void *s, int c, size_t n)
 	return ret;
 }
 # endif
+# endif
 
 #if HAVE_BINUTILS >= 217
 static void *memchr_SSSE3(const void *s, int c, size_t n)
@@ -145,74 +147,92 @@ static void *memchr_SSSE3(const void *s, int c, size_t n)
 
 	asm (
 		"movd	%k5, %%xmm1\n\t"
-		"sub	%3, %2\n\t"
-		"sub	%4, %2\n\t"
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"pshufb	%%xmm0, %%xmm1\n\t"
+		"mov	%7, %k2\n\t"
 		"movdqa	(%1), %%xmm0\n\t"
+		"sub	%k3, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"ja	1f\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"jnz	5f\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
 		"neg	%2\n\t"
-		".p2align 1\n"
-		"2:\n\t"
-		"movdqa	16(%1), %%xmm0\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"cmp	$16, %2\n\t"
-		"jbe	3f\n\t"
-		"sub	$16, %2\n\t"
-		"test	%0, %0\n\t"
-		"jz	2b\n"
-		"3:\n\t"
-		"mov	%2, %3\n\t"
-		"sub	$16, %3\n\t"
-		"jae	4f\n\t"
-		"neg	%3\n\t"
-		"shl	%b3, %w0\n\t"
-		"shr	%b3, %w0\n"
-		"4:\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"5:\n\t"
-		"bsf	%0, %0\n\t"
-		"add	%1, %0\n\t"
-		".subsection 2\n"
+		"add	%7, %1\n\t"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"mov	%k3, %k0\n\t"
+		"add	%7, %1\n"
+		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"xchg	%2, %3\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	%c7(%1), %%xmm2\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm2\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"pmovmskb	%%xmm2, %k3\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"test	%k3, %k3\n\t"
+		"jnz	8b\n"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
 		"shl	%b3, %w0\n\t"
-		"shr	%b3, %w0\n\t"
-		"mov	%2, %3\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"jmp	5b\n\t"
-		".previous"
+		"shr	%b3, %w0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
 	: /* %0 */ "=&a" (ret),
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
 	  /* %3 */ "=&c" (f)
-#ifdef __i386__
-	: /* %4 */ "m" (n),
+	: 
+#ifndef __x86_64__
+	  /* %4 */ "m" (n),
 	  /* %5 */ "m" (c),
 #else
-	: /* %4 */ "r" (n),
+	  /* %4 */ "r" (n),
 	  /* %5 */ "r" (c),
 #endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
-	  /* %7 */ "2" (SOV16),
+	  /* %7 */ "i" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
-#ifdef __SSE__
-	: "xmm0", "xmm1"
-#endif
+#  ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2"
+#  endif
 	);
 	return ret;
 }
@@ -231,74 +251,92 @@ static void *memchr_SSE2(const void *s, int c, size_t n)
 		"mov	%k0, %k2\n\t"
 		"shl	$8, %k2\n\t"
 		"or	%k2, %k0\n\t"
-		"mov	$16, %2\n\t"
+		"mov	%7, %k2\n\t"
 		"movd	%k0, %%xmm1\n\t"
-		"sub	%3, %2\n\t"
-		"sub	%4, %2\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
 		"pshuflw	$0b00000000, %%xmm1, %%xmm1\n\t"
 		"pshufd	$0b00000000, %%xmm1, %%xmm1\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"sub	%k3, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"ja	1f\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"jnz	5f\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
 		"neg	%2\n\t"
-		".p2align 1\n"
-		"2:\n\t"
-		"movdqa	16(%1), %%xmm0\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"cmp	$16, %2\n\t"
-		"jbe	3f\n\t"
-		"sub	$16, %2\n\t"
-		"test	%0, %0\n\t"
-		"jz	2b\n"
-		"3:\n\t"
-		"mov	%2, %3\n\t"
-		"sub	$16, %3\n\t"
-		"jae	4f\n\t"
-		"neg	%3\n\t"
-		"shl	%b3, %w0\n\t"
-		"shr	%b3, %w0\n"
-		"4:\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"5:\n\t"
-		"bsf	%0, %0\n\t"
-		"add	%1, %0\n\t"
-		".subsection 2\n"
+		"add	%7, %1\n\t"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"mov	%k3, %k0\n\t"
+		"add	%7, %1\n"
+		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"xchg	%2, %3\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	%c7(%1), %%xmm2\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm2\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"pmovmskb	%%xmm2, %k3\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"test	%k3, %k3\n\t"
+		"jnz	8b\n"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
 		"shl	%b3, %w0\n\t"
-		"shr	%b3, %w0\n\t"
-		"mov	%2, %3\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"jmp	5b\n\t"
-		".previous"
+		"shr	%b3, %w0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
 	: /* %0 */ "=&a" (ret),
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
 	  /* %3 */ "=&c" (f)
-#ifdef __i386__
-	: /* %4 */ "m" (n),
+	:
+#ifndef __x86_64__
+	  /* %4 */ "m" (n),
 	  /* %5 */ "m" (c),
 #else
-	: /* %4 */ "r" (n),
+	  /* %4 */ "r" (n),
 	  /* %5 */ "r" (c),
 #endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
-	  /* %7 */ "1" (ALIGN_DOWN(s, SOV16))
+	  /* %7 */ "i" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
 #ifdef __SSE__
-	: "xmm0", "xmm1"
+	: "xmm0", "xmm1", "xmm2"
 #endif
 	);
 	return ret;
@@ -313,71 +351,88 @@ static void *memchr_SSE(const void *s, int c, size_t n)
 	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 
 	asm (
-		"sub	%3, %2\n\t"
-		"sub	%4, %2\n\t"
-		"movb	%8, %b0\n\t"
+		"mov	%7, %k2\n\t"
+		"movb	%5, %b0\n\t"
 		"movb	%b0, %h0\n\t"
 		"pinsrw	$0b00000000, %k0, %%mm1\n\t"
 		"pshufw	$0b00000000, %%mm1, %%mm1\n\t"
 		"movq	(%1), %%mm0\n\t"
+		"sub	%k3, %k2\n\t"
 		"pcmpeqb	%%mm1, %%mm0\n\t"
-		"pmovmskb	%%mm0, %0\n\t"
-		"ja	1f\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"jnz	5f\n\t"
+		"pmovmskb	%%mm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
 		"neg	%2\n\t"
-		".p2align 1\n"
-		"2:\n\t"
-		"movq	8(%1), %%mm0\n\t"
-		"add	$8, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%mm1, %%mm0\n\t"
-		"pmovmskb	%%mm0, %0\n\t"
-		"cmp	$8, %2\n\t"
-		"jbe	3f\n\t"
-		"sub	$8, %2\n\t"
-		"test	%0, %0\n\t"
-		"jz	2b\n"
-		"3:\n\t"
-		"mov	%2, %3\n\t"
-		"sub	$8, %3\n\t"
-		"jae	4f\n\t"
-		"neg	%3\n\t"
-		"shl	%b3, %b0\n\t"
-		"shr	%b3, %b0\n"
-		"4:\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"5:\n\t"
-		"bsf	%0, %0\n\t"
-		"add	%1, %0\n\t"
-		".subsection 2\n\t"
+		"add	%7, %1\n\t"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"mov	%k3, %k0\n\t"
+		"add	%7, %1\n"
+		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"xchg	%2, %3\n\t"
+		"movq	(%1), %%mm0\n\t"
+		"movq	%c7(%1), %%mm2\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pcmpeqb	%%mm1, %%mm2\n\t"
+		"pmovmskb	%%mm0, %k0\n\t"
+		"pmovmskb	%%mm2, %k3\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"test	%k3, %k3\n\t"
+		"jnz	8b\n"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"movq	(%1), %%mm0\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %k0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"movq	(%1), %%mm0\n\t"
+		"pcmpeqb	%%mm1, %%mm0\n\t"
+		"pmovmskb	%%mm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
 		"shl	%b3, %b0\n\t"
-		"shr	%b3, %b0\n\t"
-		"mov	%2, %3\n\t"
-		"shr	%b3, %0\n\t"
-		"shl	%b3, %0\n\t"
-		"test	%0, %0\n\t"
-		"cmovz	%0, %1\n\t"
-		"jmp	5b\n\t"
-		".previous"
+		"shr	%b3, %b0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
 	: /* %0 */ "=&a" (ret),
-	  /* %1 */ "=r" (p),
+	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&r" (t),
-	  /* %3 */ "=c" (f)
+	  /* %3 */ "=&c" (f)
 	: /* %4 */ "m" (n),
-	  /* %5 */ "3" (ALIGN_DOWN_DIFF(s, SOV8)),
-	  /* %6 */ "2" (SOV8),
-	  /* %7 */ "1" (ALIGN_DOWN(s, SOV8)),
-	  /* %8 */ "m" (c)
-#ifdef __SSE__
-	: "mm0", "mm1"
-#endif
+	  /* %5 */ "m" (c),
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV8)),
+	  /* %7 */ "i" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV8))
+# ifdef __MMX__
+	: "mm0", "mm1", "mm2"
+# endif
 	);
 	return ret;
 }
@@ -417,20 +472,20 @@ static void *memchr_x86(const void *s, int c, size_t n)
 
 static __init_cdata const struct test_cpu_feature t_feat[] =
 {
+#ifdef HAVE_BINUTILS
 #if 0
 // TODO: advanced code is buggy ATM
-#ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))memchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2), [0] = CFB(CFEATURE_CMOV)}},
 # endif
+#endif
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))memchr_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))memchr_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))memchr_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))memchr_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))memchr_SSE,   .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV}},
-#endif
+	{.func = (void (*)(void))memchr_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
 #endif
 	{.func = (void (*)(void))memchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
