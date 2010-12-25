@@ -109,7 +109,7 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 	return ret_val;
 }
 
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
 	void *ret_val, *dummy;
@@ -131,7 +131,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 		  /* %4 */ "Jr" (val));
 	return ret_val;
 }
-#endif
+# endif
 
 extern void *_illigal_ptr_size(void *,atomicptr_t *);
 static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
@@ -140,10 +140,10 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 	{
 	case 4:
 		return atomic_px_32(val, ptr);
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 	case 8:
 		return atomic_px_64(val, ptr);
-#endif
+# endif
 	}
 	return _illigal_ptr_size(val, ptr);
 }
@@ -171,7 +171,7 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 	return ret_val;
 }
 
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
 	int ret_val, dummy;
@@ -192,7 +192,7 @@ static always_inline int atomic_x_64(int val, atomic_t *ptr)
 		  /* %3 */ "Jr" (val));
 	return ret_val;
 }
-#endif
+# endif
 
 extern int _illigal_int_size(int, atomic_t *);
 static always_inline int atomic_x(int val, atomic_t *ptr)
@@ -201,10 +201,10 @@ static always_inline int atomic_x(int val, atomic_t *ptr)
 	{
 	case 4:
 		return atomic_x_32(val, ptr);
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 	case 8:
 		return atomic_x_64(val, ptr);
-#endif
+# endif
 	}
 	return _illigal_int_size(val, ptr);
 }
@@ -237,7 +237,7 @@ static always_inline int atomic_cmpx_32(int nval, int oval, atomic_t *ptr)
 	return prev;
 }
 
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 {
 	int prev;
@@ -263,7 +263,7 @@ static always_inline int atomic_cmpx_64(int nval, int oval, atomic_t *ptr)
 		  /* %4 */ "Jr" (nval));
 	return prev;
 }
-#endif
+# endif
 
 static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 {
@@ -271,10 +271,10 @@ static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr)
 	{
 	case 4:
 		return atomic_cmpx_32(nval, oval, ptr);
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 	case 8:
 		return atomic_cmpx_64(nval, oval, ptr);
-#endif
+# endif
 	}
 	return _illigal_int_size(nval, ptr);
 }
@@ -306,7 +306,7 @@ static always_inline void *atomic_cmppx_32(void *nval, void *oval, atomicptr_t *
 	return prev;
 }
 
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 static always_inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *ptr)
 {
 	void *prev;
@@ -331,7 +331,7 @@ static always_inline void *atomic_cmppx_64(void *nval, void *oval, atomicptr_t *
 		  /* %4 */ "Jr" (nval));
 	return prev;
 }
-#endif
+# endif
 
 static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr)
 {
@@ -339,10 +339,10 @@ static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr
 	{
 	case 4:
 		return atomic_cmppx_32(nval, oval, ptr);
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 	case 8:
 		return atomic_cmppx_64(nval, oval, ptr);
-#endif
+# endif
 	}
 	return _illigal_ptr_size(nval, ptr);
 }
@@ -395,7 +395,7 @@ static always_inline void atomic_add(int i, atomic_t *ptr)
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
-		: /* %2 */ "m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "IJr" (i));
 }
 
@@ -413,7 +413,7 @@ static always_inline void atomic_sub(int i, atomic_t *ptr)
 		".set mips0\n"
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
-		: /* %2 */ "m" (atomic_read(ptr))
+		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "IJr" (i));
 }
 
@@ -438,7 +438,7 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 	return tmp;
 }
 
-# define atomic_dec_test(x) (atommic_dec_return((x)) == 0)
+# define atomic_dec_test(x) (atomic_dec_return((x)) == 0)
 
 static always_inline int atomic_inc_return(atomic_t *ptr)
 {

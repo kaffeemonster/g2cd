@@ -23,7 +23,8 @@
  * $Id: $
  */
 
-#include "../my_bitopsm.h"
+#if __mips >= 32
+# include "../my_bitopsm.h"
 
 static inline size_t flsst_32(size_t find)
 {
@@ -33,8 +34,7 @@ static inline size_t flsst_32(size_t find)
 	return SIZE_T_BITS - found;
 }
 
-static inline size_t flsst_64(size_t find);
-#if __mips == 64
+# if __mips == 64 || defined(__mips64)
 static inline size_t flsst_64(size_t find)
 {
 	size_t found;
@@ -42,7 +42,9 @@ static inline size_t flsst_64(size_t find)
 	__asm__("dclz\t%1, %0\n" : "=r" (found) : "r" (find));
 	return SIZE_T_BITS - found;
 }
-#endif
+# else
+size_t flsst_64(size_t find);
+# endif
 
 extern size_t illigal_size_t_size(size_t);
 
@@ -59,4 +61,7 @@ size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL flsst(size_t find)
 	return illigal_size_t_size(find);
 }
 
-static char const rcsid_fl[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_flm[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# include "../generic/flsst.c"
+#endif

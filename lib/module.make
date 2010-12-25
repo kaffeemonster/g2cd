@@ -76,6 +76,7 @@ LIBHEADS = \
 	$(MPL)/backtrace.h \
 	$(MPL)/alpha/alpha.h \
 	$(MPL)/arm/my_neon.h \
+	$(MPL)/mips/my_mips.h \
 	$(MPL)/x86/x86_features.h \
 	$(MPL)/x86/x86.h \
 	$(MPL)/ppc/ppc_altivec.h \
@@ -225,6 +226,7 @@ STRLENSRC = \
 	$(MPL)/generic/strlen.c \
 	$(MPL)/alpha/strlen.c \
 	$(MPL)/arm/strlen.c \
+	$(MPL)/mips/strlen.c \
 	$(MPL)/ia64/strlen.c \
 	$(MPL)/parisc/strlen.c \
 	$(MPL)/x86/strlen.c \
@@ -297,6 +299,7 @@ ADLER32SRC = \
 	$(MPL)/alpha/adler32.c \
 	$(MPL)/arm/adler32.c \
 	$(MPL)/ia64/adler32.c \
+	$(MPL)/mips/adler32.c \
 	$(MPL)/sparc/adler32.c \
 	$(MPL)/x86/adler32.c \
 	$(MPL)/ppc/adler32.c

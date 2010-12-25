@@ -33,6 +33,8 @@
 # define SOST	(sizeof(size_t))
 	/* bytes of size_t - 1 */
 # define SOSTM1	(SOST - 1L)
+# define SOCT	(sizeof(check_t))
+# define SOCTM1	(SOCT - 1L)
 	/* and sometimes sizeof(uint32_t) */
 # define SO32	(sizeof(uint32_t))
 	/* bytes of size_t - 1 */
@@ -95,6 +97,8 @@
 	(((x) -  0x01010101) & ~(x) &  0x80808080)
 # define has_nul_byte(x) \
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
+# define has_nul_byte64(x) \
+	(((x) -  0x0101010101010101ULL) & ~(x) &  0x8080808080808080ULL)
 # define nul_byte_index_l32(x) \
 	((x) & 0x80U ? 0u : (((x) & 0x8000U) ? 1u : ((x) & 0x800000U ? 2u : ((x) & 0x80000000 ? 3u : 0u))))
 # define nul_byte_index_b32(x) \

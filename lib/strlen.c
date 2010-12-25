@@ -56,6 +56,8 @@ size_t strlen(const char *s);
 #  include "alpha/strlen.c"
 # elif defined(__arm__)
 #  include "arm/strlen.c"
+# elif defined(__mips__)
+#  include "mips/strlen.c"
 # elif defined(__ia64__)
 #  include "ia64/strlen.c"
 # elif defined(__hppa__) || defined(__hppa64__)
