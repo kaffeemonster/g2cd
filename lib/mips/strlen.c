@@ -23,15 +23,15 @@
  * $Id: $
  */
 
+#include "my_mips.h"
+
 #if defined(__mips_loongson_vector_rev)
 
-# include <loongson.h>
-// #include "my_mips.h"
 size_t strlen(const char *s)
 {
 	const char *p;
 	uint8x8_t vt1, vt2;
-	unsigned r, x;
+	unsigned r;
 	prefetch(s);
 
 	asm (
@@ -57,28 +57,100 @@ size_t strlen(const char *s)
 	  /* %1 */ "=f" (vt2),
 	  /* %2 */ "=&r" (r),
 	  /* %3 */ "=&d" (p)
-	: /* %4 */ "r" (ALIGN_DOWN_DIFF(s, 8)),
-	  /* %5 */ "3" (ALIGN_DOWN(s, 8))
+	: /* %4 */ "r" (ALIGN_DOWN_DIFF(s, SOV8)),
+	  /* %5 */ "3" (ALIGN_DOWN(s, SOV8))
 	);
-	x = (size_t)(p - s);
-	if(r & 0x01)
-		return x;
-	if(r & 0x02)
-		return x + 1;
-	if(r & 0x04)
-		return x + 2;
-	if(r & 0x08)
-		return x + 3;
-	if(r & 0x10)
-		return x + 4;
-	if(r & 0x20)
-		return x + 5;
-	if(r & 0x40)
-		return x + 6;
-	return x + 7;
+	return (size_t)(p - s) + nul_byte_index_loongson(r);
 }
 
 static char const rcsid_slml[] GCC_ATTR_USED_VAR = "$Id: $";
+
+#elif defined(__mips_dsp)
+
+size_t strlen(const char *s)
+{
+	const char *p = (const char *)ALIGN_DOWN(s, SOV4);
+	v4i8 vt1;
+	unsigned r;
+
+	asm (
+		".set noreorder\n\t"
+		"cmpgu.eq.qb	%1, %4, %0\n\t"
+# if HOST_IS_BIGENDIAN != 0
+		"sllv	%1, %1, %3\n\t"
+		"bnez	%1, 2f\n\t"
+		"srlv	%1, %1, %3\n\t"
+# else
+		"srlv	%1, %1, %3\n\t"
+		"bnez	%1, 2f\n\t"
+		"sllv	%1, %1, %3\n\t"
+# endif
+		"1:\n\t"
+		"lw	%0, %5(%2)\n\t"
+		"cmpgu.eq.qb	%1, %4, %0\n\t"
+		"beqz	%1, 1b\n\t"
+		"addiu	%2, %2, %5\n\t"
+		"2:\n\t"
+		".set reorder\n\t"
+	: /* %0 */ "=&r" (vt1),
+	  /* %1 */ "=&r" (r),
+	  /* %2 */ "=&d" (p)
+	: /* %3 */ "r" (ALIGN_DOWN_DIFF(s, SOV4) * BITS_PER_CHAR),
+	  /* %4 */ "r" (0),
+	  /* %5 */ "i" (SOV4),
+	  /* %6 */ "2" (p),
+	  /* %7 */ "0" (*(const v4i8 *)p)
+	);
+	return (size_t)(p - s) + nul_byte_index_dsp(r);
+}
+
+static char const rcsid_slmd[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
-# include "../generic/strlen.c"
+
+size_t strlen(const char *s)
+{
+	const char *p;
+	check_t r;
+	uint32_t r1;
+	unsigned shift;
+	prefetch(s);
+
+	/*
+	 * MIPS has, like most RISC archs, proplems
+	 * with constants. Long imm. (64 Bit) are very
+	 * painfull on MIPS. So do the first short tests
+	 * in 32 Bit for short strings
+	 */
+	p = (const char *)ALIGN_DOWN(s, SO32);
+	shift = ALIGN_DOWN_DIFF(s, SO32) * BITS_PER_CHAR;
+	r1 = *(const uint32_t *)p;
+	if(!HOST_IS_BIGENDIAN)
+		r1 >>= shift;
+	r1 = has_nul_byte32(r1);
+	if(HOST_IS_BIGENDIAN)
+		r1 <<= shift;
+	if(r1)
+		return nul_byte_index_mips(r1);
+
+	p += SO32;
+# if __mips == 64 || defined(__mips64)
+	if(!IS_ALIGN(p, SOCT))
+	{
+		r1 = *(const uint32_t *)p;
+		r1 = has_nul_byte32(r1);
+		r = 0;
+		if(r1)
+			r = r1;
+		else
+			p += SO32;
+	} else
+#endif
+		r = 0;
+
+	for(; !r; p += SOCT)
+		r = has_nul_byte(*(const check_t *)p);
+	return p - s + nul_byte_index_mips(r);
+}
+
+static char const rcsid_slm[] GCC_ATTR_USED_VAR = "$Id: $";
 #endif

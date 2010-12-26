@@ -235,6 +235,7 @@ STRCHRNULSRC = \
 	$(MPL)/generic/strchrnul.c \
 	$(MPL)/alpha/strchrnul.c \
 	$(MPL)/arm/strchrnul.c \
+	$(MPL)/mips/strchrnul.c \
 	$(MPL)/ia64/strchrnul.c \
 	$(MPL)/parisc/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \

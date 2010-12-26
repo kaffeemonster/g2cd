@@ -33,8 +33,6 @@
 # define SOST	(sizeof(size_t))
 	/* bytes of size_t - 1 */
 # define SOSTM1	(SOST - 1L)
-# define SOCT	(sizeof(check_t))
-# define SOCTM1	(SOCT - 1L)
 	/* and sometimes sizeof(uint32_t) */
 # define SO32	(sizeof(uint32_t))
 	/* bytes of size_t - 1 */

@@ -21,11 +21,10 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 #include "../generic/adler32.c"
 
+#include "my_mips.h"
 #if defined(__mips_loongson_vector_rev) && defined(__GNUC__)
 /* We use the GCC vector internals, to make things simple for us. */
-# include <loongson.h>
 
-# define SOV8 (sizeof(uint8x8_t))
 //#define VNMAX (6*NMAX)
 # define VNMAX (4*NMAX)
 
@@ -255,14 +254,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 static char const rcsid_a32ml[] GCC_ATTR_USED_VAR = "$Id: $";
 #elif defined(__mips_dsp) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
-
-typedef signed char v4i8 __attribute__((vector_size(4)));
-typedef long long a64;
-
-# define SOV4 (sizeof(v4i8))
 # define VNMAX (4*NMAX)
-
+/* We use the GCC vector internals, to make things simple for us. */
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1, s2;

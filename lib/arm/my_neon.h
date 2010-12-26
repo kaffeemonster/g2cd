@@ -146,10 +146,9 @@ static inline unsigned ctlz(size_t a)
 
 static inline unsigned cttz(size_t a)
 {
-	unsigned r;
-	/* thumb2?? rsb & and */
-	asm("rbit	%0, %1" : "=r" (r) : "r" (a));
-	return ctlz(r);
+	size_t ;
+	a = (size_t)(-((ssize_t)a)) & a;
+	return 31 - ctlz(a);
 }
 # endif
 
