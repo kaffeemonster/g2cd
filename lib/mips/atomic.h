@@ -51,7 +51,7 @@
 # define atomic_sread(x)	((x)->next)
 # define atomic_sset(x, y) ((x)->next = (y))
 
-# ifdef HAVE_SMP
+# if defined(HAVE_SMP) && __mips > 2
 #  define MEM_ORDER	"\tsync\n"
 /*
  * looks like you get your mips in weakly ordered and strong

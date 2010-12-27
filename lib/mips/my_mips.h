@@ -166,4 +166,10 @@ static inline unsigned nul_byte_index_mips(check_t r)
 # endif
 }
 
+# if _MIPS_SZPTR < 64
+#  define SZPRFX
+# else
+#  define SZPRFX "d"
+# endif
+
 #endif

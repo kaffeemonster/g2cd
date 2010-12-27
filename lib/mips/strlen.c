@@ -45,12 +45,12 @@ size_t strlen(const char *s)
 		"bnez	%2, 2f\n\t"
 		"sllv	%2, %2, %4\n\t"
 		"1:\n\t"
-		"ldc1	%0, 8(%3)\n\t"
+		"ldc1	%0, %5(%3)\n\t"
 		"pcmpeqb	%0, %0, %1\n\t"
 		"pmovmskb	%0, %0\n\t"
 		"mfc1	%2, %0\n\t"
 		"beqz	%2, 1b\n\t"
-		"addiu	%3, %3, 8\n\t"
+		SZPRFX"addiu	%3, %3, %5\n\t"
 		"2:\n\t"
 		".set reorder\n\t"
 	: /* %0 */ "=f" (vt1),
@@ -58,7 +58,8 @@ size_t strlen(const char *s)
 	  /* %2 */ "=&r" (r),
 	  /* %3 */ "=&d" (p)
 	: /* %4 */ "r" (ALIGN_DOWN_DIFF(s, SOV8)),
-	  /* %5 */ "3" (ALIGN_DOWN(s, SOV8))
+	  /* %5 */ "i" (SOV8),
+	  /* %6 */ "3" (ALIGN_DOWN(s, SOV8))
 	);
 	return (size_t)(p - s) + nul_byte_index_loongson(r);
 }
@@ -89,7 +90,7 @@ size_t strlen(const char *s)
 		"lw	%0, %5(%2)\n\t"
 		"cmpgu.eq.qb	%1, %4, %0\n\t"
 		"beqz	%1, 1b\n\t"
-		"addiu	%2, %2, %5\n\t"
+		SZPRFX"addiu	%2, %2, %5\n\t"
 		"2:\n\t"
 		".set reorder\n\t"
 	: /* %0 */ "=&r" (vt1),

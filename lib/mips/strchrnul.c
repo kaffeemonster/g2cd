@@ -47,14 +47,14 @@ char *strchrnul(const char *s, int c)
 		"bnez	%4, 2f\n\t"
 		"sllv	%4, %4, %6\n\t"
 		"1:\n\t"
-		"ldc1	%0, 8(%5)\n\t"
+		"ldc1	%0, %7(%5)\n\t"
 		"pcmpeqb	%1, %0, %2\n\t"
 		"pcmpeqb	%0, %0, %3\n\t"
 		"or	%0, %1, %0\n\t"
 		"pmovmskb	%0, %0\n\t"
 		"mfc1	%4, %0\n\t"
 		"beqz	%4, 1b\n\t"
-		"addiu	%5, %5, 8\n\t"
+		SZPRFX"addiu	%5, %5, %7\n\t"
 		"2:\n\t"
 		".set reorder\n\t"
 	: /* %0 */ "=f" (vt1),
@@ -64,8 +64,9 @@ char *strchrnul(const char *s, int c)
 	  /* %4 */ "=&r" (r),
 	  /* %5 */ "=&d" (p)
 	: /* %6 */ "r" (ALIGN_DOWN_DIFF(s, SOV8)),
-	  /* %7 */ "3" ((c & 0xff) * 0x0101),
-	  /* %8 */ "5" (ALIGN_DOWN(s, SOV8))
+	  /* %7 */ "i" (SOV8),
+	  /* %8 */ "3" ((c & 0xff) * 0x0101),
+	  /* %9 */ "5" (ALIGN_DOWN(s, SOV8))
 	);
 	return (char *)(uintptr_t)p + nul_byte_index_loongson(r);
 }
