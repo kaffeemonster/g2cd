@@ -669,7 +669,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 
 	logg_develd_old("gwc \"%s\" response: \"%s\"\n", act_gwc.data.url, line);
 	/* skip whitespace */
-	for(wptr = line; *wptr && isblank((int)*wptr); wptr++);
+	for(wptr = line; *wptr && isblank_a((int)*wptr); wptr++);
 
 	response = *wptr++;
 	/* make shure there is a field seperator */
@@ -689,8 +689,8 @@ static void gwc_handle_line(char *line, time_t lnow)
 				break;
 			wptr = next + str_size("access|period|");
 			/* skip whitespace at period start */
-			for(; *wptr && isblank((int)*wptr); wptr++);
-			if(*wptr && isdigit((int)*wptr))
+			for(; *wptr && isblank_a((int)*wptr); wptr++);
+			if(*wptr && isdigit_a((int)*wptr))
 				period = atoi(wptr);
 			else
 				break;
@@ -710,13 +710,13 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(next) {
 				*next++ = '\0';
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank((int)*next); next++);
-				if(*next && isdigit((int)*next))
+				for(; *next && isblank_a((int)*next); next++);
+				if(*next && isdigit_a((int)*next))
 					since = atoi(next);
 			}
 
 			/* skip whitespace at addr start */
-			for(; *wptr && isblank((int)*wptr); wptr++);
+			for(; *wptr && isblank_a((int)*wptr); wptr++);
 
 			memset(&a, 0, sizeof(a));
 			if(!combo_addr_read_wport(wptr, &a)) {
@@ -752,12 +752,12 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(next) {
 				*next++ = '\0';
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank((int)*next); next++);
-				if(*next && isdigit((int)*next))
+				for(; *next && isblank_a((int)*next); next++);
+				if(*next && isdigit_a((int)*next))
 					since = atoi(next);
 			}
 			/* trim trailing whitespace */
-			for(next = wptr + strlen(wptr) - 1; next >= wptr && isblank(*next); next--)
+			for(next = wptr + strlen(wptr) - 1; next >= wptr && isblank_a(*next); next--)
 				*next = '\0';
 
 			if('\0' == *wptr)
@@ -840,9 +840,9 @@ static int gwc_handle_response(void)
 			bool goto_to_next = false;
 			while(buffer_remaining(*buff)) {
 				char c = *buffer_start(*buff) & 0x7F;
-				if(isblank(c))
+				if(isblank_a(c))
 					buff->pos++;
-				else if(isdigit((int)c)) {
+				else if(isdigit_a((int)c)) {
 					act_gwc.state++;
 					goto_to_next = true;
 					break;
@@ -882,7 +882,7 @@ static int gwc_handle_response(void)
 		if('0' != *buffer_start(*buff))
 			return false;
 		buff->pos++;
-		if(!isspace(*buffer_start(*buff) & 0x7F))
+		if(!isspace_a(*buffer_start(*buff) & 0x7F))
 			return false;
 		buff->pos++;
 		act_gwc.state++;

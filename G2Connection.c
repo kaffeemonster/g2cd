@@ -679,7 +679,7 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 
 		x = strchrnul(w_ptr, ',');
 		/* remove leading white-spaces in field-data */
-		for(c = *x, *x++ = '\0'; c && (c = *x) && isspace((unsigned)*x);)
+		for(c = *x, *x++ = '\0'; c && (c = *x) && isspace_a((unsigned)*x);)
 			*x++ = '\0';
 
 		t_str = strchrnul(w_ptr, ' ');

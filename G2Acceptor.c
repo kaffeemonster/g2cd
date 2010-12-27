@@ -608,13 +608,13 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 		goto out_fixup;
 
 	/* filter leading garbage */
-	for(f_key.txt = line; f_key.txt < ret_val && !isalnum((int)*f_key.txt);)
+	for(f_key.txt = line; f_key.txt < ret_val && !isalnum_a((int)*f_key.txt);)
 		f_key.txt++;
 	if(unlikely(1 >= ret_val - f_key.txt)) /* nothing left? */
 		goto out_fixup;
 
 	/* filter trailing garbage */
-	for(f_end = ret_val - 1; f_end >= f_key.txt && !isgraph((int)*f_end);)
+	for(f_end = ret_val - 1; f_end >= f_key.txt && !isgraph_a((int)*f_end);)
 		f_end--;
 	f_dist = (f_end + 1) - f_key.txt;
 	if(unlikely(1 > f_dist)) /* something left? */
@@ -654,7 +654,7 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	c_dist = (line + len) - c_start;
 
 	/* remove leading white-spaces in field-data */
-	for(; c_dist > 0 && isspace((unsigned)*c_start); c_dist--)
+	for(; c_dist > 0 && isspace_a(*(unsigned char *)c_start); c_dist--)
 		c_start++, to_con->recv->pos++;
 
 	/* now call the associated action for this field */

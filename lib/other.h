@@ -46,13 +46,6 @@
 # define DYN_ARRAY_LEN FLEXIBLE_ARRAY_MEMBER
 #endif
 
-#ifndef HAVE_ISBLANK
-static inline int isblank(int c)
-{
-	return ' ' == c || '\t' == c;
-}
-#endif
-
 /*
  * some Magic for determining the attrib-capabilitie of an gcc or just set it
  * to nothing, if we are not capable of it
@@ -295,6 +288,48 @@ static inline int isblank(int c)
 typedef void (*sighandler_t)(int);
 # endif
 #endif
+
+static inline int isspace_a(int c)
+{
+	if((unsigned)c > (unsigned)' ')
+		return 0;
+	if(likely(c == ' '))
+		return 1;
+	if(c >= '\t' && c <= '\r')
+		return 1;
+	return 0;
+}
+
+static inline int isblank_a(int c)
+{
+	return ' ' == c || '\t' == c;
+}
+
+static inline int isdigit_a(int c)
+{
+	return c >= '0' && c <= '9';
+}
+
+static inline int isalpha_a(int c)
+{
+	return (c >= 'a' && c <= 'z') ||
+	       (c >= 'A' && c <= 'Z');
+}
+
+static inline int isalnum_a(int c)
+{
+	return isalpha_a(c) || isdigit_a(c);
+}
+
+static inline int isgraph_a(int c)
+{
+	return c > ' ' && c < 0x7f;
+}
+
+#ifndef HAVE_ISBLANK
+# define isblank(x) isblank_a(x);
+#endif
+
 
 /* (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) */
 #if defined(HAVE_STDINT_H)

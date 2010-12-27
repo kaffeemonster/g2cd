@@ -1325,9 +1325,9 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 				txt = txt_tbuf;
 				o_len = len;
 				len = decode_html_entities_utf8(txt, w_ptr, len);
-				while(*txt && isblank(*txt))
+				while(*txt && isblank_a(*txt))
 					txt++, len--;
-				while(len && isblank(*(txt + len - 1)))
+				while(len && isblank_a(*(txt + len - 1)))
 					txt[--len] = '\0';
 
 				logg_develd_old("len: %zu\t\"%s\" \"%.*s\"\n", len, txt, (int)o_len, w_ptr);

@@ -127,7 +127,7 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 		{
 			int k = 0;
 			for(; k < 8; k++)
-				*buf++ = isprint(addr[k]) ? addr[k] : (isspace(addr[k]) ? ' ' : '.');
+				*buf++ = isprint(addr[k]) ? addr[k] : (isspace_a(addr[k]) ? ' ' : '.');
 			*buf++ = ' ';
 		}
 		*buf++ = '\n';
