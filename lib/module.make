@@ -281,6 +281,7 @@ TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
 	$(MPL)/alpha/tstrlen.c \
 	$(MPL)/arm/tstrlen.c \
+	$(MPL)/mips/tstrlen.c \
 	$(MPL)/ia64/tstrlen.c \
 	$(MPL)/parisc/tstrlen.c \
 	$(MPL)/x86/tstrlen.c \

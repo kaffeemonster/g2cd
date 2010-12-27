@@ -47,6 +47,8 @@
 #  include "alpha/tstrlen.c"
 # elif defined(__arm__)
 #  include "arm/tstrlen.c"
+# elif defined(__mips__)
+#  include "mips/tstrlen.c"
 # elif defined(__ia64__)
 #  include "ia64/tstrlen.c"
 # elif defined(__hppa__) || defined(__hppa64__)
