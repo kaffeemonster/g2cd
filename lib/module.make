@@ -198,6 +198,7 @@ MEMPOPCNTSRC = \
 	$(MPL)/generic/mempopcnt.c \
 	$(MPL)/alpha/mempopcnt.c \
 	$(MPL)/arm/mempopcnt.c \
+	$(MPL)/mips/mempopcnt.c \
 	$(MPL)/sparc/mempopcnt.c \
 	$(MPL)/ia64/mempopcnt.c \
 	$(MPL)/ppc/mempopcnt.c \
