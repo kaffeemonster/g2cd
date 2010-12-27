@@ -290,6 +290,7 @@ TSTRCHRNULSRC = \
 	$(MPL)/generic/tstrchrnul.c \
 	$(MPL)/alpha/tstrchrnul.c \
 	$(MPL)/arm/tstrchrnul.c \
+	$(MPL)/mips/tstrchrnul.c \
 	$(MPL)/ia64/tstrchrnul.c \
 	$(MPL)/parisc/tstrchrnul.c \
 	$(MPL)/x86/tstrchrnul.c \

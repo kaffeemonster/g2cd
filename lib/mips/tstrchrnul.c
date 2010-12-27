@@ -1,6 +1,6 @@
 /*
- * strchrnul.c
- * strchrnul for non-GNU platforms, mips implementation
+ * tstrchrnul.c
+ * tstrchrnul, mips implementation
  *
  * Copyright (c) 2010 Jan Seiffert
  *
@@ -26,7 +26,7 @@
 #include "my_mips.h"
 
 #if defined(__mips_loongson_vector_rev)
-char *strchrnul(const char *s, int c)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
 	uint8x8_t mask, vt1, vt2, vt3;
@@ -36,10 +36,11 @@ char *strchrnul(const char *s, int c)
 	asm (
 		".set noreorder\n\t"
 		"ldc1	%0, (%5)\n\t"
+		"mtc1	%8, %3\n\t"
 		"xor	%2, %2, %2\n\t"
 		"pshufh	%3, %3, %2\n\t"
-		"pcmpeqb	%1, %0, %2\n\t"
-		"pcmpeqb	%0, %0, %3\n\t"
+		"pcmpeqh	%1, %0, %2\n\t"
+		"pcmpeqh	%0, %0, %3\n\t"
 		"or	%0, %1, %0\n\t"
 		"pmovmskb	%0, %0\n\t"
 		"mfc1	%4, %0\n\t"
@@ -48,8 +49,8 @@ char *strchrnul(const char *s, int c)
 		"sllv	%4, %4, %6\n\t"
 		"1:\n\t"
 		"ldc1	%0, %7(%5)\n\t"
-		"pcmpeqb	%1, %0, %2\n\t"
-		"pcmpeqb	%0, %0, %3\n\t"
+		"pcmpeqh	%1, %0, %2\n\t"
+		"pcmpeqh	%0, %0, %3\n\t"
 		"or	%0, %1, %0\n\t"
 		"pmovmskb	%0, %0\n\t"
 		"mfc1	%4, %0\n\t"
@@ -65,62 +66,64 @@ char *strchrnul(const char *s, int c)
 	  /* %5 */ "=&d" (p)
 	: /* %6 */ "r" (ALIGN_DOWN_DIFF(s, SOV8)),
 	  /* %7 */ "i" (SOV8),
-	  /* %8 */ "3" ((c & 0xff) * 0x0101),
+	  /* %8 */ "r" (c),
 	  /* %9 */ "5" (ALIGN_DOWN(s, SOV8))
 	);
-	return (char *)(uintptr_t)p + nul_byte_index_loongson(r);
+	return ((tchar_t *)(uintptr_t)p) + nul_word_index_loongson(r);
 }
 
-static char const rcsid_scnml[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscnml[] GCC_ATTR_USED_VAR = "$Id: $";
 #elif defined(__mips_dsp)
 
-char *strchrnul(const char *s, int c)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p = (const char *)ALIGN_DOWN(s, SOV4);
-	v4i8 vt1, vt2;
+	v4i8 vt1;
 	unsigned r;
 
 	asm (
 		".set noreorder\n\t"
-		"cmpgu.eq.qb	%2, %5, %0\n\t"
-		"cmpgu.eq.qb	%1, %6, %0\n\t"
-		"or	%2, %1, %2\n\t"
+		"cmp.eq.ph	%4, %0\n\t"
+		"pick.ph	%1, %7, %4\n\t"
+		"cmp.eq.ph	%5, %0\n\t"
+		"pick.ph	%1, %7, %1\n\t"
 # if HOST_IS_BIGENDIAN != 0
-		"sllv	%2, %2, %4\n\t"
-		"bnez	%2, 2f\n\t"
-		"srlv	%2, %2, %4\n\t"
+		"sllv	%1, %1, %3\n\t"
+		"bnez	%1, 2f\n\t"
+		"srlv	%1, %1, %3\n\t"
 # else
-		"srlv	%2, %2, %4\n\t"
-		"bnez	%2, 2f\n\t"
-		"sllv	%2, %2, %4\n\t"
+		"srlv	%1, %1, %3\n\t"
+		"bnez	%1, 2f\n\t"
+		"sllv	%1, %1, %3\n\t"
 # endif
 		"1:\n\t"
-		"lw	%0, %7(%3)\n\t"
-		"cmpgu.eq.qb	%2, %5, %0\n\t"
-		"cmpgu.eq.qb	%1, %6, %0\n\t"
-		"or	%2, %1, %2\n\t"
-		"beqz	%2, 1b\n\t"
-		SZPRFX"addiu	%3, %3, %7\n\t"
+		"lw	%0, %6(%2)\n\t"
+		"cmp.eq.ph	%4, %0\n\t"
+		"pick.ph	%1, %7, %4\n\t"
+		"cmp.eq.ph	%5, %0\n\t"
+		"pick.ph	%1, %7, %1\n\t"
+		"beqz	%1, 1b\n\t"
+		SZPRFX"addiu	%2, %2, %6\n\t"
 		"2:\n\t"
 		".set reorder\n\t"
 	: /* %0 */ "=&r" (vt1),
-	  /* %1 */ "=&r" (vt2),
-	  /* %2 */ "=&r" (r),
-	  /* %3 */ "=&d" (p)
-	: /* %4 */ "r" (ALIGN_DOWN_DIFF(s, SOV4) * BITS_PER_CHAR),
-	  /* %5 */ "r" (0),
-	  /* %6 */ "r" ((c & 0xff) * 0x01010101),
-	  /* %7 */ "i" (SOV4),
-	  /* %8 */ "3" (p),
+	  /* %1 */ "=&r" (r),
+	  /* %2 */ "=&d" (p)
+	: /* %3 */ "r" (ALIGN_DOWN_DIFF(s, SOV4) * BITS_PER_CHAR),
+	  /* %4 */ "r" (0),
+	  /* %5 */ "r" (((uint32_t)c & 0xffff) * 0x00010001),
+	  /* %6 */ "i" (SOV4),
+	  /* %7 */ "r" (0x00010001),
+	  /* %8 */ "2" (p),
 	  /* %9 */ "0" (*(const v4i8 *)p)
 	);
-	return (char *)(uintptr_t)p + nul_byte_index_dsp(r);
+	return ((tchar_t *)(uintptr_t)p) + nul_word_index_dsp(r);
 }
 
-static char const rcsid_scnmd[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscnmd[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 
-char *strchrnul(const char *s, int c)
+tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;
 	check_t r;
@@ -128,24 +131,18 @@ char *strchrnul(const char *s, int c)
 	unsigned shift;
 
 	if(unlikely(!c))
-		return (char *)(intptr_t)s + strlen(s);
+		return ((tchar_t *)(uintptr_t)s) + tstrlen(s);
 	prefetch(s);
 
-	/*
-	 * MIPS has, like most RISC archs, proplems
-	 * with constants. Long imm. (64 Bit) are very
-	 * painfull on MIPS. So do the first short tests
-	 * in 32 Bit for short strings
-	 */
-	mask1 = (c & 0xFF) * 0x01010101;
+	mask1 = (((uint32_t)c) & 0xFFFF) * 0x00010001;
 	p  = (const char *)ALIGN_DOWN(s, SO32);
 	shift = ALIGN_DOWN_DIFF(s, SO32) * BITS_PER_CHAR;
 	x1  = *(const uint32_t *)p;
 	if(!HOST_IS_BIGENDIAN)
 		x1 >>= shift;
-	r1  = has_nul_byte32(x1);
+	r1  = has_nul_word(x1);
 	x1 ^= mask1;
-	r1 |= has_nul_byte32(x1);
+	r1 |= has_nul_word(x1);
 	r1 <<= shift;
 	if(HOST_IS_BIGENDIAN)
 		r1 >>= shift;
@@ -155,9 +152,9 @@ char *strchrnul(const char *s, int c)
 	{
 		p += SO32;
 		r1 = *(const uint32_t *)p;
-		r1  = has_nul_byte32(x1);
+		r1  = has_nul_word32(x1);
 		x1 ^= mask1;
-		r1 |= has_nul_byte32(x1);
+		r1 |= has_nul_word32(x1);
 	}
 # endif
 
@@ -165,18 +162,19 @@ char *strchrnul(const char *s, int c)
 	{
 		check_t mask, x;
 		p += SO32;
-		mask = (c & 0xFF) * MK_CC(0x01010101);
+		mask = (((check_t)c) & 0xFFFF) * MK_CC(0x00010001);
 		for(r = 0; !r; p += SOCT) {
 			x  = *(const check_t *)p;
-			r  = has_nul_byte(x);
+			r  = has_nul_word(x);
 			x ^= mask;
-			r |= has_nul_byte(x);
+			r |= has_nul_word(x);
 		}
 	}
 	else
 		r = r1;
-	return (char *)(uintptr_t)p + nul_byte_index_mips(r);
+	return ((tchar_t *)(uintptr_t)p) + nul_word_index_mips(r);
 }
 
-static char const rcsid_scnm[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscnm[] GCC_ATTR_USED_VAR = "$Id: $";
 #endif
+/* EOF */
