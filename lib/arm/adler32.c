@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   arm implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -58,6 +58,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	s2 = (adler >> 16) & 0xffff;
 
 // TODO: byte order?
+	/*
+	 * big endian qwords are big endian within the dwords
+	 * but WRONG (really??) way round between lo and hi
+	 * GCC wants to disable qword endian specific patterns
+	 */
 	if(HOST_IS_BIGENDIAN)
 		vord = (uint8x16_t){16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 	else

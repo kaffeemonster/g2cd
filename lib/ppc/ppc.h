@@ -2,7 +2,7 @@
  * ppc.h
  * little ppc helper
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,7 +26,8 @@
 #ifndef PPC_H
 # define PPC_H
 
-# undef has_nul_byte
+# ifdef _ARCH_PWR6
+#  undef has_nul_byte
 static inline size_t has_nul_byte(size_t a)
 {
 	size_t res;
@@ -34,11 +35,12 @@ static inline size_t has_nul_byte(size_t a)
 	return res;
 }
 
-# undef has_nul_word
+#  undef has_nul_word
 static inline size_t has_nul_word(size_t a)
 {
 	size_t res;
 	asm("cmpb	%0, %1, %2" : "=r" (res) : "%rO" (a), "rO" (0));
 	return res & ((res & MK_C(0x00FF00FF)) << BITS_PER_CHAR);
 }
+# endif
 #endif

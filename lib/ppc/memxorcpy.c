@@ -2,7 +2,7 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest, ppc implementation
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -163,28 +163,45 @@ alignment_16:
 		register const vector unsigned char *src_vec1 = (const vector unsigned char *) src_char1;
 		register const vector unsigned char *src_vec2 = (const vector unsigned char *) src_char2;
 		register vector unsigned char v[8];
-		size_t small_len = len / SOVUC;
+		size_t small_len = len / SOVUC, block_num = DIV_ROUNDUP(len, 512);
 		register size_t smaller_len = small_len / 4;
+		unsigned f;
 		small_len %= 4;
 
-		for(; smaller_len--; dst_vec += 4, src_vec1 += 4, src_vec2 += 4)
+		f  = block_num >= 256 ? 0 : block_num << 16;
+		f |= 512;
+		vec_dst(src_vec1, f, 1);
+		vec_dst(src_vec2, f, 2);
+		vec_dstst(dst_vec, f, 3);
+		while(smaller_len)
 		{
-			v[0] = vec_ldl(0 * SOVUC, src_vec2);
-			v[4] = vec_ldl(0 * SOVUC, src_vec1);
-			v[1] = vec_ldl(1 * SOVUC, src_vec2);
-			v[5] = vec_ldl(1 * SOVUC, src_vec1);
-			v[2] = vec_ldl(2 * SOVUC, src_vec2);
-			v[6] = vec_ldl(2 * SOVUC, src_vec1);
-			v[3] = vec_ldl(3 * SOVUC, src_vec2);
-			v[7] = vec_ldl(3 * SOVUC, src_vec1);
-			v[0] = vec_xor(v[0], v[4]);
-			v[1] = vec_xor(v[1], v[5]);
-			v[2] = vec_xor(v[2], v[6]);
-			v[3] = vec_xor(v[3], v[7]);
-			vec_stl(v[0], 0 * SOVUC, dst_vec);
-			vec_stl(v[1], 1 * SOVUC, dst_vec);
-			vec_stl(v[2], 2 * SOVUC, dst_vec);
-			vec_stl(v[3], 3 * SOVUC, dst_vec);
+			f  = block_num >= 256 ? 0 : block_num << 16;
+			f |= 512;
+			vec_dst(src_vec1, f, 1);
+			vec_dst(src_vec2, f, 2);
+			vec_dstst(dst_vec, f, 3);
+			block_num -= block_num >= 128 ? 128 : block_num;
+			f = smaller_len >= 1024 ? 1024 : smaller_len;
+			smaller_len -= f;
+			for(; f--; dst_vec += 4, src_vec1 += 4, src_vec2 += 4)
+			{
+				v[0] = vec_ldl(0 * SOVUC, src_vec2);
+				v[4] = vec_ldl(0 * SOVUC, src_vec1);
+				v[1] = vec_ldl(1 * SOVUC, src_vec2);
+				v[5] = vec_ldl(1 * SOVUC, src_vec1);
+				v[2] = vec_ldl(2 * SOVUC, src_vec2);
+				v[6] = vec_ldl(2 * SOVUC, src_vec1);
+				v[3] = vec_ldl(3 * SOVUC, src_vec2);
+				v[7] = vec_ldl(3 * SOVUC, src_vec1);
+				v[0] = vec_xor(v[0], v[4]);
+				v[1] = vec_xor(v[1], v[5]);
+				v[2] = vec_xor(v[2], v[6]);
+				v[3] = vec_xor(v[3], v[7]);
+				vec_stl(v[0], 0 * SOVUC, dst_vec);
+				vec_stl(v[1], 1 * SOVUC, dst_vec);
+				vec_stl(v[2], 2 * SOVUC, dst_vec);
+				vec_stl(v[3], 3 * SOVUC, dst_vec);
+			}
 		}
 		for(; small_len--; dst_vec++, src_vec1++, src_vec2++)
 		{
@@ -194,6 +211,9 @@ alignment_16:
 			d = vec_xor(d, s);
 			vec_stl(d, 0 * SOVUC, dst_vec);
 		}
+		vec_dss(1);
+		vec_dss(2);
+		vec_dss(3);
 
 		len %= SOVUC;
 		dst_char   = (char *) dst_vec;
@@ -244,67 +264,85 @@ no_alignment_wanted:
 		vector unsigned char fix_alignment; /* 17 */
 		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
 		register size_t smaller_len = small_len / 8;
+		size_t block_num = DIV_ROUNDUP(len, 512);
+		unsigned f;
 		small_len %= 8;
 
-		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char2);
+		f  = block_num >= 256 ? 0 : block_num << 16;
+		f |= 512;
 		src_vec1 = (const vector unsigned char *) src_char1;
 		src_vec2 = (const vector unsigned char *) src_char2;
+		vec_dst(src_vec1, f, 1);
+		vec_dst(src_vec2, f, 2);
+		vec_dstst(dst_vec, f, 3);
+		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char2);
 		v[8] = vec_ldl(0, src_vec2);
-		while(smaller_len--)
+		while(smaller_len)
 		{
-			/* load src */
-			v[0] = v[8];
-			v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
-			v[2] = vec_ldl(2 * SOVUC, src_vec2);
-			v[3] = vec_ldl(3 * SOVUC, src_vec2);
-			v[4] = vec_ldl(4 * SOVUC, src_vec2);
-			v[5] = vec_ldl(5 * SOVUC, src_vec2);
-			v[6] = vec_ldl(6 * SOVUC, src_vec2);
-			v[7] = vec_ldl(7 * SOVUC, src_vec2);
-			v[8] = vec_ldl(8 * SOVUC, src_vec2);
-			src_vec2 += 8;
+			f  = block_num >= 256 ? 0 : block_num << 16;
+			f |= 512;
+			vec_dst(src_vec1, f, 1);
+			vec_dst(src_vec2, f, 2);
+			vec_dstst(dst_vec, f, 3);
+			block_num -= block_num >= 128 ? 128 : block_num;
+			f = smaller_len >= 512 ? 512 : smaller_len;
+			smaller_len -= f;
+			while(f--)
+			{
+				/* load src */
+				v[0] = v[8];
+				v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
+				v[2] = vec_ldl(2 * SOVUC, src_vec2);
+				v[3] = vec_ldl(3 * SOVUC, src_vec2);
+				v[4] = vec_ldl(4 * SOVUC, src_vec2);
+				v[5] = vec_ldl(5 * SOVUC, src_vec2);
+				v[6] = vec_ldl(6 * SOVUC, src_vec2);
+				v[7] = vec_ldl(7 * SOVUC, src_vec2);
+				v[8] = vec_ldl(8 * SOVUC, src_vec2);
+				src_vec2 += 8;
 
-			/* load dest */
-			vd[0] = vec_ldl(0 * SOVUC, src_vec1);
-			vd[1] = vec_ldl(1 * SOVUC, src_vec1);
-			vd[2] = vec_ldl(2 * SOVUC, src_vec1);
-			vd[3] = vec_ldl(3 * SOVUC, src_vec1);
-			vd[4] = vec_ldl(4 * SOVUC, src_vec1);
-			vd[5] = vec_ldl(5 * SOVUC, src_vec1);
-			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
-			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
-			src_vec1 += 8;
+				/* load dest */
+				vd[0] = vec_ldl(0 * SOVUC, src_vec1);
+				vd[1] = vec_ldl(1 * SOVUC, src_vec1);
+				vd[2] = vec_ldl(2 * SOVUC, src_vec1);
+				vd[3] = vec_ldl(3 * SOVUC, src_vec1);
+				vd[4] = vec_ldl(4 * SOVUC, src_vec1);
+				vd[5] = vec_ldl(5 * SOVUC, src_vec1);
+				vd[6] = vec_ldl(6 * SOVUC, src_vec1);
+				vd[7] = vec_ldl(7 * SOVUC, src_vec1);
+				src_vec1 += 8;
 
-			/* permutate src for alignment */
-			v[0] = vec_perm(v[0], v[1], fix_alignment);
-			v[1] = vec_perm(v[1], v[2], fix_alignment);
-			v[2] = vec_perm(v[2], v[3], fix_alignment);
-			v[3] = vec_perm(v[3], v[4], fix_alignment);
-			v[4] = vec_perm(v[4], v[5], fix_alignment);
-			v[5] = vec_perm(v[5], v[6], fix_alignment);
-			v[6] = vec_perm(v[6], v[7], fix_alignment);
-			v[7] = vec_perm(v[7], v[8], fix_alignment);
+				/* permutate src for alignment */
+				v[0] = vec_perm(v[0], v[1], fix_alignment);
+				v[1] = vec_perm(v[1], v[2], fix_alignment);
+				v[2] = vec_perm(v[2], v[3], fix_alignment);
+				v[3] = vec_perm(v[3], v[4], fix_alignment);
+				v[4] = vec_perm(v[4], v[5], fix_alignment);
+				v[5] = vec_perm(v[5], v[6], fix_alignment);
+				v[6] = vec_perm(v[6], v[7], fix_alignment);
+				v[7] = vec_perm(v[7], v[8], fix_alignment);
 
-			/* xor it */
-			vd[0] = vec_xor(vd[0], v[0]);
-			vd[1] = vec_xor(vd[1], v[1]);
-			vd[2] = vec_xor(vd[2], v[2]);
-			vd[3] = vec_xor(vd[3], v[3]);
-			vd[4] = vec_xor(vd[4], v[4]);
-			vd[5] = vec_xor(vd[5], v[5]);
-			vd[6] = vec_xor(vd[6], v[6]);
-			vd[7] = vec_xor(vd[7], v[7]);
+				/* xor it */
+				vd[0] = vec_xor(vd[0], v[0]);
+				vd[1] = vec_xor(vd[1], v[1]);
+				vd[2] = vec_xor(vd[2], v[2]);
+				vd[3] = vec_xor(vd[3], v[3]);
+				vd[4] = vec_xor(vd[4], v[4]);
+				vd[5] = vec_xor(vd[5], v[5]);
+				vd[6] = vec_xor(vd[6], v[6]);
+				vd[7] = vec_xor(vd[7], v[7]);
 
-			/* store it */
-			vec_stl(vd[0], 0 * SOVUC, dst_vec);
-			vec_stl(vd[1], 1 * SOVUC, dst_vec);
-			vec_stl(vd[2], 2 * SOVUC, dst_vec);
-			vec_stl(vd[3], 3 * SOVUC, dst_vec);
-			vec_stl(vd[4], 4 * SOVUC, dst_vec);
-			vec_stl(vd[5], 5 * SOVUC, dst_vec);
-			vec_stl(vd[6], 6 * SOVUC, dst_vec);
-			vec_stl(vd[7], 7 * SOVUC, dst_vec);
-			dst_vec += 8;
+				/* store it */
+				vec_stl(vd[0], 0 * SOVUC, dst_vec);
+				vec_stl(vd[1], 1 * SOVUC, dst_vec);
+				vec_stl(vd[2], 2 * SOVUC, dst_vec);
+				vec_stl(vd[3], 3 * SOVUC, dst_vec);
+				vec_stl(vd[4], 4 * SOVUC, dst_vec);
+				vec_stl(vd[5], 5 * SOVUC, dst_vec);
+				vec_stl(vd[6], 6 * SOVUC, dst_vec);
+				vec_stl(vd[7], 7 * SOVUC, dst_vec);
+				dst_vec += 8;
+			}
 		}
 		for(; small_len--; dst_vec++, src_vec2++, src_vec1++)
 		{
@@ -316,6 +354,9 @@ no_alignment_wanted:
 			d    = vec_xor(d, v[0]);
 			vec_stl(d, 0 * SOVUC, dst_vec);
 		}
+		vec_dss(1);
+		vec_dss(2);
+		vec_dss(3);
 
 // TODO: Hmmm, how many bytes are left???
 		len %= SOVUC;
@@ -338,78 +379,98 @@ both_unaligned:
 		vector unsigned char fix_alignment2; /* 19 */
 		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
 		register size_t smaller_len = small_len / 8;
+		size_t block_num = DIV_ROUNDUP(len, 512);
 		small_len %= 8;
+		unsigned f;
 
-		fix_alignment1 = vec_lvsl(0, (const volatile unsigned char *)src_char1);
-		fix_alignment2 = vec_lvsl(0, (const volatile unsigned char *)src_char2);
+		f  = block_num >= 256 ? 0 : block_num << 16;
+		f |= 512;
 		src_vec1 = (const vector unsigned char *) src_char1;
 		src_vec2 = (const vector unsigned char *) src_char2;
+		vec_dst(src_vec1, f, 1);
+		vec_dst(src_vec2, f, 2);
+		vec_dstst(dst_vec, f, 3);
+		fix_alignment1 = vec_lvsl(0, (const volatile unsigned char *)src_char1);
+		fix_alignment2 = vec_lvsl(0, (const volatile unsigned char *)src_char2);
 		vd[8] = vec_ldl(0, src_vec1);
 		v[8]  = vec_ldl(0, src_vec2);
-		while(smaller_len--)
+		while(smaller_len)
 		{
-			/* load src2 */
-			v[0] = v[8];
-			v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
-			v[2] = vec_ldl(2 * SOVUC, src_vec2);
-			v[3] = vec_ldl(3 * SOVUC, src_vec2);
-			v[4] = vec_ldl(4 * SOVUC, src_vec2);
-			v[5] = vec_ldl(5 * SOVUC, src_vec2);
-			v[6] = vec_ldl(6 * SOVUC, src_vec2);
-			v[7] = vec_ldl(7 * SOVUC, src_vec2);
-			v[8] = vec_ldl(8 * SOVUC, src_vec2);
-			src_vec2 += 8;
+			f  = block_num >= 256 ? 0 : block_num << 16;
+			f |= 512;
+			vec_dst(src_vec1, f, 1);
+			vec_dst(src_vec2, f, 2);
+			vec_dstst(dst_vec, f, 3);
+			block_num -= block_num >= 128 ? 128 : block_num;
+			f = smaller_len >= 512 ? 512 : smaller_len;
+			smaller_len -= f;
+// TODO: reduce the number of vectors used?
+			/* since we use the full reg set, we spill */
+			while(f--)
+			{
+				/* load src2 */
+				v[0] = v[8];
+				v[1] = vec_ldl(1 * SOVUC, src_vec2); /* load always rounds address down */
+				v[2] = vec_ldl(2 * SOVUC, src_vec2);
+				v[3] = vec_ldl(3 * SOVUC, src_vec2);
+				v[4] = vec_ldl(4 * SOVUC, src_vec2);
+				v[5] = vec_ldl(5 * SOVUC, src_vec2);
+				v[6] = vec_ldl(6 * SOVUC, src_vec2);
+				v[7] = vec_ldl(7 * SOVUC, src_vec2);
+				v[8] = vec_ldl(8 * SOVUC, src_vec2);
+				src_vec2 += 8;
 
-			/* load src1 */
-			vd[0] = v[8];
-			vd[1] = vec_ldl(1 * SOVUC, src_vec1);
-			vd[2] = vec_ldl(2 * SOVUC, src_vec1);
-			vd[3] = vec_ldl(3 * SOVUC, src_vec1);
-			vd[4] = vec_ldl(4 * SOVUC, src_vec1);
-			vd[5] = vec_ldl(5 * SOVUC, src_vec1);
-			vd[6] = vec_ldl(6 * SOVUC, src_vec1);
-			vd[7] = vec_ldl(7 * SOVUC, src_vec1);
-			vd[8] = vec_ldl(8 * SOVUC, src_vec1);
-			src_vec1 += 8;
+				/* load src1 */
+				vd[0] = v[8];
+				vd[1] = vec_ldl(1 * SOVUC, src_vec1);
+				vd[2] = vec_ldl(2 * SOVUC, src_vec1);
+				vd[3] = vec_ldl(3 * SOVUC, src_vec1);
+				vd[4] = vec_ldl(4 * SOVUC, src_vec1);
+				vd[5] = vec_ldl(5 * SOVUC, src_vec1);
+				vd[6] = vec_ldl(6 * SOVUC, src_vec1);
+				vd[7] = vec_ldl(7 * SOVUC, src_vec1);
+				vd[8] = vec_ldl(8 * SOVUC, src_vec1);
+				src_vec1 += 8;
 
-			/* permutate src for alignment */
-			v[0]  = vec_perm( v[0],  v[1], fix_alignment2);
-			v[1]  = vec_perm( v[1],  v[2], fix_alignment2);
-			v[2]  = vec_perm( v[2],  v[3], fix_alignment2);
-			v[3]  = vec_perm( v[3],  v[4], fix_alignment2);
-			v[4]  = vec_perm( v[4],  v[5], fix_alignment2);
-			v[5]  = vec_perm( v[5],  v[6], fix_alignment2);
-			v[6]  = vec_perm( v[6],  v[7], fix_alignment2);
-			v[7]  = vec_perm( v[7],  v[8], fix_alignment2);
-			vd[0] = vec_perm(vd[0], vd[1], fix_alignment1);
-			vd[1] = vec_perm(vd[1], vd[2], fix_alignment1);
-			vd[2] = vec_perm(vd[2], vd[3], fix_alignment1);
-			vd[3] = vec_perm(vd[3], vd[4], fix_alignment1);
-			vd[4] = vec_perm(vd[4], vd[5], fix_alignment1);
-			vd[5] = vec_perm(vd[5], vd[6], fix_alignment1);
-			vd[6] = vec_perm(vd[6], vd[7], fix_alignment1);
-			vd[7] = vec_perm(vd[7], vd[8], fix_alignment1);
+				/* permutate src for alignment */
+				v[0]  = vec_perm( v[0],  v[1], fix_alignment2);
+				v[1]  = vec_perm( v[1],  v[2], fix_alignment2);
+				v[2]  = vec_perm( v[2],  v[3], fix_alignment2);
+				v[3]  = vec_perm( v[3],  v[4], fix_alignment2);
+				v[4]  = vec_perm( v[4],  v[5], fix_alignment2);
+				v[5]  = vec_perm( v[5],  v[6], fix_alignment2);
+				v[6]  = vec_perm( v[6],  v[7], fix_alignment2);
+				v[7]  = vec_perm( v[7],  v[8], fix_alignment2);
+				vd[0] = vec_perm(vd[0], vd[1], fix_alignment1);
+				vd[1] = vec_perm(vd[1], vd[2], fix_alignment1);
+				vd[2] = vec_perm(vd[2], vd[3], fix_alignment1);
+				vd[3] = vec_perm(vd[3], vd[4], fix_alignment1);
+				vd[4] = vec_perm(vd[4], vd[5], fix_alignment1);
+				vd[5] = vec_perm(vd[5], vd[6], fix_alignment1);
+				vd[6] = vec_perm(vd[6], vd[7], fix_alignment1);
+				vd[7] = vec_perm(vd[7], vd[8], fix_alignment1);
 
-			/* xor it */
-			vd[0] = vec_xor(vd[0], v[0]);
-			vd[1] = vec_xor(vd[1], v[1]);
-			vd[2] = vec_xor(vd[2], v[2]);
-			vd[3] = vec_xor(vd[3], v[3]);
-			vd[4] = vec_xor(vd[4], v[4]);
-			vd[5] = vec_xor(vd[5], v[5]);
-			vd[6] = vec_xor(vd[6], v[6]);
-			vd[7] = vec_xor(vd[7], v[7]);
+				/* xor it */
+				vd[0] = vec_xor(vd[0], v[0]);
+				vd[1] = vec_xor(vd[1], v[1]);
+				vd[2] = vec_xor(vd[2], v[2]);
+				vd[3] = vec_xor(vd[3], v[3]);
+				vd[4] = vec_xor(vd[4], v[4]);
+				vd[5] = vec_xor(vd[5], v[5]);
+				vd[6] = vec_xor(vd[6], v[6]);
+				vd[7] = vec_xor(vd[7], v[7]);
 
-			/* store it */
-			vec_stl(vd[0], 0 * SOVUC, dst_vec);
-			vec_stl(vd[1], 1 * SOVUC, dst_vec);
-			vec_stl(vd[2], 2 * SOVUC, dst_vec);
-			vec_stl(vd[3], 3 * SOVUC, dst_vec);
-			vec_stl(vd[4], 4 * SOVUC, dst_vec);
-			vec_stl(vd[5], 5 * SOVUC, dst_vec);
-			vec_stl(vd[6], 6 * SOVUC, dst_vec);
-			vec_stl(vd[7], 7 * SOVUC, dst_vec);
-			dst_vec += 8;
+				/* store it */
+				vec_stl(vd[0], 0 * SOVUC, dst_vec);
+				vec_stl(vd[1], 1 * SOVUC, dst_vec);
+				vec_stl(vd[2], 2 * SOVUC, dst_vec);
+				vec_stl(vd[3], 3 * SOVUC, dst_vec);
+				vec_stl(vd[4], 4 * SOVUC, dst_vec);
+				vec_stl(vd[5], 5 * SOVUC, dst_vec);
+				vec_stl(vd[6], 6 * SOVUC, dst_vec);
+				vec_stl(vd[7], 7 * SOVUC, dst_vec);
+				dst_vec += 8;
+			}
 		}
 		for(; small_len--; dst_vec++, src_vec2++, src_vec1++)
 		{
@@ -422,6 +483,9 @@ both_unaligned:
 			vd[0] = vec_xor(vd[0], v[0]);
 			vec_stl(vd[0], 0 * SOVUC, dst_vec);
 		}
+		vec_dss(1);
+		vec_dss(2);
+		vec_dss(3);
 
 // TODO: Hmmm, how many bytes are left???
 		len %= SOVUC;

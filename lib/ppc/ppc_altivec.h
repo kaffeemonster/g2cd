@@ -2,7 +2,7 @@
  * ppc_altivec.h
  * little ppc altivec helper
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -136,7 +136,6 @@ static inline uint32_t vec_zpos(vector bool char vr)
 	vector unsigned char vswz, vswz1, vswz21, vswz22, vswz31, vswz32, vswz33, vswz34;
 	unsigned r;
 
-// TODO: this is ... broken?
 	vswz1 = vec_lvsl(8, (unsigned char *)0);
 	vt1 = vec_perm(v0, vr, vswz1);
 	vswz21 = vec_lvsl(12, (unsigned char *)0);
@@ -160,12 +159,12 @@ static inline uint32_t vec_zpos(vector bool char vr)
 		if(vec_all_eq(vt22, v0))
 			r = vec_all_eq(vt33, v0) ?  7 :  4;
 		else
-			r = vec_all_eq(vt34, v0) ?  1 :  3;
+			r = vec_all_eq(vt34, v0) ?  3 :  1;
 	}
 	vswz = vec_lvsl(r, (unsigned char *)0);
 	vt = vec_perm(v0, vr, vswz);
-	r += vec_all_eq(vt, v0) ? 1 : -1;
-	return r - 1;
+	r += vec_all_eq(vt, v0) ? 0 : -1;
+	return r;
 #endif
 }
 
@@ -190,24 +189,39 @@ static inline uint32_t vec_zpos_last(vector bool char vr)
 	 * - direct info path over compare instructions
 	 */
 	vector bool char v0 = (vector bool char)vec_splat_s8(0);
-	vector bool char vt;
-	vector unsigned char vswz;
-	unsigned r = 8;
+	vector bool char vt, vt1, vt21, vt22, vt31, vt32, vt33, vt34;
+	vector unsigned char vswz, vswz1, vswz21, vswz22, vswz31, vswz32, vswz33, vswz34;
+	unsigned r;
 
-// TODO: this is ... broken?
+	vswz1 = vec_lvsr(8, (unsigned char *)0);
+	vt1 = vec_perm(vr, v0, vswz1);
+	vswz21 = vec_lvsr( 4, (unsigned char *)0);
+	vswz22 = vec_lvsr(12, (unsigned char *)0);
+	vt21 = vec_perm(vr, v0, vswz21);
+	vt22 = vec_perm(vr, v0, vswz22);
+	vswz31 = vec_lvsr( 2, (unsigned char *)0);
+	vswz32 = vec_lvsr( 6, (unsigned char *)0);
+	vswz33 = vec_lvsr(10, (unsigned char *)0);
+	vswz34 = vec_lvsr(14, (unsigned char *)0);
+	vt31 = vec_perm(vr, v0, vswz31);
+	vt32 = vec_perm(vr, v0, vswz32);
+	vt33 = vec_perm(vr, v0, vswz33);
+	vt34 = vec_perm(vr, v0, vswz34);
+	if(vec_all_eq(vt1, v0)) {
+		if(vec_all_eq(vt21, v0))
+			r = vec_all_eq(vt31, v0) ?  1 :  3;
+		else
+			r = vec_all_eq(vt32, v0) ?  4 :  7;
+	} else {
+		if(vec_all_eq(vt22, v0))
+			r = vec_all_eq(vt33, v0) ?  9 : 11;
+		else
+			r = vec_all_eq(vt34, v0) ? 13 : 15;
+	}
 	vswz = vec_lvsr(r, (unsigned char *)0);
 	vt = vec_perm(vr, v0, vswz);
-	r += vec_all_eq(vt, v0) ? 4 : -4;
-	vswz = vec_lvsr(r, (unsigned char *)0);
-	vt = vec_perm(vr, v0, vswz);
-	r += vec_all_eq(vt, v0) ? 2 : -2;
-	vswz = vec_lvsr(r, (unsigned char *)0);
-	vt = vec_perm(vr, v0, vswz);
-	r += vec_all_eq(vt, v0) ? 1 : -1;
-	vswz = vec_lvsr(r, (unsigned char *)0);
-	vt = vec_perm(vr, v0, vswz);
-	r += vec_all_eq(vt, v0) ? 1 : -1;
-	return 15 - r;
+	r += vec_all_eq(vt, v0) ? -1 : 0;
+	return r;
 #endif
 }
 

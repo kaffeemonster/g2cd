@@ -2,7 +2,7 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *

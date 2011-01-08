@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, ppc implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -28,26 +28,38 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
+/*
+ * Deppending on the field length, this is 3 to 2 times faster
+ * then the generic version, and prop. only capped by mem bandwith
+ */
+
 # define vec_popcnt(x) \
-	vec_add(vec_perm(lutl, luth, x), vec_perm(lutl, lutl, vec_sr(x, v_5)))
+	vec_add(vec_perm(lutl, v_0, vec_and(x, v_15)), vec_perm(lutl, v_0, vec_sr(x, v_4)))
 
 size_t mempopcnt(const void *s, size_t len)
 {
-	vector unsigned char v_0, v_5;
-	vector unsigned char lutl, luth;
+	vector unsigned char v_0, v_4, v_15;
+	vector unsigned char lutl;
 	vector unsigned char c, v_perm;
 	vector unsigned int v_sum;
 	unsigned char *p;
-	size_t r;
+	size_t r, block_num;
 	uint32_t ret;
-	unsigned shift;
+	unsigned shift, f;
 
-	prefetch(s);
+	if(HOST_IS_BIGENDIAN)
+		lutl  = (vector unsigned char){0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
+	else
+		lutl  = (vector unsigned char){4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0};
 
-	lutl  = (vector unsigned char){4, 3, 3, 2, 3, 2, 2, 1, 3, 2, 2, 1, 2, 1, 1, 0};
-	luth  = vec_add(vec_splat_u8(1), lutl);
-	v_5   = vec_splat_u8(5);
+	block_num = DIV_ROUNDUP(len, 512);
+	f  = 512;
+	f |= block_num >= 256 ? 0 : block_num << 16;
+	vec_dst((const unsigned char *)s, f, 3);
+
+	v_4   = vec_splat_u8(4);
 	v_0   = vec_splat_u8(0);
+	v_15  = vec_splat_u8(15);
 	v_sum = (vector unsigned int)v_0;
 	/*
 	 * Sometimes you need a new perspective, like the altivec
@@ -80,19 +92,22 @@ size_t mempopcnt(const void *s, size_t len)
 			{
 				vector unsigned char v_sumb = v_0;
 
+				f  = 512;
+				f |= block_num >= 256 ? 0 : block_num << 16;
+				vec_dst(p, f, 3);
+
 				r    = len / (SOVUC * 8);
-// TODO: 31 rounds till v_sumb overflows is a guess...
 				r    = r > 31 ? 31 : r;
 				len -= r * SOVUC * 8;
 				/*
 				 * Altivec has it's wonderfull vec_perm. This way one can build
 				 * a popcnt quite fast. Build a lut for 4 to 5 bits at once,
 				 * tada. Still this is not the fasted way...
-				 * You have to split the upper and lower bits in a byte, shift,
-				 * and you stress the permutation engine. The permutation engine
-				 * is powerfull, but has it's limits. Esp. since they made the perm
-				 * one cycle slower on >= G5.
-				 * Also you have to still do the horizontal addition because you add
+				 * You have to split the upper and lower bits in a byte, mask,
+				 * shift, add, and you stress the permutation engine. The permutation
+				 * engine is powerfull, but has it's limits, and is prop. single issue.
+				 * Esp. since they made the perm one cycle slower on >= G5.
+				 * Also you still have to do the horizontal addition because you add
 				 * up only bytes. Cool vector ops for the rescue again (sums4s, etc.)
 				 * but they are also not the fasted, and frequently requiered,
 				 * breaking the loop. And ppc is not the greatest fan of conditional
@@ -106,6 +121,11 @@ size_t mempopcnt(const void *s, size_t len)
 				 * This is only a win when the vector engine for bin ops is better
 				 * than the permutation engine, not on some cut down embedded chip,
 				 * to make up for the additional ops.
+				 *
+				 * Also GCC like to use all regs of Altivec, pushing nearly 10 regs
+				 * to the stack, which means this could be a loss on small length
+				 * (the push is done in the prologue/epilogue, not when we near the
+				 * inner loop...)
 				 */
 				for(; r; r--, p += SOVUC * 8)
 				{
@@ -135,6 +155,7 @@ size_t mempopcnt(const void *s, size_t len)
 					v_sumb = vec_add(v_sumb, vec_popcnt(v_eights));
 				}
 				v_sum_t = vec_sum4s(v_sumb, v_sum_t);
+				block_num = DIV_ROUNDUP(len, 512);
 			}
 			v_sum_t = vec_sl(v_sum_t, vec_splat_u32(3)); /* *8 */
 			v_sum_t = vec_msum(vec_popcnt(v_fours), vec_splat_u8(4), v_sum_t);
@@ -158,12 +179,14 @@ size_t mempopcnt(const void *s, size_t len)
 		if(len)
 			c = vec_ldl(0, (const vector unsigned char *)p);
 	}
+	vec_dss(3);
 	if(len) {
 		v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)(SOVUC - len));
 		c      = vec_perm(v_0, c, v_perm);
 		v_sum  = vec_sum4s(vec_popcnt(c), v_sum);
 	}
-
+// TODO: uff, shit, does saturation and signed harm here?
+	/* sure, this way we can only count to 0x7fffffff??? */
 	v_sum = (vector unsigned int)vec_sums((vector signed int)v_sum, (vector signed int)v_0);
 	v_sum = vec_splat(v_sum, 3); /* splat */
 	vec_ste(v_sum, 0, &ret); /* transfer */
@@ -172,7 +195,9 @@ size_t mempopcnt(const void *s, size_t len)
 #else
 # if defined(_ARCH_PWR5)
 /*
- * PowerPC 5 (ISA 2.02) has a popcntb instruction. But:
+ * POWER 5 (ISA 2.02) has a popcntb instruction.
+ * (Category "Phased in v2.05", whatever...)
+ * But:
  * popcnt instructions, even if nice, are seldomly the fasted
  * instructions. Often they also have another knack, like only
  * one of several ALUs (the "complex ALU" or somehting like that)

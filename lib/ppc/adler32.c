@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   ppc implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -16,7 +16,8 @@
 #if defined(__ALTIVEC__) && defined(__GNUC__)
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
-# define MIN_WORK 16
+/* it needs some bytes till the vec version gets up to speed... */
+# define MIN_WORK 56
 #endif
 
 #include "../generic/adler32.c"
@@ -25,6 +26,23 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 /* We use the GCC vector internals, to make things simple for us. */
 # include <altivec.h>
 # include "ppc_altivec.h"
+
+/*
+ * Depending on length, this can be slower (short length < 64 bytes),
+ * much faster (or beloved 128kb 22.2s generic to 3.4s vec, but cache
+ * is important...), to a little faster (very long length, 1.6MB, 47.6s
+ * to 36s), which is prop. only capped by memory bandwith.
+ * (The orig. 128k case was slower in AltiVec, because AltiVec loads
+ * are always uncached and trigger no HW prefetching, because that is
+ * what you often need with mass data manipulation (not poisen your
+ * cache, movntq), instead you have to do it for yourself (data stream
+ * touch). With 128k it could be cleanly seen: no prefetch, half as slow
+ * as generic, but comment out the memory load -> 3s. With proper prefetch
+ * we are at 3.4s. So AltiVec can execute these "expensive" FMA quite
+ * fast (even without fancy unrolling), only the data does not arrive
+ * fast enough. In cases where the working set does not fit into cache
+ * it simply cannot be delivered fast enough over the FSB/Mem).
+ */
 
 /* can be propably more, since we do not have the x86 psadbw 64 bit sum */
 #define VNMAX (6*NMAX)
@@ -63,8 +81,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		vector unsigned int vs1, vs2;
 		vector unsigned char in16, vord_a, v1_a, vperm;
 		unsigned f, n;
-		unsigned k;
+		unsigned k, block_num;
 
+		block_num = DIV_ROUNDUP(len, 512); /* 32 block size * 16 bytes */
+		f  = 512;
+		f |= block_num >= 256 ? 0 : block_num << 16;
+		vec_dst(buf, f, 2);
 		/*
 		 * Add stuff to achieve alignment
 		 */
@@ -110,13 +132,16 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		if(likely(k >= SOVUC)) do
 		{
 			vector unsigned int vs1_r = v0_32;
+			f  = 512;
+			f |= block_num >= 256 ? 0 : block_num << 16;
+			vec_dst(buf, f, 2);
 			do
 			{
-				/* add vs1 for this round */
-				vs1_r += vs1;
-
 				/* get input data */
 				in16 = vec_ldl(0, buf);
+
+				/* add vs1 for this round */
+				vs1_r += vs1;
 
 				/* add 4 byte horizontal and add to old dword */
 				vs1 = vec_sum4s(in16, vs1);
@@ -135,6 +160,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			vs1 = vector_reduce(vs1);
 			len += k;
 			k = len < VNMAX ? (unsigned)len : VNMAX;
+			block_num = DIV_ROUNDUP(len, 512); /* 32 block size * 16 bytes */
 			len -= k;
 		} while(likely(k >= SOVUC));
 
@@ -174,9 +200,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 * OBSOLETE:
 		 * We know have a "cheap" reduce to get the vectors in a range
 		 * around BASE, they still need the final proper mod, but we can
-		 * stay on the vector unit and do not overflow
-		 *
-		 * we could stay more than NMAX in the loops above and
+		 * stay on the vector unit and do not overflow.
+		 * ----------------------------------------------------------
+		 * We could stay more than NMAX in the loops above and
 		 * fill the first uint32_t near overflow.
 		 * Then we have to make the modulus on all vector elements.
 		 * there is only one problem:
@@ -197,7 +223,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		v15_32 = vec_splat_u32(15);
 		vbase_recp = 4 times 0x080078071; /* a mem load hides here */
 		vbase  = 4 times 0xFFF1; /* and propably here */
-		/* divde vectors by BASE */
+		/* divide vectors by BASE */
 		/* multiply vectors by BASE reciprocal, get high 32 bit */
 		vres1 = vec_mullwh(vs1, vbase_recp); /* 9 operations */
 		vres2 = vec_mullwh(vs2, vbase_recp);
@@ -224,9 +250,10 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 * Just noted down it doesn't get lost.
 		 */
 #endif
+		vec_dss(2);
 
 		/* add horizontal */
-// TODO: uff, shit, does saturation and signed harm here?
+		/* stuff should be reduced so no proplem with signed sature */
 		vs1 = (vector unsigned)vec_sums((vector int)vs1, (vector int)v0_32);
 		vs2 = (vector unsigned)vec_sums((vector int)vs2, (vector int)v0_32);
 		/* shake and roll */
@@ -240,8 +267,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	MOD(s1);
-	MOD(s2);
+	s1 = reduce(s1);
+	s2 = reduce(s2);
 
 	return s2 << 16 | s1;
 }

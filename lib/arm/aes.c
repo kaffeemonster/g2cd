@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, arm implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,6 +24,13 @@
  */
 
 // TODO: write big endian version
+// TODO: be arm NEON has some kind of PDP11 endianess??
+/*
+ * NEON is more a 64 bit SIMD, one 64 Bit unit has nativ endianess,
+ * but two 64 Bit have a fixed endianess, so on big endian they are wrong
+ * way round (only little endian is "normal")
+ */
+
 #if defined(__ARM_NEON__) && defined(__ARMEL__)
 # include <arm_neon.h>
 # include "my_neon.h"
@@ -58,7 +65,7 @@ static const struct
 	uint8x16_t sb2hi;
 	uint8x16_t mcf[4];
 	uint8x16_t mcb[4];
-	uint8x16_t sr[8];
+	uint8x16_t sr[4];
 	uint8x16_t rcon;
 	uint8x16_t optlo;
 	uint8x16_t opthi;
@@ -193,7 +200,7 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 		klo = pshufb(aes_consts.mcf[0], klo);
 		khi = veorq_u8(khi, klo);
 		khi = pshufb(khi, aes_consts.sr[n--]);
-		n  &= 3;
+		n  &= 2;
 		*++key_target = khi;
 	} while(1);
 	/* schedule last round key */

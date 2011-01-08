@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, generic implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -93,14 +93,14 @@ extern const uint32_t aes_fl_tab[4][256];
 extern const uint32_t aes_it_tab[4][256];
 extern const uint32_t aes_il_tab[4][256];
 
-static inline uint32_t ror32(uint32_t word, unsigned int shift)
-{
-	return (word >> shift) | (word << (32 - shift));
-}
-
 static inline uint8_t byte(const uint32_t x, const unsigned n)
 {
 	return x >> (n << 3);
+}
+
+static inline uint32_t ror32(uint32_t word, unsigned int shift)
+{
+	return (word >> shift) | (word << (32 - shift));
 }
 
 #define ls_box(x) \

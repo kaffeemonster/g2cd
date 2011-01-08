@@ -2,7 +2,7 @@
  * memneg.c
  * neg a memory region efficient, ppc implementation
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -169,27 +169,44 @@ alignment_16:
 		register const vector unsigned char *src_vec = (const vector unsigned char *) src_char;
 		register vector unsigned char v[4];
 		const vector unsigned char v_0 = vec_splat_u8(0);
-		size_t small_len = len / SOVUC;
+		size_t small_len = len / SOVUC, block_num = DIV_ROUNDUP(len, 512);
 		register size_t smaller_len = small_len / 4;
+		unsigned f;
 		small_len %= 4;
 
-		for(; smaller_len--; dst_vec += 4, src_vec += 4)
+		f  = block_num >= 256 ? 0 : block_num << 16;
+		f |= 512;
+		vec_dst(src_vec, f, 2);
+		vec_dstst(dst_vec, f, 3);
+		while(smaller_len)
 		{
-			v[0] = vec_ldl(0 * SOVUC, src_vec);
-			v[1] = vec_ldl(1 * SOVUC, src_vec);
-			v[2] = vec_ldl(2 * SOVUC, src_vec);
-			v[3] = vec_ldl(3 * SOVUC, src_vec);
-			v[0] = vec_nor(v[0], v_0);
-			v[1] = vec_nor(v[1], v_0);
-			v[2] = vec_nor(v[2], v_0);
-			v[3] = vec_nor(v[3], v_0);
-			vec_stl(v[0], 0 * SOVUC, dst_vec);
-			vec_stl(v[1], 1 * SOVUC, dst_vec);
-			vec_stl(v[2], 2 * SOVUC, dst_vec);
-			vec_stl(v[3], 3 * SOVUC, dst_vec);
+			f  = 512;
+			f |= block_num >= 256 ? 0 : block_num;
+			vec_dst(src_vec, f, 2);
+			vec_dstst(dst_vec, f, 3);
+			block_num -= block_num >= 128 ? 128 : block_num;
+			f = smaller_len >= 1024 ? 1024 : smaller_len;
+			smaller_len -= f;
+			for(; f--; dst_vec += 4, src_vec += 4)
+			{
+				v[0] = vec_ldl(0 * SOVUC, src_vec);
+				v[1] = vec_ldl(1 * SOVUC, src_vec);
+				v[2] = vec_ldl(2 * SOVUC, src_vec);
+				v[3] = vec_ldl(3 * SOVUC, src_vec);
+				v[0] = vec_nor(v[0], v_0);
+				v[1] = vec_nor(v[1], v_0);
+				v[2] = vec_nor(v[2], v_0);
+				v[3] = vec_nor(v[3], v_0);
+				vec_stl(v[0], 0 * SOVUC, dst_vec);
+				vec_stl(v[1], 1 * SOVUC, dst_vec);
+				vec_stl(v[2], 2 * SOVUC, dst_vec);
+				vec_stl(v[3], 3 * SOVUC, dst_vec);
+			}
 		}
 		for(; small_len--; dst_vec++, src_vec++)
 			*dst_vec = vec_nor(*src_vec, v_0);
+		vec_dss(2);
+		vec_dss(3);
 
 		len %= SOVUC;
 		dst_char  = (char *) dst_vec;
@@ -219,55 +236,71 @@ no_alignment_wanted:
 		const vector unsigned char v_0 = vec_splat_u8(0); /* 10 */
 		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
 		register size_t smaller_len = small_len / 8;
+		size_t block_num = DIV_ROUNDUP(len, 512);
+		unsigned f;
 		small_len %= 8;
 
-		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
+		f  = block_num >= 256 ? 0 : block_num << 16;
+		f |= 512;
 		src_vec = (const vector unsigned char *) src_char;
+		vec_dst(src_vec, f, 2);
+		vec_dstst(dst_vec, f, 3);
+		fix_alignment = vec_lvsl(0, (const volatile unsigned char *)src_char);
 		v[8] = vec_ldl(0, src_vec);
-		while(smaller_len--)
+		while(smaller_len)
 		{
-			/* load src */
-			v[0] = v[8];
-			v[1] = vec_ldl(1 * SOVUC, src_vec); /* load always rounds address down */
-			v[2] = vec_ldl(2 * SOVUC, src_vec);
-			v[3] = vec_ldl(3 * SOVUC, src_vec);
-			v[4] = vec_ldl(4 * SOVUC, src_vec);
-			v[5] = vec_ldl(5 * SOVUC, src_vec);
-			v[6] = vec_ldl(6 * SOVUC, src_vec);
-			v[7] = vec_ldl(7 * SOVUC, src_vec);
-			v[8] = vec_ldl(8 * SOVUC, src_vec);
-			src_vec += 8;
+			f  = 512;
+			f |= block_num >= 256 ? 0 : block_num;
+			vec_dst(src_vec, f, 2);
+			vec_dstst(dst_vec, f, 3);
+			block_num -= block_num >= 128 ? 128 : block_num;
+			f = smaller_len >= 512 ? 512 : smaller_len;
+			smaller_len -= f;
+			while(f--)
+			{
+				/* load src */
+				v[0] = v[8];
+				v[1] = vec_ldl(1 * SOVUC, src_vec); /* load always rounds address down */
+				v[2] = vec_ldl(2 * SOVUC, src_vec);
+				v[3] = vec_ldl(3 * SOVUC, src_vec);
+				v[4] = vec_ldl(4 * SOVUC, src_vec);
+				v[5] = vec_ldl(5 * SOVUC, src_vec);
+				v[6] = vec_ldl(6 * SOVUC, src_vec);
+				v[7] = vec_ldl(7 * SOVUC, src_vec);
+				v[8] = vec_ldl(8 * SOVUC, src_vec);
+				src_vec += 8;
 
-			/* permutate src for alignment */
-			v[0] = vec_perm(v[0], v[1], fix_alignment);
-			v[1] = vec_perm(v[1], v[2], fix_alignment);
-			v[2] = vec_perm(v[2], v[3], fix_alignment);
-			v[3] = vec_perm(v[3], v[4], fix_alignment);
-			v[4] = vec_perm(v[4], v[5], fix_alignment);
-			v[5] = vec_perm(v[5], v[6], fix_alignment);
-			v[6] = vec_perm(v[6], v[7], fix_alignment);
-			v[7] = vec_perm(v[7], v[8], fix_alignment);
+				/* permutate src for alignment */
+				v[0] = vec_perm(v[0], v[1], fix_alignment);
+				v[1] = vec_perm(v[1], v[2], fix_alignment);
+				v[2] = vec_perm(v[2], v[3], fix_alignment);
+				v[3] = vec_perm(v[3], v[4], fix_alignment);
+				v[4] = vec_perm(v[4], v[5], fix_alignment);
+				v[5] = vec_perm(v[5], v[6], fix_alignment);
+				v[6] = vec_perm(v[6], v[7], fix_alignment);
+				v[7] = vec_perm(v[7], v[8], fix_alignment);
 
-			/* neg it */
-			v[0] = vec_nor(v[0], v_0);
-			v[1] = vec_nor(v[1], v_0);
-			v[2] = vec_nor(v[2], v_0);
-			v[3] = vec_nor(v[3], v_0);
-			v[4] = vec_nor(v[4], v_0);
-			v[5] = vec_nor(v[5], v_0);
-			v[6] = vec_nor(v[6], v_0);
-			v[7] = vec_nor(v[7], v_0);
+				/* neg it */
+				v[0] = vec_nor(v[0], v_0);
+				v[1] = vec_nor(v[1], v_0);
+				v[2] = vec_nor(v[2], v_0);
+				v[3] = vec_nor(v[3], v_0);
+				v[4] = vec_nor(v[4], v_0);
+				v[5] = vec_nor(v[5], v_0);
+				v[6] = vec_nor(v[6], v_0);
+				v[7] = vec_nor(v[7], v_0);
 
-			/* store it */
-			vec_stl(v[0], 0 * SOVUC, dst_vec);
-			vec_stl(v[1], 1 * SOVUC, dst_vec);
-			vec_stl(v[2], 2 * SOVUC, dst_vec);
-			vec_stl(v[3], 3 * SOVUC, dst_vec);
-			vec_stl(v[4], 4 * SOVUC, dst_vec);
-			vec_stl(v[5], 5 * SOVUC, dst_vec);
-			vec_stl(v[6], 6 * SOVUC, dst_vec);
-			vec_stl(v[7], 7 * SOVUC, dst_vec);
-			dst_vec += 8;
+				/* store it */
+				vec_stl(v[0], 0 * SOVUC, dst_vec);
+				vec_stl(v[1], 1 * SOVUC, dst_vec);
+				vec_stl(v[2], 2 * SOVUC, dst_vec);
+				vec_stl(v[3], 3 * SOVUC, dst_vec);
+				vec_stl(v[4], 4 * SOVUC, dst_vec);
+				vec_stl(v[5], 5 * SOVUC, dst_vec);
+				vec_stl(v[6], 6 * SOVUC, dst_vec);
+				vec_stl(v[7], 7 * SOVUC, dst_vec);
+				dst_vec += 8;
+			}
 		}
 		for(; small_len--; dst_vec++, src_vec++)
 		{
@@ -278,6 +311,8 @@ no_alignment_wanted:
 			d    = vec_nor(v[0], v_0);
 			vec_stl(d, 0 * SOVUC, dst_vec);
 		}
+		vec_dss(2);
+		vec_dss(3);
 
 // TODO: Hmmm, how many bytes are left???
 		len %= SOVUC;

@@ -1,8 +1,8 @@
 /*
  * cpy_rest.c
- * copy a byte trailer, ppc64 impl.
+ * copy a byte trailer, ppc impl.
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,13 +23,17 @@
  * $Id: $
  */
 
-#if defined(__powerpc64__) && 1 == HOST_IS_BIGENDIAN
+#if 1 == HOST_IS_BIGENDIAN
 // TODO: keep the wrong processors out
 /*
- * since we need to write to the high bits in xer,
- * i think this is only available in 64 bit mode.
- * If in little endian mode, this traps (execption ppc740 & ppc750)
- * Normaly this is also only avail on POWER, not PowerPC
+ * If in little endian mode, this traps (execption ppc740 & ppc750) or does
+ * nothing, or in ISA parlance it is "not supported for the server enviroment
+ * in little endian mode".
+ * Normaly this is also only avail on POWER, not PowerPC, or the other way
+ * rounds because these instructions are "category legacy move assist".
+ *
+ * Unfortunatly they are _exactly_ what we need!
+ * (and that in a RISC processor...)
  */
 # if _GNUC_PREREQ(4, 1)
 #  define PPC_MEM_CONSTRAIN	"Z"
@@ -38,12 +42,18 @@
 # endif
 char GCC_ATTR_FASTCALL *cpy_rest(char *dst, const char *src, unsigned i)
 {
-	register size_t a asm ("r5"); /* inline asm syntax gone wrong... */
-	register size_t b asm ("r6"); /* we can not allocate these on the inline asm, */
-	register size_t c asm ("r7"); /* r5 is an alternative of r (every register) */
-	register size_t d asm ("r8"); /* and positional arg 5, not ppc gen.purp.reg r5 */
+// TODO: r4 is used on Darwin?
+	register size_t a asm ("r4"); /* inline asm syntax gone wrong... */
+	register size_t b asm ("r5"); /* we can not allocate these on the inline asm, */
+	register size_t c asm ("r6"); /* r5 is an alternative of r (every register) */
+	register size_t d asm ("r7"); /* and positional arg 5, not ppc gen.purp.reg r5 */
 
-	asm volatile ("mtxer %0": : "r" (((size_t)i) << 57));
+	/*
+	 * these instructions work as advertised, if gcc is not
+	 * to confused to put stuff in the wrong registers...
+	 */
+
+	asm volatile ("mtxer %0": : "r" (i));
 	asm(
 		"lswx	%0, %y4"
 	: /* %0 */ "=r" (a),
