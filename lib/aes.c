@@ -2,7 +2,7 @@
  * aes.c
  * AES routines
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,6 +33,8 @@
 #  include "x86/aes.c"
 # elif defined(__arm__)
 #  include "arm/aes.c"
+# elif defined(__powerpc__) || defined(__powerpc64__)
+#  include "ppc/aes.c"
 # else
 	/*
 	 * we could create a altivec version, but it would be slower most

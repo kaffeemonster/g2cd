@@ -274,7 +274,7 @@ start_round:
 	prefetchw(dout);
 	/* middle of last round */
 	ihllinv = pshufb(aes_consts.sbolo, ilhinv);
-	ihllinv = veorq_u8(*++key_store, ihllinv);
+	ihllinv = veorq_u8(*key_store, ihllinv);
 	ilo     = pshufb(aes_consts.sbohi, ihlinv);
 	ilo     = veorq_u8(ilo, ihllinv);
 	in      = pshufb(ilo, aes_consts.sr[n]);

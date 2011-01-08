@@ -135,6 +135,7 @@ ATOMSRC = \
 AESSRC = \
 	$(MPL)/generic/aes.c \
 	$(MPL)/arm/aes.c \
+	$(MPL)/ppc/aes.c \
 	$(MPL)/x86/aes.c
 FLSSTSRC = \
 	$(MPL)/generic/flsst.c \
