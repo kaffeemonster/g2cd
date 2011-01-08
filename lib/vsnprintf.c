@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -165,6 +165,7 @@ struct format_spec
 			bool ip:1;
 			bool guid:1;
 			bool negative:1;
+			bool th_group:1;
 		} flags;
 		int xyz;
 	} u;
@@ -1988,6 +1989,11 @@ static const char *flag_I(char *buf, const char *fmt, struct format_spec *spec)
 	spec->u.flags.ip = true;
 	return format_dispatch(buf, fmt, spec);
 }
+static const char *flag_t(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->u.flags.th_group = true;
+	return format_dispatch(buf, fmt, spec);
+}
 
 /*
  * lenght mod
@@ -2089,7 +2095,7 @@ static const fmt_func format_table[256] =
 	/*          NUL,    SOH,    STX,    ETX,    EOT,    ENQ,    ACK,    BEL,     BS,     HT,     LF,     VT,     FF,     CR,     SO,     SI, */
 	/* 10 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*          DLE,    DC1,    DC2,    DC3,    DC4,    NAK,    SYN,    ETB,    CAN,     EM,    SUB,    ESC,     FS,     GS,     RS,     US, */
-	/* 20 */ flag_s, fmtnop, fmtnop, flag_h, unimpl,  lit_p, fmtnop, fmtnop, fmtnop, fmtnop, widths, flag_p, fmtnop, flag_m, prec_p, fmtnop,
+	/* 20 */ flag_s, fmtnop, fmtnop, flag_h, unimpl,  lit_p, fmtnop, flag_t, fmtnop, fmtnop, widths, flag_p, fmtnop, flag_m, prec_p, fmtnop,
 	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
 	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
