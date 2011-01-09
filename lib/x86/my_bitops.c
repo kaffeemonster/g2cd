@@ -456,7 +456,8 @@ static __init void identify_cpu(void)
 		 */
 		/* Centauer mirrors the 3DNow flag into the base plane */
 		cpu_feature_clear(CFEATURE_PBE);
-		if(5 == our_cpu.family) {
+		if(5 == our_cpu.family)
+		{
 			/* the tsc on early chips is buggy */
 			if(4 == our_cpu.model)
 				cpu_feature_clear(CFEATURE_TSC);
@@ -464,7 +465,9 @@ static __init void identify_cpu(void)
 			/* Winchip2 and above have 3DNow! */
 			if(our_cpu.model >= 8)
 				cpu_feature_set(CFEATURE_3DNOW);
-		} else if(5 < our_cpu.family) {
+		}
+		else if(5 < our_cpu.family)
+		{
 			/* poke on the centauer extended feature flags */
 			cpuids(&a, 0xC0000000UL);
 			if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {

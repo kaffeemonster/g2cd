@@ -43,7 +43,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const v
 			"sub	%2, (%%esp)\n\t"
 			"rep	movsb\n\t"
 			"mov	(%%esp), %2\n\t"
-			"and	$3, (%%esp)\n\t"
+			"andl	$3, (%%esp)\n\t"
 			"shr	$2, %2\n\t"
 			"rep	movsd\n\t"
 			"pop	%2\n\t"
