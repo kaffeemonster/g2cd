@@ -1,8 +1,8 @@
 /*
- * strnpcpy.c
- * strnpcpy for efficient concatination
+ * strlpcpy.c
+ * strlpcpy for efficient concatination
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,7 +24,7 @@
  */
 
 /*
- * strnpcpy - strncpy which returns the end of the copied region
+ * strlpcpy - strlcpy which returns the end of the copied region
  * dst: where to copy to
  * src: from where to copy
  * maxlen: the maximum length
@@ -42,12 +42,12 @@
 #ifdef I_LIKE_ASM
 # if defined(__i386__) || defined(__x86_64__)
 	/* works for both */
-#  include "x86/strnpcpy.c"
+#  include "x86/strlpcpy.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
-#  include "ppc/strnpcpy.c"
+#  include "ppc/strlpcpy.c"
 # else
-#  include "generic/strnpcpy.c"
+#  include "generic/strlpcpy.c"
 # endif
 #else
-# include "generic/strnpcpy.c"
+# include "generic/strlpcpy.c"
 #endif

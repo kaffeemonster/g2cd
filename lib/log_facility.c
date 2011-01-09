@@ -2,7 +2,7 @@
  * log_facility.c
  * logging logic/magic/functions
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -304,7 +304,7 @@ static int logg_internal(const enum loglevel level,
 	if(file)
 	{
 		retry_cnt = 0;
-		prefetch(strnpcpy);
+		prefetch(strlpcpy);
 		prefetch(file);
 		prefetch(func);
 		/*
@@ -319,7 +319,7 @@ static int logg_internal(const enum loglevel level,
 
 			stmp = sptr = buffer_start(*logg_buff);
 			remaining = buffer_remaining(*logg_buff);
-			rstart = strnpcpy(sptr, file, remaining);
+			rstart = strlpcpy(sptr, file, remaining);
 			remaining -= rstart - sptr;
 			if(unlikely(remaining < 7))
 				goto realloc;
@@ -327,7 +327,7 @@ static int logg_internal(const enum loglevel level,
 
 			*sptr++ = ':';
 			remaining--;
-			rstart = strnpcpy(sptr, func, remaining);
+			rstart = strlpcpy(sptr, func, remaining);
 			remaining -= rstart - sptr;
 			if(unlikely(remaining < 18)) /* make sure we have enough space */
 				goto realloc;

@@ -209,7 +209,7 @@
 		strchrnul;
 		strncasecmp_a;
 		strnlen;
-		strnpcpy;
+		strlpcpy;
 		strpcpy;
 	# tchar stuff
 		tchar_c1table;

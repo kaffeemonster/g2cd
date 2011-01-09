@@ -2,7 +2,7 @@
  * my_bitops.h
  * header-file for some global usefull bitbanging functions
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -72,7 +72,7 @@ LIB_MY_BITOPS_EXTRN(void *my_memmove(void *dst, const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(void *my_memchr(const void *s, int c, size_t n));
 LIB_MY_BITOPS_EXTRN(int strncasecmp_a(const char *s1, const char *s2, size_t n));
 char *strpcpy(char *restrict dst, const char *restrict src);
-char *strnpcpy(char *restrict dst, const char *restrict src, size_t maxlen);
+char *strlpcpy(char *restrict dst, const char *restrict src, size_t maxlen);
 # ifndef HAVE_STRNLEN
 size_t strnlen(const char *s, size_t maxlen) GCC_ATTR_PURE;
 #  define STRNLEN_DEFINED

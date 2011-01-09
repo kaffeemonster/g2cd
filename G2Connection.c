@@ -508,8 +508,8 @@ static bool ulpeer_what(g2_connection_t *to_con, size_t distance GCC_ATTR_UNUSED
 static bool uagent_what(g2_connection_t *to_con, size_t distance)
 {
 	size_t n = (distance < (sizeof(to_con->uagent) - 1))? distance : sizeof(to_con->uagent) - 1;
-	strncpy(to_con->uagent, buffer_start(*to_con->recv), n);
-	to_con->uagent[n] = '\0';
+	char *t = mempcpy(to_con->uagent, buffer_start(*to_con->recv), n);
+	*t = '\0';
 	to_con->u.accept.flags.uagent_ok = true;
 	logg_develd_old("found for User-Agent:\t\"%s\"\n", to_con->uagent);
 	return false;

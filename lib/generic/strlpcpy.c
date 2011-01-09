@@ -1,8 +1,8 @@
 /*
- * strnpcpy.c
- * strnpcpy for efficient concatination, generic implementation
+ * strlpcpy.c
+ * strlpcpy for efficient concatination, generic implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,7 +25,7 @@
 
 #define ALIGN_WANTED SOST
 
-char *strnpcpy(char *dst, const char *src, size_t maxlen)
+char *strlpcpy(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	size_t r;
@@ -201,5 +201,5 @@ OUT_SET:
 	return dst;
 }
 
-static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_slpcg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

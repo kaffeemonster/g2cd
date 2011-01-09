@@ -1,8 +1,8 @@
 /*
- * strnpcpy.c
- * strnpcpy for efficient concatination, x86 implementation
+ * strlpcpy.c
+ * strlpcpy for efficient concatination, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -60,14 +60,14 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen);
+static char *strlpcpy_SSE42(char *dst, const char *src, size_t maxlen);
 # endif
 #endif
-static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen);
+static char *strlpcpy_SSE2(char *dst, const char *src, size_t maxlen);
 #ifndef __x86_64__
-static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen);
+static char *strlpcpy_SSE(char *dst, const char *src, size_t maxlen);
 #endif
-static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
+static char *strlpcpy_x86(char *dst, const char *src, size_t maxlen);
 
 #define cpy_one_u32(dst, src, i, maxlen) \
 	if(likely(SO32M1 < i)) \
@@ -133,7 +133,7 @@ static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen);
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-static char *strnpcpy_SSE42(char *dst, const char *src, size_t maxlen)
+static char *strlpcpy_SSE42(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	size_t r;
@@ -215,7 +215,7 @@ CPY_NEXT:
 # endif
 #endif
 
-static char *strnpcpy_SSE2(char *dst, const char *src, size_t maxlen)
+static char *strlpcpy_SSE2(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	unsigned r;
@@ -289,7 +289,7 @@ CPY_NEXT:
 }
 
 #ifndef __x86_64__
-static char *strnpcpy_SSE(char *dst, const char *src, size_t maxlen)
+static char *strlpcpy_SSE(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 	unsigned r;
@@ -360,7 +360,7 @@ CPY_NEXT:
 }
 #endif
 
-static char *strnpcpy_x86(char *dst, const char *src, size_t maxlen)
+static char *strlpcpy_x86(char *dst, const char *src, size_t maxlen)
 {
 	size_t i;
 
@@ -429,29 +429,29 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))strnpcpy_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
+	{.func = (void (*)(void))strlpcpy_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif
 #endif
-	{.func = (void (*)(void))strnpcpy_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
+	{.func = (void (*)(void))strlpcpy_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
 #ifndef __x86_64__
-	{.func = (void (*)(void))strnpcpy_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
-	{.func = (void (*)(void))strnpcpy_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT)}},
+	{.func = (void (*)(void))strlpcpy_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
+	{.func = (void (*)(void))strlpcpy_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT)}},
 #endif
-	{.func = (void (*)(void))strnpcpy_x86,   .features = {}, .flags = CFF_DEFAULT},
+	{.func = (void (*)(void))strlpcpy_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen);
+static char *strlpcpy_runtime_sw(char *dst, const char *src, size_t maxlen);
 /*
  * Func ptr
  */
-static char *(*strnpcpy_ptr)(char *dst, const char *src, size_t maxlen) = strnpcpy_runtime_sw;
+static char *(*strlpcpy_ptr)(char *dst, const char *src, size_t maxlen) = strlpcpy_runtime_sw;
 
 /*
  * constructor
  */
-static GCC_ATTR_CONSTRUCT __init void strnpcpy_select(void)
+static GCC_ATTR_CONSTRUCT __init void strlpcpy_select(void)
 {
-	strnpcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
+	strlpcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
 /*
@@ -459,16 +459,16 @@ static GCC_ATTR_CONSTRUCT __init void strnpcpy_select(void)
  *
  * this is inherent racy, we only provide it if the constructer failes
  */
-static __init char *strnpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
+static __init char *strlpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
 {
-	strnpcpy_select();
-	return strnpcpy_ptr(dst, src, maxlen);
+	strlpcpy_select();
+	return strlpcpy_ptr(dst, src, maxlen);
 }
 
-char *strnpcpy(char *dst, const char *src, size_t maxlen)
+char *strlpcpy(char *dst, const char *src, size_t maxlen)
 {
-	return strnpcpy_ptr(dst, src, maxlen);
+	return strlpcpy_ptr(dst, src, maxlen);
 }
 
-static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_slpcx[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

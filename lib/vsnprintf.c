@@ -1647,7 +1647,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	}
 	else
 	{
-		t = strnpcpy(buf, s, maxlen);
+		t = strlpcpy(buf, s, maxlen);
 		diff = t - buf;
 		len += diff;
 		if(diff >= maxlen)

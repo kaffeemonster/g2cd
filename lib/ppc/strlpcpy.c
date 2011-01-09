@@ -1,6 +1,6 @@
 /*
- * strnpcpy.c
- * strnpcpy for efficient concatination, ppc implementation
+ * strlpcpy.c
+ * strlpcpy for efficient concatination, ppc implementation
  *
  * Copyright (c) 2008-2010 Jan Seiffert
  *
@@ -28,7 +28,7 @@
 # include <altivec.h>
 # include "ppc_altivec.h"
 
-char *strnpcpy(char *dst, const char *src, size_t maxlen)
+char *strlpcpy(char *dst, const char *src, size_t maxlen)
 {
 	vector unsigned char v0, vff, c, v_perm, low, high, mask, t;
 	size_t i, s_diff, d_diff, r, u;
@@ -59,11 +59,11 @@ char *strnpcpy(char *dst, const char *src, size_t maxlen)
 
 	d_diff = ALIGN_DOWN_DIFF(d, SOVUC);
 	v_perm = vec_lvsr(0, d);
-	mask = vec_perm(v0, vff, v_perm);
-	   t = vec_perm(c, c, v_perm);
-	 low = vec_sel(low, t, mask);
-	high = vec_sel(t, v0, mask);
-	   r = vec_any_eq(c, v0);
+	  mask = vec_perm(v0, vff, v_perm);
+	     t = vec_perm(c, c, v_perm);
+	   low = vec_sel(low, t, mask);
+	  high = vec_sel(t, v0, mask);
+	     r = vec_any_eq(c, v0);
 	if(r || i)
 		goto OUT_STORE;
 
@@ -120,9 +120,9 @@ OUT_STORE:
 	return (char *)d + u - r;
 }
 
-static char const rcsid_snpcg[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_slpcav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
-# include "../generic/strnlen.c"
+# include "../generic/strlpcpy.c"
 #endif
 /* EOF */

@@ -257,10 +257,10 @@ STRNCASECMP_ASRC = \
 	$(MPL)/parisc/strncasecmp_a.c \
 	$(MPL)/x86/strncasecmp_a.c \
 	$(MPL)/ppc/strncasecmp_a.c
-STRNPCPYSRC = \
-	$(MPL)/generic/strnpcpy.c \
-	$(MPL)/x86/strnpcpy.c \
-	$(MPL)/ppc/strnpcpy.c
+STRLPCPYSRC = \
+	$(MPL)/generic/strlpcpy.c \
+	$(MPL)/x86/strlpcpy.c \
+	$(MPL)/ppc/strlpcpy.c
 STRREVERSE_LSRC = \
 	$(MPL)/generic/strreverse_l.c \
 	$(MPL)/ppc/strreverse_l.c \
@@ -336,7 +336,7 @@ LIBASRCS = \
 	$(STRRCHRSRC) \
 	$(STRNCASECMP_ASRC) \
 	$(STRLENSRC) \
-	$(STRNPCPYSRC) \
+	$(STRLPCPYSRC) \
 	$(STRREVERSE_LSRC) \
 	$(TO_BASE16SRC) \
 	$(TO_BASE32SRC) \
@@ -390,7 +390,7 @@ LIBSRCS = \
 	$(MPL)/strchrnul.c \
 	$(MPL)/strncasecmp_a.c \
 	$(MPL)/strpcpy.c \
-	$(MPL)/strnpcpy.c \
+	$(MPL)/strlpcpy.c \
 	$(MPL)/strreverse_l.c \
 	$(MPL)/to_base16.c \
 	$(MPL)/to_base32.c \
@@ -426,7 +426,7 @@ BITOPOBJS = \
 	$(MPL)/strchrnul.o \
 	$(MPL)/strncasecmp_a.o \
 	$(MPL)/strpcpy.o \
-	$(MPL)/strnpcpy.o \
+	$(MPL)/strlpcpy.o \
 	$(MPL)/strreverse_l.o\
 	$(MPL)/to_base16.o \
 	$(MPL)/to_base32.o \
@@ -545,7 +545,7 @@ $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)
 $(MPL)/strrchr.o: $(STRRCHRSRC)
 $(MPL)/strncasecmp_a.o: $(STRNCASECMP_ASRC)
-$(MPL)/strnpcpy.o: $(STRNPCPYSRC)
+$(MPL)/strlpcpy.o: $(STRLPCPYSRC)
 $(MPL)/strreverse_l.o: $(STRREVERSE_LSRC)
 $(MPL)/to_base16.o: $(TO_BASE16SRC)
 $(MPL)/to_base32.o: $(TO_BASE32SRC)
