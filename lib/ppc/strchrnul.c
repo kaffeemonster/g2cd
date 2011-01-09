@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU-platforms, ppc implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 
@@ -37,8 +36,8 @@ char *strchrnul(const char *s, int c)
 	vector bool char m1, m2;
 	char *p;
 
-	prefetch(s);
-
+	/* only prefetch the first block of 512 byte */
+	vec_dst((const unsigned char *)s, 0x10200, 2);
 	/* transfer lower nibble */
 	v_c = vec_lvsl(c & 0x0F, (unsigned char *)NULL);
 	/* transfer upper nibble */
@@ -51,7 +50,7 @@ char *strchrnul(const char *s, int c)
 	v0 = vec_splat_u8(0);
 
 	p = (char *)ALIGN_DOWN(s, SOVUC);
-	x = vec_ldl(0, (const vector unsigned char *)p);
+	x = vec_ldl(0, (const unsigned char *)p);
 	m1 = vec_cmpeq(x, v0);
 	m2 = vec_cmpeq(x, v_c);
 	m1 = vec_or(m1, m2);
@@ -62,15 +61,16 @@ char *strchrnul(const char *s, int c)
 
 	while(vec_all_eq(m1, v0)) {
 		p += SOVUC;
-		x = vec_ldl(0, (const vector unsigned char *)p);
+		x = vec_ldl(0, (const unsigned char *)p);
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
+	vec_dss(2);
 	return (char *)(uintptr_t)p + vec_zpos(m1);
 }
 
-static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_scnav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/strchrnul.c"

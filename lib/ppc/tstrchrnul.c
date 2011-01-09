@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, ppc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 
@@ -35,10 +34,10 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	vector unsigned char v_perm;
 	vector unsigned short x;
 	vector bool short m1, m2;
-	char *p;
+	const char *p;
 
-	prefetch(s);
-
+	/* only prefetch the first block of 512 byte */
+	vec_dst(s, 0x10200, 2);
 	v0 = vec_splat_u16(0);
 
 	v_c = v0;
@@ -47,8 +46,8 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	v_c = vec_perm(v_c, v0, v_perm);
 	v_c = vec_splat(v_c, 0);
 
-	p = (char *)ALIGN_DOWN(s, SOVUC);
-	x = vec_ldl(0, (const vector unsigned short *)p);
+	p = (const char *)ALIGN_DOWN(s, SOVUC);
+	x = vec_ldl(0, (const unsigned short *)p);
 	m1 = vec_cmpeq(x, v0);
 	m2 = vec_cmpeq(x, v_c);
 	m1 = vec_or(m1, m2);
@@ -60,15 +59,16 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	while(vec_all_eq(m1, v0))
 	{
 		p += SOVUC;
-		x = vec_ldl(0, (const vector unsigned short *)p);
+		x = vec_ldl(0, (const unsigned short *)p);
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 		m1 = vec_or(m1, m2);
 	}
+	vec_dss(2);
 	return ((tchar_t *)(uintptr_t)p) + vec_zpos((vector bool char)m1)/sizeof(tchar_t);
 }
 
-static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tscnav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/tstrchrnul.c"

@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, ppc implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 
@@ -36,13 +35,13 @@ size_t strlen(const char *s)
 	vector unsigned char c;
 	const char *p;
 
-	prefetch(s);
-
+	/* only prefetch the first block of 512 byte */
+	vec_dst((const unsigned char *)s, 0x10200, 2);
 	v0 = vec_splat_u8(0);
 	v1 = vec_splat_u8(1);
 
 	p = (const char *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (const vector unsigned char *)p);
+	c = vec_ldl(0, (const unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
@@ -50,12 +49,13 @@ size_t strlen(const char *s)
 
 	while(!vec_any_eq(c, v0)) {
 		p += SOVUC;
-		c = vec_ldl(0, (const vector unsigned char *)p);
+		c = vec_ldl(0, (const unsigned char *)p);
 	}
+	vec_dss(2);
 	return p - s + vec_zpos(vec_cmpeq(c, v0));
 }
 
-static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_slav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/strlen.c"

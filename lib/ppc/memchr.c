@@ -2,7 +2,7 @@
  * memchr.c
  * memchr, ppc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 
@@ -35,9 +34,14 @@ void *my_memchr(const void *s, int c, size_t n)
 	vector unsigned char v_perm;
 	vector unsigned char x;
 	ssize_t f, k;
+	size_t block_num = DIV_ROUNDUP(n, 512);
 	const unsigned char *p;
+	unsigned j;
 
-	prefetch(s);
+	/* only do one prefetch, this covers nearly 128k */
+	j  = block_num >= 256 ? 0 : block_num << 16;
+	j |= 512;
+	vec_dst((const unsigned char *)s, j, 2);
 
 	/* transfer lower nibble */
 	v_c = vec_lvsl(c & 0x0F, (unsigned char *)NULL);
@@ -69,9 +73,8 @@ void *my_memchr(const void *s, int c, size_t n)
 		x = vec_perm(x, v0, v_perm);
 	}
 
-	if(vec_any_ne(x, v0)) {
+	if(vec_any_ne(x, v0))
 		goto OUT;
-	}
 	if(k > 0)
 		return NULL;
 
@@ -96,12 +99,16 @@ void *my_memchr(const void *s, int c, size_t n)
 		x = vec_perm(x, v0, v_perm);
 	}
 	if(!vec_any_ne(x, v0))
-		return NULL;
+		goto OUT_NULL;
 OUT:
+	vec_dss(2);
 	return (char *)(uintptr_t)p + vec_zpos((vector bool char)x);
+OUT_NULL:
+	vec_dss(2);
+	return NULL;
 }
 
-static char const rcsid_mc[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mcav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/memchr.c"

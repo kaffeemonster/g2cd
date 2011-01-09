@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, ppc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,10 +36,17 @@ size_t mem_spn_ff(const void *s, size_t len)
 	vector bool char ft;
 	const unsigned char *p;
 	ssize_t k;
+	size_t block_num;
+	unsigned j;
 
-	prefetch(s);
 	if(unlikely(!len))
 		return 0;
+
+	/* only do one prefetch, this covers nearly 128k */
+	block_num = DIV_ROUNDUP(len, 512);
+	j  = block_num >= 256 ? 0 : block_num << 16;
+	j |= 512;
+	vec_dst((const unsigned char *)s, j, 2);
 
 	v_ff = (vector unsigned char)vec_splat_s8(-1);
 
@@ -65,7 +72,7 @@ size_t mem_spn_ff(const void *s, size_t len)
 				goto OUT;
 		}
 		if(0 >= k)
-			return len;
+			goto OUT_LEN;
 		c = vec_ldl(0, (const vector unsigned char *)p);
 		k = SOVUC - k;
 K_SHIFT:
@@ -74,12 +81,16 @@ K_SHIFT:
 		v_perm = vec_lvsl(0, (unsigned char *)k);
 		c = vec_perm(c, v_ff, v_perm);
 		if(vec_all_eq(c, v_ff))
-			return len;
+			goto OUT_LEN;
 	}
 
 OUT:
+	vec_dss(2);
 	ft = vec_cmpeq(c, v_ff);
 	return (size_t)(p - (const unsigned char *)s) + vec_zpos(ft);
+OUT_LEN:
+	vec_dss(2);
+	return len;
 }
 
 static char const rcsid_msfalt[] GCC_ATTR_USED_VAR = "$Id: $";

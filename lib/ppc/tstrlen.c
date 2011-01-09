@@ -2,7 +2,7 @@
  * tstrlen.c
  * tstrlen, ppc implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 
@@ -36,15 +35,15 @@ size_t tstrlen(const tchar_t *s)
 	vector unsigned char c;
 	vector unsigned short x;
 	uint32_t r;
-	tchar_t *p;
+	const tchar_t *p;
 
-	prefetch(s);
-
+	/* only prefetch the first block of 512 byte */
+	vec_dst((const unsigned char *)s, 0x10200, 2);
 	v0 = vec_splat_u16(0);
 	v1 = vec_splat_u8(1);
 
-	p = (tchar_t *)ALIGN_DOWN(s, SOVUC);
-	c = vec_ldl(0, (const vector unsigned char *)p);
+	p = (const tchar_t *)ALIGN_DOWN(s, SOVUC);
+	c = vec_ldl(0, (const unsigned char *)p);
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)s);
 	c = vec_perm(c, v1, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)s);
@@ -53,13 +52,14 @@ size_t tstrlen(const tchar_t *s)
 
 	while(!vec_any_eq(x, v0)) {
 		p += SOVUC/sizeof(*p);
-		x = vec_ldl(0, (const vector unsigned short *)p);
+		x = vec_ldl(0, (const unsigned short *)p);
 	}
+	vec_dss(2);
 	r = vec_zpos((vector bool char)vec_cmpeq((vector unsigned char)x, (vector unsigned char)v0));
 	return p - s + r/sizeof(tchar_t);
 }
 
-static char const rcsid_tslp[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_tslpav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/tstrlen.c"

@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, ppc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,8 +23,7 @@
  * $Id: $
  */
 
-#if defined(__ALTIVEC__) && defined(__GNUC__)
-/* We use the GCC vector internals, to make things simple for us. */
+#if defined(__ALTIVEC__)
 # include <altivec.h>
 # include "ppc_altivec.h"
 /*
@@ -42,8 +41,8 @@ char *strrchr(const char *s, int c)
 	vector bool char m1, m2, l_m;
 	char *p, *l_match;
 
-	prefetch(s);
-
+	/* only prefetch the first block of 512 byte */
+	vec_dst((const unsigned char *)s, 0x10200, 2);
 	/* transfer lower nibble */
 	v_c = vec_lvsl(c & 0x0F, (unsigned char *)NULL);
 	/* transfer upper nibble */
@@ -80,6 +79,7 @@ char *strrchr(const char *s, int c)
 		m1 = vec_cmpeq(x, v0);
 		m2 = vec_cmpeq(x, v_c);
 	}
+	vec_dss(2);
 	if(vec_any_ne(m2, v0))
 	{
 		vector unsigned char v1 = (vector unsigned char)vec_splat_s8(-1);
@@ -95,7 +95,7 @@ char *strrchr(const char *s, int c)
 	return NULL;
 }
 
-static char const rcsid_srcp[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_srcpav[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 # include "ppc.h"
 # include "../generic/strrchr.c"

@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, ppc implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *

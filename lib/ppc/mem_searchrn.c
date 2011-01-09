@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, ppc implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -39,10 +39,17 @@ void *mem_searchrn(void *s, size_t len)
 	vector bool char last_rr;
 	char *p;
 	ssize_t k;
+	size_t block_num;
+	unsigned f;
 
-	prefetch(s);
 	if(unlikely(!s || !len))
 		return NULL;
+
+	/* only do one prefetch, this covers nearly 128k */
+	block_num = DIV_ROUNDUP(len, 512);
+	f  = block_num >= 256 ? 0 : block_num << 16;
+	f |= 512;
+	vec_dst((const unsigned char *)s, f, 2);
 
 	v_cr = vec_splat_u8('\r');
 	v_nl = vec_splat_u8('\n');
@@ -75,18 +82,23 @@ void *mem_searchrn(void *s, size_t len)
 			rr = vec_cmpeq(c, v_cr);
 			rn = vec_cmpeq(c, v_nl);
 
-			if(vec_any_eq(last_rr, rn))
+			if(vec_any_eq(last_rr, rn)) {
+				vec_dss(2);
 				return p - 1;
+			}
 START_LOOP:
 			last_rr = (vector bool char)vec_sld(v0, (vector unsigned char)rr, 1);
 			rn = (vector bool char)vec_sld(v0, (vector unsigned char)rn, 15);
 			rr = vec_and(rr, rn); /* get mask */
-			if(vec_any_ne(rr, v0))
+			if(vec_any_ne(rr, v0)) {
+				vec_dss(2);
 				return p + vec_zpos(rr);
+			}
 		}
 	} while(k > 0);
 	k = -k;
 K_SHIFT:
+	vec_dss(2);
 	v_perm = vec_lvsr(0, (unsigned char *)k);
 	c = vec_perm(v0, c, v_perm);
 	v_perm = vec_lvsl(0, (unsigned char *)k);
