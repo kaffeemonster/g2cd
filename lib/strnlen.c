@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -72,6 +72,8 @@ size_t strnlen(const char *s, size_t maxlen);
 #  include "alpha/strnlen.c"
 # elif defined(__arm__)
 #  include "arm/strnlen.c"
+# elif defined(__mips__)
+#  include "mips/strnlen.c"
 # elif defined(__ia64__)
 #  include "ia64/strnlen.c"
 # elif defined(__hppa__) || defined(__hppa64__)

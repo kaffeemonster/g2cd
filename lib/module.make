@@ -193,6 +193,8 @@ MEMCHRSRC = \
 	$(MPL)/generic/memchr.c \
 	$(MPL)/alpha/memchr.c \
 	$(MPL)/arm/memchr.c \
+	$(MPL)/ia64/memchr.c \
+	$(MPL)/parisc/memchr.c \
 	$(MPL)/x86/memchr.c \
 	$(MPL)/ppc/memchr.c
 MEMPOPCNTSRC = \
@@ -222,6 +224,7 @@ STRNLENSRC = \
 	$(MPL)/arm/strnlen.c \
 	$(MPL)/parisc/strnlen.c \
 	$(MPL)/ia64/strnlen.c \
+	$(MPL)/mips/strnlen.c \
 	$(MPL)/x86/strnlen.c \
 	$(MPL)/ppc/strnlen.c
 STRLENSRC = \

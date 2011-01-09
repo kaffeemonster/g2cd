@@ -2,7 +2,7 @@
  * my_mips.h
  * magic mips fudging
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,6 +34,11 @@ typedef long long a64;
 
 # define SOV4 (sizeof(v4i8))
 
+# if (__mips == 64 || defined(__mips64)) && (defined(_ABIN32) || defined(_LP64))
+#  define MY_MIPS_IS_64 1
+# else
+#  define MY_MIPS_IS_64 0
+# endif
 
 # if defined(__mips_loongson_vector_rev)
 #  include <loongson.h>
@@ -143,18 +148,18 @@ static inline unsigned nul_word_index_dsp(unsigned r)
 # endif
 }
 
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 typedef unsigned long long check_t;
-# undef has_nul_byte
-# undef has_nul_word
-# define has_nul_byte(x) has_nul_byte64(x)
-# define has_nul_word(x) has_nul_word64(x)
+#  undef has_nul_byte
+#  undef has_nul_word
+#  define has_nul_byte(x) has_nul_byte64(x)
+#  define has_nul_word(x) has_nul_word64(x)
 # else
 typedef unsigned check_t;
-# undef has_nul_byte
-# undef has_nul_word
-# define has_nul_byte(x) has_nul_byte32(x)
-# define has_nul_word(x) has_nul_word32(x)
+#  undef has_nul_byte
+#  undef has_nul_word
+#  define has_nul_byte(x) has_nul_byte32(x)
+#  define has_nul_word(x) has_nul_word32(x)
 # endif
 
 # define SOCT (sizeof(check_t))
@@ -164,7 +169,7 @@ typedef unsigned check_t;
 
 static inline unsigned nul_byte_index_mips(check_t r)
 {
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 #  if __mips < 32
 	if(HOST_IS_BIGENDIAN)
 		return nul_byte_index_b64(r);
@@ -213,7 +218,7 @@ static inline unsigned nul_byte_index_mips(check_t r)
 
 static inline unsigned nul_word_index_mips(check_t r)
 {
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 #  if __mips < 32
 	if(HOST_IS_BIGENDIAN)
 		return nul_word_index_b64(r);

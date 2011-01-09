@@ -2,7 +2,7 @@
  * memchr.c
  * memchr
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,6 +49,10 @@
 #  include "alpha/memchr.c"
 # elif defined(__arm__)
 #  include "arm/memchr.c"
+# elif defined(__ia64__)
+#  include "ia64/memchr.c"
+# elif defined(__hppa__) || defined(__hppa64__)
+#  include "parisc/memchr.c"
 # else
 #  include "generic/memchr.c"
 # endif

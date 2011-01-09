@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, mips implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -130,7 +130,7 @@ static inline sumt_t sideways_add(sumt_t sum, check_t x)
 	asm(
 		"dpau.h.qbl	%q0, %1, %2\n\t"
 		"dpau.h.qbr	%q0, %1, %2\n\t"
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 		"dsrl32	%1, %1, 0\n\t"
 		"dpau.h.qbl	%q0, %1, %2\n\t"
 		"dpau.h.qbr	%q0, %1, %2\n\t"

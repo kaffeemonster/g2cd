@@ -1,8 +1,8 @@
 /*
- * strnlen.c
- * strnlen for non-GNU platforms, parisc implementation
+ * memchr.c
+ * memchr, parisc implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,10 +25,10 @@
 
 #include "parisc.h"
 
-size_t strnlen(const char *s, size_t maxlen)
+void *my_memchr(const void *s, int c, size_t n)
 {
-	const char *p;
-	unsigned long r, t;
+	const unsigned char *p;
+	unsigned long r, t, mask;
 	long f, k;
 	prefetch(s);
 
@@ -40,16 +40,15 @@ size_t strnlen(const char *s, size_t maxlen)
 	 * We don't precheck for alignment.
 	 * Instead we "align hard", do one load "under the address",
 	 * mask the excess info out and afterwards we are fine to go.
-	 *
-	 * Even this beeing strNlen, this n can be seen as a "hint"
-	 * We can overread and underread, but should cut the result.
 	 */
 	f = ALIGN_DOWN_DIFF(s, SOUL);
-	k = SOUL - f - (long)maxlen;
+	k = SOUL - f - (long)n;
 	k = k > 0 ? k  : 0;
+	mask = (((size_t)c) & 0xFF) * 0x0101010101010101ULL;
 
-	p = (const char *)ALIGN_DOWN(s, SOUL);
-	r = *(const unsigned long *)p;
+	p  = (const unsigned char *)ALIGN_DOWN(s, SOUL);
+	r  = *(const unsigned long long *)p;
+	r ^= mask;
 	if(!HOST_IS_BIGENDIAN) {
 		r |= (~0ULL) >> ((SOUL - f) * BITS_PER_CHAR);
 		r |= (~0ULL) << ((SOUL - k) * BITS_PER_CHAR);
@@ -60,27 +59,29 @@ size_t strnlen(const char *s, size_t maxlen)
 	t = pa_is_z(r);
 	if(t) {
 		t = pa_find_z(r);
-		return t - f < maxlen ? t - f : maxlen;
+		return (char *)(uintptr_t)p + t;
 	} else if(k)
-		return maxlen;
+		return NULL;
 
-	maxlen -= SOUL - f;
+	n -= SOUL - f;
 	asm (
 		"1:\n\t"
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 		"cmpib,>>=	"PA_TZ"-1, %2, 2f\n\t"
-		"uxor,"PA_NBZ"	%1, %%r0, %%r0\n\t"
+		"uxor,"PA_NBZ"	%1, %3, %%r0\n\t"
 		"b,n	2f\n\t"
 		"b	1b\n\t"
 		"addi	-"PA_TZ", %2, %2\n"
 		"2:"
-		: "=r" (p),
-		  "=r" (r),
-		  "=r" (maxlen)
-		: "0" (p),
-		  "2" (maxlen)
+		: "=&r" (p),
+		  "=&r" (r),
+		  "=&r" (n)
+		: "r" (mask),
+		  "0" (p),
+		  "2" (n)
 	);
-	k = SOUL - (long)maxlen;
+	r ^= mask;
+	k = SOUL - (long)n;
 	k = k > 0 ? k : 0;
 	if(k)
 	{
@@ -90,13 +91,11 @@ size_t strnlen(const char *s, size_t maxlen)
 			r |= (~0ULL) >> ((SOUL - k) * BITS_PER_CHAR);
 	}
 	t = pa_is_z(r);
-	if(t) {
-		t = pa_find_z(r);
-		t = t < maxlen ? t : maxlen;
-	} else
-		t = maxlen;
-	return p - s + r;
+	if(!t)
+		return NULL;
+	t = pa_find_z(r);
+	return (char *)(uintptr_t)p + t;
 }
 
-static char const rcsid_snlpa[] GCC_ATTR_USED_VAR = "$Id: $";
+static char const rcsid_mcia64[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

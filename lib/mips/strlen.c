@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, mips implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -133,23 +133,26 @@ size_t strlen(const char *s)
 	if(r1)
 		return nul_byte_index_mips(r1);
 
-	p += SO32;
-# if __mips == 64 || defined(__mips64)
+	r = 0;
+# if MY_MIPS_IS_64 == 1
 	if(!IS_ALIGN(p, SOCT))
 	{
+		p += SO32;
 		r1 = *(const uint32_t *)p;
 		r1 = has_nul_byte32(r1);
-		r = 0;
 		if(r1)
 			r = r1;
-		else
-			p += SO32;
-	} else
+	}
 #endif
-		r = 0;
 
-	for(; !r; p += SOCT)
-		r = has_nul_byte(*(const check_t *)p);
+	if(!r)
+	{
+		p -= SOCT - SO32;
+		do {
+			p += SOCT;
+			r = has_nul_byte(*(const check_t *)p);
+		} while(!r);
+	}
 	return p - s + nul_byte_index_mips(r);
 }
 

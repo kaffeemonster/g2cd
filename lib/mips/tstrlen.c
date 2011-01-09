@@ -2,7 +2,7 @@
  * tstrlen.c
  * tstrlen, mips implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -117,6 +117,12 @@ size_t tstrlen(const tchar_t *s)
 	uint32_t r1;
 	unsigned shift;
 
+	/*
+	 * MIPS has, like most RISC archs, proplems
+	 * with constants. Long imm. (64 Bit) are very
+	 * painfull on MIPS. So do the first short tests
+	 * in 32 Bit for short strings
+	 */
 	p = (const char *)ALIGN_DOWN(s, SO32);
 	shift = ALIGN_DOWN_DIFF(s, SO32) * BITS_PER_CHAR;
 	r1 = *(const uint32_t *)p;
@@ -128,23 +134,26 @@ size_t tstrlen(const tchar_t *s)
 	if(r1)
 		return nul_word_index_mips(r1);
 
-	p += SO32;
-# if __mips == 64 || defined(__mips64)
+	r = 0;
+# if MY_MIPS_IS_64 == 1
 	if(!IS_ALIGN(p, SOCT))
 	{
+		p += SO32;
 		r1 = *(const uint32_t *)p;
 		r1 = has_nul_word32(r1);
-		r = 0;
 		if(r1)
 			r = r1;
-		else
-			p += SO32;
-	} else
+	}
 #endif
-		r = 0;
 
-	for(; !r; p += SOCT)
-		r = has_nul_word(*(const check_t *)p);
+	if(!r)
+	{
+		p -= SOCT - SO32;
+		do {
+			p += SOCT;
+			r = has_nul_word(*(const check_t *)p);
+		} while(!r);
+	}
 	return ((const tchar_t *)p) - s + nul_word_index_mips(r);
 }
 

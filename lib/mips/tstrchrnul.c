@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, mips implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -134,6 +134,12 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 		return ((tchar_t *)(uintptr_t)s) + tstrlen(s);
 	prefetch(s);
 
+	/*
+	 * MIPS has, like most RISC archs, proplems
+	 * with constants. Long imm. (64 Bit) are very
+	 * painfull on MIPS. So do the first short tests
+	 * in 32 Bit for short strings
+	 */
 	mask1 = (((uint32_t)c) & 0xFFFF) * 0x00010001;
 	p  = (const char *)ALIGN_DOWN(s, SO32);
 	shift = ALIGN_DOWN_DIFF(s, SO32) * BITS_PER_CHAR;
@@ -147,7 +153,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	if(HOST_IS_BIGENDIAN)
 		r1 >>= shift;
 
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 	if(!r1 && !IS_ALIGN(p, SOCT))
 	{
 		p += SO32;
@@ -161,14 +167,16 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	if(!r1)
 	{
 		check_t mask, x;
-		p += SO32;
+		p -= SOCT - SO32;
 		mask = (((check_t)c) & 0xFFFF) * MK_CC(0x00010001);
-		for(r = 0; !r; p += SOCT) {
+		do
+		{
+			p += SOCT;
 			x  = *(const check_t *)p;
 			r  = has_nul_word(x);
 			x ^= mask;
 			r |= has_nul_word(x);
-		}
+		} while(!r);
 	}
 	else
 		r = r1;

@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platforms, mips implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -150,7 +150,7 @@ char *strchrnul(const char *s, int c)
 	if(HOST_IS_BIGENDIAN)
 		r1 >>= shift;
 
-# if __mips == 64 || defined(__mips64)
+# if MY_MIPS_IS_64 == 1
 	if(!r1 && !IS_ALIGN(p, SOCT))
 	{
 		p += SO32;
@@ -164,14 +164,16 @@ char *strchrnul(const char *s, int c)
 	if(!r1)
 	{
 		check_t mask, x;
-		p += SO32;
+		p -= SOCT - SO32;
 		mask = (c & 0xFF) * MK_CC(0x01010101);
-		for(r = 0; !r; p += SOCT) {
+		do
+		{
+			p += SOCT;
 			x  = *(const check_t *)p;
 			r  = has_nul_byte(x);
 			x ^= mask;
 			r |= has_nul_byte(x);
-		}
+		} while(!r);
 	}
 	else
 		r = r1;
