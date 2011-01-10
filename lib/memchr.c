@@ -49,6 +49,8 @@
 #  include "alpha/memchr.c"
 # elif defined(__arm__)
 #  include "arm/memchr.c"
+# elif defined(__mips__)
+#  include "mips/memchr.c"
 # elif defined(__ia64__)
 #  include "ia64/memchr.c"
 # elif defined(__hppa__) || defined(__hppa64__)

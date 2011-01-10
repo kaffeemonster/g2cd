@@ -90,7 +90,7 @@ size_t strlen(const char *s)
 		"lw	%0, %5(%2)\n\t"
 		"cmpgu.eq.qb	%1, %4, %0\n\t"
 		"beqz	%1, 1b\n\t"
-		SZPRFX"addiu	%2, %2, %5\n\t"
+		SZPRFX"addiu	%2, %2, %5\n"
 		"2:\n\t"
 		".set reorder\n\t"
 	: /* %0 */ "=&r" (vt1),
@@ -143,7 +143,7 @@ size_t strlen(const char *s)
 		if(r1)
 			r = r1;
 	}
-#endif
+# endif
 
 	if(!r)
 	{

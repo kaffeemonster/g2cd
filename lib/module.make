@@ -193,6 +193,7 @@ MEMCHRSRC = \
 	$(MPL)/generic/memchr.c \
 	$(MPL)/alpha/memchr.c \
 	$(MPL)/arm/memchr.c \
+	$(MPL)/mips/memchr.c \
 	$(MPL)/ia64/memchr.c \
 	$(MPL)/parisc/memchr.c \
 	$(MPL)/x86/memchr.c \
