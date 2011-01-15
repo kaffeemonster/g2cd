@@ -2,7 +2,7 @@
 # configure.ac
 # autoconf input for our foo
 #
-# Copyright (c) 2010 Jan Seiffert
+# Copyright (c) 2010-2011 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -196,7 +196,7 @@ if test x"$disable_bit_instr" = xno; then
 # We sometimes need to find the index of a bit. This can be
 # done fast and cheap if your arch has instructions to scan
 # for a bit (bsf, cntlz). popcnt would also work, but is a
-# bead idea if it is slow like on sparc (50 times slower than
+# bad idea if it is slow like on sparc (50 times slower than
 # our generic bitmagic). Sparclite/Sparclet have a scan
 # instruction (ffs), it might help.
 	AC_DEFINE(HAVE_BIT_INSTR, 1, arch has bit manipulation instruction)
@@ -382,7 +382,7 @@ AX_CHECK_LINKER_FLAGS([-Wl,--large-address-aware],
                       [LDFLAGS="-Wl,--large-address-aware $LDFLAGS"],
                       [])
 
-if test "$use_mapfiles" = yes; then
+if test x"$use_mapfiles" = xyes; then
 	t_file_name=`mktemp`
 	echo "{};" >> "$t_file_name"
 	AX_CHECK_LINKER_FLAGS([-Wl,-M,"$t_file_name"],
@@ -411,6 +411,10 @@ if test x"$my_enable_debug" = xno; then
 		*powerpc64-*)
 			check_for_prefetch_loop_array=yes;;
 		*x86_64-*)
+			check_for_prefetch_loop_array=yes;;
+		*mips*)
+			check_for_prefetch_loop_array=yes;;
+		*ia64-*)
 			check_for_prefetch_loop_array=yes;;
 		*)
 			;;
@@ -457,7 +461,7 @@ case "$host" in
 	*)
 		;;
 esac
-if test "$as_tst_needed" != no; then
+if test x"$as_tst_needed" != xno; then
 	AS_CHECK_FEATURE(SSSE3, as_cv_ssse3_tst, [-c], [pmaddubsw %xmm5, %xmm0], [susp_binutils=217])
 	if test x"$as_cv_ssse3_tst" != xno; then
 		AS_CHECK_FEATURE(SSE4.2, as_cv_sse42_tst, [-c], [pcmpestri $0b0010100, (%eax), %xmm1], [susp_binutils=218])
@@ -491,7 +495,7 @@ m4_include([m4/ax_check_zlib.m4])
 AX_CHECK_ZLIB
 
 # keep this above the dbm test, so when cross compiling and
-# pkc-config takes the host libs, things brake
+# pkg-config takes the host libs, things brake
 m4_include([m4/pkg.m4])
 if test x"$disable_dbus" = xno; then
 	PKG_CHECK_EXISTS([dbus-1],
@@ -505,7 +509,7 @@ fi
 
 # do you have db.h or ndbm.h?
 AC_CHECK_HEADER([db.h], [have_db_h=yes],[have_db_h=no][])
-if test "$have_db_h" = yes; then
+if test x"$have_db_h" = xyes; then
 	AC_MSG_CHECKING([for ndbm interface in db.h])
 	AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
 	                   [
@@ -523,7 +527,7 @@ if test "$have_db_h" = yes; then
 	                  [have_db_h=no
 	                   AC_MSG_RESULT([no])])
 	
-	if test "$have_db_h" = yes; then
+	if test x"$have_db_h" = xyes; then
 		AC_MSG_CHECKING([for ndbm interface in -ldb])
 		backup_LIBS="$LIBS"
 		LIBS="-ldb $LIBS"
@@ -544,13 +548,13 @@ if test "$have_db_h" = yes; then
 		                AC_MSG_RESULT([yes])],
 		               [have_db_h=no
 		                AC_MSG_RESULT([no])])
-		if test "$have_db_h" = no; then
+		if test x"$have_db_h" = xno; then
 			LIBS="$backup_LIBS"
 		fi
 	fi
 fi
 
-if test "$have_db_h" = no; then
+if test x"$have_db_h" = xno; then
 	AC_CHECK_HEADER([ndbm.h], [],[][AC_MSG_ERROR(can not find an ndbm provider!)])
 	AC_SEARCH_LIBS([dbm_open], [ndbm dbm], [], [AC_MSG_ERROR(can not find ndbm!)])
 fi
@@ -712,7 +716,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(
                 need_epoll_compat=yes
                 AC_MSG_RESULT([no])])
 
-if test "$need_epoll_compat" = yes; then
+if test x"$need_epoll_compat" = xyes; then
 
 # Linux with old userland and 2.6 Kernel
 	AC_CHECK_DECL([__NR_epoll_create], [epoll_kepoll=yes], [], [[#include <sys/syscall.h>]])
@@ -770,19 +774,19 @@ if test "$need_epoll_compat" = yes; then
 	               [AC_MSG_RESULT([no])])
 
 # try to find the "best"
-	if test "$epoll_kepoll" = yes; then
+	if test x"$epoll_kepoll" = xyes; then
 		AC_DEFINE(HAVE_KEPOLL, 1, Define to 1 if the kernel has epoll)
 	else
-		if test "$epoll_eport" = yes; then
+		if test x"$epoll_eport" = xyes; then
 			AC_DEFINE(HAVE_EPORT, 1, Define to 1 if the kernel has event ports)
 		else
-			if test "$epoll_kqueue" = yes; then
+			if test x"$epoll_kqueue" = xyes; then
 				AC_DEFINE(HAVE_KQUEUE, 1, Define to 1 if the kernel has kqueue)
 			else
-				if test "$epoll_devpoll" = yes; then
+				if test x"$epoll_devpoll" = xyes; then
 					AC_DEFINE(HAVE_DEVPOLL, 1, Define to 1 if the kernel /dev/poll)
 				else
-					if test "$epoll_pollset" = yes; then
+					if test x"$epoll_pollset" = xyes; then
 						AC_DEFINE(HAVE_POLLSET, 1, Define to 1 if the kernel pollset)
 					else
 						AC_DEFINE(HAVE_POLL, 1, Define to 1 if the kernel has poll)
@@ -810,7 +814,7 @@ AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton])
 
-if test "$strerror_mtsafe" = yes; then
+if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)
 fi
 

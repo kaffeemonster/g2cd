@@ -128,6 +128,7 @@ DBGFLAGS += -foptimize-sibling-calls
 #ARCH = cortex-a8
 #ARCH = ev67
 #ARCH = mckinley
+#ARCH = loongson2f
 # set the march
 #ARCH_FLAGS += -march=$(ARCH)
 #ARCH_FLAGS += -mcpu=$(ARCH)
@@ -137,6 +138,9 @@ DBGFLAGS += -foptimize-sibling-calls
 #ARCH_FLAGS += -mfpu=neon -mfloat-abi=softfp
 # 64 Bit?
 #ARCH_FLAGS += -m64
+#ARCH_FLAGS += -mabi=64
+#ARCH_FLAGS += -mips64
+#ARCH_FLAGS += -mips64 -mdsp -Wa,-mdsp
 # x86
 #ARCH_FLAGS += -momit-leaf-frame-pointer
 #ARCH_FLAGS += -maccumulate-outgoing-args

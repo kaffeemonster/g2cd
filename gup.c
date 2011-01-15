@@ -2,7 +2,7 @@
  * gup.c
  * grand unified poller
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -58,28 +58,30 @@
 #include "lib/hzp.h"
 #include "lib/my_bitops.h"
 
+#define NUM_EEVENT 8
+
 /* data-structures */
 static struct worker_sync {
 	some_fd epollfd;
 	some_fd from_main;
-	char padding[128 - 2 * sizeof(int)]; /* move at least a cacheline between data */
-	volatile bool wait;
+	char padding[128 - 2 * sizeof(some_fd)]; /* move at least a cacheline between data */
 	volatile bool keep_going;
 } worker;
 
 static void clean_up_gup(int);
 static bool handle_abort(struct simple_gup *, struct epoll_event *);
+static bool handle_gups(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], g2_connection_t **lcon, int num);
+static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev);
 
 static void *gup_loop(void *param)
 {
+// TODO: maybe take 4, or more?
+	struct epoll_event eevents[NUM_EEVENT];
 	struct norm_buff *lbuff[MULTI_RECV_NUM];
 	g2_connection_t *lcon = NULL;
-	int num_poll = 0;
-	int index_poll = 0;
-	unsigned i;
+	int num_poll, i;
+	int refill_count = EVENT_SPACE / 2;
 
-	unsigned refill_count = EVENT_SPACE / 2;
-	bool lcon_refresh_needed = false;
 	/* make our hzp ready */
 	hzp_alloc();
 	g2_packet_local_alloc_init();
@@ -96,7 +98,6 @@ static void *gup_loop(void *param)
 			goto out;
 		}
 	}
-	num_poll = 0;
 	/* fill connection buffer */
 	lcon = g2_con_get_free();
 	if(!lcon) {
@@ -113,28 +114,15 @@ static void *gup_loop(void *param)
 
 	while(worker.keep_going)
 	{
-// TODO: maybe take 4, or more?
-		struct epoll_event eevents[3];
-		union gup *guppie;
-		struct epoll_event *ev = &eevents[0];
-		bool repoll = true, kg;
-
-		if(lcon_refresh_needed) {
-			g2_con_clear(lcon);
-			lcon_refresh_needed = false;
-		}
 		for(i = 0; i < MULTI_RECV_NUM; i++) {
 			if(!lbuff[i])
 				lbuff[i] = recv_buff_local_get();
 		}
-		if(!(--refill_count)) {
+		if(0 >= refill_count) {
 			recv_buff_local_refill();
 			g2_packet_local_refill();
-			refill_count = EVENT_SPACE / 2;
+			refill_count += EVENT_SPACE / 2;
 		}
-
-		if(!worker.keep_going)
-			break;
 
 		/*
 		 * Originaly we let one worker thread poll, retrieving a big
@@ -160,12 +148,12 @@ static void *gup_loop(void *param)
 		 * (Which is not bad perse, somewhere there has to be a
 		 * lock, at least in the kernel to make the syscall
 		 * concurrent save).
+		 *
 		 * But to make matters worse reality is a bitch:
 		 * When a lock can not be taken in userspace the
 		 * libpthread has to fall back to some kernel support
 		 * to get the sleeping, and conditionals are an extra
 		 * complicated beast.
-		 *
 		 * Under (2.6) Linux this is where futexes come into
 		 * play. They are the "new" fast kernel support for such
 		 * things. But locking is hard and since this was new
@@ -173,10 +161,9 @@ static void *gup_loop(void *param)
 		 * corner cases (normally cases not used by libpthread,
 		 * stuff if you would use the syscall directly with
 		 * rigged parameters), fixed in later kernel versions.
-		 *
-		 * Still i managed to run into one on an old 2.6.9-vserver
-		 * when the 4 core machine got busy (no cputime usage,
-		 * but high lock rates).
+		 *    Still i managed to run into one on an old 2.6.9-
+		 * vserver when the 4 core machine got busy (no cputime
+		 * usage, but high lock rates).
 		 * Total userspace lockup, you can still ping the machine,
 		 * tcp connections still 3-way handshaked (so the kernel
 		 * is alive and kicking), but userspace is dead, ALL of
@@ -196,102 +183,27 @@ static void *gup_loop(void *param)
 		 * should manage the locking.
 		 * Our epoll emulations have to do the locking if they
 		 * need one.
-		 * We take 3 events (which may hurt the poll based
-		 * emulation badly), to not wander off for to long, but
-		 * still "suck up" the worst offending events, udp & accept
-		 * while still consuming at least one event from a tcp
-		 * connection.
 		 *
 		 * And it works beautifull, the kernel "round robins"
 		 * the threads as early as an event arrives giving nice
 		 * concurency.
 		 * Oneshot mode was the right decission.
 		 */
-//TODO: rethink event distribution
-		do
-		{
-			if(!worker.keep_going)
-				goto out;
+		num_poll = do_the_poll(eevents, anum(eevents));
+		if(0 > num_poll)
+			break;
 
-			if(index_poll >= num_poll) {
-				num_poll = my_epoll_wait(worker.epollfd, eevents, anum(eevents), 10000);
-				if(0 < num_poll)
-					update_local_time();
-				index_poll = 0;
-			}
-			repoll = false;
-			switch(num_poll)
-			{
-			default:
-				ev = &eevents[index_poll++];
-				break;
-			/* Something bad happened */
-			case -1:
-				if(EINTR != errno)
-				{
-					/* Print what happened */
-					logg_errno(LOGF_ERR, "poll");
-					/* and get out here (at the moment) */
-					worker.keep_going = false;
-					break;
-				}
-			/* Nothing happened (or just the Timeout) */
-			case 0:
-				repoll = true;
-				break;
-			}
-		} while(repoll);
-
+		refill_count -= num_poll;
 		/* use result */
-		guppie = ev->data.ptr;
-		if(unlikely(!guppie)) {
-			logg_devel("no guppie?");
-			continue;
-		}
-		kg = true;
-		switch(guppie->gup)
-		{
-		case GUP_G2CONNEC_HANDSHAKE:
-			handle_con_a(ev, lbuff, worker.epollfd);
+		if(!handle_gups(eevents, lbuff, &lcon, num_poll))
 			break;
-		case GUP_G2CONNEC:
-			handle_con(ev, lbuff, worker.epollfd);
-			break;
-		case GUP_ACCEPT:
-			if(ev->events & (uint32_t)EPOLLIN)
-			{
-				if(handle_accept_in(&guppie->s_gup, lcon, worker.epollfd)) {
-					lcon = g2_con_get_free();
-					if(unlikely(!lcon))
-						kg = false;
-//TODO: a master abort is not the best way...
-				} else
-					lcon_refresh_needed = true;
-			}
-			if(ev->events & ~((uint32_t)EPOLLIN|EPOLLONESHOT))
-				kg = handle_accept_abnorm(&guppie->s_gup, ev, worker.epollfd);
-			break;
-		case GUP_UDP:
-			{
-				for(i = 0; i < MULTI_RECV_NUM; i++) {
-					if(!lbuff[i])
-						lbuff[i] = recv_buff_local_get(); /* try to fill in missing buffers */
-				}
-				handle_udp(ev, lbuff, worker.epollfd);
-			}
-			break;
-		case GUP_ABORT:
-			kg = handle_abort(&guppie->s_gup, ev);
-			break;
-		}
-		if(!kg && worker.keep_going) {
-			ssize_t w_res;
-			worker.keep_going = false;
-			do {
-				w_res = write(worker.from_main, "stop!", str_size("stop!"));
-			} while(str_size("stop!") != w_res && EINTR == errno);
-			break;
-		}
+	}
+	if(worker.keep_going) {
+		ssize_t w_res;
+		worker.keep_going = false;
+		do {
+			w_res = write(worker.from_main, "stop!", str_size("stop!"));
+		} while(str_size("stop!") != w_res && EINTR == errno);
 	}
 
 out:
@@ -306,6 +218,163 @@ out:
 		pthread_exit(NULL);
 	/* only the creator thread should get out here */
 	return NULL;
+}
+
+static int check_for_accept(struct epoll_event *ev, g2_connection_t **lcon, int num)
+{
+	int i;
+
+	for(i = 0; i < num; i++)
+	{
+		union gup *guppie = ev[i].data.ptr;
+
+		if(unlikely(!guppie)) {
+			logg_devel("no guppie?");
+			continue;
+		}
+		if(GUP_ACCEPT != guppie->gup)
+			continue;
+
+		if(!worker.keep_going)
+			return -1;
+
+		if(ev[i].events & (uint32_t)EPOLLIN)
+		{
+			if(handle_accept_in(&guppie->s_gup, *lcon, worker.epollfd)) {
+				*lcon = g2_con_get_free();
+				if(unlikely(!*lcon))
+					return -1;
+//TODO: a master abort is not the best way...
+			} else
+				g2_con_clear(*lcon);
+		}
+		if(ev[i].events & ~((uint32_t)EPOLLIN|EPOLLONESHOT)) {
+			if(!handle_accept_abnorm(&guppie->s_gup, &ev[i], worker.epollfd))
+				return -1;
+		}
+
+		num--;
+		if(num - i)
+			memmove(&ev[i], &ev[i+1], (num - i) * sizeof(*ev));
+		i--;
+	}
+	return i;
+}
+
+static int check_for_udp(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], int num)
+{
+	int i;
+
+	for(i = 0; i < num; i++)
+	{
+		unsigned j;
+		union gup *guppie = ev[i].data.ptr;
+
+		if(unlikely(!guppie)) {
+			logg_devel("no guppie?");
+			continue;
+		}
+		if(GUP_UDP != guppie->gup)
+			continue;
+
+		for(j = 0; j < MULTI_RECV_NUM; j++) {
+			if(!lbuff[j])
+				lbuff[j] = recv_buff_local_get(); /* try to fill in missing buffers */
+		}
+
+		if(!worker.keep_going)
+			return 0;
+
+		handle_udp(&ev[i], lbuff, worker.epollfd);
+		num--;
+		if(num - i)
+			memmove(&ev[i], &ev[i+1], (num - i) * sizeof(*ev));
+		i--;
+	}
+	return i;
+}
+
+static bool handle_gups(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], g2_connection_t **lcon, int num)
+{
+	int i;
+
+	/* first check for accept sockets, to "free" them with minimal latency */
+	num = check_for_accept(ev, lcon, num);
+	if(0 > num)
+		return false;
+	/* then check for UDP, so they are also free again with less latency */
+	num = check_for_udp(ev, lbuff, num);
+
+	/* now handle all other socket types */
+	for(i = 0; i < num; i++)
+	{
+		union gup *guppie = ev[i].data.ptr;
+		unsigned j;
+
+		if(unlikely(!guppie)) {
+			logg_devel("no guppie?");
+			continue;
+		}
+		for(j = 0; j < MULTI_RECV_NUM; j++) {
+			if(!lbuff[j])
+				lbuff[j] = recv_buff_local_get();
+		}
+		if(!worker.keep_going)
+			return false;
+
+		switch(guppie->gup)
+		{
+		case GUP_G2CONNEC_HANDSHAKE:
+			handle_con_a(&ev[i], lbuff, worker.epollfd);
+			break;
+		case GUP_G2CONNEC:
+			handle_con(&ev[i], lbuff, worker.epollfd);
+			break;
+		case GUP_ABORT:
+			if(!handle_abort(&guppie->s_gup, &ev[i]))
+				return false;
+			break;
+		default:
+			break;
+		}
+	}
+	return true;
+}
+
+static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev)
+{
+	bool repoll;
+	int num_poll;
+
+	do
+	{
+		if(!worker.keep_going)
+			return -1;
+
+		num_poll = my_epoll_wait(worker.epollfd, eevents, num_ev, 10000);
+		repoll = false;
+		switch(num_poll)
+		{
+		default:
+			update_local_time();
+			break;
+		/* Something bad happened */
+		case -1:
+			if(EINTR != errno)
+			{
+				/* Print what happened */
+				logg_errno(LOGF_ERR, "poll");
+				/* and get out here (at the moment) */
+				worker.keep_going = false;
+				break;
+			}
+		/* Nothing happened (or just the Timeout) */
+		case 0:
+			repoll = true;
+			break;
+		}
+	} while(repoll);
+	return num_poll;
 }
 
 void *gup(void *param)
