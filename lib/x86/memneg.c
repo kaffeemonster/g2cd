@@ -2,7 +2,7 @@
  * memneg.c
  * neg two memory region efficient, x86 implementation
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -76,20 +76,22 @@ static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, si
 #include "memneg_tmpl.c"
 #undef HAVE_3DNOW
 
-#define HAVE_SSE3
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3
-static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memneg_tmpl.c"
-
-#define HAVE_3DNOW
-#undef ARCH_NAME_SUFFIX
-#define ARCH_NAME_SUFFIX _SSE3_3DNOW
-static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
-#include "memneg_tmpl.c"
-#undef HAVE_3DNOW
-
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
+#  define HAVE_SSE3
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3
+static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#  include "memneg_tmpl.c"
+
+#  define HAVE_3DNOW
+#  undef ARCH_NAME_SUFFIX
+#  define ARCH_NAME_SUFFIX _SSE3_3DNOW
+static void *DFUNC_NAME(memneg, ARCH_NAME_SUFFIX)(void *dst, const void *src, size_t len);
+#  include "memneg_tmpl.c"
+#  undef HAVE_3DNOW
+# endif
+
 # if HAVE_BINUTILS >= 219
 #  define HAVE_AVX
 #  undef ARCH_NAME_SUFFIX

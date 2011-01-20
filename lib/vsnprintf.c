@@ -720,7 +720,7 @@ MAKE_NFUNC( nD, unsigned long long)
 
 static const char *vnDDtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-#ifdef HAVE_TIMODE
+#ifdef COMPILER_CAN_VAARG_TIMODE
 	/* this will let the compiler barf... */
 	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
 #else
@@ -1425,7 +1425,7 @@ static const char *vDtoa(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *vDDtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
-#ifdef HAVE_TIMODE
+#ifdef COMPILER_CAN_VAARG_TIMODE
 	/* this will let the compiler barf... */
 	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
 #else
@@ -1452,7 +1452,7 @@ static const char *vDtoxa(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *vDDtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
-#ifdef HAVE_TIMODE
+#ifdef COMPILER_CAN_VAARG_TIMODE
 	/* this will let the compiler barf... */
 	__uint128 n GCC_ATTRIB_UNUSED = va_arg(spec->ap, __uint128);
 #else

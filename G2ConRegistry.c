@@ -2,7 +2,7 @@
  * G2ConRegistry.c
  * Central G2Connection registry
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -892,7 +892,7 @@ static noinline void do_global_update(struct qhtable *new_master, struct g2_ht_b
 		}
 
 		/* swap in the new qht */
-		old_sub = atomic_px(new_sub, (atomicptr_t *)&b->qht);
+		old_sub = atomic_px(new_sub, (atomicptr_t *)(uintptr_t)&b->qht);
 		/* bring out the gimp */
 		g2_qht_put(old_sub);
 	}

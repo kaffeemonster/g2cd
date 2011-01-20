@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2010 Jan Seiffert
+ * Copyright (c) 2004 - 2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -224,9 +224,12 @@
 #endif
 
 #if _GNUC_PREREQ (3,1)
+# undef noinline
 # define noinline GCC_ATTRIB(__noinline__)
 #else
-# define noinline
+# ifndef noinline
+#  define noinline
+# endif
 #endif
 
 #if _GNUC_PREREQ (3,1)

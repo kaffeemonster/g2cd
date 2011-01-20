@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, x86 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -361,11 +361,15 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"punpckhqdq	%%xmm0, %%xmm0\n\t"
 		"paddq	%%xmm5, %%xmm0\n\t"
 #  ifdef __x86_64__
+#   ifndef HAVE_MOVQ_XMM_GPR
+		".byte 0x66, 0x48, 0x0f, 0x7e, 0xc0\n\t"
+#   else
 		"movq	%%xmm0, %0\n\t"
+#   endif
 #  else
 		"movd	%%xmm0, %0\n\t"
 #  endif
-	: /* %0 */ "="CL"r" (ret),
+	: /* %0 */ "="CL"a" (ret),
 	  /* %1 */ "="CL"r" (cnt1),
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
@@ -836,11 +840,15 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"punpckhqdq	%%xmm0, %%xmm0\n\t"
 		"paddq	%%xmm5, %%xmm0\n\t"
 #  ifdef __x86_64__
+#   ifndef HAVE_MOVQ_XMM_GPR
+		".byte 0x66, 0x48, 0x0f, 0x7e, 0xc0\n\t"
+#   else
 		"movq	%%xmm0, %0\n\t"
+#   endif
 #  else
 		"movd	%%xmm0, %0\n\t"
 #  endif
-	: /* %0 */ "="CL"r" (ret),
+	: /* %0 */ "="CL"a" (ret),
 	  /* %1 */ "="CL"r" (cnt1),
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
@@ -1158,11 +1166,15 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"punpckhqdq	%%xmm0, %%xmm0\n\t"
 		"paddq	%%xmm3, %%xmm0\n\t"
 #ifdef __x86_64__
+# ifndef HAVE_MOVQ_XMM_GPR
+		".byte 0x66, 0x48, 0x0f, 0x7e, 0xc0\n\t"
+# else
 		"movq	%%xmm0, %0\n\t"
+# endif
 #else
 		"movd	%%xmm0, %0\n\t"
 #endif
-	: /* %0 */ "="CL"r" (ret),
+	: /* %0 */ "="CL"a" (ret),
 	  /* %1 */ "="CL"r" (cnt),
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
@@ -1470,7 +1482,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"punpckhdq	%%mm0, %%mm0\n\t"
 		"paddd	%%mm3, %%mm0\n\t"
 		"movd	%%mm0, %0\n\t"
-	: /* %0 */ "="CL"r" (ret),
+	: /* %0 */ "="CL"a" (ret),
 	  /* %1 */ "="CL"r" (cnt),
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
@@ -1806,7 +1818,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"punpckhdq	%%mm0, %%mm0\n\t"
 		"paddd	%%mm3, %%mm0\n\t"
 		"movd	%%mm0, %0\n\t"
-	: /* %0 */ "="CL"r" (ret),
+	: /* %0 */ "="CL"a" (ret),
 	  /* %1 */ "="CL"r" (cnt),
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)

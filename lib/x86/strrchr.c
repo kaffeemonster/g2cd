@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, x86 implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -236,7 +236,7 @@ static char *strrchr_SSE41(const char *s, int c)
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
-		: /* %0 */ "=&r" (ret),
+		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t),
 		  /* %3 */ "=&r" (m),
@@ -333,7 +333,7 @@ static char *strrchr_SSSE3(const char *s, int c)
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
-		: /* %0 */ "=&r" (ret),
+		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t),
 		  /* %3 */ "=&r" (m),
@@ -435,7 +435,7 @@ static char *strrchr_SSE2(const char *s, int c)
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
-		: /* %0 */ "=&r" (ret),
+		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t),
 		  /* %3 */ "=&r" (m),
@@ -527,10 +527,10 @@ static char *strrchr_SSE(const char *s, int c)
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
-		: /* %0 */ "=&r" (ret),
+		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=r" (p),
 		  /* %2 */ "=c" (t),
-		  /* %3 */ "=r" (m),
+		  /* %3 */ "=q" (m),
 		  /* %4 */ "=r" (p_o)
 		: /* %5 */ "m" (s),
 		  /* %6 */ "m" (c)

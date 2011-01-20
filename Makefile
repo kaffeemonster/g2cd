@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogerated
 #
-# Copyright (c) 2004 - 2010 Jan Seiffert
+# Copyright (c) 2004 - 2011 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -473,11 +473,25 @@ dist: $(TARED_FILES)
 	@mkdir `cat .fname`
 	@for da_dir in $(TARED_DIRS) ; do mkdir `cat .fname`/$$da_dir ; done
 	@for da_file in $(TARED_FILES) ; do ln $$da_file `cat .fname`/$$da_file ; done
-	@$(PORT_PR) "\tTAR[$(DISTNAME)]\n"
+	@$(PORT_PR) "\tTAR[`cat .fname`]\n"
 	@tar chf `cat .fname`.tar `cat .fname`
-	@-(($(PORT_PR) "\tGZIP[$(DISTNAME).tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[$(DISTNAME).tar]\n"; compress `cat .fname`.tar))
+	@-(($(PORT_PR) "\tGZIP[`cat .fname`.tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[`cat .fname`.tar]\n"; compress `cat .fname`.tar))
 	@$(PORT_PR) "please check if packet is correct!\n\n"
 	@-$(RM) -rf `cat .fname` .fname
+
+distrevno: $(TARED_FILES)
+	@$(PORT_PR) $(DISTNAME)-r`bzr revno` > .fname
+	@-$(RM) -rf `cat .fname`
+	@$(PORT_PR) "\tPREP[`cat .fname`]\n"
+	@mkdir `cat .fname`
+	@for da_dir in $(TARED_DIRS) ; do mkdir `cat .fname`/$$da_dir ; done
+	@for da_file in $(TARED_FILES) ; do ln $$da_file `cat .fname`/$$da_file ; done
+	@$(PORT_PR) "\tTAR[`cat .fname`]\n"
+	@tar chf `cat .fname`.tar `cat .fname`
+	@-(($(PORT_PR) "\tGZIP[`cat .fname`.tar]\n"; gzip -f9 `cat .fname`.tar) || ($(PORT_PR) "\tCOMPR[`cat .fname`.tar]\n"; compress `cat .fname`.tar))
+	@$(PORT_PR) "please check if packet is correct!\n\n"
+	@-$(RM) -rf `cat .fname` .fname
+
 
 #	genarte tags-file for vi(m)
 tags: $(LIBHEADS) $(LIBASRCS) $(SRCS) $(HEADS) Makefile

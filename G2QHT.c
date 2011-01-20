@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2010 Jan Seiffert
+ * Copyright (c) 2006-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1725,12 +1725,12 @@ static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_
 	}
 	my_memcpy(t_data->data, ndata, res);
 	if(table->data) {
-		t_x = atomic_px(t_x, (atomicptr_t *)&table->data);
+		t_x = atomic_px(t_x, (atomicptr_t *)(uintptr_t)&table->data);
 		g2_qht_data_free(t_x);
 	}
 	table->compressed = tcomp;
 	table->data_length = res;
-	t_x = atomic_px(t_data->data, (atomicptr_t *)&table->data);
+	t_x = atomic_px(t_data->data, (atomicptr_t *)(uintptr_t)&table->data);
 	g2_qht_data_free(t_x);
 	return true;
 }

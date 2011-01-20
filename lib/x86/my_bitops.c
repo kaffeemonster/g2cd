@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -211,6 +211,7 @@ static inline bool cpu_feature(int f)
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
 }
 
+#ifndef __x86_64__
 static bool detect_old_cyrix(void)
 {
 	/*
@@ -245,6 +246,7 @@ static bool detect_old_cyrix(void)
 	}
 	return result;
 }
+#endif
 
 static __init void identify_cpu(void)
 {
@@ -295,14 +297,22 @@ static __init void identify_cpu(void)
 			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
+#ifndef __x86_64__
+		/*
+		 * old and broken enterprise-stable assembler have problems with
+		 * sahf/lahf on x86_64.
+		 * Don't test on x86_64, these chips will never be x86_64.
+		 */
 		if(detect_old_cyrix()) {
 			/* we may run before main, other thread impl. do not like an print so early */
-#ifdef __linux__
+# ifdef __linux__
 			if(4 == our_cpu.family)
 				logg_pos(LOGF_WARN, "This seems to be some Cyrix/NSC/Geode CPU."
 				         "Please enable CPUID if possible (BIOS, whatever)\n");
+# endif
+		} else
 #endif
-		} else {
+		{
 #ifdef __linux__
 			/* we may run before main, other thread impl. do not like an print so early */
 			logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");

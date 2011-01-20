@@ -427,6 +427,7 @@ if test x"$my_enable_debug" = xno; then
 #	AX_CHECK_COMPILER_FLAGS([-O3],[CFLAGS="-O3 $CFLAGS"],[])
 	AX_CHECK_COMPILER_FLAGS([-g],[CFLAGS="-g $CFLAGS"],[])
 	AX_CHECK_COMPILER_FLAGS([-pipe],[CFLAGS="-pipe $CFLAGS"],[])
+#	AX_CHECK_COMPILER_FLAGS([-save-temps],[CFLAGS="-save-temps $CFLAGS"],[])
 # else
 	# TODO: automatically switch to low CFLAGS, without default -O2 but with user override
 fi
@@ -453,10 +454,17 @@ m4_include([m4/test_asm.m4])
 susp_binutils=215
 my_cv_as="$CC"
 as_tst_needed=no
+
 case "$host" in
 	*i?86-*)
 		as_tst_needed=yes;;
 	*x86_64-*)
+		AS_CHECK_FEATURE([movq %xmm_, %r_x], as_cv_movq_tst, [-c], [movq %xmm0, %rax])
+		if test x"$as_cv_movq_tst" = xyes; then
+			AC_DEFINE(HAVE_MOVQ_XMM_GPR, 1, Yes, the assambler is not broken)
+		else
+			AC_MSG_WARN([Your assembler is broken, prop. because your distro is to old to live. Please, let it die.])
+		fi
 		as_tst_needed=yes;;
 	*)
 		;;
@@ -498,13 +506,50 @@ AX_CHECK_ZLIB
 # pkg-config takes the host libs, things brake
 m4_include([m4/pkg.m4])
 if test x"$disable_dbus" = xno; then
-	PKG_CHECK_EXISTS([dbus-1],
-		[
-			AC_DEFINE(HAVE_DBUS, 1, Define to 1 if we have dbus)
-			PKG_CHECK_MODULES([DBUS], [dbus-1])
-			LIBS="$DBUS_LIBS $LIBS"
-			CFLAGS="$DBUS_CFLAGS $CFLAGS"
-		], [])
+	dbus_on_machine=no
+	PKG_CHECK_EXISTS([dbus-1], [dbus_on_machine=yes], [])
+
+	if test x"$dbus_on_machine" = xyes; then
+		dbus_header=no
+		PKG_CHECK_MODULES([DBUS], [dbus-1])
+		oCPPFLAGS="$CPPFLAGS"
+		oCFLAGS="$CFLAGS"
+		oLIBS="$LIBS"
+		CPPFLAGS="$DBUS_CPPFLAGS $CPPFLAGS"
+		CFLAGS="$DBUS_CFLAGS $CFLAGS"
+		LIBS="$DBUS_LIBS $LIBS"
+		AC_CHECK_HEADER(dbus/dbus.h, [dbus_header=yes], [], [#define DBUS_API_SUBJECT_TO_CHANGE])
+		if test x"$dbus_header" = xyes; then
+			dbus_working=no
+			AC_MSG_CHECKING([if dbus is new enough])
+			AC_LINK_IFELSE([AC_LANG_PROGRAM(
+                [
+#define DBUS_API_SUBJECT_TO_CHANGE
+#include <stdlib.h>
+#include <dbus/dbus.h>
+                ],
+                [
+                      DBusConnection *d;
+                      DBusError de;
+                      d = dbus_bus_get(DBUS_BUS_SYSTEM, &de);
+                      dbus_bus_request_name(d, "/foo/bla/tralala", 0, &de);
+                ]
+               )],
+               [AC_MSG_RESULT([yes])
+                dbus_working=yes],
+               [AC_MSG_RESULT([no])])
+			if test x"$dbus_working" = xyes; then
+				AC_DEFINE(HAVE_DBUS, 1, Define to 1 if we have dbus)
+			else
+				CFLAGS="$oCFLAGS"
+				LIBS="$oLIBS"
+			fi
+		else
+			CFLAGS="$oCFLAGS"
+			LIBS="$oLIBS"
+		fi
+		CPPFLAGS="$oCPPFLAGS"
+	fi
 fi
 
 # do you have db.h or ndbm.h?
@@ -605,7 +650,23 @@ void MUL_BIG(u64 x, u64 y, u64 *z, u64 *k)
 ],[return 0;])],
                [AC_MSG_RESULT([yes])
                 AC_DEFINE(HAVE_TIMODE, 1, Define to 1 if your compiler has a 128 bit type)],
-               [AC_MSG_RESULT([no])])],
+               [AC_MSG_RESULT([no])])
+AC_MSG_CHECKING([if __uint128 in va_list works])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <stdarg.h>
+typedef unsigned __uint128 __attribute__((mode(TI)));
+struct foo {
+	va_list ap;
+};
+const char *vnDDtoa(const char *buf, struct foo *foo)
+{
+	__uint128 n = va_arg(foo->ap, __uint128);
+	return buf;
+}
+],[return 0;])],
+               [AC_MSG_RESULT([yes])
+                AC_DEFINE(COMPILER_CAN_VAARG_TIMODE, 1, Define to 1 if your compiler can handle 128 bit in a va_list)],
+               [AC_MSG_RESULT([no])])
+               ],
                [AC_MSG_RESULT([no])])
 AC_CHECK_TYPES([ptrdiff_t])
 AC_CHECK_TYPES([sighandler_t], [],[], [[#include <signal.h>]])
@@ -812,7 +873,7 @@ AC_FUNC_MMAP
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton])
+AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
 
 if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)

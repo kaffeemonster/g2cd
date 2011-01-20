@@ -2,7 +2,7 @@
  * idbus.c
  * interface to dbus
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,6 +36,7 @@ bool __init idbus_init(void)
 	return true;
 }
 #else
+# define DBUS_API_SUBJECT_TO_CHANGE
 # include <stdlib.h>
 # include <dbus/dbus.h>
 # include "G2MainServer.h"
@@ -45,6 +46,10 @@ bool __init idbus_init(void)
 # include "lib/my_epoll.h"
 # include "lib/log_facility.h"
 # include "lib/my_bitopsm.h"
+
+#ifndef HAVE_DBUS_WATCH_GET_UNIX_FD
+# define dbus_watch_get_unix_fd(x) dbus_watch_get_fd(x)
+#endif
 
 static DBusConnection *idbus_connection;
 
@@ -333,10 +338,19 @@ bool __init idbus_init(void)
 	static const struct DBusObjectPathVTable bp_vtable = {.message_function = message_handler};
 	DBusError dbus_error;
 
+# ifdef HAVE_DBUS_THREADS_INIT_DEFAULT
 	if(!dbus_threads_init_default()) {
 		logg(LOGF_NOTICE, "Warning, couldn't init dbus thread foo, but will continue\n");
 		return true;
 	}
+# else
+// TODO: use the old not default variant
+	/*
+	 * but where to get the funcs?
+	 * luckily we sevice dbus only by one thread
+	 * still, this may blow up...
+	 */
+# endif
 
 	dbus_error_init(&dbus_error);
 	idbus_connection = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error);
@@ -359,12 +373,20 @@ bool __init idbus_init(void)
 		return false;
 	}
 
+# ifdef HAVE_DBUS_CONNECTION_TRY_REGISTER_OBJECT_PATH
 	dbus_error_init(&dbus_error);
 	if(!dbus_connection_try_register_object_path(idbus_connection, G2CD_DBUS_PATH, &bp_vtable,
 	                                             NULL /* user data */, &dbus_error)) {
 		logg(LOGF_ERR, "Couldn't register our g2cd dbus path \""G2CD_DBUS_PATH"\": %s\n", dbus_error.message);
 		return false;
 	}
+# else
+	if(!dbus_connection_register_object_path(idbus_connection, G2CD_DBUS_PATH, &bp_vtable,
+	                                         NULL /* user data */)) {
+		logg_errno(LOGF_ERR, "Couldn't register our g2cd dbus path \""G2CD_DBUS_PATH"\"\n");
+		return false;
+	}
+# endif
 
 	return true;
 }

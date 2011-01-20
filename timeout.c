@@ -2,7 +2,7 @@
  * timeout.c
  * thread to handle the varios server timeouts needed
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -375,7 +375,8 @@ static int kick_timeouts(void)
 	 * and work on timeouts while they are
 	 * below now (timed out).
 	 */
-	timespec_fill(&now);
+	if(timespec_fill(&now))
+		return ret_val;
 	local_time_now = now.tv_sec;
 	set_master_time(now.tv_sec);
 	for(t = timeout_nearest();

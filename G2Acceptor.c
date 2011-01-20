@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * code to accept connections and handshake G2
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -261,6 +261,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
+		work_entry->com_socket = -1;
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "too many connections");
 		return false;
 	}
@@ -271,6 +272,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 		/* have already counted it, so remove it from count */
 		atomic_dec(&server.status.act_connection_sum);
 		while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
+		work_entry->com_socket = -1;
 		handle_accept_give_msg(work_entry, LOGF_DEVEL_OLD, "ip already connected");
 		return false;
 	}
@@ -367,6 +369,7 @@ err_out_after_count:
 	/* the connection failed, but we have already counted it, so remove it from count */
 	atomic_dec(&server.status.act_connection_sum);
 	while(-1 == my_epoll_closesocket(work_entry->com_socket) && EINTR == errno);
+	work_entry->com_socket = -1;
 	handle_accept_give_msg(work_entry, LOGF_DEBUG, "problems adding it!");
 	return false;
 }

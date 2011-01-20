@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1793,7 +1793,7 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	return result;
 }
 
-static inline ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, some_fd from_fd, unsigned l)
+static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, some_fd from_fd, unsigned l)
 {
 	struct mfromto m[l];
 	ssize_t result;
