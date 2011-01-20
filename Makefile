@@ -212,10 +212,12 @@ AUX = \
 	obs_build/g2cd-Debian_5.0.dsc \
 	obs_build/g2cd-Debian_Etch.dsc \
 	obs_build/g2cd.spec \
+	obs_build/g2cd-xUbuntu_10.10.dsc \
 	obs_build/g2cd-xUbuntu_10.04.dsc \
 	obs_build/g2cd-xUbuntu_8.04.dsc \
 	obs_build/g2cd-xUbuntu_9.04.dsc \
-	obs_build/g2cd-xUbuntu_9.10.dsc
+	obs_build/g2cd-xUbuntu_9.10.dsc \
+	obs_build/g2cd-xUbuntu_6.06.dsc
 
 #
 #	files to be included in a package
