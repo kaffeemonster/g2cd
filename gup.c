@@ -294,18 +294,53 @@ static int check_for_udp(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_R
 	return i;
 }
 
+static int check_for_abort(struct epoll_event *ev, int num)
+{
+	int i;
+
+	for(i = 0; i < num; i++)
+	{
+		union gup *guppie = ev[i].data.ptr;
+
+		if(unlikely(!guppie)) {
+			logg_devel("no guppie?");
+			continue;
+		}
+		if(GUP_ABORT != guppie->gup)
+			continue;
+
+		if(!handle_abort(&guppie->s_gup, &ev[i]))
+			return -1;
+		num--;
+		if(num - i)
+			memmove(&ev[i], &ev[i+1], (num - i) * sizeof(*ev));
+		i--;
+	}
+	return num;
+}
+
 static bool handle_gups(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], g2_connection_t **lcon, int num)
 {
 	int i;
 
-	/* first check for accept sockets, to "free" them with minimal latency */
+	/*
+	 * first check for abort. This is not the most important thing
+	 * or latency sensitiv, but we do not want to "miss" to retrigger
+	 * the event, since abort is shared by all threads and should
+	 * be delivered to all threads.
+	 * This also works as a prefetch ;)
+	 */
+	num = check_for_abort(ev, num);
+	if(0 > num)
+		return false;
+	/* Then check for accept sockets, to "free" them with minimal latency */
 	num = check_for_accept(ev, lcon, num);
 	if(0 > num)
 		return false;
-	/* then check for UDP, so they are also free again with less latency */
+	/* and then check for UDP, so they are also free again with less latency */
 	num = check_for_udp(ev, lbuff, num);
 
-	/* now handle all other socket types */
+	/* finally handle all other socket types */
 	for(i = 0; i < num; i++)
 	{
 		union gup *guppie = ev[i].data.ptr;
@@ -329,10 +364,6 @@ static bool handle_gups(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RE
 			break;
 		case GUP_G2CONNEC:
 			handle_con(&ev[i], lbuff, worker.epollfd);
-			break;
-		case GUP_ABORT:
-			if(!handle_abort(&guppie->s_gup, &ev[i]))
-				return false;
 			break;
 		default:
 			break;
