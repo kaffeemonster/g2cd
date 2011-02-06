@@ -203,8 +203,10 @@
 		random_bytes_get;
 		random_bytes_init;
 	# udp from to
-		recvfromto;
 		sendtofrom;
+		recvmfromto;
+		recvmfromto_pre;
+		recvmfromto_post;
 	# str stuff
 		strchrnul;
 		strncasecmp_a;

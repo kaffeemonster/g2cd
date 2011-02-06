@@ -526,6 +526,25 @@ static __init void identify_cpu(void)
 	else /* no core info, estimate... */
 		our_cpu.num_cores = 1;
 
+	/*
+	 * sigh....
+	 * At this point we would need to check OS support.
+	 * Yes, there are some anal "server grade" OS out there, prop. still
+	 * running on server grade HW, which do not manage to save all x86
+	 * extra state (MMX, SSE).
+	 * The simple thing would be to check cr4:OSFXSR and cr0:EM:TS:MP,
+	 * the problem: only readable from ring0 (*facepalm*, we only need
+	 * to read it, no write access needed, where is the f****ing harm in
+	 * this).
+	 * So we are left with an execution check:
+	 * Execute one offending instruction, catch the SIGILL.
+	 * We leave this out, because:
+	 *  - Checking for this is complicated, exp. since we run before
+	 *    main is up, we may only run into new problems (signals before
+	 *    main crash)
+	 *  - those OS are OLD and IMHO broken
+	 */
+
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
 	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)

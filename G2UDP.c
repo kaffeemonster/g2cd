@@ -115,7 +115,7 @@ struct udp_reas_cache_entry
 
 /* internal prototypes */
 static ssize_t udp_sock_send(struct pointer_buff *, const union combo_addr *, some_fd);
-static ssize_t handle_udp_sock(struct epoll_event *, struct norm_buff **, union combo_addr *, union combo_addr *, some_fd, unsigned);
+static ssize_t handle_udp_sock(struct epoll_event *, struct norm_buff **, union combo_addr *, union combo_addr *, some_fd, some_fd, unsigned);
 static noinline bool handle_udp_packet(struct norm_buff **, union combo_addr *, union combo_addr *, some_fd);
 static inline bool init_con_u(some_fd *, union combo_addr *);
 
@@ -929,19 +929,9 @@ void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_N
 		}
 	}
 
-	if((result = handle_udp_sock(ev, d_hold_sp, from, to, sg->fd, j)) < 0) {
+	if((result = handle_udp_sock(ev, d_hold_sp, from, to, sg->fd, epoll_fd, j)) < 0) {
 		/* bad things */
 		keep_going = false;
-	}
-	/*
-	 * We have extracted the data from the UDP socket, now work on it
-	 * but first we return the UDP socket back into epoll, so other
-	 * threads can receive the next packet.
-	 */
-	ev->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
-	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, sg->fd, ev)) {
-		logg_errno(LOGF_ERR, "reactivating udp-socket in epoll");
-// TODO: handle bad things
 	}
 
 	if(keep_going)
@@ -1793,7 +1783,16 @@ static ssize_t udp_sock_send(struct pointer_buff *d_hold, const union combo_addr
 	return result;
 }
 
-static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, some_fd from_fd, unsigned l)
+static void restart_udp_sock(struct epoll_event *ev, some_fd from_fd, some_fd epoll_fd)
+{
+	ev->events = (uint32_t)(EPOLLIN | EPOLLERR | EPOLLONESHOT);
+	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, from_fd, ev)) {
+		logg_errno(LOGF_ERR, "reactivating udp-socket in epoll");
+// TODO: handle bad things
+	}
+}
+
+static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **d_hold, union combo_addr *from, union combo_addr *to, some_fd from_fd, some_fd epoll_fd, unsigned l)
 {
 	struct mfromto m[l];
 	ssize_t result;
@@ -1802,11 +1801,14 @@ static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **
 	if(udp_poll->events & ~(EPOLLIN|EPOLLOUT)) {
 		/* If our udp sock is not ready reading or writing -> fuzz */
 		logg_pos(LOGF_ERR, "udp_so NVAL|ERR|HUP\n");
+		restart_udp_sock(udp_poll, from_fd, epoll_fd);
 		return -1;
 	}
 
-	if(!(udp_poll->events & EPOLLIN))
+	if(!(udp_poll->events & EPOLLIN)) {
+		restart_udp_sock(udp_poll, from_fd, epoll_fd);
 		return 0;
+	}
 
 	for(i = 0; i < l; i++)
 	{
@@ -1822,19 +1824,28 @@ static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **
 	do
 	{
 		set_s_errno(0);
-		/* ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags) */
-		result = recvmfromto(from_fd, m, l, 0);
+		/* ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags) */
+		result = recvmfromto_pre(from_fd, m, l, 0);
 	} while(unlikely(-1 == result) && EINTR == s_errno);
+
+	/*
+	 * We have extracted the data from the UDP socket, now work on it
+	 * but first we return the UDP socket back into epoll, so other
+	 * threads can receive the next packet.
+	 */
+	restart_udp_sock(udp_poll, from_fd, epoll_fd);
 
 	if(result < 0) {
 		logg_serrnod(LOGF_ERR, "%s ERRNO=%i\tFDNum: %i", "recvmfromto:", s_errno, from_fd);
 		result = -(result + 1);
 	}
+	recvmfromto_post(m, result);
 
 	for(i = 0; i < (unsigned)result; i++) {
 		logg_devel_old("Data read from socket\n");
 		d_hold[i]->pos += m[i].iov.iov_len;
 	}
+
 	return result;
 }
 
