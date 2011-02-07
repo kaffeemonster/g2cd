@@ -30,26 +30,6 @@
 
 int strncasecmp_a(const char *s1, const char *s2, size_t n)
 {
-	static const unsigned char tab[256] =
-	{
-	/*	  0     1     2     3     4     5     6     7         */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 07 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 0F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 17 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 1F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 27 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 2F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 37 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 47 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 4F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 57 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 5F */
-		0x00, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 67 */
-		0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 6F */
-		0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 77 */
-		0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, /* 7F */
-	};
 	vector unsigned char c_ex1, c_ex2;
 	vector unsigned char c_1, c_2;
 	vector unsigned char v_perm1, v_perm2;
@@ -106,18 +86,21 @@ LOOP_AGAIN:
 			c_2    = vec_sub(c_2, vec_and(v_20, v_mask));
 
 			v_mask = vec_cmpeq(c_1, v_0);
-			v_mask = vec_or(v_mask, vec_cmpeq(c_2, v_0));
 			c_1    = vec_xor(c_1, c_2);
 			v_mask = vec_or(v_mask, vec_cmpgt(c_1, v_0));
 
 			if(likely(vec_any_ne(v_mask, v_0)))
 			{
 				unsigned r;
-				r = vec_zpos(vec_cmpgt((vector unsigned char)v_mask, v_0));
+				r   = vec_zpos(vec_cmpgt((vector unsigned char)v_mask, v_0));
 				cycles = (((cycles - i)) / SOVUC) * SOVUC;
-				n -= cycles;
-				r = r < n - 1 ? r : n - 1;
-				return (int)(*(s1 + r)) - (int)(*(s2 + r));
+				n  -= cycles;
+				r   = r < n - 1 ? r : n - 1;
+				c1  = *(const unsigned char *)(s1 + r);
+				c2  = *(const unsigned char *)(s2 + r);
+				c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+				c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+				return (int)c1 - (int)c2;
 			}
 			s1   += SOVUC;
 			s2   += SOVUC;
@@ -128,21 +111,25 @@ LOOP_AGAIN:
 		return 0;
 	n -= cycles;
 
-	i = ALIGN_DIFF(s1, 4096);
-	i = i ? i : 4096;
-	j = ALIGN_DIFF(s2, 4096);
-	j = j ? j : i;
-	i = i < j ? i : j;
-	i = i < n ? i : n;
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i ? i : 4096;
+	j  = ALIGN_DIFF(s2, 4096);
+	j  = j ? j : i;
+	i  = i < j ? i : j;
+	i  = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--, n--)
+	for(; i; i--, s1++, s2++)
 	{
-		c1 = (unsigned) *s1++;
-		c2 = (unsigned) *s2++;
-		n--;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		c1 = *(const unsigned char *)s1;
+		c2 = *(const unsigned char *)s2;
+		/*
+		 * GCC can turn these compares into jumpless arith.
+		 * So spare ppc from the mem access to a lookup table.
+		 */
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 

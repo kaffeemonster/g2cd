@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,26 +25,21 @@
 
 #include "x86_features.h"
 
-static const unsigned char tab[256] =
-{
-/*	  0     1     2     3     4     5     6     7         */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 07 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 0F */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 17 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 1F */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 27 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 2F */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 37 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3F */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 47 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 4F */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 57 */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 5F */
-	0x00, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 67 */
-	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 6F */
-	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 77 */
-	0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, /* 7F */
-};
+/*
+ * My GCC generates a nice instruction sequence for
+ *   c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+ *
+ *   lea    -0x61(%eax),%edx
+ *   cmp    $0x1a,%edx
+ *   sbb    %ecx,%ecx
+ *   and    $0x20,%ecx
+ *   sub    %ecx,%eax
+ *
+ * so away with the lookuptable, it costs cache and
+ * the access latency, even cache hot, is "bad".
+ * If your GCC does not manage to do the same, update
+ * it.
+ */
 static const char sma[16] GCC_ATTR_ALIGNED(16) =
 {
 	0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60,
@@ -102,15 +97,15 @@ LOOP_AGAIN:
 		"jb	3f\n\t"
 		"2:\n\t"
 		"sub	%3, %2\n\t"
-		/* s1 */
 		"movdqu	(%0), %%xmm7\n\t"
+		"movdqu	(%1), %%xmm6\n\t"
+		/* s1 */
 		/* ByteM,Masked+,Range,Bytes */
 		/*             6543210 */
 		"pcmpestrm	$0b1100100, %%xmm7, %%xmm1\n\t"
 		"pand	%%xmm2, %%xmm0\n\t"
 		"psubb	%%xmm0, %%xmm7\n\t"
 		/* s2 */
-		"movdqu	(%1), %%xmm6\n\t"
 		/* ByteM,Masked+,Range,Bytes */
 		/*             6543210 */
 		"pcmpestrm	$0b1100100, %%xmm6, %%xmm1\n\t"
@@ -135,32 +130,37 @@ LOOP_AGAIN:
 	  /*  */ "2" (i)
 	);
 	cycles = ROUND_TO(cycles - i, 16);
-	if(likely(m1 < 16)) {
+	if(likely(m1 < 16))
+	{
 		if(cycles >= n)
 			cycles -= 16;
-		n -= cycles;
-		m1 = m1 < n - 1 ? m1 : n - 1;
-		return s1[m1] - s2[m1];
+		n  -= cycles;
+		m1  = m1 < n - 1 ? m1 : n - 1;
+		c1  = *(const unsigned char *)(s1 + m1);
+		c2  = *(const unsigned char *)(s2 + m1);
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		return (int)c1 - (int)c2;
 	}
 	if(cycles >= n)
 		return 0;
 	n -= cycles;
 
-	i = ALIGN_DIFF(s1, 4096);
-	i = i ? i : 4096;
-	j = ALIGN_DIFF(s2, 4096);
-	j = j ? j : i;
-	i = i < j ? i : j;
-	i = i < n ? i : n;
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i ? i : 4096;
+	j  = ALIGN_DIFF(s2, 4096);
+	j  = j ? j : i;
+	i  = i < j ? i : j;
+	i  = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--)
+	for(; i; i--, s1++, s2++)
 	{
-		c1 = (unsigned) *s1++;
-		c2 = (unsigned) *s2++;
-		n--;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		c1  = *(const unsigned char *)s1;
+		c2  = *(const unsigned char *)s2;
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 
@@ -211,8 +211,9 @@ LOOP_AGAIN:
 		"jb	3f\n\t"
 		"2:\n\t"
 		"sub	$16, %2\n\t"
-		/* s1 */
 		"movdqu	(%0), %%xmm7\n\t"
+		"movdqu	(%1), %%xmm6\n\t"
+		/* s1 */
 		"movdqa	%%xmm7, %%xmm1\n\t"
 		"movdqa	%%xmm7, %%xmm2\n\t"
 		"pcmpgtb	%%xmm5, %%xmm1\n\t"
@@ -222,7 +223,6 @@ LOOP_AGAIN:
 		"pand	%%xmm4, %%xmm2\n\t"
 		"psubb	%%xmm2, %%xmm7\n\t"
 		/* s2 */
-		"movdqu	(%1), %%xmm6\n\t"
 		"movdqa	%%xmm6, %%xmm1\n\t"
 		"movdqa	%%xmm6, %%xmm2\n\t"
 		"pcmpgtb	%%xmm5, %%xmm1\n\t"
@@ -232,12 +232,11 @@ LOOP_AGAIN:
 		"pand	%%xmm4, %%xmm2\n\t"
 		"psubb	%%xmm2, %%xmm6\n\t"
 		/* s1 ^ s2 */
-		"movdqa	%%xmm7, %%xmm1\n\t"
-		"pxor	%%xmm6, %%xmm1\n\t"
-		"pcmpgtb	%%xmm0, %%xmm1\n\t"
+		"pxor	%%xmm7, %%xmm6\n\t"
+		"pcmpeqb	%%xmm1, %%xmm1\n\t"
 		"pcmpeqb	%%xmm0, %%xmm6\n\t"
 		"pcmpeqb	%%xmm0, %%xmm7\n\t"
-		"por	%%xmm1, %%xmm6\n\t"
+		"pxor	%%xmm1, %%xmm6\n\t"
 		"por	%%xmm6, %%xmm7\n\t"
 		"pmovmskb	%%xmm7, %3\n\t"
 		"test	%3, %3\n\t"
@@ -257,33 +256,38 @@ LOOP_AGAIN:
 	  /*  */ "2" (i)
 	);
 	cycles = ROUND_TO(cycles - i, 16);
-	if(likely(m1)) {
+	if(likely(m1))
+	{
 		if(cycles >= n)
 			cycles -= 16;
-		n -= cycles;
+		n  -= cycles;
 		m1--;
-		m1 = m1 < n - 1 ? m1 : n - 1;
-		return s1[m1] - s2[m1];
+		m1  = m1 < n - 1 ? m1 : n - 1;
+		c1  = *(const unsigned char *)(s1 + m1);
+		c2  = *(const unsigned char *)(s2 + m1);
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		return (int)c1 - (int)c2;
 	}
 	if(cycles >= n)
 		return 0;
 	n -= cycles;
 
-	i = ALIGN_DIFF(s1, 4096);
-	i = i ? i : 4096;
-	j = ALIGN_DIFF(s2, 4096);
-	j = j ? j : i;
-	i = i < j ? i : j;
-	i = i < n ? i : n;
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i ? i : 4096;
+	j  = ALIGN_DIFF(s2, 4096);
+	j  = j ? j : i;
+	i  = i < j ? i : j;
+	i  = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--)
+	for(; i; i--, s1++, s2++)
 	{
-		c1 = (unsigned) *s1++;
-		c2 = (unsigned) *s2++;
-		n--;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		c1  = *(const unsigned char *)s1;
+		c2  = *(const unsigned char *)s2;
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 
@@ -333,8 +337,9 @@ LOOP_AGAIN:
 		"jb	3f\n\t"
 		"2:\n\t"
 		"sub	$8, %2\n\t"
-		/* s1 */
 		"movq	(%0), %%mm7\n\t"
+		"movq	(%1), %%mm6\n\t"
+		/* s1 */
 		"movq	%%mm7, %%mm1\n\t"
 		"movq	%%mm7, %%mm2\n\t"
 		"pcmpgtb	%%mm5, %%mm1\n\t"
@@ -344,7 +349,6 @@ LOOP_AGAIN:
 		"pand	%%mm4, %%mm2\n\t"
 		"psubb	%%mm2, %%mm7\n\t"
 		/* s2 */
-		"movq	(%1), %%mm6\n\t"
 		"movq	%%mm6, %%mm1\n\t"
 		"movq	%%mm6, %%mm2\n\t"
 		"pcmpgtb	%%mm5, %%mm1\n\t"
@@ -354,12 +358,11 @@ LOOP_AGAIN:
 		"pand	%%mm4, %%mm2\n\t"
 		"psubb	%%mm2, %%mm6\n\t"
 		/* s1 ^ s2 */
-		"movq	%%mm7, %%mm1\n\t"
-		"pxor	%%mm6, %%mm1\n\t"
-		"pcmpgtb	%%mm0, %%mm1\n\t"
+		"pxor	%%mm7, %%mm6\n\t"
+		"pcmpeqb	%%mm1, %%mm1\n\t"
 		"pcmpeqb	%%mm0, %%mm6\n\t"
 		"pcmpeqb	%%mm0, %%mm7\n\t"
-		"por	%%mm1, %%mm6\n\t"
+		"pxor	%%mm1, %%mm6\n\t"
 		"por	%%mm6, %%mm7\n\t"
 		"pmovmskb	%%mm7, %3\n\t"
 		"test	%3, %3\n\t"
@@ -379,13 +382,18 @@ LOOP_AGAIN:
 	  /*  */ "2" (i)
 	);
 	cycles = ROUND_TO(cycles - i, 8);
-	if(likely(m1)) {
+	if(likely(m1))
+	{
 		if(cycles >= n)
 			cycles -= 8;
-		n -= cycles;
+		n  -= cycles;
 		m1--;
-		m1 = m1 < n - 1 ? m1 : n - 1;
-		return s1[m1] - s2[m1];
+		m1  = m1 < n - 1 ? m1 : n - 1;
+		c1  = *(const unsigned char *)(s1 + m1);
+		c2  = *(const unsigned char *)(s2 + m1);
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		return (int)c1 - (int)c2;
 	}
 	if(cycles >= n)
 		return 0;
@@ -397,15 +405,15 @@ LOOP_AGAIN:
 	j = j ? j : i;
 	i = i < j ? i : j;
 	i = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--)
+	for(; i; i--, s1++, s2++)
 	{
-		c1 = (unsigned) *s1++;
-		c2 = (unsigned) *s2++;
-		n--;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		c1  = *(const unsigned char *)s1;
+		c2  = *(const unsigned char *)s2;
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 
@@ -453,7 +461,7 @@ LOOP_AGAIN:
 		m2 >>= 2;
 		w2  -= m2;
 		m1   = w1 ^ w2;
-		m2   = has_nul_byte(w1) | has_nul_byte(w2);
+		m2   = has_nul_byte(w1);
 		if(m1 || m2) {
 			unsigned r1, r2;
 			m1 = has_greater(m1, 0);
@@ -472,21 +480,21 @@ LOOP_AGAIN:
 		return 0;
 	n -= cycles;
 
-	i = ALIGN_DIFF(s1, 4096);
-	i = i ? i : 4096;
-	j = ALIGN_DIFF(s2, 4096);
-	j = j ? j : i;
-	i = i < j ? i : j;
-	i = i < n ? i : n;
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i ? i : 4096;
+	j  = ALIGN_DIFF(s2, 4096);
+	j  = j ? j : i;
+	i  = i < j ? i : j;
+	i  = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--)
+	for(; i; i--, s1++, s2++)
 	{
-		c1 = (unsigned) *s1++;
-		c2 = (unsigned) *s2++;
-		n--;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		c1  = *(const unsigned char *)s1;
+		c2  = *(const unsigned char *)s2;
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 

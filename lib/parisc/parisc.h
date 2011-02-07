@@ -2,7 +2,7 @@
  * parisc.h
  * special parisc instructions
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -72,6 +72,31 @@ static inline int pa_find_z(unsigned long x)
 			r++;
 			x >>= BITS_PER_CHAR;
 		} while(t);
+	}
+	return r;
+}
+
+static inline int pa_find_nz(unsigned long x)
+{
+	int r = -1;
+	unsigned long t;
+
+	if(HOST_IS_BIGENDIAN)
+	{
+		x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
+		do {
+			t = x & 0xff;
+			r++;
+			x = (x << BITS_PER_CHAR) | (x >> (SOULM1 * BITS_PER_CHAR));
+		} while(!t);
+	}
+	else
+	{
+		do {
+			t = x & 0xff;
+			r++;
+			x >>= BITS_PER_CHAR;
+		} while(!t);
 	}
 	return r;
 }

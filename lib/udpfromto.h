@@ -31,7 +31,7 @@
  * sendfromto	added 18/08/2003, Jan Berkel <jan@sitadelle.com>
  *		Works on Linux and FreeBSD (5.x)
  *
- * IPv6 and changes etc. Copyright (C) 2009 Jan Seiffert
+ * IPv6 and changes etc. Copyright (C) 2009-2011 Jan Seiffert
  */
 #ifndef UDPFROMTO_H
 # define UDPFROMTO_H

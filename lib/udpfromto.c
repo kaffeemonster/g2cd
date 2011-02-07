@@ -31,7 +31,7 @@
  * sendfromto	added 18/08/2003, Jan Berkel <jan@sitadelle.com>
  *		Works on Linux and FreeBSD (5.x)
  *
- * IPv6 and changes etc. (C) 2009 Jan Seiffert
+ * IPv6 and changes etc. (C) 2009-2011 Jan Seiffert
  *
  * Version: $Id: udpfromto.c,v 1.4.4.1 2006/03/15 15:37:58 nbk Exp $
  */

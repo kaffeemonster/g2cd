@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, alpha implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,26 +27,6 @@
 
 static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n)
 {
-	static const unsigned char tab[256] =
-	{
-	/*	  0     1     2     3     4     5     6     7         */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 07 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 0F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 17 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 1F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 27 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 2F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 37 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 47 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 4F */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 57 */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 5F */
-		0x00, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 67 */
-		0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 6F */
-		0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, /* 77 */
-		0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, /* 7F */
-	};
 	size_t i, j, cycles;
 
 LOOP_AGAIN:
@@ -103,7 +83,7 @@ LOOP_AGAIN:
 			m2   = zapnot(0x2020202020202020UL, m2);
 			w2  -= m2;
 			m1   = w1 ^ w2;
-			m2   = cmpbeqz(w1) | cmpbeqz(w2);
+			m2   = cmpbeqz(w1);
 			if(m1 || m2)
 			{
 				unsigned long r1, r2;
@@ -128,19 +108,24 @@ LOOP_AGAIN:
 	s1 += cycles;
 	s2 += cycles;
 
-	i = ALIGN_DIFF(s1, 4096);
-	i = i ? i : 4096;
-	j = ALIGN_DIFF(s2, 4096);
-	j = j ? j : i;
-	i = i < j ? i : j;
-	i = i < n ? i : n;
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i ? i : 4096;
+	j  = ALIGN_DIFF(s2, 4096);
+	j  = j ? j : i;
+	i  = i < j ? i : j;
+	i  = i < n ? i : n;
+	n -= i;
 
-	for(; i; i--, n--)
+	for(; i; i--, s1++, s2++)
 	{
-		unsigned c1 = (unsigned) *s1++, c2 = (unsigned) *s2++;
-		c1 -= tab[c1];
-		c2 -= tab[c2];
-		if(!(c1 && c2 && c1 == c2))
+		unsigned c1 = *(const unsigned char *)s1, c2 = *(const unsigned char *)s2;
+		/*
+		 * GCC can turn these compares into jumpless arith.
+		 * So save Alpha from byte access into an lookup table
+		 */
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 
@@ -174,7 +159,7 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	m2   = zapnot(0x2020202020202020UL, m2);
 	w2  -= m2;
 	m1   = w1 ^ w2;
-	m2   = cmpbeqz(w1) | cmpbeqz(w2);
+	m2   = cmpbeqz(w1);
 	if(!HOST_IS_BIGENDIAN) {
 		m1 >>= shift * BITS_PER_CHAR;
 		m2 >>= shift;
@@ -218,7 +203,7 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 		m2   = zapnot(0x2020202020202020UL, m2);
 		w2  -= m2;
 		m1   = w1 ^ w2;
-		m2   = cmpbeqz(w1) | cmpbeqz(w2);
+		m2   = cmpbeqz(w1);
 		if(m1 || m2)
 		{
 			unsigned long r1, r2;

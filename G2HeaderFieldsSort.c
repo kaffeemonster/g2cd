@@ -2,7 +2,7 @@
  * G2HeaderFieldsSort.c
  * Automatic sort for the G2 header fields
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -94,13 +94,13 @@ static int strncasecmp_a(const char *a, const char *b, size_t len)
 {
 	unsigned c1, c2;
 
-	for(; len; len--)
+	for(; len; len--, a++, b++)
 	{
-		c1  = (unsigned) *a++;
-		c2  = (unsigned) *b++;
+		c1  = *(const unsigned char *)a;
+		c2  = *(const unsigned char *)b;
 		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
 		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
-		if(!(c1 && c2 && c1 == c2))
+		if(!(c1 && c1 == c2))
 			return (int)c1 - (int)c2;
 	}
 	return 0;
