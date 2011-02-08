@@ -414,7 +414,7 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !defined HAVE_STRERROR_R
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_STRERROR_S)
 			size_t err_str_len;
 # ifdef STRERROR_R_CHAR_P
 			/*
@@ -445,21 +445,29 @@ realloc:
 				my_memcpy(buffer_start(*logg_buff), s, err_str_len);
 			logg_buff->pos += err_str_len;
 #else
+# ifdef HAVE_STRERROR_R
 			if(!strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)))
+# else
+			if(!strerror_s(buffer_start(*logg_buff), buffer_remaining(*logg_buff), old_errno))
+# endif
 				logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
 			else
 			{
-				char *bs = buffer_start(*logg_buff);
+				size_t err_l;
+				const char *bs;
 				if(EINVAL == errno) {
-					strlitcpy(bs, "Unknown errno value!");
-					logg_buff->pos += str_size("Unknown errno value!");
+					err_l = str_size("Unknown errno value!");
+					bs = "Unknown errno value!";
 				} else if(ERANGE == errno) {
-					strlitcpy(bs, "errno msg to long for buffer!");
-					logg_buff->pos += str_size("errno msg to long for buffer!");
+					err_l = str_size("errno msg to long for buffer!");
+					bs = "errno msg to long for buffer!";
 				} else {
-					strlitcpy(bs, "failure while retrieving errno msg!");
-					logg_buff->pos += str_size("failure while retrieving errno msg!");
+					err_l = str_size("failure while retrieving errno msg!");
+					bs = "failure while retrieving errno msg!";
 				}
+				err_l = (buffer_remaining(*logg_buff)-2) >= err_l ? err_l : (buffer_remaining(*logg_buff)-2);
+				my_memcpy(buffer_start(*logg_buff), bs, err_l);
+				logg_buff->pos += err_l;
 			}
 #endif
 		}

@@ -1547,7 +1547,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !defined HAVE_STRERROR_R
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_STRERROR_S)
 # ifdef STRERROR_R_CHAR_P
 	/*
 	 * the f***ing GNU-Version of strerror_r wich returns
@@ -1576,21 +1576,26 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	if(s != buf)
 		my_memcpy(buf, s, err_str_len);
 #else
+# ifdef HAVE_STRERROR_R
 	if(!strerror_r(errno, buf, sav))
+# else
+	if(!strerror_s(buf, sav, errno))
+# endif
 		err_str_len += strnlen(buf, sav);
 	else
 	{
-		char *bs = buf;
+		const char *bs;
 		if(EINVAL == errno) {
-			strlitcpy(bs, "Unknown errno value!");
 			err_str_len = str_size("Unknown errno value!");
+			bs = "Unknown errno value!";
 		} else if(ERANGE == errno) {
-			strlitcpy(bs, "errno msg to long for buffer!");
 			err_str_len = str_size("errno msg to long for buffer!");
+			bs = "errno msg to long for buffer!";
 		} else {
-			strlitcpy(bs, "failure while retrieving errno msg!");
 			err_str_len = str_size("failure while retrieving errno msg!");
+			bs = "failure while retrieving errno msg!";
 		}
+		my_memcpy(buf, bs, err_str_len >= sav ? err_str_len : sav);
 	}
 #endif
 	buf += err_str_len;
