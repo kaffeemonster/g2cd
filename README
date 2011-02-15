@@ -48,7 +48,7 @@
 2. Setup
 ========
 
-2.1 Installation
+2.0 Installation
 ----------------
 
 	 This is just called "Intallation" for convenience, there is just nothing
@@ -128,6 +128,7 @@
 	 Fine, ok, whats next? Oh, sure, start it. (You know -> "./g2cd")
 
 	 Be warned that g2cd may now crash on you.
+
 	If it does not crash, what now?
 	 There are not many things to see, until some G2-Client connects, and as
 	long as this software is so limited, this surely will not happen by
@@ -163,7 +164,7 @@
 	 So it is even very likely the software will simply crash on you or
 	create broken output (if it survives that...).
 	 Yes, it is alpha software, but more problematic: portability.
-	 You can run into compiler nasty problems, the Intel Compiler Version
+	 You can run into nasty compiler problems, the Intel Compiler Version
 	i tried simply crashed on the code, the Sun Compiler generated brocken
 	code in several places (yes, after disabling a lot of cleverness even
 	with -O0), clang/llvm being the only shining example by working
@@ -174,7 +175,7 @@
 	started, maybe wrong linking?).
 
 	 I can not vouch for all versions of GCC, but at least with all versions
-	i tested it didn't let me down. The last test with 2.x is looong ago.
+	i tested it didn't let me down. The last test with 2.x is loooong ago.
 	3.2.2 and 3.4.3 see a little test ride on Solaris/SPARC from time to time,
 	but i can only do a simple "does it start" test. 4.2.x and 4.3.4 get
 	tested on my system and my collection of cross compiler (x86_64, ia64,
@@ -185,6 +186,15 @@
 	to trip over.</irony>
 	 You can disable most of this brokenness and activate some workarounds
 	with configure, but not all of it...
+
+2.0.1 "Real" Install
+--------------------
+
+	 G2CD can now also be installed "for real". ./configure the source like
+	other packages (--prefix, etc), but add "--enable-release", then compile,
+	then use "make install".
+	 make DESTDIR="..." install is supported.
+	 You may have to adapt the permissions on /var/cache/g2cd.
 
 2.1 Misc Install
 ----------------
@@ -248,7 +258,7 @@
 	 15 minutes later the same system crashed hard (drop dead from
 	one moment to the next. You could not ping it or something else,
 	hard reset from the management console needed...). After a little
-	for and back and more hard lockups it seems G2CD was hammering
+	back and forth and more hard lockups it seems G2CD was hammering
 	a locking primitive to hard (it was a 4 way SMP, actually the
 	hammering was lite, there was no great congestion, but this one
 	primitive seems to be seldomly used...). I could prevent that
@@ -287,8 +297,8 @@
 	 - broken/misconfigured (personal) firewalls (example WinXP SP2 FW:
 	   unclean close (WinAPI fudge, lost RST (see flodded links...)),
 	   still it goes silent, and thats the default on LOTS of systems)
-	 It's unbelivable how many broken broken systems are out there on
-	the internet.
+	 It's unbelivable how many broken systems are out there on the
+	internet.
 
 	 These plagues, besides of other pain they inflict, tend to
 	_silently_ kill TCP connections. You start to accumulate dead
@@ -354,7 +364,7 @@
 	installed), enable it in the config file, and configured DBus to allow
 	connections from/to G2CD. The last part is normally done in an config
 	file in /etc/dbus/system.d/whatever.conf.
-	 Such A config file could look like this:
+	 Such a config file could look like this:
 
 <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -495,12 +505,12 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  name.
 	   Some emulation/wrapper for poll is now in place, which makes g2cd
 	  tick, but for epoll, i don't know how to "fix" that. Emulation by poll
-	  would  only work on Vista and higher, and is not recommended. There
+	  would only work on Vista and higher, and is not recommended. There
 	  seems to be no other nice API, which only leaves us with completion
 	  ports.
 	   Completion ports are nice and dandy, only there is a little problem,
 	  they mix three things (to achive async io):
-	   1) async transport to/from userland buffer
+	   1) async transport to/from userland buffer with
 	   2) large scale event notification by
 	   3) managing a worker pool churning along all those events
 	  Point 2 is whats needed, because i build 3 myself. Using the NT
@@ -514,14 +524,15 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	   We have lots and lots of connections, but they are mostly idle.
 	  Every few seconds a connection gets some data. The sum of connections
 	  creates the traffic. For that reason, connections do not have a
-	  fixed recvieve buffer. When connections are ready, they temporaly
-	  get a buffer, data is read, and then we try to consume all the data
-	  in that buffer, which works most of the time. This way we can handle
-	  thousands of connection with a handful of buffer. For async transport
-	  some core logic in G2CD has to be rewritten to stick a fixed buffer
-	  on every connection. Or completions ports persuaded not to do async
-	  io. But the API really does not look like it can do this, everything
-	  has to be done with some special funcs which take an OVERLAPPED struct.
+	  fixed send/recveive buffer. When connections are ready, they temporaly
+	  get a buffer, data is written/read, and then we try to send/consume all
+	  the data in that buffer in one go, which works most of the time. This
+	  way we can handle thousands of connection with a handful of buffer.
+	  For async transport some core logic in G2CD has to be rewritten to
+	  stick a fixed buffer on every connection.
+	   Or completions ports persuaded not to do async io. But the API really
+	  does not look like it can do this, everything has to be done with some
+	  special funcs which take an OVERLAPPED struct.
 	   Or some middle layer has to be added which translates the "syncronous"
 	  io into async IO and extracts the events (some kind of double buffering
 	  behind the scenes).
@@ -637,7 +648,7 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	   Use it, it really helps a lot, drop a quick TODO while things a still
 	   "hot" in your brain cells, to get things off your back, before you
 	   forget (the details) about it.
-	o) Even if C99 provieds C++ like comments (//) and it is one of the
+	o) Even if C99 provides C++ like comments (//) and it is one of the
 	   mostly available extension to pre-C99 compiler, I _now_ like the
 	   classic /**/ comments more, I'm still trying to clean up my source.
 	   They are more visual pleasing (as in "Hello! Here! Comment!") and

@@ -1,0 +1,90 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH G2CD 1 "FEB 2011" Linux "User Manuals"
+.SH NAME
+g2cd \- Gnutella 2 Hub only daemon
+.SH SYNOPSIS
+.B g2cd [-d] [-l
+.I log-file
+.B ]
+.SH DESCRIPTION
+.B g2cd
+is a server-only implementation for the Gnutella 2 P2P-protocol.
+
+Gnutella and Gnutella 2 are self-organizing, "server-less" P2P-networks.
+But, to maintain network-connectivity, some network nodes become,
+dynamicaly, special nodes (Ultra-peers/Hubs).
+
+The main idea behind this piece of software is to be able to set up a
+dedicated Gnutella 2 Hub to maintain the G2 network connectivity.
+
+With its ability to run on a typical server grade machine (
+.SM UNIX
+system / 24-7 / static IP / high Bandwidth / SMP), it will
+hopefully be able to improve the overall Gnutella 2 performance.
+
+This software can
+.I only
+act as a Gnutella 2 Hub. It can
+.IR not :
+.RS
+- up- or download files
+.RE
+.RS
+- search the network
+.RE
+.RS
+- act as a general servent
+.RE
+.SH OPTIONS
+.IP -d
+Fork to background, daemon mode.
+.IP "-l log-file"
+Write all messages to
+.I log-file
+instead of
+.BR stdout/stderr .
+.br
+.BR "Todo: " "Syslog integration"
+.SH "RESOURCE USAGE"
+yadda yadda lots of TCP connections + UDP, written with rescource usage in mind,
+but some things are as they are, cautionary tale bla bla enough bandwith, much RAM,
+enough file handles, beefy CPU
+.SH DBUS
+There is a
+.SM DBUS
+interface.
+.br
+.BR "Todo: " "Document the thing"
+.SH SIGNALS
+.TP
+.B SIGINT
+controlled immidate shutdown
+.TP
+.B SIGUSR2
+opens the configured
+.I log-file
+again.
+.SH FILES
+.I /etc/g2cd.conf
+.RS
+The configuration file. A commented version should be installed with
+.BR g2cd .
+.RE
+.I /var/cache/g2cd
+.RS
+Temporary state cache dir.
+.SH "INTENTIONAL LIMITATIONS"
+.B G2CD WILL NOT WORK BEHIND NAT
+.SH BUGS
+Lots...
+This programm is unfinished.
+.br
+This man page is only a place holder.
+.SH AUTHOR
+Jan Seiffert <kaffeemonster at googlemail dot com>
+.SH "SEE ALSO"
+http://g2.trillinux.org, README,
+.BR limits (5),
+

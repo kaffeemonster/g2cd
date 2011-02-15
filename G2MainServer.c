@@ -1298,7 +1298,7 @@ static noinline __init bool startup(int argc, char **args)
 	if(connect_dbus && !idbus_init())
 		return false;
 
-/* ANYTHING what need any priviledges should be done before */
+/* ANYTHING that needs any priviledges should be done before this */
 	/* Drop priviledges */
 	change_the_user();
 

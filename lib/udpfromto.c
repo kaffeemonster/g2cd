@@ -358,6 +358,7 @@ ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags)
 		memcpy(info[i].to, info[0].to, sizeof(*info[0].to));
 		info[i].to_len = info[0].to_len;
 	}
+// TODO: move part of this at post end
 	for(i = 0; i < len; i++)
 	{
 		mts->msghv[i].msg_hdr.msg_control    = mts->cbuf[i];

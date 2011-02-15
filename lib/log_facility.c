@@ -414,7 +414,7 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_STRERROR_S)
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_DECL_STRERROR_S)
 			size_t err_str_len;
 # ifdef STRERROR_R_CHAR_P
 			/*
@@ -430,6 +430,12 @@ realloc:
 			 * Ol Solaris seems to have a static msgtable, so
 			 * strerror is threadsafe and we don't have a
 			 * _r version
+			 */
+			/*
+			 * we also simply fall into here if strerror is not thread
+			 * safe, but we have nothing else.
+			 * Since what should we do in this case... _sys_errlist
+			 * is a bsd extentions.
 			 */
 			const char *s = strerror(old_errno);
 # endif

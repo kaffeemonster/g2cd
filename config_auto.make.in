@@ -60,12 +60,18 @@ exec_prefix = @exec_prefix@
 bindir = @bindir@
 localstatedir = @localstatedir@
 sysconfdir = @sysconfdir@
+datarootdir = @datarootdir@
+mandir = @mandir@
+docdir = @docdir@
 cachedir = $(localstatedir)/cache/$(PACKAGE_NAME)
 
 BINPATH = $(DESTDIR)$(bindir)
 CONFPATH = $(DESTDIR)$(sysconfdir)
 STATEPATH = $(DESTDIR)$(localstatedir)
 CACHEPATH = $(DESTDIR)$(cachedir)
+DATAROOTPATH = $(DESTPATH)$(datarootdir)
+DOCPATH = $(DESTDIR)$(docdir)
+MYMANPATH = $(DESTDIR)$(mandir)
 
 EXEEXT = @EXEEXT@
 ################################

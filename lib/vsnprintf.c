@@ -1547,7 +1547,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_STRERROR_S)
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_DECL_STRERROR_S)
 # ifdef STRERROR_R_CHAR_P
 	/*
 	 * the f***ing GNU-Version of strerror_r wich returns
@@ -1562,6 +1562,12 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	 * Ol Solaris seems to have a static msgtable, so
 	 * strerror is threadsafe and we don't have a
 	 * _r version
+	 */
+	/*
+	 * we also simply fall into here if strerror is not thread
+	 * safe, but we have nothing else.
+	 * Since what should we do in this case... _sys_errlist
+	 * is a bsd extentions.
 	 */
 	const char *s = strerror(errno);
 # endif

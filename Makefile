@@ -188,6 +188,7 @@ AUX = \
 	Makefile \
 	.mapfile \
 	g2cd.conf.in \
+	g2cd.1 \
 	COPYING \
 	README \
 	autogen.sh \
@@ -415,6 +416,12 @@ $(CACHEPATH): $(DESTDIR)
 	mkdir -p "$(CACHEPATH)"
 $(CONFPATH): $(DESTDIR)
 	mkdir -p "$(CONFPATH)"
+$(DATAROOTPATH): $(DESTDIR)
+	mkdir -p "$(DATAROOTPATH)"
+$(DOCPATH): $(DESTDIR)
+	mkdir -p "$(DOCPATH)"
+$(MYMANPATH): $(DESTDIR)
+	mkdir -p "$(MYMANPATH)"
 
 # program
 install_$(MAIN): $(MAIN) $(BINPATH)
@@ -424,7 +431,9 @@ install_program: install_$(MAIN)
 # data
 install_g2cd.conf: g2cd.conf $(CONFPATH)
 	$(INSTALL_DAT) g2cd.conf $(CONFPATH)/
-install_data: install_g2cd.conf
+install_g2cd.1: g2cd.1 $(MYMANPATH)
+	$(INTSALL_DAT) g2cd.1 $(MYMANPATH)/man1/
+install_data: install_g2cd.conf install_g2cd.1
 
 install: install_program install_data $(CACHEPATH)
 
