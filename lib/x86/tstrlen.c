@@ -2,7 +2,7 @@
  * tstrlen.c
  * tstrlen, x86 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -295,34 +295,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static size_t tstrlen_runtime_sw(const tchar_t *s);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static size_t (*tstrlen_ptr)(const tchar_t *s) = tstrlen_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void tstrlen_select(void)
 {
 	tstrlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static __init size_t tstrlen_runtime_sw(const tchar_t *s)
-{
-	tstrlen_select();
-	return tstrlen_ptr(s);
 }
 
 size_t tstrlen(const tchar_t *s)
 {
 	return tstrlen_ptr(s);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void tstrlen_select(void)
+{
+	patch_instruction(tstrlen, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(tstrlen);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init size_t tstrlen_runtime_sw(const tchar_t *s)
+{
+	tstrlen_select();
+	return tstrlen(s);
+}
+
+/*@unused@*/
 static char const rcsid_tsl[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

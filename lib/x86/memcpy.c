@@ -2,7 +2,7 @@
  * memcpy.c
  * memcpy - x86 version
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -259,30 +259,43 @@ static __init_cdata const struct test_cpu_feature t_feat_big[] =
 	{.func = (void (*)(void))memcpy_small,          .features = {}, .flags = CFF_DEFAULT},
 };
 
-static GCC_ATTR_FASTCALL void *memcpy_runtime_sw(void *restrict dst, const void *restrict src, size_t len);
+static GCC_ATTR_FASTCALL void *my_memcpy_medium_runtime_sw(void *restrict dst, const void *restrict src, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
-static GCC_ATTR_FASTCALL void *(*memcpy_medium_ptr)(void *restrict dst, const void *restrict src, size_t len) = memcpy_runtime_sw;
-static GCC_ATTR_FASTCALL void *(*memcpy_big_ptr)(void *restrict dst, const void *restrict src, size_t len) = memcpy_runtime_sw;
+static GCC_ATTR_FASTCALL void *(*my_memcpy_medium_ptr)(void *restrict dst, const void *restrict src, size_t len) = my_memcpy_medium_runtime_sw;
+static GCC_ATTR_FASTCALL void *(*my_memcpy_big_ptr)(void *restrict dst, const void *restrict src, size_t len) = my_memcpy_runtime_sw;
 
-/*
- * constructor
- */
-static void memcpy_select(void) GCC_ATTR_CONSTRUCT;
-static __init void memcpy_select(void)
+static GCC_ATTR_CONSTRUCT __init void my_memcpy_select(void)
 {
-	memcpy_medium_ptr = test_cpu_feature(t_feat_med, anum(t_feat_med));
-	memcpy_big_ptr = test_cpu_feature(t_feat_big, anum(t_feat_big));
+	my_memcpy_medium_ptr = test_cpu_feature(t_feat_med, anum(t_feat_med));
+	my_memcpy_big_ptr = test_cpu_feature(t_feat_big, anum(t_feat_big));
 }
 
-static GCC_ATTR_FASTCALL __init void *memcpy_runtime_sw(void *restrict dst, const void *restrict src, size_t len)
+static inline GCC_ATTR_FASTCALL void *my_memcpy_medium(void *restrict dst, const void *restrict src, size_t len)
 {
-	memcpy_select();
-	if(likely(len < 256 * 1024))
-		return memcpy_medium_ptr(dst, src, len);
-	return memcpy_big_ptr(dst, src, len);
+	return my_memcpy_medium_ptr(dst, src, len);
 }
+
+static inline GCC_ATTR_FASTCALL void *my_memcpy_big(void *restrict dst, const void *restrict src, size_t len)
+{
+	return my_memcpy_big_ptr(dst, src, len);
+}
+#else
+GCC_ATTR_FASTCALL void *my_memcpy_medium(void *restrict dst, const void *restrict src, size_t len);
+GCC_ATTR_FASTCALL void *my_memcpy_big(void *restrict dst, const void *restrict src, size_t len);
+
+static GCC_ATTR_CONSTRUCT __init void my_memcpy_select(void)
+{
+	patch_instruction(my_memcpy_medium, t_feat_med, anum(t_feat_med));
+	patch_instruction(my_memcpy_big, t_feat_big, anum(t_feat_big));
+}
+
+DYN_JMP_DISPATCH_ST(my_memcpy_medium);
+DYN_JMP_DISPATCH_ST(my_memcpy_big);
+#endif
 
 /*
   1) less than 64-byte use a MOV or MOVQ or MOVDQA
@@ -297,9 +310,16 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	if(likely(len < 512))
 		return memcpy_small(dst, src, len);
 	if(likely(len < 256 * 1024))
-		return memcpy_medium_ptr(dst, src, len);
-	return memcpy_big_ptr(dst, src, len);
+		return my_memcpy_medium(dst, src, len);
+	return my_memcpy_big(dst, src, len);
 }
+
+static GCC_ATTR_USED GCC_ATTR_FASTCALL __init void *my_memcpy_medium_runtime_sw(void *restrict dst, const void *restrict src, size_t len)
+{
+	my_memcpy_select();
+	return my_memcpy(dst, src, len);
+}
+static GCC_ATTR_FASTCALL void *my_memcpy_big_runtime_sw(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_memcpy_medium_runtime_sw");
 
 void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
@@ -309,9 +329,10 @@ void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 	/* trick gcc to generate lean stack frame and do a tailcail */
 	return memcpy_big(dst, src, len);
 }
+
 void *my_memcpy_fwd(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
 
 #include "../generic/memcpy_rev.c"
-
+/*@unused@*/
 static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

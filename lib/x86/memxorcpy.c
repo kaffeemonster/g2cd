@@ -2,7 +2,7 @@
  * memxorcpy.c
  * xor two memory region efficient and cpy to dest, x86 implementation
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -130,37 +130,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void *(*memxorcpy_ptr)(void *dst, const void *src1, const void *src2, size_t len) = memxorcpy_runtime_sw;
 
-/*
- * constructor
- */
-static void memxorcpy_select(void) GCC_ATTR_CONSTRUCT;
-static __init void memxorcpy_select(void)
+static GCC_ATTR_CONSTRUCT __init void memxorcpy_select(void)
 {
 	memxorcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
+
+void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
+{
+	return memxorcpy_ptr(dst, src1, src2, len);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void memxorcpy_select(void)
+{
+	patch_instruction(memxorcpy, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH(memxorcpy);
+#endif
 
 /*
  * runtime switcher
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static __init void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len)
+static GCC_ATTR_USED __init void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len)
 {
 	memxorcpy_select();
-	return memxorcpy_ptr(dst, src1, src2, len);
+	return memxorcpy(dst, src1, src2, len);
 }
 
-/*
- * trampoline
- */
-void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
-{
-	return memxorcpy_ptr(dst, src1, src2, len);
-}
-
+/*@unused@*/
 static char const rcsid_mxxc[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

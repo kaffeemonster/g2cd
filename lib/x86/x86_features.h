@@ -2,7 +2,7 @@
  * x86_features.h
  * x86 feature bits
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -176,5 +176,64 @@ enum x86_cpu_features
 # undef ENUM_CMD
 
 extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
+
+#ifdef __ELF__
+# define _DYN_JMP_SECTION_NAME ".plt"
+# ifdef __arm__
+#  define _DYN_JMP_DBG_START(name) ".type	" #name ", #function\n"
+# else
+#  define _DYN_JMP_DBG_START(name) ".type	" #name ", @function\n"
+# endif
+# define _DYN_JMP_DBG_END(name) ".size	" #name ", . - " #name "\n\t"
+#else
+# define _DYN_JMP_SECTION_NAME ".text.jmp"
+# define _DYN_JMP_DBG_START(name) "\n"
+# define _DYN_JMP_DBG_END(name) "\n\t"
+#endif
+
+#define DYN_JMP_DISPATCH(name) \
+	asm ( \
+		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
+		".p2align 2\n\t" \
+		".global " #name "\n\t" \
+		_DYN_JMP_DBG_START(name) \
+		#name ":\n\t" \
+		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
+		".long	" #name "_runtime_sw - 1f\n" \
+		"1:\n\t" \
+		_DYN_JMP_DBG_END(name) \
+		".popsection" \
+	)
+
+#define DYN_JMP_DISPATCH_ALIAS(name, sname) \
+	asm ( \
+		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
+		".p2align 2\n\t" \
+		".global " #name "\n\t" \
+		".global " #sname "\n\t" \
+		_DYN_JMP_DBG_START(name) \
+		#sname ":\n\t" \
+		#name ":\n\t" \
+		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
+		".long	" #name "_runtime_sw - 1f\n" \
+		"1:\n\t" \
+		_DYN_JMP_DBG_END(name) \
+		".popsection" \
+	)
+
+
+#define DYN_JMP_DISPATCH_ST(name) \
+	asm ( \
+		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
+		".p2align 2\n\t" \
+		_DYN_JMP_DBG_START(name) \
+		#name ":\n\t" \
+		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
+		".long	" #name "_runtime_sw - 1f\n" \
+		"1:\n\t" \
+		_DYN_JMP_DBG_END(name) \
+		".popsection" \
+	)
+
 
 #endif

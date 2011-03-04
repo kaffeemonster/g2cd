@@ -32,6 +32,7 @@ default_hate_cbranch=no
 default_enable_unaligned_ok=no
 default_disable_bit_instr=yes
 default_enable_release=no
+disable_dyndispatch=no
 disable_backtraces=no
 disable_dbus=no
 disable_hw_mult=no
@@ -121,6 +122,14 @@ AC_ARG_ENABLE([asm], [AS_HELP_STRING([--disable-asm],
               [disable assembler code])],
               [disable_asm=yes], [])
 case "$host" in
+	*i?86-*)
+	AC_ARG_ENABLE([dyndispatch], [AS_HELP_STRING([--disable-dyndispatch],
+	              [disable dynamic code patching to dispatch to cpu dependent functions])],
+	              [disable_dyndispatch=yes], []);;
+	*x86_64-*)
+	AC_ARG_ENABLE([dyndispatch], [AS_HELP_STRING([--disable-dyndispatch],
+	              [disable dynamic code patching to dispatch to cpu dependent functions])],
+	              [disable_dyndispatch=yes], []);;
 	*sparc*)
 	AC_ARG_ENABLE([sparcv9], [AS_HELP_STRING([--disable-sparcv9],
 	              [disable sparcv9 code, only do this if you really do _not_ have a v9, which means < UltraSPARC/SPARC64])],
@@ -238,6 +247,24 @@ else
 fi
 
 case "$host" in
+	*i?86-*)
+		AC_MSG_CHECKING([wheter we should disable dynamic code dispatch])
+		if test x"$disable_dyndispatch" = xyes; then
+			AC_DEFINE(USE_OLD_DISPATCH, 1, do not use dynamic code patching)
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([no])
+		fi
+		;;
+	*x86_64-*)
+		AC_MSG_CHECKING([wheter we should disable dynamic code dispatch])
+		if test x"$disable_dyndispatch" = xyes; then
+			AC_DEFINE(USE_OLD_DISPATCH, 1, do not use dynamic code patching)
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([no])
+		fi
+		;;
 	*sparc*)
 		AC_MSG_CHECKING([wheter we should disable SPARCv9 code])
 		if test x"$disable_v9" = xno; then
@@ -495,7 +522,7 @@ esac
 
 # Checks for header files.
 AC_FUNC_ALLOCA
-AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h syslog.h wchar.h winsock2.h ws2tcpip.h])
+AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h sys/mman.h valgrind/valgrind.h syslog.h wchar.h winsock2.h ws2tcpip.h])
 
 AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
 
@@ -879,7 +906,7 @@ AC_FUNC_MMAP
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
+AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
 
 if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)

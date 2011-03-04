@@ -1,7 +1,7 @@
 /* bin2o.c
  * little helper to make a .o from (data)files
  *
- * Copytight (c) 2006 - 2010 Jan Seiffert
+ * Copytight (c) 2006 - 2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -79,6 +79,9 @@ static const char *opt_pack = NULL;
 static unsigned balignment = 8;
 static int verbose;
 static int export_base_data;
+static int unhidden_tramp;
+static int rel_tramp;
+static int no_tramp;
 #define PBUF_SIZE (1<<15)
 static char pbuf[PBUF_SIZE];
 
@@ -142,6 +145,12 @@ int main(int argc, char **argv)
 					verbose = true;
 				else if('e' == argv[i][1])
 					export_base_data = true;
+				else if('u' == argv[i][1])
+					unhidden_tramp = true;
+				else if('r' == argv[i][1])
+					rel_tramp = true;
+				else if('n' == argv[i][1])
+					no_tramp = true;
 				else
 					fprintf(stderr, "unknown option: '-%c'\n", argv[i][1]);
 				continue;
@@ -359,18 +368,24 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		w_ptr  = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
 		w_ptr += sprintf(w_ptr, "\t.type %s_base_data, %cobject\n", buf->name, GAS == as_dia ? '@' : '#');
 	}
-	if(GAS == as_dia)
-		w_ptr += sprintf(w_ptr, "\t.hidden %s\n", buf->name);
-	w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
-	w_ptr += sprintf(w_ptr, "%s:\n", buf->name);
-	w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
-	if(COFF == as_dia) {
-		w_ptr += sprintf(w_ptr, "\t.def %s\n\t\t.size . - %s\n", buf->name, buf->name);
-		w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");
-		w_ptr += sprintf(w_ptr, "\t\t.type 63\n\t.endef\n\n");
-	} else {
-		w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n", buf->name, buf->name);
-		w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? '@' : '#');
+	if(!(export_base_data && no_tramp))
+	{
+		if(GAS == as_dia && !unhidden_tramp)
+			w_ptr += sprintf(w_ptr, "\t.hidden %s\n", buf->name);
+		w_ptr += sprintf(w_ptr, ".globl %s\n\t.align 8\n", buf->name);
+		w_ptr += sprintf(w_ptr, "%s:\n", buf->name);
+		if(!rel_tramp)
+			w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
+		else
+			w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s-%s_base_data\n", (unsigned long) buf->len, buf->name, buf->name);
+		if(COFF == as_dia) {
+			w_ptr += sprintf(w_ptr, "\t.def %s\n\t\t.size . - %s\n", buf->name, buf->name);
+			w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");
+			w_ptr += sprintf(w_ptr, "\t\t.type 63\n\t.endef\n\n");
+		} else {
+			w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n", buf->name, buf->name);
+			w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? '@' : '#');
+		}
 	}
 	if(verbose) {
 		if(w_ptr - pbuf != write(STDOUT_FILENO, pbuf, w_ptr - pbuf)) {
@@ -550,6 +565,9 @@ static int invokation(char *prg_name)
 	fputs("\t-o outfile\t- output filename\t(d: what as takes)\n", stderr);
 	fputs("\t-e\t- also export the base data as symbol\n", stderr);
 	fputs("\t-v\t- dump text written to assambler\n", stderr);
+	fputs("\t-u\t- unhidden trampoline\n", stderr);
+	fputs("\t-r\t- relative trampoline\n", stderr);
+	fputs("\t-n\t- no trampoline, only with -e\n", stderr);
 	fputs("\tfile\t- the filename to \n", stderr);
 	return EXIT_FAILURE;
 }

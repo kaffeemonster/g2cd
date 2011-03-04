@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -54,37 +54,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static size_t popcountst_runtime_sw(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL;
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static size_t (*popcountst_ptr)(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL = popcountst_runtime_sw;
 
-/*
- * constructor
- */
-static void popcountst_select(void) GCC_ATTR_CONSTRUCT;
-static __init void popcountst_select(void)
+static GCC_ATTR_CONSTRUCT __init void popcountst_select(void)
 {
 	popcountst_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
+size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
+{
+	return popcountst_ptr(n);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void popcountst_select(void)
+{
+	patch_instruction(popcountst, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH(popcountst);
+#endif
+
 /*
  * runtime switcher
  *
- * this is inherent racy, we only provide it if the constructer failes
+ * this is inherent racy, we only provide it if the constructor fails
  */
-static __init size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_runtime_sw(size_t n)
+static GCC_ATTR_USED __init size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_runtime_sw(size_t n)
 {
 	popcountst_select();
 	return popcountst(n);
 }
 
-/*
- * trampoline
- */
-size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
-{
-	return popcountst_ptr(n);
-}
-
+/*@unused@*/
 static char const rcsid_pcx[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient, x86 implementation
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -132,37 +132,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static void *memand_runtime_sw(void *dst, const void *src, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void *(*memand_ptr)(void *dst, const void *src, size_t len) = memand_runtime_sw;
 
-/*
- * constructor
- */
-static void memand_select(void) GCC_ATTR_CONSTRUCT;
-static __init void memand_select(void)
+static GCC_ATTR_CONSTRUCT __init void memand_select(void)
 {
 	memand_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init void *memand_runtime_sw(void *dst, const void *src, size_t len)
-{
-	memand_select();
-	return memand_ptr(dst, src, len);
-}
-
-/*
- * trampoline
- */
 void *memand(void *dst, const void *src, size_t len)
 {
 	return memand_ptr(dst, src, len);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void memand_select(void)
+{
+	patch_instruction(memand, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(memand);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void *memand_runtime_sw(void *dst, const void *src, size_t len)
+{
+	memand_select();
+	return memand(dst, src, len);
+}
+
+/*@unused@*/
 static char const rcsid_max[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

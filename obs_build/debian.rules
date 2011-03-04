@@ -33,7 +33,7 @@ build-stamp:
 	# Add here commands to compile the package.
 	# there are surely some vars for the paths...
 	./configure --enable-release --prefix=/usr --sysconfdir="/etc" --localstatedir="/var"
-	make $(MAKEFLAGS) all
+	$(MAKE) $(MAKEFLAGS) all
 
 	# ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 		# Code to run the package test suite.

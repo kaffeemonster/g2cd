@@ -2,7 +2,7 @@
  * strreverse_l.c
  * strreverse_l, x86 implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -323,37 +323,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static void strreverse_l_runtime_sw(char *begin, char *end);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void (*strreverse_l_ptr)(char *begin, char *end) = strreverse_l_runtime_sw;
 
-/*
- * constructor
- */
-static void strreverse_l_select(void) GCC_ATTR_CONSTRUCT;
-static __init void strreverse_l_select(void)
+static GCC_ATTR_CONSTRUCT __init void strreverse_l_select(void)
 {
 	strreverse_l_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init void strreverse_l_runtime_sw(char *begin, char *end)
-{
-	strreverse_l_select();
-	strreverse_l_ptr(begin, end);
-}
-
-/*
- * trampoline
- */
 void strreverse_l(char *begin, char *end)
 {
 	strreverse_l_ptr(begin, end);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void strreverse_l_select(void)
+{
+	patch_instruction(strreverse_l, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(strreverse_l);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void strreverse_l_runtime_sw(char *begin, char *end)
+{
+	strreverse_l_select();
+	strreverse_l(begin, end);
+}
+
+/*@unused@*/
 static char const rcsid_srl[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

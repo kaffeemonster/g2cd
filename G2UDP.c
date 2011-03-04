@@ -952,7 +952,7 @@ void handle_udp(struct epoll_event *ev, struct norm_buff *d_hold_sp[MULTI_RECV_N
 	}
 }
 
-bool init_udp(some_fd epoll_fd)
+__init bool init_udp(some_fd epoll_fd)
 {
 	unsigned i, sos_num, idx;
 	bool ipv4_ready = false;

@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platform, x86 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -437,34 +437,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static char *strchrnul_runtime_sw(const char *s, int c);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static char *(*strchrnul_ptr)(const char *s, int c) = strchrnul_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void strchrnul_select(void)
 {
 	strchrnul_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init char *strchrnul_runtime_sw(const char *s, int c)
-{
-	strchrnul_select();
-	return strchrnul_ptr(s, c);
 }
 
 char *strchrnul(const char *s, int c)
 {
 	return strchrnul_ptr(s, c);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void strchrnul_select(void)
+{
+	patch_instruction(strchrnul, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(strchrnul);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init char *strchrnul_runtime_sw(const char *s, int c)
+{
+	strchrnul_select();
+	return strchrnul(s, c);
+}
+
+/*@unused@*/
 static char const rcsid_scn[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

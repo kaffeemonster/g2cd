@@ -256,6 +256,13 @@
 # define SECTION_GOT
 #endif
 
+#ifndef USE_OLD_DISPATCH
+# if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MPROTECT)
+# else
+#  define USE_OLD_DISPATCH
+# endif
+#endif
+
 /*
  * maybe we can unmap our init code
  * But for now, wimply mark it cold, because it is run exactly

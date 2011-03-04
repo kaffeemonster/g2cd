@@ -520,30 +520,17 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strncasecmp_a_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-#if 1
 static int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static int (*strncasecmp_a_ptr)(const char *s1, const char *s2, size_t n) = strncasecmp_a_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void strncasecmp_a_select(void)
 {
 	strncasecmp_a_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static __init int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
-{
-	strncasecmp_a_select();
-	return strncasecmp_a_ptr(s1, s2, n);
 }
 
 int strncasecmp_a(const char *s1, const char *s2, size_t n)
@@ -552,78 +539,25 @@ int strncasecmp_a(const char *s1, const char *s2, size_t n)
 }
 
 #else
-
-/*
- * Try with self modifing code.
- *
- * Since this will not work (memory protection), it is disabled and only
- * kept for reference.
- * .  .  .  . pause .  .  .  .
- * Ok, it works under specific circumstances, which are normaly OK on
- * Linux, but depending on those is fragile and brittle.
- * And we modify the .text segment, so we break the cow mapping (Ram +
- * pagetable usage). It's like a textrel, which are bad.
- *
- * The ideal solution is a segment on its own with min. page size and
- * alignment, aggregating all jmp where we control the mapping flags.
- * (bad example .got: recently changed - GNU_RELRO. Make readonly on old
- * systems -> boom. Simply write on new systems -> boom)
- * But this needs a linker script -> heavy sysdep -> ouch.
- * Normaly we would need something similar for the other code to write
- * protect the function pointer, but -> heavy sysdep.
- * Moving all the function pointer to the start of the .data segment would
- * be a start but still unportable.
- * Aggregating all pointer nerby to each other would also be a start, to
- * only have one potential remap.
- */
-#include <sys/mman.h>
-#include <unistd.h>
-
-/*
- * constructor
- */
-static GCC_ATTR_CONSTRUCT void strncasecmp_a_select(void)
+static GCC_ATTR_CONSTRUCT __init void strncasecmp_a_select(void)
 {
-	char *of_addr = (char *)strncasecmp_a;
-	char *nf_addr = (char *)test_cpu_feature(t_feat, anum(t_feat));
-	char *page;
-	uint32_t displ;
-
-	of_addr += 1; /* jmp is one byte */
-
-	page = (char *)ALIGN_DOWN(of_addr, getpagesize());
-	displ = (uint32_t)(nf_addr - (of_addr + 4));
-	/*
-	 * If this fails, which is likely and why the code is disabled, we
-	 * are screwed.
-	 * And it will fail since we have no influence how the runtime
-	 * linker opened the underlying executable (O_READONLY).
-	 */
-	mprotect(page, getpagesize(), PROT_READ|PROT_WRITE|PROT_EXEC);
-	*(uint32_t *)of_addr = displ;
-	mprotect(page, getpagesize(), PROT_READ|PROT_EXEC);
+	patch_instruction(strncasecmp_a, t_feat, anum(t_feat));
 }
+
+DYN_JMP_DISPATCH(strncasecmp_a);
+#endif
 
 /*
  * runtime switcher
  *
- * this is inherent racy, we only provide it if the constructor is not run
+ * this is inherent racy, we only provide it if the constructor fails
  */
-static int __attribute__((used)) strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
+static GCC_ATTR_USED __init int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
 {
 	strncasecmp_a_select();
 	return strncasecmp_a(s1, s2, n);
 }
 
-asm (
-	".section	.text\n\t"
-	".global strncasecmp_a\n"
-	"strncasecmp_a:\n\t"
-	".byte	0xE9\n" /* make sure we get a jmp with displacement */
-	".long	strncasecmp_a_runtime_sw - 1f\n"
-	"1:"
-);
-#endif
-
+/*@unused@*/
 static char const rcsid_sncca[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

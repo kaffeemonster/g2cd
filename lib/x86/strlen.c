@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -337,30 +337,17 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strlen_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-#if 1
 static size_t strlen_runtime_sw(const char *s);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static size_t (*strlen_ptr)(const char *s) = strlen_runtime_sw;
 
-/*
- * constructor
- */
-static __init GCC_ATTR_CONSTRUCT void strlen_select(void)
+static GCC_ATTR_CONSTRUCT __init void strlen_select(void)
 {
 	strlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static __init size_t strlen_runtime_sw(const char *s)
-{
-	strlen_select();
-	return strlen_ptr(s);
 }
 
 size_t strlen(const char *s)
@@ -368,6 +355,26 @@ size_t strlen(const char *s)
 	return strlen_ptr(s);
 }
 #else
+static GCC_ATTR_CONSTRUCT __init void strlen_select(void)
+{
+	patch_instruction(strlen, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH(strlen);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init size_t strlen_runtime_sw(const char *s)
+{
+	strlen_select();
+	return strlen(s);
+}
+
+#if 0
 /*
  * newer glibc(2.11)/binutils(2.20) now know "ifuncs",
  * functions which are re-linked to a specific impl. based on
@@ -417,5 +424,6 @@ void *strlen_ifunc (void)
 __asm__ (".type strlen, %gnu_indirect_function");
 #endif
 
+/*@unused@*/
 static char const rcsid_sl[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

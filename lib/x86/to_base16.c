@@ -2,7 +2,7 @@
  * to_base16.c
  * convert binary string to hex, x86 impl.
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -217,38 +217,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static unsigned char *(*to_base16_ptr)(unsigned char *s, const unsigned char *src, unsigned len) = to_base16_runtime_sw;
 
-/*
- * constructor
- */
-static void to_base16_select(void) GCC_ATTR_CONSTRUCT;
-static __init void to_base16_select(void)
+static GCC_ATTR_CONSTRUCT __init void to_base16_select(void)
 {
 	to_base16_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	return to_base16_ptr(dst, src, len);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void to_base16_select(void)
+{
+	patch_instruction(to_base16, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH(to_base16);
+#endif
+
 /*
  * runtime switcher
  *
- * this is inherent racy, we only provide it if the constructer failes
+ * this is inherent racy, we only provide it if the constructor fails
  */
-static __init unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
+static GCC_ATTR_USED __init unsigned char *to_base16_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	to_base16_select();
 	return to_base16(dst, src, len);
 }
 
-/*
- * trampoline
- */
-unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
-{
-	return to_base16_ptr(dst, src, len);
-}
-
+/*@unused@*/
 static char const rcsid_tb16x[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

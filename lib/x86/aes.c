@@ -645,42 +645,19 @@ static __init_cdata const struct test_cpu_feature enc_feat[] =
 static void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in);
 static void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in);
 
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void (*aes_encrypt_key128_ptr)(struct aes_encrypt_ctx *ctx, const void *in) = aes_encrypt_key128_runtime_sw;
 static void (*aes_ecb_encrypt_ptr)(const struct aes_encrypt_ctx *ctx, void *out, const void *in) = aes_ecb_encrypt_runtime_sw;
 
-/*
- * constructor
- */
-static void aes_select(void) GCC_ATTR_CONSTRUCT;
-static __init void aes_select(void)
+static GCC_ATTR_CONSTRUCT __init void aes_select(void)
 {
 	aes_encrypt_key128_ptr = test_cpu_feature(key_feat, anum(key_feat));
 	aes_ecb_encrypt_ptr = test_cpu_feature(enc_feat, anum(enc_feat));
 }
 
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in)
-{
-	aes_select();
-	aes_encrypt_key128(ctx, in);
-}
-
-static __init void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
-{
-	aes_select();
-	aes_ecb_encrypt(ctx, out, in);
-}
-
-/*
- * trampoline
- */
 void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	aes_encrypt_key128_ptr(ctx, in);
@@ -689,6 +666,33 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	aes_ecb_encrypt_ptr(ctx, out, in);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void aes_select(void)
+{
+	patch_instruction(aes_encrypt_key128, key_feat, anum(key_feat));
+	patch_instruction(aes_ecb_encrypt, enc_feat, anum(enc_feat));
+}
+
+DYN_JMP_DISPATCH(aes_encrypt_key128);
+DYN_JMP_DISPATCH(aes_ecb_encrypt);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	aes_select();
+	aes_encrypt_key128(ctx, in);
+}
+
+static GCC_ATTR_USED __init void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_select();
+	aes_ecb_encrypt(ctx, out, in);
 }
 
 /*@unused@*/

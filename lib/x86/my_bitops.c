@@ -26,9 +26,11 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 #include "../other.h"
 #include "../log_facility.h"
 #include "../my_bitops.h"
+#include "../my_bitopsm.h"
 #include "x86_features.h"
 #include "x86.h"
 
@@ -196,23 +198,23 @@ static inline bool is_486(void)
 	return toggle_eflags_test(1 << 18);
 }
 
-static inline void cpu_feature_clear(int f)
+static __init inline void cpu_feature_clear(int f)
 {
 	our_cpu.features[f / 32] &= ~(1 << (f % 32));
 }
 
-static inline void cpu_feature_set(int f)
+static __init inline void cpu_feature_set(int f)
 {
 	our_cpu.features[f / 32] |= 1 << (f % 32);
 }
 
-static inline bool cpu_feature(int f)
+static __init inline bool cpu_feature(int f)
 {
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
 }
 
 #ifndef __x86_64__
-static bool detect_old_cyrix(void)
+static __init bool detect_old_cyrix(void)
 {
 	/*
 	 * Perform the Cyrix 5/2 test. A Cyrix won't change
@@ -947,5 +949,70 @@ __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 	}
 	return NULL; /* whoever fucked it up, die! */
 }
+
+#ifndef USE_OLD_DISPATCH
+/*
+ * Try with self modifing code.
+ *
+ * Since this will not work (memory protection), it is disabled and only
+ * kept for reference.
+ * .  .  .  . pause .  .  .  .
+ * Ok, it works under specific circumstances, which are normaly OK on
+ * Linux, but depending on those is fragile and brittle.
+ * And we modify the .text segment, so we break the cow mapping (Ram +
+ * pagetable usage). It's like a textrel, which are bad.
+ *
+ * The ideal solution is a segment on its own with min. page size and
+ * alignment, aggregating all jmp where we control the mapping flags.
+ * (bad example .got: recently changed - GNU_RELRO. Make readonly on old
+ * systems -> boom. Simply write on new systems -> boom)
+ * But this needs a linker script -> heavy sysdep -> ouch.
+ * Normaly we would need something similar for the other code to write
+ * protect the function pointer, but -> heavy sysdep.
+ * Moving all the function pointer to the start of the .data segment would
+ * be a start but still unportable.
+ * Aggregating all pointer nerby to each other would also be a start, to
+ * only have one potential remap.
+ */
+# include <sys/mman.h>
+# include <unistd.h>
+
+# ifdef HAVE_VALGRIND_VALGRIND_H
+#  include <valgrind/valgrind.h>
+# endif
+__init void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l)
+{
+	char *of_addr = (char *)where;
+	char *nf_addr = (char *)test_cpu_feature(t, l);
+	char *page;
+	size_t len;
+	size_t pagesize = (size_t)sysconf(_SC_PAGESIZE);
+	ptrdiff_t displ;
+
+	of_addr += 1; /* jmp is one byte */
+
+	page  = (char *)ALIGN_DOWN(of_addr, pagesize);
+	len   = (of_addr + 4) - page;
+	len   = len < pagesize ? pagesize : 2 * pagesize;
+	displ = nf_addr - (of_addr + 4);
+	if((size_t)-1 == pagesize || displ > INT32_MAX || displ < INT32_MIN)
+		abort();
+	/*
+	 * If this fails, which is likely, we are screwed.
+	 * And it will fail since we have no influence how the runtime
+	 * linker opened the underlying executable (O_READONLY).
+	 */
+	mprotect(page, len, PROT_READ|PROT_WRITE|PROT_EXEC);
+	*(int32_t *)of_addr = (int32_t)displ;
+	mprotect(page, len, PROT_READ|PROT_EXEC);
+# ifdef HAVE_VALGRIND_VALGRIND_H
+	VALGRIND_DISCARD_TRANSLATIONS(where, 8);
+# endif
+}
+#else
+__init void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l)
+{
+}
+#endif
 
 static char const rcsid_mbx[] GCC_ATTR_USED_VAR = "$Id:$";

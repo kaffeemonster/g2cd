@@ -128,7 +128,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"lea	15("SP"), %0\n\t"
 		"and	$-16, %0\n\t"
 		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"
-		"vmovdqu	%%xmm5, 16+16("SP")\n\t"
+		"vmovdqa	%%xmm5, 16(%0)\n\t"
 		"vpcmpeqd	%%xmm1, %%xmm1, %%xmm1\n\t"
 		"vinsertf128	$1, %%xmm1, %%ymm1, %%ymm1\n\t"
 		"vmovdqa	%%ymm1, %%ymm3\n\t"
@@ -277,7 +277,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		/* twice as much bits, twice the constant??? */
 		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
-		"vmovdqu	16+16("SP"), %%xmm5\n\t"
+		"vmovdqa	16(%0), %%xmm5\n\t"
 		"add	$(32+16), "SP"\n\t"
 		"pop	%0\n\t"
 		"test	%1, %1\n\t"
@@ -621,7 +621,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"lea	15("SP"), %0\n\t"
 		"and	$-16, %0\n\t"
 		"pxor	%%xmm7, %%xmm7\n\t"
-		"movdqu	%%xmm5, 16+16("SP")\n\t"
+		"movdqa	%%xmm5, 16(%0)\n\t"
 		"pcmpeqd	%%xmm1, %%xmm1\n\t"
 		"pcmpeqd	%%xmm3, %%xmm3\n\t"
 		"pcmpeqd	%%xmm5, %%xmm5\n\t"
@@ -756,7 +756,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	64+%8, %%xmm2\n\t"
 		"paddq	%%xmm2, %%xmm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
-		"movdqu	16+16("SP"), %%xmm5\n\t"
+		"movdqa	16(%0), %%xmm5\n\t"
 		"add	$(32+16), "SP"\n\t"
 		"pop	%0\n\t"
 		"test	%1, %1\n\t"
@@ -938,7 +938,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"lea	15("SP"), %0\n\t"
 		"and	$-16, %0\n\t"
 		"pxor	%%xmm7, %%xmm7\n\t"
-		"movdqu	%%xmm3, 16+16("SP")\n\t"
+		"movdqa	%%xmm3, 16(%0)\n\t"
 		"pcmpeqd	%%xmm1, %%xmm1\n\t"
 		"pcmpeqd	%%xmm3, %%xmm3\n\t"
 		"pcmpeqd	%%xmm5, %%xmm5\n\t"
@@ -1076,7 +1076,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"movdqa	64+%5, %%xmm2\n\t"
 		"paddq	%%xmm2, %%xmm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
-		"movdqu	16+16("SP"), %%xmm3\n\t"
+		"movdqa	16(%0), %%xmm3\n\t"
 		"add	$(32+16), "SP"\n\t"
 		"pop	%0\n\t"
 		"test	%1, %1\n\t"
@@ -1257,7 +1257,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"lea	7("SP"), %0\n\t"
 		"and	$-8, %0\n\t"
 		"pxor	%%mm7, %%mm7\n\t"
-		"movq	%%mm3, 8+8("SP")\n\t"
+		"movq	%%mm3, 8(%0)\n\t"
 		"pcmpeqd	%%mm1, %%mm1\n\t"
 		"pcmpeqd	%%mm3, %%mm3\n\t"
 		"pcmpeqd	%%mm5, %%mm5\n\t"
@@ -1394,7 +1394,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"movq	64+%5, %%mm2\n\t"
 		"paddd	%%mm2, %%mm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
-		"movq	8+8("SP"), %%mm3\n\t"
+		"movq	8(%0), %%mm3\n\t"
 		"add	$(16+8), "SP"\n\t"
 		"pop	%0\n\t"
 		"test	%1, %1\n\t"
@@ -1570,7 +1570,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"lea	7("SP"), %0\n\t"
 		"and	$-8, %0\n\t"
 		"pxor	%%mm7, %%mm7\n\t"
-		"movq	%%mm3, 8+8("SP")\n\t"
+		"movq	%%mm3, 8(%0)\n\t"
 		"pcmpeqd	%%mm1, %%mm1\n\t"
 		"pcmpeqd	%%mm3, %%mm3\n\t"
 		"pcmpeqd	%%mm5, %%mm5\n\t"
@@ -1721,7 +1721,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"movq	64+%5, %%mm2\n\t"
 		"paddd	%%mm2, %%mm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
-		"movq	8+8("SP"), %%mm3\n\t"
+		"movq	8(%0), %%mm3\n\t"
 		"add	$(16+8), "SP"\n\t"
 		"pop	%0\n\t"
 		"test	%1, %1\n\t"
@@ -1863,37 +1863,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static size_t mempopcnt_runtime_sw(const void *s, size_t n);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static size_t (*mempopcnt_ptr)(const void *s, size_t n) = mempopcnt_runtime_sw;
 
-/*
- * constructor
- */
-static void mempopcnt_select(void) GCC_ATTR_CONSTRUCT;
-static __init void mempopcnt_select(void)
+static GCC_ATTR_CONSTRUCT __init void mempopcnt_select(void)
 {
 	mempopcnt_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
+size_t mempopcnt(const void *s, size_t n)
+{
+	return mempopcnt_ptr(s, n);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void mempopcnt_select(void)
+{
+	patch_instruction(mempopcnt, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH(mempopcnt);
+#endif
+
 /*
  * runtime switcher
  *
- * this is inherent racy, we only provide it if the constructer failes
+ * this is inherent racy, we only provide it if the constructor fails
  */
-static __init size_t mempopcnt_runtime_sw(const void *s, size_t n)
+static GCC_ATTR_USED __init size_t mempopcnt_runtime_sw(const void *s, size_t n)
 {
 	mempopcnt_select();
 	return mempopcnt(s, n);
 }
 
-/*
- * trampoline
- */
-size_t mempopcnt(const void *s, size_t n)
-{
-	return mempopcnt_ptr(s, n);
-}
-
+/*@unused@*/
 static char const rcsid_mpx[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

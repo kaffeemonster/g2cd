@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,5 +64,8 @@ char *strrchr(const char *s, int c);
 # include "generic/strrchr.c"
 #endif
 
+#ifndef NO_ALIAS
+# undef rindex
 char *rindex(const char *s, int c) GCC_ATTR_ALIAS("strrchr");
+#endif
 /* EOF */

@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   x86 implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -14,8 +14,13 @@
  * original, please go to zlib.net.
  */
 
+#include "../other.h"
 #define HAVE_ADLER32_VEC
+#ifndef USE_SIMPLE_DISPATCH
+uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+#else
 static inline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+#endif
 #define MIN_WORK 32
 
 #include "../generic/adler32.c"
@@ -588,34 +593,41 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))adler32_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static uint32_t adler32_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len);
+static uint32_t adler32_vec_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
-static uint32_t (*adler32_ptr)(uint32_t adler, const uint8_t *buf, unsigned len) = adler32_runtime_sw;
+static uint32_t (*adler32_vec_ptr)(uint32_t adler, const uint8_t *buf, unsigned len) = adler32_vec_runtime_sw;
 
-/*
- * constructor
- */
-static GCC_ATTR_CONSTRUCT __init void adler32_select(void)
+static GCC_ATTR_CONSTRUCT __init void adler32_vec_select(void)
 {
-	adler32_ptr = test_cpu_feature(t_feat, anum(t_feat));
+	adler32_vec_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
+
+static inline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	return adler32_vec_ptr(adler, buf, len);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void adler32_vec_select(void)
+{
+	patch_instruction(adler32_vec, t_feat, anum(t_feat));
+}
+
+DYN_JMP_DISPATCH_ST(adler32_vec);
+#endif
 
 /*
  * runtime switcher
  *
  * this is inherent racy, we only provide it if the constructor fails
  */
-static __init uint32_t adler32_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len)
+static GCC_ATTR_USED __init uint32_t adler32_vec_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	adler32_select();
-	return adler32_ptr(adler, buf, len);
-}
-
-static inline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
-{
-	return adler32_ptr(adler, buf, len);
+	adler32_vec_select();
+	return adler32_vec(adler, buf, len);
 }
 
 static char const rcsid_a32x86[] GCC_ATTR_USED_VAR = "$Id: $";

@@ -62,6 +62,8 @@
 # include "generic/memchr.c"
 #endif
 
-#undef memchr
+#ifndef NO_ALIAS
+# undef memchr
 void *memchr(const void *s, int c, size_t n) GCC_ATTR_ALIAS("my_memchr");
+#endif
 /* EOF */

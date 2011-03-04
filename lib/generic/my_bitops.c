@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, generic fallback/nop
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,7 +23,7 @@
  * $Id:$
  */
 
-void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
+__init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 {
 	size_t i;
 
@@ -32,6 +32,10 @@ void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 			return t[i].func;
 	}
 	return NULL; /* die, sucker, die! */
+}
+
+__init void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l)
+{
 }
 
 static char const rcsid_mbg[] GCC_ATTR_USED_VAR = "$Id:$";

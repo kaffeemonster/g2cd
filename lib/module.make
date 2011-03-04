@@ -408,7 +408,7 @@ BITOPOBJS = \
 	$(MPL)/adler32.o \
 	$(MPL)/bitfield_rle.o \
 	$(MPL)/cpy_rest.o \
-	$(MPL)/config_parser.o \
+	$(MPL)/config_parser.lo \
 	$(MPL)/entities.o \
 	$(MPL)/flsst.o \
 	$(MPL)/introsort.o \
@@ -434,7 +434,7 @@ BITOPOBJS = \
 	$(MPL)/strreverse_l.o\
 	$(MPL)/to_base16.o \
 	$(MPL)/to_base32.o \
-	$(MPL)/my_bitops.o
+	$(MPL)/my_bitops.lo
 
 TCHAROBJS = \
 	$(MPL)/tstrlen.o \
@@ -449,13 +449,10 @@ LIBBINOBJS = \
 
 # base objectfiles
 LIBOBJS = \
-	$(BITOPOBJS) \
-	$(TCHAROBJS) \
-	$(LIBBINOBJS) \
 	$(MPL)/aes.o \
 	$(MPL)/atomic.o \
 	$(MPL)/ansi_prng.o \
-	$(MPL)/backtrace.o \
+	$(MPL)/backtrace.lo \
 	$(MPL)/combo_addr.o \
 	$(MPL)/guid.o \
 	$(MPL)/hzp.o \
@@ -467,8 +464,11 @@ LIBOBJS = \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
+	$(MPL)/vsnprintf.o \
 	$(MPL)/print_ts.o \
-	$(MPL)/vsnprintf.o
+	$(BITOPOBJS) \
+	$(TCHAROBJS) \
+	$(LIBBINOBJS)
 
 # target for this module
 LIBCOMMON = $(MPL)/libcommon.a
@@ -494,7 +494,7 @@ $(AES_TABS): $(MPL)/aes_tab_gen
 	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/aes_tab_gen $@
 
 $(MPL)/aes_tab.o: $(AES_TABS) bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(AES_TABS)
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -n -a $(AS) $(BIN2O_OPTS) -o $@ $(AES_TABS)
 
 $(MPL)/five_tab_gen: $(MPL)/five_tab_gen.c ccdrv $(MPL)/module.make Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) $(MPL)/five_tab_gen.c -o $@
@@ -503,10 +503,10 @@ $(MPL)/five_tab.bin: $(MPL)/five_tab_gen
 	@./ccdrv -s$(VERBOSE) "TAB[$@]" $(MPL)/five_tab_gen $@
 
 $(MPL)/five_tab.o: $(MPL)/five_tab.bin bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(MPL)/five_tab.bin
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -n -a $(AS) $(BIN2O_OPTS) -o $@ $(MPL)/five_tab.bin
 
 $(MPL)/tchar_tab.o: $(TCHAR_TABS) bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -a $(AS) $(BIN2O_OPTS) -o $@ $(TCHAR_TABS)
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -e -n -a $(AS) $(BIN2O_OPTS) -o $@ $(TCHAR_TABS)
 
 $(MPL)/tchar_tolower.bin: $(MPL)/tchar_tolower_be.bin
 	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
@@ -569,12 +569,12 @@ $(MPL)/guid.o: $(MPL)/guid.h $(MPL)/aes.h $(MPL)/ansi_prng.h $(MPL)/hthash.h
 $(MPL)/inet_ntop.o: $(MPL)/combo_addr.h
 $(MPL)/inet_pton.o: $(MPL)/combo_addr.h
 $(MPL)/combo_addr.o: $(MPL)/combo_addr.h $(MPL)/other.h $(MPL)/hthash.h
-$(MPL)/backtrace.o: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
-$(MPL)/config_parser.o: $(MPL)/config_parser.h $(MPL)/log_facility.h G2Connection.h
+$(MPL)/backtrace.lo: $(MPL)/backtrace.h $(MPL)/log_facility.h $(MPL)/itoa.h config.h
+$(MPL)/config_parser.lo: $(MPL)/config_parser.h $(MPL)/log_facility.h G2Connection.h
 $(MPL)/atomic.o: $(MPL)/atomic.h $(MPL)/generic/atomic.h $(MPL)/generic/atomic.c
 $(MPL)/atomic.h: $(ATOMICSRC)
 $(MPL)/my_bitops.h: $(MPL)/other.h
-$(MPL)/my_bitops.o: $(MY_BITOPSSRC)
+$(MPL)/my_bitops.lo: $(MY_BITOPSSRC)
 $(MPL)/my_bitopsm.h: $(MPL)/other.h config.h
 $(MPL)/my_epoll_devpoll.c: $(MPL)/hzp.h
 $(MPL)/my_epoll.h: $(MPL)/other.h config.h

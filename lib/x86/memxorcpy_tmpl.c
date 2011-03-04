@@ -731,7 +731,7 @@ alignment_size_t:
 			"jnz	1b\n\t"
 			"2:\n\t"
 		/* handle remaining in 32 bit, should be small and helps amd64 */
-			"mov	%9, %3\n\t"
+			"mov	%7, %3\n\t"
 			"shr	$2, %3\n\t"
 			"jz	4f\n\t"
 			"xor	%1, %1\n"
@@ -754,19 +754,16 @@ alignment_size_t:
 			: /* %0 */ "=&a" (tmp1),
 			  /* %1 */ "=&d" (tmp2),
 #if defined(__i386__) && defined(__PIC__)
-			  /* %2 */ "=m" (src_char1),
+			  /* %2 */ "+m" (src_char1),
 #else
-			  /* %2 */ "=&b" (src_char1),
+			  /* %2 */ "+&b" (src_char1),
 #endif
 			  /* %3 */ "=&c" (cnt2),
 			  /* %4 */ "+&D" (src_char2),
-			  /* %5 */ "+&S" (dst_char),
-			  /* %6 */ "=m" (dst_char)
-			: /* %7 */ "3" (len/(SOST*4)),
-			  /* %8 */ "2" (src_char1),
-			  /* %9 */ "m" (rem),
-			  /* %10 */ "m" (src_char2)
-			: "cc"
+			  /* %5 */ "+&S" (dst_char)
+			: /* %6 */ "3" (len/(SOST*4)),
+			  /* %7 */ "m" (rem)
+			: "cc", "memory"
 		);
 		len %= SO32;
 	}

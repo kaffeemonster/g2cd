@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, x86 implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -462,34 +462,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static size_t mem_spn_ff_runtime_sw(const void *s, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static size_t (*mem_spn_ff_ptr)(const void *s, size_t len) = mem_spn_ff_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void mem_spn_ff_select(void)
 {
 	mem_spn_ff_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer fails
- */
-static __init size_t mem_spn_ff_runtime_sw(const void *s, size_t len)
-{
-	mem_spn_ff_select();
-	return mem_spn_ff_ptr(s, len);
 }
 
 size_t mem_spn_ff(const void *s, size_t len)
 {
 	return mem_spn_ff_ptr(s, len);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void mem_spn_ff_select(void)
+{
+	patch_instruction(mem_spn_ff, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(mem_spn_ff);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init size_t mem_spn_ff_runtime_sw(const void *s, size_t len)
+{
+	mem_spn_ff_select();
+	return mem_spn_ff(s, len);
+}
+
+/*@unused@*/
 static char const rcsid_msfx[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

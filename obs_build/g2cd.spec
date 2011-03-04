@@ -1,7 +1,7 @@
 # Defines a constant that is used later by the spec file.
 %define shortname g2cd
 %define ver_real 0.0.00.11
-%define ver_revno r394
+%define ver_revno r398
 
 # Name, brief description, and version 
 Summary: A G2 hub only implementation

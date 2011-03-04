@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, x86 implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -506,34 +506,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static void *mem_searchrn_runtime_sw(void *s, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void *(*mem_searchrn_ptr)(void *s, size_t len) = mem_searchrn_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void mem_searchrn_select(void)
 {
 	mem_searchrn_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer fails
- */
-static __init void *mem_searchrn_runtime_sw(void *s, size_t len)
-{
-	mem_searchrn_select();
-	return mem_searchrn_ptr(s, len);
 }
 
 void *mem_searchrn(void *s, size_t len)
 {
 	return mem_searchrn_ptr(s, len);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void mem_searchrn_select(void)
+{
+	patch_instruction(mem_searchrn, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(mem_searchrn);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void *mem_searchrn_runtime_sw(void *s, size_t len)
+{
+	mem_searchrn_select();
+	return mem_searchrn(s, len);
+}
+
+/*@unused@*/
 static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

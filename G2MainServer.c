@@ -415,6 +415,8 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	 * This is scary and propably racy, and whatnot...
 	 */
 #ifdef __linux__
+// TODO: TIOCOUTQNSD
+	/* maybe there will be a new ioctl for the _not_ send data */
 	if(ioctl(con->com_socket, SIOCOUTQ, &val) < 0)
 #endif
 		val = 0;
@@ -1111,6 +1113,7 @@ static __init void init_prng(void)
 	{
 		struct timeval now;
 		unsigned i, t;
+		unsigned magic = 0x5BD1E995;
 
 		logg(LOGF_CRIT, "WARNING: We could not gather high quality entropy!\n"
 		                "         Will try to rectify, but this may impact the\n"
@@ -1119,17 +1122,20 @@ static __init void init_prng(void)
 		gettimeofday(&now, 0);
 		t  = getpid() | (getppid() << 16);
 		t ^= now.tv_usec << 11;
-		t  = ((t >> 13) ^ (t << 7)) + 65521;
+		t ^= ((t >> 13) ^ (t << 7)) * magic;
 		t ^= now.tv_sec << 3;
-		t  = ((t >> 13) ^ (t << 7)) + 65521;
+		t ^= ((t >> 13) ^ (t << 7)) * magic;
 // TODO: more entropy sources for the mix?
 		/* something from the filesystem? the kernel?
 		 * AUX_VECTOR? Enviroment? some random read
 		 * from our .text section?
 		 */
 		for(i = 0; i < anum(rd); i++) {
+			unsigned o_rd = rd[i];
 			rd[i] ^= t;
-			t = ((t >> 13) ^ (t << 7)) + 65521;
+			t ^= ((t >> 13) ^ (t << 7)) * magic;
+			t ^= o_rd;
+			t ^= ((t >> 13) ^ (t << 7)) * magic;
 		}
 		/*
 		 * Even if we could not get entropy, feed rd into the prng.

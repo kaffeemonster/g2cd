@@ -245,8 +245,10 @@ static int check_for_accept(struct epoll_event *ev, g2_connection_t **lcon, int 
 				if(unlikely(!*lcon))
 					return -1;
 //TODO: a master abort is not the best way...
-			} else
+			} else {
+				logg_devel("recycling con\n");
 				g2_con_clear(*lcon);
+			}
 		}
 		if(ev[i].events & ~((uint32_t)EPOLLIN|EPOLLONESHOT)) {
 			if(!handle_accept_abnorm(&guppie->s_gup, &ev[i], worker.epollfd))
@@ -541,6 +543,7 @@ int handler_active_timeout(void *arg)
 	logg_develd_old("%p is inactive for %lus! last: %lu\n",
 	                con, time(NULL) - con->last_active, con->last_active);
 
+	p_entry.events = EPOLLIN | EPOLLONESHOT;
 	p_entry.data.ptr = con;
 	if(local_time_now >= (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
 	{
@@ -591,6 +594,7 @@ int handler_z_flush_timeout(void *arg)
 
 	p_entry.data.ptr = con;
 	con->u.handler.z_flush = true;
+	/* matched by the rmb() in G2Handler.c, z_flush handling on write */
 	wmb();
 	shortlock_t_lock(&con->pts_lock);
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;

@@ -441,34 +441,42 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static char *strlpcpy_runtime_sw(char *dst, const char *src, size_t maxlen);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static char *(*strlpcpy_ptr)(char *dst, const char *src, size_t maxlen) = strlpcpy_runtime_sw;
 
-/*
- * constructor
- */
 static GCC_ATTR_CONSTRUCT __init void strlpcpy_select(void)
 {
 	strlpcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init char *strlpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
-{
-	strlpcpy_select();
-	return strlpcpy_ptr(dst, src, maxlen);
 }
 
 char *strlpcpy(char *dst, const char *src, size_t maxlen)
 {
 	return strlpcpy_ptr(dst, src, maxlen);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void strlpcpy_select(void)
+{
+	patch_instruction(strlpcpy, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(strlpcpy);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init char *strlpcpy_runtime_sw(char *dst, const char *src, size_t maxlen)
+{
+	strlpcpy_select();
+	return strlpcpy(dst, src, maxlen);
+}
+
+/*@unused@*/
 static char const rcsid_slpcx[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

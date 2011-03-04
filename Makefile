@@ -250,7 +250,7 @@ OBJS = \
 	G2QueryKey.o \
 	data.o \
 	timeout.o \
-	idbus.o \
+	idbus.lo \
 	gup.o
 #	and again: with gmake ... $(patsubst %.c,%.o,$(MSRCS))
 #OBJS = $(patsubst %.c,%.o,$(MSRCS))
@@ -318,9 +318,12 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #
 # since SUN-make doens't set -o
 #
-.SUFFIXES: .c .o .a .rtl .gch .h
+.SUFFIXES: .c .o .lo .a .rtl .gch .h
 .c.o:
 	@$(COMPILE.c) $< -o $@
+
+.c.lo:
+	@$(COMPILE.c) $< $(PICFLAGS) -o $@
 
 .c.rtl:
 	@$(RM) $@ && $(COMPILE.c) -dr $< -o `basename $@ .rtl`.o && (mv -f `basename $@ .rtl`.c.*.rtl $@ || touch $@)
@@ -423,6 +426,13 @@ $(DOCPATH): $(DESTDIR)
 $(MYMANPATH): $(DESTDIR)
 	mkdir -p "$(MYMANPATH)"
 
+MYMANPATH1 = $(MYMANPATH)/man1
+MYMANPATH5 = $(MYMANPATH)/man5
+$(MYMANPATH1): $(MYMANPATH)
+	mkdir -p "$(MYMANPATH1)"
+$(MYMANPATH5): $(MYMANPATH)
+	mkdir -p "$(MYMANPATH5)"
+
 # program
 install_$(MAIN): $(MAIN) $(BINPATH)
 	$(INSTALL_PRG) $(MAIN) $(BINPATH)/
@@ -431,8 +441,8 @@ install_program: install_$(MAIN)
 # data
 install_g2cd.conf: g2cd.conf $(CONFPATH)
 	$(INSTALL_DAT) g2cd.conf $(CONFPATH)/
-install_g2cd.1: g2cd.1 $(MYMANPATH)
-	$(INTSALL_DAT) g2cd.1 $(MYMANPATH)/man1/
+install_g2cd.1: g2cd.1 $(MYMANPATH1)
+	$(INSTALL_DAT) g2cd.1 $(MYMANPATH1)/
 install_data: install_g2cd.conf install_g2cd.1
 
 install: install_program install_data $(CACHEPATH)
@@ -642,7 +652,7 @@ version.h: Makefile
 #	$(PORT_PR)	"$(TOEOL)\b\b\b[OK]\n"
 
 data.o: sbox.bin bin2o
-	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) $(BIN2O_OPTS) -o $@ sbox.bin
+	@./ccdrv -s$(VERBOSE) "BIN[$@]" ./bin2o -a $(AS) -u -r $(BIN2O_OPTS) -o $@ sbox.bin
 #	what are the .o's derived from: implicit [target].c +
 #	additional dependencies, written out...
 G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h idbus.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h lib/my_bitopsm.h version.h builtin_defaults.h
@@ -659,7 +669,7 @@ G2KHL.o: G2KHL.h lib/my_epoll.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rb
 G2GUIDCache.o: G2GUIDCache.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/rbtree.h lib/my_bitops.h lib/ansi_prng.h
 G2QueryKey.o: G2QueryKey.h lib/hthash.h lib/ansi_prng.h lib/guid.h
 timeout.o: timeout.h
-idbus.o: idbus.h G2MainServer.h G2ConRegistry.h timeout.h lib/my_epoll.h lib/my_bitopsm.h
+idbus.lo: idbus.h G2MainServer.h G2ConRegistry.h timeout.h lib/my_epoll.h lib/my_bitopsm.h
 gup.o: gup.h G2Acceptor.h G2UDP.h G2Connection.h G2ConHelper.h lib/my_epoll.h lib/sec_buffer.h lib/recv_buff.h lib/hzp.h
 #	header-deps
 G2MainServer.h: G2Connection.h G2Packet.h lib/combo_addr.h lib/atomic.h lib/log_facility.h

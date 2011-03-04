@@ -2,7 +2,7 @@
  * print_ts.c
  * print a timestamp in fixed format
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -82,8 +82,8 @@
  *
  * WARNING: does not obey n ATM
  */
-size_t print_ts(char *buf, size_t n, const time_t *t);
-size_t print_ts_rev(char *buf, size_t n, const time_t *t);
+size_t print_ts(char *buf, size_t n, const time_t *t) GCC_ATTR_VIS("hidden");
+size_t print_ts_rev(char *buf, size_t n, const time_t *t) GCC_ATTR_VIS("hidden");
 
 /*
  * print_lts: print a timestamp to a buffer in the format
@@ -98,7 +98,7 @@ size_t print_ts_rev(char *buf, size_t n, const time_t *t);
  *
  * WARNING: does not obey n ATM
  */
-size_t print_lts(char *buf, size_t n, const time_t *t);
+size_t print_lts(char *buf, size_t n, const time_t *t) GCC_ATTR_VIS("hidden");
 
 /*
  * read_ts: reads a timestamp from a buffer in the format
@@ -109,7 +109,7 @@ size_t print_lts(char *buf, size_t n, const time_t *t);
  *
  * return value: 1 conversion succesfull, 0 error
  */
-int read_ts(const char *buf, time_t *t);
+int read_ts(const char *buf, time_t *t) GCC_ATTR_VIS("hidden");
 
 #define SECONDS_PER_MIN  (60)
 #define SECONDS_PER_HOUR (SECONDS_PER_MIN * 60)

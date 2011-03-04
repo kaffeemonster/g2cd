@@ -2,7 +2,7 @@
  * memchr.c
  * memchr, x86 implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -490,35 +490,44 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))memchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static void *memchr_runtime_sw(const void *s, int c, size_t n);
+static void *my_memchr_runtime_sw(const void *s, int c, size_t n);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
-static void *(*memchr_ptr)(const void *s, int c, size_t n) = memchr_runtime_sw;
+static void *(*my_memchr_ptr)(const void *s, int c, size_t n) = my_memchr_runtime_sw;
 
-/*
- * constructor
- */
-static GCC_ATTR_CONSTRUCT __init void memchr_select(void)
+static GCC_ATTR_CONSTRUCT __init void my_memchr_select(void)
 {
-	memchr_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init void *memchr_runtime_sw(const void *s, int c, size_t n)
-{
-	memchr_select();
-	return memchr_ptr(s, c, n);
+	my_memchr_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
 void *my_memchr(const void *s, int c, size_t n)
 {
-	return memchr_ptr(s, c, n);
+	return my_memchr_ptr(s, c, n);
+}
+#else
+static GCC_ATTR_CONSTRUCT __init void my_memchr_select(void)
+{
+	patch_instruction(my_memchr, t_feat, anum(t_feat));
 }
 
+# define NO_ALIAS
+DYN_JMP_DISPATCH_ALIAS(my_memchr, memchr);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void *my_memchr_runtime_sw(const void *s, int c, size_t n)
+{
+	my_memchr_select();
+	return my_memchr(s, c, n);
+}
+
+/*@unused@*/
 static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

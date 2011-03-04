@@ -127,37 +127,43 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 };
 
 static void *memneg_runtime_sw(void *dst, const void *src, size_t len);
+
+#ifdef USE_SIMPLE_DISPATCH
 /*
  * Func ptr
  */
 static void *(*memneg_ptr)(void *dst, const void *src, size_t len) = memneg_runtime_sw;
 
-/*
- * constructor
- */
-static void memneg_select(void) GCC_ATTR_CONSTRUCT;
-static __init void memneg_select(void)
+static GCC_ATTR_CONSTRUCT __init void memneg_select(void)
 {
 	memneg_ptr = test_cpu_feature(t_feat, anum(t_feat));
 }
 
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructer failes
- */
-static __init void *memneg_runtime_sw(void *dst, const void *src, size_t len)
-{
-	memneg_select();
-	return memneg_ptr(dst, src, len);
-}
-
-/*
- * trampoline
- */
 void *memneg(void *dst, const void *src, size_t len)
 {
 	return memneg_ptr(dst, src, len);
 }
+#else
+static GCC_ATTR_CONSTRUCT __init void memneg_select(void)
+{
+	patch_instruction(memneg, t_feat, anum(t_feat));
+}
 
+DYN_JMP_DISPATCH(memneg);
+#endif
+
+/*
+ * runtime switcher
+ *
+ * this is inherent racy, we only provide it if the constructor fails
+ */
+static GCC_ATTR_USED __init void *memneg_runtime_sw(void *dst, const void *src, size_t len)
+{
+	memneg_select();
+	return memneg(dst, src, len);
+}
+
+
+/*@unused@*/
 static char const rcsid_mnx[] GCC_ATTR_USED_VAR = "$Id:$";
+/* EOF */

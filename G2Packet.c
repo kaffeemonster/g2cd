@@ -4463,7 +4463,7 @@ static bool handle_G2CDC(struct ptype_action_args *parg)
 	const struct s_data
 	{
 		const unsigned long len;
-		const char *data;
+		const long off;
 	} *s_data;
 	g2_packet_t *t;
 
@@ -4494,7 +4494,7 @@ static bool handle_G2CDC(struct ptype_action_args *parg)
 
 	t->type = PT_G2CDc;
 	t->big_endian = HOST_IS_BIGENDIAN;
-	t->data_trunk.data = (void*)(intptr_t)s_data->data;
+	t->data_trunk.data = ((char *)(intptr_t)s_data) + s_data->off;
 	t->data_trunk.capacity = s_data->len;
 	buffer_clear(t->data_trunk);
 	g2_packet_add2target(t, parg->target, parg->target_lock);

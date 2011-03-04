@@ -130,6 +130,7 @@ struct test_cpu_feature
 };
 
 LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
+LIB_MY_BITOPS_EXTRN(void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l));
 LIB_MY_BITOPS_EXTRN(void emit_emms(void));
 LIB_MY_BITOPS_EXTRN(unsigned get_cpus_online(void));
 

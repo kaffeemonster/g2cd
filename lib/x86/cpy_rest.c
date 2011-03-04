@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer, x86 impl
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -46,13 +46,13 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 		"xchg	%0, %%edi\n\t"
 		"xchg	%1, %%esi\n\t"
 # define MOVSQ	"movsl\n\tmovsl\n\t"
+		"neg	%4\n\t"
 # ifndef __PIC__
 #  define CLOB
 #  define JUMP_POS (i-15)
-		"neg	%4\n\t"
 		"lea	1f(,%4,8), %2\n\t"
 # else
-#  define CLOB "&"
+#  define CLOB
 #  define JUMP_POS (i-15)
 	/*
 	 * PIC must be the acronym for Pain In the Chest ;)
@@ -63,11 +63,12 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 * compiling their executables with -fPIC let them
 	 * pay their bill...
 	 */
-		"call	i686_get_pc\n\t"
-		"lea	1f-.(%2,%4,8), %2\n\t"
+		"lea	1f-3f(,%4,8), %2\n\t"
+		"call	i686_add_pc\n"
+		"3:\n\t"
 		".subsection 2\n"
-		"i686_get_pc:\n\t"
-		"movl (%%esp), %2\n\t"
+		"i686_add_pc:\n\t"
+		"addl (%%esp), %2\n\t"
 		"ret\n\t"
 		".previous\n\t"
 # endif
@@ -77,7 +78,7 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 # define JUMP_POS (15-i)
 	/*
 	 * Legacy galore...
-	 * Since this not a compiler generated addressing
+	 * Since this is not a compiler generated addressing
 	 * we better make sure it "works". Using the
 	 * addressing sheme from above gives us a working
 	 * Symbol + where to go absolut address, cool.
