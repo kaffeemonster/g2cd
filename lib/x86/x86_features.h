@@ -177,63 +177,135 @@ enum x86_cpu_features
 
 extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 
-#ifdef __ELF__
-# define _DYN_JMP_SECTION_NAME ".plt"
-# ifdef __arm__
-#  define _DYN_JMP_DBG_START(name) ".type	" #name ", #function\n"
+# ifdef __ELF__
+#  define _DYN_JMP_SECTION_NAME ".plt"
+#  ifdef __arm__
+#   define _DYN_JMP_DBG_START(name) ".type	" #name ", #function\n"
+#  else
+#   define _DYN_JMP_DBG_START(name) ".type	" #name ", @function\n"
+#  endif
+#  define _DYN_JMP_DBG_END(name) ".size	" #name ", . - " #name "\n\t"
 # else
-#  define _DYN_JMP_DBG_START(name) ".type	" #name ", @function\n"
+#  define _DYN_JMP_SECTION_NAME ".text.jmp"
+#  define _DYN_JMP_DBG_START(name) "\n"
+#  define _DYN_JMP_DBG_END(name) "\n\t"
 # endif
-# define _DYN_JMP_DBG_END(name) ".size	" #name ", . - " #name "\n\t"
-#else
-# define _DYN_JMP_SECTION_NAME ".text.jmp"
-# define _DYN_JMP_DBG_START(name) "\n"
-# define _DYN_JMP_DBG_END(name) "\n\t"
-#endif
 
-#define DYN_JMP_DISPATCH(name) \
+# ifdef USE_SIMPLE_DISPATCH
+#  define _DYN_JMP_CONSTRUCTOR(name) \
+	static GCC_ATTR_CONSTRUCT __init void name##_select(void) { \
+		name##_ptr = test_cpu_feature(tfeat_##name, anum(tfeat_##name)); \
+	}
+# else
+#  define _DYN_JMP_CONSTRUCTOR(name) \
+	static GCC_ATTR_CONSTRUCT __init void name##_select(void) { \
+		patch_instruction(name, tfeat_##name, anum(tfeat_##name)); \
+	}
+# endif
+
+# ifdef USE_SIMPLE_DISPATCH
+#   define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
+	static __init rtype name##_runtime_sw prot { \
+		name##_select(); \
+		return name call; \
+	}
+#   define _DYN_JMP_RT_SWITCH_NR(name, prot, call) \
+	static __init void name##_runtime_sw prot { \
+		name##_select(); \
+		name call; \
+	}
+# else
+#  ifdef __x86_64__
+#   define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
+	asm ( \
+		".pushsection .text.unlikely\n\t" \
+		_DYN_JMP_DBG_START(name##_runtime_sw) \
+		#name "_runtime_sw:\n\t" \
+		"push	%rdi\n\t" \
+		"push	%rsi\n\t" \
+		"push	%rdx\n\t" \
+		"push	%rcx\n\t" \
+		"push	%r8\n\t" \
+		"push	%r9\n\t" \
+		"call	" #name "_select\n\t" \
+		"pop	%r9\n\t" \
+		"pop	%r8\n\t" \
+		"pop	%rcx\n\t" \
+		"pop	%rdx\n\t" \
+		"pop	%rsi\n\t" \
+		"pop	%rdi\n\t" \
+		"jmp	" #name "\n\t"\
+		_DYN_JMP_DBG_END(name##_runtime_sw) \
+		".popsection" \
+	);
+#  else
+#   define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
+	asm ( \
+		".pushsection .text.unlikely\n\t" \
+		_DYN_JMP_DBG_START(name##_runtime_sw) \
+		#name "_runtime_sw:\n\t" \
+		"pushal\n\t" \
+		"call	" #name "_select\n\t" \
+		"popal\n\t" \
+		"jmp	" #name "\n\t"\
+		_DYN_JMP_DBG_END(name##_runtime_sw) \
+		".popsection" \
+	);
+#  endif
+#  define _DYN_JMP_RT_SWITCH_NR(name, prot, call) _DYN_JMP_RT_SWITCH(void, name, prot, call)
+# endif
+
+# ifdef USE_SIMPLE_DISPATCH
+#  define _DYN_JMP_REST_GEN(mod, rtype, name, prot, call, ret) \
+	static rtype name##_runtime_sw prot; \
+	static rtype (* name##_ptr) prot = name##_runtime_sw; \
+	mod rtype name prot { \
+		ret name##_ptr call; \
+	}
+#  define _DYN_JMP_REST(rtype, name, prot, call) _DYN_JMP_REST_GEN( , rtype, name, prot, call, return)
+#  define _DYN_JMP_REST_NR(name, prot, call) _DYN_JMP_REST_GEN( , void, name, prot, call, )
+#  define _DYN_JMP_REST_ALIAS(rtype, name, prot, call, sname) _DYN_JMP_REST(rtype, name, prot, call)
+#  define _DYN_JMP_REST_ST(rtype, name, prot, call) _DYN_JMP_REST_GEN(static, rtype, name, prot, call, return)
+# else
+#  define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
 	asm ( \
 		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
 		".p2align 2\n\t" \
-		".global " #name "\n\t" \
+		name_export \
+		alias_export \
 		_DYN_JMP_DBG_START(name) \
+		alias \
 		#name ":\n\t" \
 		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
 		".long	" #name "_runtime_sw - 1f\n" \
 		"1:\n\t" \
 		_DYN_JMP_DBG_END(name) \
 		".popsection" \
-	)
+	);
+#  define _DYN_JMP_REST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".global " #name "\n\t", , )
+#  define _DYN_JMP_REST_NR(name, prot, call) _DYN_JMP_REST(void, name, prot, call)
+#  define _DYN_JMP_REST_ALIAS(rtype, name, prot, call, sname) _DYN_JMP_REST_GEN(name, ".global " #name "\n\t", #sname ":\n\t", ".global " #sname "\n\t")
+#  define _DYN_JMP_REST_ST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, , , )
+# endif
 
-#define DYN_JMP_DISPATCH_ALIAS(name, sname) \
-	asm ( \
-		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
-		".p2align 2\n\t" \
-		".global " #name "\n\t" \
-		".global " #sname "\n\t" \
-		_DYN_JMP_DBG_START(name) \
-		#sname ":\n\t" \
-		#name ":\n\t" \
-		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
-		".long	" #name "_runtime_sw - 1f\n" \
-		"1:\n\t" \
-		_DYN_JMP_DBG_END(name) \
-		".popsection" \
-	)
+# define DYN_JMP_DISPATCH(rtype, name, prot, call) \
+	_DYN_JMP_REST(rtype, name, prot, call) \
+	_DYN_JMP_CONSTRUCTOR(name) \
+	_DYN_JMP_RT_SWITCH(rtype, name, prot, call)
 
+# define DYN_JMP_DISPATCH_NR(name, prot, call) \
+	_DYN_JMP_REST_NR(name, prot, call) \
+	_DYN_JMP_CONSTRUCTOR(name) \
+	_DYN_JMP_RT_SWITCH_NR(name, prot, call)
 
-#define DYN_JMP_DISPATCH_ST(name) \
-	asm ( \
-		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
-		".p2align 2\n\t" \
-		_DYN_JMP_DBG_START(name) \
-		#name ":\n\t" \
-		".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
-		".long	" #name "_runtime_sw - 1f\n" \
-		"1:\n\t" \
-		_DYN_JMP_DBG_END(name) \
-		".popsection" \
-	)
+# define DYN_JMP_DISPATCH_ALIAS(rtype, name, prot, call, sname) \
+	_DYN_JMP_REST_ALIAS(rtype, name, prot, call, sname) \
+	_DYN_JMP_CONSTRUCTOR(name) \
+	_DYN_JMP_RT_SWITCH(rtype, name, prot, call)
 
+# define DYN_JMP_DISPATCH_ST(rtype, name, prot, call) \
+	_DYN_JMP_REST_ST(rtype, name, prot, call) \
+	_DYN_JMP_CONSTRUCTOR(name) \
+	_DYN_JMP_RT_SWITCH(rtype, name, prot, call)
 
 #endif

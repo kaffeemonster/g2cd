@@ -41,7 +41,7 @@ static size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_SSE4(size_t n)
 #define ARCH_NAME_SUFFIX _generic
 #include "../generic/popcountst.c"
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_popcountst[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -53,42 +53,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))popcountst_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static size_t popcountst_runtime_sw(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL;
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static size_t (*popcountst_ptr)(size_t n) GCC_ATTR_CONST GCC_ATTR_FASTCALL = popcountst_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void popcountst_select(void)
-{
-	popcountst_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst(size_t n)
-{
-	return popcountst_ptr(n);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void popcountst_select(void)
-{
-	patch_instruction(popcountst, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(popcountst);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init size_t GCC_ATTR_CONST GCC_ATTR_FASTCALL popcountst_runtime_sw(size_t n)
-{
-	popcountst_select();
-	return popcountst(n);
-}
+DYN_JMP_DISPATCH(GCC_ATTR_CONST GCC_ATTR_FASTCALL size_t, popcountst, (size_t n), (n))
 
 /*@unused@*/
 static char const rcsid_pcx[] GCC_ATTR_USED_VAR = "$Id:$";

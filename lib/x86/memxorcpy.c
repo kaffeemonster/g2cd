@@ -104,7 +104,7 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 /*
  * needed features
  */
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_memxorcpy[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -129,42 +129,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))memxorcpy_x86,        .features = {}, .flags = CFF_DEFAULT},
 };
 
-static void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static void *(*memxorcpy_ptr)(void *dst, const void *src1, const void *src2, size_t len) = memxorcpy_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void memxorcpy_select(void)
-{
-	memxorcpy_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-void *memxorcpy(void *dst, const void *src1, const void *src2, size_t len)
-{
-	return memxorcpy_ptr(dst, src1, src2, len);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void memxorcpy_select(void)
-{
-	patch_instruction(memxorcpy, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(memxorcpy);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init void *memxorcpy_runtime_sw(void *dst, const void *src1, const void *src2, size_t len)
-{
-	memxorcpy_select();
-	return memxorcpy(dst, src1, src2, len);
-}
+DYN_JMP_DISPATCH(void *, memxorcpy, (void *dst, const void *src1, const void *src2, size_t len), (dst, src1, src2, len))
 
 /*@unused@*/
 static char const rcsid_mxxc[] GCC_ATTR_USED_VAR = "$Id:$";

@@ -1838,7 +1838,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 #define NEED_GEN_POPER
 #include "../generic/mempopcnt.c"
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -1862,42 +1862,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))mempopcnt_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static size_t mempopcnt_runtime_sw(const void *s, size_t n);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static size_t (*mempopcnt_ptr)(const void *s, size_t n) = mempopcnt_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void mempopcnt_select(void)
-{
-	mempopcnt_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-size_t mempopcnt(const void *s, size_t n)
-{
-	return mempopcnt_ptr(s, n);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void mempopcnt_select(void)
-{
-	patch_instruction(mempopcnt, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(mempopcnt);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init size_t mempopcnt_runtime_sw(const void *s, size_t n)
-{
-	mempopcnt_select();
-	return mempopcnt(s, n);
-}
+DYN_JMP_DISPATCH(size_t, mempopcnt, (const void *s, size_t n), (s, n))
 
 /*@unused@*/
 static char const rcsid_mpx[] GCC_ATTR_USED_VAR = "$Id:$";

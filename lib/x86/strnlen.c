@@ -357,7 +357,7 @@ static size_t strnlen_x86(const char *s, size_t maxlen)
 	return p - s + r;
 }
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_strnlen[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -372,42 +372,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strnlen_x86, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static size_t strnlen_runtime_sw(const char *s, size_t maxlen);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static size_t (*strnlen_ptr)(const char *s, size_t maxlen) = strnlen_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void strnlen_select(void)
-{
-	strnlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-size_t strnlen(const char *s, size_t maxlen)
-{
-	return strnlen_ptr(s, maxlen);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void strnlen_select(void)
-{
-	patch_instruction(strnlen, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(strnlen);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init size_t strnlen_runtime_sw(const char *s, size_t maxlen)
-{
-	strnlen_select();
-	return strnlen(s, maxlen);
-}
+DYN_JMP_DISPATCH(size_t, strnlen, (const char *s, size_t maxlen), (s, maxlen))
 
 /*@unused@*/
 static char const rcsid_snl[] GCC_ATTR_USED_VAR = "$Id: $";

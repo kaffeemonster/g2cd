@@ -304,7 +304,7 @@ static void strreverse_l_SSE(char *begin, char *end)
 }
 #endif
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_strreverse_l[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -322,42 +322,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strreverse_l_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static void strreverse_l_runtime_sw(char *begin, char *end);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static void (*strreverse_l_ptr)(char *begin, char *end) = strreverse_l_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void strreverse_l_select(void)
-{
-	strreverse_l_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-void strreverse_l(char *begin, char *end)
-{
-	strreverse_l_ptr(begin, end);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void strreverse_l_select(void)
-{
-	patch_instruction(strreverse_l, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(strreverse_l);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init void strreverse_l_runtime_sw(char *begin, char *end)
-{
-	strreverse_l_select();
-	strreverse_l(begin, end);
-}
+DYN_JMP_DISPATCH_NR(strreverse_l, (char *begin, char *end), (begin, end))
 
 /*@unused@*/
 static char const rcsid_srl[] GCC_ATTR_USED_VAR = "$Id:$";

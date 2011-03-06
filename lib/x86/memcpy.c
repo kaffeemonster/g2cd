@@ -217,7 +217,7 @@ static GCC_ATTR_FASTCALL void *memcpy_medium_MMX(void *restrict dst, const void 
 # endif
 #endif
 
-static __init_cdata const struct test_cpu_feature t_feat_med[] =
+static __init_cdata const struct test_cpu_feature tfeat_my_memcpy_medium[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -238,7 +238,7 @@ static __init_cdata const struct test_cpu_feature t_feat_med[] =
 	{.func = (void (*)(void))memcpy_small,             .features = {}, .flags = CFF_DEFAULT},
 };
 
-static __init_cdata const struct test_cpu_feature t_feat_big[] =
+static __init_cdata const struct test_cpu_feature tfeat_my_memcpy_big[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -259,43 +259,12 @@ static __init_cdata const struct test_cpu_feature t_feat_big[] =
 	{.func = (void (*)(void))memcpy_small,          .features = {}, .flags = CFF_DEFAULT},
 };
 
-static GCC_ATTR_FASTCALL void *my_memcpy_medium_runtime_sw(void *restrict dst, const void *restrict src, size_t len);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static GCC_ATTR_FASTCALL void *(*my_memcpy_medium_ptr)(void *restrict dst, const void *restrict src, size_t len) = my_memcpy_medium_runtime_sw;
-static GCC_ATTR_FASTCALL void *(*my_memcpy_big_ptr)(void *restrict dst, const void *restrict src, size_t len) = my_memcpy_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void my_memcpy_select(void)
-{
-	my_memcpy_medium_ptr = test_cpu_feature(t_feat_med, anum(t_feat_med));
-	my_memcpy_big_ptr = test_cpu_feature(t_feat_big, anum(t_feat_big));
-}
-
-static inline GCC_ATTR_FASTCALL void *my_memcpy_medium(void *restrict dst, const void *restrict src, size_t len)
-{
-	return my_memcpy_medium_ptr(dst, src, len);
-}
-
-static inline GCC_ATTR_FASTCALL void *my_memcpy_big(void *restrict dst, const void *restrict src, size_t len)
-{
-	return my_memcpy_big_ptr(dst, src, len);
-}
-#else
+#ifndef USE_SIMPLE_DISPATCH
 GCC_ATTR_FASTCALL void *my_memcpy_medium(void *restrict dst, const void *restrict src, size_t len);
 GCC_ATTR_FASTCALL void *my_memcpy_big(void *restrict dst, const void *restrict src, size_t len);
-
-static GCC_ATTR_CONSTRUCT __init void my_memcpy_select(void)
-{
-	patch_instruction(my_memcpy_medium, t_feat_med, anum(t_feat_med));
-	patch_instruction(my_memcpy_big, t_feat_big, anum(t_feat_big));
-}
-
-DYN_JMP_DISPATCH_ST(my_memcpy_medium);
-DYN_JMP_DISPATCH_ST(my_memcpy_big);
 #endif
+DYN_JMP_DISPATCH_ST(GCC_ATTR_FASTCALL void *, my_memcpy_medium, (void *restrict dst, const void *restrict src, size_t len), (dst, src, len))
+DYN_JMP_DISPATCH_ST(GCC_ATTR_FASTCALL void *, my_memcpy_big, (void *restrict dst, const void *restrict src, size_t len), (dst, src, len))
 
 /*
   1) less than 64-byte use a MOV or MOVQ or MOVDQA
@@ -313,13 +282,6 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 		return my_memcpy_medium(dst, src, len);
 	return my_memcpy_big(dst, src, len);
 }
-
-static GCC_ATTR_USED GCC_ATTR_FASTCALL __init void *my_memcpy_medium_runtime_sw(void *restrict dst, const void *restrict src, size_t len)
-{
-	my_memcpy_select();
-	return my_memcpy(dst, src, len);
-}
-static GCC_ATTR_FASTCALL void *my_memcpy_big_runtime_sw(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_memcpy_medium_runtime_sw");
 
 void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {

@@ -490,7 +490,7 @@ void *mem_searchrn_x86(void *s, size_t len)
 	return NULL;
 }
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_mem_searchrn[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -505,42 +505,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))mem_searchrn_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static void *mem_searchrn_runtime_sw(void *s, size_t len);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static void *(*mem_searchrn_ptr)(void *s, size_t len) = mem_searchrn_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void mem_searchrn_select(void)
-{
-	mem_searchrn_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-void *mem_searchrn(void *s, size_t len)
-{
-	return mem_searchrn_ptr(s, len);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void mem_searchrn_select(void)
-{
-	patch_instruction(mem_searchrn, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(mem_searchrn);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init void *mem_searchrn_runtime_sw(void *s, size_t len)
-{
-	mem_searchrn_select();
-	return mem_searchrn(s, len);
-}
+DYN_JMP_DISPATCH(void *, mem_searchrn, (void *s, size_t len), (s, len))
 
 /*@unused@*/
 static char const rcsid_msrn[] GCC_ATTR_USED_VAR = "$Id: $";

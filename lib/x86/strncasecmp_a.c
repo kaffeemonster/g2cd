@@ -505,7 +505,7 @@ LOOP_AGAIN:
 }
 
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_strncasecmp_a[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -520,43 +520,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strncasecmp_a_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static int (*strncasecmp_a_ptr)(const char *s1, const char *s2, size_t n) = strncasecmp_a_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void strncasecmp_a_select(void)
-{
-	strncasecmp_a_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-int strncasecmp_a(const char *s1, const char *s2, size_t n)
-{
-	return strncasecmp_a_ptr(s1, s2, n);
-}
-
-#else
-static GCC_ATTR_CONSTRUCT __init void strncasecmp_a_select(void)
-{
-	patch_instruction(strncasecmp_a, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(strncasecmp_a);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init int strncasecmp_a_runtime_sw(const char *s1, const char *s2, size_t n)
-{
-	strncasecmp_a_select();
-	return strncasecmp_a(s1, s2, n);
-}
+DYN_JMP_DISPATCH(int, strncasecmp_a, (const char *s1, const char *s2, size_t n), (s1, s2, n))
 
 /*@unused@*/
 static char const rcsid_sncca[] GCC_ATTR_USED_VAR = "$Id: $";

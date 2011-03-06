@@ -626,7 +626,7 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 }
 #endif
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_to_base32[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -644,42 +644,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))to_base32_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static unsigned char *(*to_base32_ptr)(unsigned char *dst, const unsigned char *src, unsigned len) = to_base32_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void to_base32_select(void)
-{
-	to_base32_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-unsigned char *to_base32(unsigned char *dst, const unsigned char *src, unsigned len)
-{
-	return to_base32_ptr(dst, src, len);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void to_base32_select(void)
-{
-	patch_instruction(to_base32, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(to_base32);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init unsigned char *to_base32_runtime_sw(unsigned char *dst, const unsigned char *src, unsigned len)
-{
-	to_base32_select();
-	return to_base32(dst, src, len);
-}
+DYN_JMP_DISPATCH(unsigned char *, to_base32, (unsigned char *dst, const unsigned char *src, unsigned len), (dst, src, len))
 
 /*@unused@*/
 static char const rcsid_tb32x[] GCC_ATTR_USED_VAR = "$Id:$";

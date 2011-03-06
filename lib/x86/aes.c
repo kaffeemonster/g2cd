@@ -387,7 +387,7 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 		  /* %4 */ "=m" (*(char *)out)
 		: /* %4 */ "d" (control_word),
 #if defined(__i386__) && defined(__PIC__)
-		  /* %5 */ "rm" (&ctx->k),
+		  /* %5 */ "a" (&ctx->k),
 #else
 		  /* %5 */ "b" (&ctx->k),
 #endif
@@ -618,7 +618,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 #define ARCH_NAME_SUFFIX _generic
 #include "../generic/aes.c"
 
-static __init_cdata const struct test_cpu_feature key_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_aes_encrypt_key128[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -629,7 +629,7 @@ static __init_cdata const struct test_cpu_feature key_feat[] =
 	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static __init_cdata const struct test_cpu_feature enc_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_aes_ecb_encrypt[] =
 {
 	{.func = (void (*)(void))aes_ecb_encrypt_padlock,  .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
@@ -641,59 +641,8 @@ static __init_cdata const struct test_cpu_feature enc_feat[] =
 	{.func = (void (*)(void))aes_ecb_encrypt_generic,  .features = {}, .flags = CFF_DEFAULT},
 };
 
-
-static void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in);
-static void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static void (*aes_encrypt_key128_ptr)(struct aes_encrypt_ctx *ctx, const void *in) = aes_encrypt_key128_runtime_sw;
-static void (*aes_ecb_encrypt_ptr)(const struct aes_encrypt_ctx *ctx, void *out, const void *in) = aes_ecb_encrypt_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void aes_select(void)
-{
-	aes_encrypt_key128_ptr = test_cpu_feature(key_feat, anum(key_feat));
-	aes_ecb_encrypt_ptr = test_cpu_feature(enc_feat, anum(enc_feat));
-}
-
-void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
-{
-	aes_encrypt_key128_ptr(ctx, in);
-}
-
-void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
-{
-	aes_ecb_encrypt_ptr(ctx, out, in);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void aes_select(void)
-{
-	patch_instruction(aes_encrypt_key128, key_feat, anum(key_feat));
-	patch_instruction(aes_ecb_encrypt, enc_feat, anum(enc_feat));
-}
-
-DYN_JMP_DISPATCH(aes_encrypt_key128);
-DYN_JMP_DISPATCH(aes_ecb_encrypt);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init void aes_encrypt_key128_runtime_sw(struct aes_encrypt_ctx *ctx, const void *in)
-{
-	aes_select();
-	aes_encrypt_key128(ctx, in);
-}
-
-static GCC_ATTR_USED __init void aes_ecb_encrypt_runtime_sw(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
-{
-	aes_select();
-	aes_ecb_encrypt(ctx, out, in);
-}
+DYN_JMP_DISPATCH_NR(aes_encrypt_key128, (struct aes_encrypt_ctx *ctx, const void *in), (ctx, in))
+DYN_JMP_DISPATCH_NR(aes_ecb_encrypt, (const struct aes_encrypt_ctx *ctx, void *out, const void *in), (ctx, out, in))
 
 /*@unused@*/
 static char const rcsid_aesx[] GCC_ATTR_USED_VAR = "$Id:$";

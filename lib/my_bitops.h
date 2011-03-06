@@ -123,7 +123,7 @@ LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src
 struct test_cpu_feature
 {
 	void (*func)(void);
-	long flags;
+	int flags;
 # if defined(__i386__) || defined(__x86_64__)
 	uint32_t features[7];
 # endif

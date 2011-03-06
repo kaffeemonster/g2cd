@@ -19,7 +19,7 @@
 #ifndef USE_SIMPLE_DISPATCH
 uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 #else
-static inline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 #endif
 #define MIN_WORK 32
 
@@ -579,7 +579,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 	return (s2 << 16) | s1;
 }
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_adler32_vec[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 217
@@ -593,42 +593,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))adler32_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static uint32_t adler32_vec_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static uint32_t (*adler32_vec_ptr)(uint32_t adler, const uint8_t *buf, unsigned len) = adler32_vec_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void adler32_vec_select(void)
-{
-	adler32_vec_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-static inline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
-{
-	return adler32_vec_ptr(adler, buf, len);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void adler32_vec_select(void)
-{
-	patch_instruction(adler32_vec, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH_ST(adler32_vec);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init uint32_t adler32_vec_runtime_sw(uint32_t adler, const uint8_t *buf, unsigned len)
-{
-	adler32_vec_select();
-	return adler32_vec(adler, buf, len);
-}
+DYN_JMP_DISPATCH_ST(uint32_t, adler32_vec, (uint32_t adler, const uint8_t *buf, unsigned len), (adler, buf, len))
 
 static char const rcsid_a32x86[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

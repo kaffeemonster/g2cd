@@ -256,10 +256,10 @@
 # define SECTION_GOT
 #endif
 
-#ifndef USE_OLD_DISPATCH
-# if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MPROTECT)
+#ifndef USE_SIMPLE_DISPATCH
+# if defined(HAVE_SYS_MMAN_H) && defined(HAVE_MPROTECT) && defined(I_LIKE_ASM)
 # else
-#  define USE_OLD_DISPATCH
+#  define USE_SIMPLE_DISPATCH
 # endif
 #endif
 

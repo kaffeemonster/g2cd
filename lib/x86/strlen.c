@@ -321,7 +321,7 @@ static size_t strlen_x86(const char *s)
 }
 
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_strlen[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -337,42 +337,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strlen_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static size_t strlen_runtime_sw(const char *s);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static size_t (*strlen_ptr)(const char *s) = strlen_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void strlen_select(void)
-{
-	strlen_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-size_t strlen(const char *s)
-{
-	return strlen_ptr(s);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void strlen_select(void)
-{
-	patch_instruction(strlen, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(strlen);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init size_t strlen_runtime_sw(const char *s)
-{
-	strlen_select();
-	return strlen(s);
-}
+DYN_JMP_DISPATCH(size_t, strlen, (const char *s), (s))
 
 #if 0
 /*

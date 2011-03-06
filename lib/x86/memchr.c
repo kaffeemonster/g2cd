@@ -470,7 +470,7 @@ static void *memchr_x86(const void *s, int c, size_t n)
 }
 
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_my_memchr[] =
 {
 #ifdef HAVE_BINUTILS
 #if 0
@@ -490,43 +490,10 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))memchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static void *my_memchr_runtime_sw(const void *s, int c, size_t n);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static void *(*my_memchr_ptr)(const void *s, int c, size_t n) = my_memchr_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void my_memchr_select(void)
-{
-	my_memchr_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-void *my_memchr(const void *s, int c, size_t n)
-{
-	return my_memchr_ptr(s, c, n);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void my_memchr_select(void)
-{
-	patch_instruction(my_memchr, t_feat, anum(t_feat));
-}
-
+#ifndef USE_SIMPLE_DISPATCH
 # define NO_ALIAS
-DYN_JMP_DISPATCH_ALIAS(my_memchr, memchr);
 #endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init void *my_memchr_runtime_sw(const void *s, int c, size_t n)
-{
-	my_memchr_select();
-	return my_memchr(s, c, n);
-}
+DYN_JMP_DISPATCH_ALIAS(void *, my_memchr, (const void *s, int c, size_t n), (s, c, n), memchr)
 
 /*@unused@*/
 static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id: $";

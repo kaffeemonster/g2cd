@@ -606,7 +606,7 @@ static char *strrchr_x86(const char *s, int c)
 	return NULL;
 }
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_strrchr[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -627,43 +627,10 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))strrchr_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static char *strrchr_runtime_sw(const char *s, int c);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static char *(*strrchr_ptr)(const char *s, int c) = strrchr_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void strrchr_select(void)
-{
-	strrchr_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-char *strrchr(const char *s, int c)
-{
-	return strrchr_ptr(s, c);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void strrchr_select(void)
-{
-	patch_instruction(strrchr, t_feat, anum(t_feat));
-}
-
+#ifndef USE_SIMPLE_DISPATCH
 # define NO_ALIAS
-DYN_JMP_DISPATCH_ALIAS(strrchr, rindex);
 #endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init char *strrchr_runtime_sw(const char *s, int c)
-{
-	strrchr_select();
-	return strrchr(s, c);
-}
+DYN_JMP_DISPATCH_ALIAS(char *, strrchr, (const char *s, int c), (s, c), rindex)
 
 /*@unused@*/
 static char const rcsid_srcx[] GCC_ATTR_USED_VAR = "$Id: $";

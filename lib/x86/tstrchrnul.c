@@ -353,7 +353,7 @@ static tchar_t *tstrchrnul_x86(const tchar_t *s, tchar_t c)
 }
 
 
-static __init_cdata const struct test_cpu_feature t_feat[] =
+static __init_cdata const struct test_cpu_feature tfeat_tstrchrnul[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -368,42 +368,7 @@ static __init_cdata const struct test_cpu_feature t_feat[] =
 	{.func = (void (*)(void))tstrchrnul_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-static tchar_t *tstrchrnul_runtime_sw(const tchar_t *s, tchar_t c);
-
-#ifdef USE_SIMPLE_DISPATCH
-/*
- * Func ptr
- */
-static tchar_t *(*tstrchrnul_ptr)(const tchar_t *s, tchar_t c) = tstrchrnul_runtime_sw;
-
-static GCC_ATTR_CONSTRUCT __init void tstrchrnul_select(void)
-{
-	tstrchrnul_ptr = test_cpu_feature(t_feat, anum(t_feat));
-}
-
-tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
-{
-	return tstrchrnul_ptr(s, c);
-}
-#else
-static GCC_ATTR_CONSTRUCT __init void tstrchrnul_select(void)
-{
-	patch_instruction(tstrchrnul, t_feat, anum(t_feat));
-}
-
-DYN_JMP_DISPATCH(tstrchrnul);
-#endif
-
-/*
- * runtime switcher
- *
- * this is inherent racy, we only provide it if the constructor fails
- */
-static GCC_ATTR_USED __init tchar_t *tstrchrnul_runtime_sw(const tchar_t *s, tchar_t c)
-{
-	tstrchrnul_select();
-	return tstrchrnul(s, c);
-}
+DYN_JMP_DISPATCH(tchar_t *, tstrchrnul, (const tchar_t *s, tchar_t c), (s, c))
 
 /*@unused@*/
 static char const rcsid_tscn[] GCC_ATTR_USED_VAR = "$Id: $";

@@ -250,7 +250,7 @@ case "$host" in
 	*i?86-*)
 		AC_MSG_CHECKING([wheter we should disable dynamic code dispatch])
 		if test x"$disable_dyndispatch" = xyes; then
-			AC_DEFINE(USE_OLD_DISPATCH, 1, do not use dynamic code patching)
+			AC_DEFINE(USE_SIMPLE_DISPATCH, 1, do not use dynamic code patching)
 			AC_MSG_RESULT([yes])
 		else
 			AC_MSG_RESULT([no])
@@ -259,7 +259,7 @@ case "$host" in
 	*x86_64-*)
 		AC_MSG_CHECKING([wheter we should disable dynamic code dispatch])
 		if test x"$disable_dyndispatch" = xyes; then
-			AC_DEFINE(USE_OLD_DISPATCH, 1, do not use dynamic code patching)
+			AC_DEFINE(USE_SIMPLE_DISPATCH, 1, do not use dynamic code patching)
 			AC_MSG_RESULT([yes])
 		else
 			AC_MSG_RESULT([no])
