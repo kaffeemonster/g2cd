@@ -921,12 +921,10 @@ static void one_shift_left(int y, struct big_num *z)
 static void short_shift_left(big_digit x, int y, struct big_num *z)
 {
 	int n, m, i, zl;
-	big_digit *zp;
 
 	n = y / 64;
 	m = y % 64;
 	zl = n;
-	zp = &(z->d[0]);
 
 	for(i = 0; i < n; i++)
 		z->d[i] = 0;

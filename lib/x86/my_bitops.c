@@ -281,7 +281,6 @@ static __init void identify_cpu(void)
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
 	{
-		int ologlevel;
 		/*
 		 * No? *cough* Ok, maybe rare/exotic chip like Geode
 		 * which can switch off cpuid in firmware...
@@ -290,8 +289,6 @@ static __init void identify_cpu(void)
 		bool t = is_486();
 		write_flags(i);
 		barrier();
-		ologlevel = server.settings.logging.act_loglevel;
-		server.settings.logging.act_loglevel = LOGF_WARN;
 		if(t) {
 			strlitcpy(our_cpu.vendor_str.s, "486?");
 			our_cpu.family = 4;
@@ -299,28 +296,6 @@ static __init void identify_cpu(void)
 			strlitcpy(our_cpu.vendor_str.s, "386??");
 			our_cpu.family = 3;
 		}
-#ifndef __x86_64__
-		/*
-		 * old and broken enterprise-stable assembler have problems with
-		 * sahf/lahf on x86_64.
-		 * Don't test on x86_64, these chips will never be x86_64.
-		 */
-		if(detect_old_cyrix()) {
-			/* we may run before main, other thread impl. do not like an print so early */
-# ifdef __linux__
-			if(4 == our_cpu.family)
-				logg_pos(LOGF_WARN, "This seems to be some Cyrix/NSC/Geode CPU."
-				         "Please enable CPUID if possible (BIOS, whatever)\n");
-# endif
-		} else
-#endif
-		{
-#ifdef __linux__
-			/* we may run before main, other thread impl. do not like an print so early */
-			logg_pos(LOGF_DEBUG, "Looks like this is an CPU older Pentium I???\n");
-#endif
-		}
-		server.settings.logging.act_loglevel = ologlevel;
 		return;
 	}
 	write_flags(i);
@@ -439,6 +414,7 @@ static __init void identify_cpu(void)
 	   our_cpu.model  <  0x14)
 		cpu_feature_clear(CFEATURE_LAHF);
 #endif
+
 	if(our_cpu.vendor == X86_VENDOR_CYRIX)
 	{
 		/* Cyrix mirrors the 3DNow flag into the base plane */
@@ -498,15 +474,6 @@ static __init void identify_cpu(void)
 	/* Rise mP6 -> TSC, CX8, MMX */
 	/* Transmeta -> MMX, CMOV, later SEP */
 
-	server.settings.logging.act_loglevel = LOGF_DEVEL;
-#ifdef __linux__
-	/* other thread impl. do not like an print so early */
-	logg_posd(LOGF_DEBUG,
-		"Vendor: \"%s\" Family: %d Model: %d Stepping: %d Name: \"%s\"\n",
-		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
-		our_cpu.stepping, our_cpu.model_str.s);
-#endif
-
 	/* AMD performance hints */
 	if(our_cpu.vendor == X86_VENDOR_AMD)
 	{
@@ -546,6 +513,42 @@ static __init void identify_cpu(void)
 	 *    main crash)
 	 *  - those OS are OLD and IMHO broken
 	 */
+
+	return;
+}
+
+__init void cpu_detect_finish(void)
+{
+	identify_cpu();
+
+	if(our_cpu.family < 5)
+	{
+		int ologlevel = server.settings.logging.act_loglevel;
+		server.settings.logging.act_loglevel = LOGF_WARN;
+#ifndef __x86_64__
+		/*
+		 * old and broken enterprise-stable assembler have problems with
+		 * sahf/lahf on x86_64.
+		 * Don't test on x86_64, these chips will never be x86_64.
+		 */
+		if(detect_old_cyrix()) {
+			if(4 == our_cpu.family)
+				logg_pos(LOGF_WARN, "This seems to be some Cyrix/NSC/Geode CPU."
+				         "Please enable CPUID if possible (BIOS, whatever)\n");
+		} else
+#endif
+		{
+			logg_pos(LOGF_WARN, "Looks like this is an CPU older Pentium I???\n");
+		}
+		server.settings.logging.act_loglevel = ologlevel;
+		return;
+	}
+
+	server.settings.logging.act_loglevel = LOGF_DEVEL;
+	logg_posd(LOGF_DEBUG,
+		"Vendor: \"%s\" Family: %d Model: %d Stepping: %d Name: \"%s\"\n",
+		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
+		our_cpu.stepping, our_cpu.model_str.s);
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
@@ -673,7 +676,6 @@ static __init void identify_cpu(void)
 		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, Errata 147.\nThis may lead to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
 		server.settings.logging.act_loglevel = ologlevel;
 	}
-	return;
 }
 
 static __init int cmp_vendor(const char *str1, const char *str2)
@@ -950,7 +952,7 @@ __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 	return NULL; /* whoever fucked it up, die! */
 }
 
-#ifndef USE_OLD_DISPATCH
+#ifndef USE_SIMPLE_DISPATCH
 /*
  * Try with self modifing code.
  *

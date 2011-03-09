@@ -2,7 +2,7 @@
  * memneg_tmpl.c
  * neg a memory region efficient, x86 implementation, template
  *
- * Copyright (c) 2006-2010 Jan Seiffert
+ * Copyright (c) 2006-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,10 +30,6 @@
  * used in 32Bit & 64Bit
  */
 
-#if (defined(HAVE_MMX) || defined (HAVE_SSE) || defined (HAVE_AVX)) && !defined(ALL_ONES_ALREADY_DEFINED)
-static const uint32_t all_ones[8] GCC_ATTR_ALIGNED(32) = {~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U};
-# define ALL_ONES_ALREADY_DEFINED
-#endif
 static void *DFUNC_NAME(memneg1, ARCH_NAME_SUFFIX)(void *dst, size_t len)
 {
 	char *dst_char = dst;
@@ -97,7 +93,8 @@ alignment_size_t:
 		register intptr_t d0;
 		__asm__ __volatile__(
 			SSE_PREFETCHW(  (%1))
-			AVX_MOVE(%3, %%ymm0)
+			"vpcmpeqb	%%xmm0, %%xmm0, %%xmm0\n\t"
+			"vperm2f128	$0, %%ymm0, %%ymm0, %%ymm0\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCHW(64(%1))
@@ -116,13 +113,13 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$32, %4\n\t"
+			"test	$32, %3\n\t"
 			"je	3f\n\t"
 			AVX_XOR(    (%1), %%ymm0, %%ymm2)
 			AVX_STORE(%%ymm2,  (%1))
 			"add	$32, %1\n"
 			"3:\n\t"
-			"test	$16, %4\n\t"
+			"test	$16, %3\n\t"
 			"je	4f\n\t"
 			AVX_XOR(    (%1), %%xmm0, %%xmm2)
 			AVX_STORE(%%xmm2,  (%1))
@@ -131,7 +128,7 @@ alignment_size_t:
 			/* done! */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (dst_char)
-			: "0" (len/64), "m" (*all_ones), "r" (len%64)
+			: "0" (len/64), "r" (len%64)
 			: "cc",
 # ifdef __SSE__
 #  ifdef __avx__
@@ -162,7 +159,7 @@ alignment_size_t:
 
 		__asm__ __volatile__(
 			SSE_PREFETCHW(  (%1))
-			SSE_MOVE(%3, %%xmm2)
+			"pcmpeqb	%%xmm2, %%xmm2\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCHW(32(%1))
@@ -183,7 +180,7 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %4\n\t"
+			"test	$16, %3\n\t"
 			"je	3f\n\t"
 			SSE_MOVE(   (%1), %%xmm0)
 			SSE_XOR(  %%xmm2, %%xmm0)
@@ -193,7 +190,7 @@ alignment_size_t:
 			/* done */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1", "xmm2", "xmm3",
@@ -213,7 +210,7 @@ alignment_size_t:
 
 		__asm__ __volatile__ (
 			MMX_PREFETCHW(  (%1))
-			"movq	%3, %%mm4\n\t"
+			"pcmpeqb	%%mm4, %%mm4\n\t"
 			"movq	%%mm4, %%mm5\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
@@ -242,7 +239,7 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %4\n\t"
+			"test	$16, %3\n\t"
 			"je	3f\n\t"
 			"movq	 (%1), %%mm0\n\t"
 			"movq	8(%1), %%mm1\n\t"
@@ -252,7 +249,7 @@ alignment_size_t:
 			MMX_STORE(%%mm1, 8(%1))
 			"add	$16, %1\n"
 			"3:\n\t"
-			"test	$8, %4\n\t"
+			"test	$8, %3\n\t"
 			"je	4f\n\t"
 			"movq	 (%1), %%mm0\n\t"
 			"pxor	%%mm4, %%mm0\n\t"
@@ -262,7 +259,7 @@ alignment_size_t:
 			/* done */
 			MMX_FENCE
 			: "=&c" (d0), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __MMX__
 			  "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7",
@@ -427,7 +424,8 @@ alignment_size_t:
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
 			SSE_PREFETCHW(  (%2))
-			AVX_MOVE(%4, %%ymm0)
+			"vpcmpeqb	%%xmm0, %%xmm0, %%xmm0\n\t"
+			"vperm2f128	$0, %%ymm0, %%ymm0, %%ymm0\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(64(%1))
@@ -451,14 +449,14 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$32, %5\n\t"
+			"test	$32, %4\n\t"
 			"je	3f\n\t"
 			AVX_XOR(    (%1), %%ymm0, %%ymm2)
 			"add	$32, %1\n\t"
 			AVX_STORE(%%ymm2,  (%2))
 			"add	$32, %2\n"
 			"3:\n\t"
-			"test	$16, %5\n\t"
+			"test	$16, %4\n\t"
 			"je	4f\n\t"
 			AVX_XOR(    (%1), %%xmm0, %%xmm2)
 			"add	$16, %1\n\t"
@@ -468,7 +466,7 @@ alignment_size_t:
 			/* done! */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/64), "m" (*all_ones), "r" (len%64)
+			: "0" (len/64), "r" (len%64)
 			: "cc",
 # ifdef __SSE__
 #  ifdef __avx__
@@ -502,7 +500,7 @@ alignment_16:
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
 			SSE_PREFETCHW(  (%2))
-			SSE_MOVE(%4, %%xmm2)
+			"pcmpeqb	%%xmm2, %%xmm2\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(32(%1))
@@ -528,7 +526,7 @@ alignment_16:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %5\n\t"
+			"test	$16, %4\n\t"
 			"je	3f\n\t"
 			SSE_MOVE(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
@@ -539,7 +537,7 @@ alignment_16:
 			/* done */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1", "xmm2", "xmm3",
@@ -558,7 +556,7 @@ alignment_8:
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
 			SSE_PREFETCHW(  (%2))
-			SSE_MOVE(%4, %%xmm2)
+			"pcmpeqb	%%xmm2, %%xmm2\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(32(%1))
@@ -586,7 +584,7 @@ alignment_8:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %5\n\t"
+			"test	$16, %4\n\t"
 			"je	3f\n\t"
 			SSE_LOAD8L(  0(%1), %%xmm0)
 			SSE_LOAD8H(  0(%1), %%xmm0)
@@ -598,7 +596,7 @@ alignment_8:
 			/* done */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1", "xmm2", "xmm3",
@@ -615,7 +613,7 @@ alignment_size_t:
 		__asm__ __volatile__(
 			SSE_PREFETCH(  (%1))
 			SSE_PREFETCHW(  (%2))
-			SSE_MOVE(%4, %%xmm2)
+			"pcmpeqb	%%xmm2, %%xmm2\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
 			SSE_PREFETCH(32(%1))
@@ -641,7 +639,7 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %5\n\t"
+			"test	$16, %4\n\t"
 			"je	3f\n\t"
 			SSE_LOAD(   (%1), %%xmm0)
 			"add	$16, %1\n\t"
@@ -652,7 +650,7 @@ alignment_size_t:
 			/* done */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __SSE__
 			  "xmm0", "xmm1", "xmm2", "xmm3",
@@ -673,7 +671,7 @@ alignment_size_t:
 		__asm__ __volatile__ (
 			MMX_PREFETCH(  (%1))
 			MMX_PREFETCHW(  (%2))
-			"movq	%4, %%mm4\n\t"
+			"pcmpeqb	%%mm4, %%mm4\n\t"
 			"movq	%%mm4, %%mm5\n\t"
 			"test	%0, %0\n\t"
 			"jz	2f\n\t"
@@ -707,7 +705,7 @@ alignment_size_t:
 			"jnz	1b\n"
 			/* loop done, handle trailer */
 			"2:\n\t"
-			"test	$16, %5\n\t"
+			"test	$16, %4\n\t"
 			"je	3f\n\t"
 			"movq	 (%1), %%mm0\n\t"
 			"movq	8(%1), %%mm1\n\t"
@@ -718,7 +716,7 @@ alignment_size_t:
 			MMX_STORE(%%mm1, 8(%2))
 			"add	$16, %2\n"
 			"3:\n\t"
-			"test	$8, %5\n\t"
+			"test	$8, %4\n\t"
 			"je	4f\n\t"
 			"movq	 (%1), %%mm0\n\t"
 			"add	$8, %1\n\t"
@@ -729,7 +727,7 @@ alignment_size_t:
 			/* done */
 			MMX_FENCE
 			: "=&c" (d0), "+&r" (src_char), "+&r" (dst_char)
-			: "0" (len/32), "m" (*all_ones), "r" (len%32)
+			: "0" (len/32), "r" (len%32)
 			: "cc",
 #  ifdef __MMX__
 			  "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7",

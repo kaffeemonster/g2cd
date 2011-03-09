@@ -81,7 +81,7 @@ static const action_string enc_as00 = {NULL, str_size(ENC_NONE_S),    ENC_NONE_S
 static const action_string enc_as01 = {NULL, str_size(ENC_DEFLATE_S), ENC_DEFLATE_S};
 static const action_string enc_as02 = {NULL, str_size(ENC_LZO_S),     ENC_LZO_S};
 
-const action_string *KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
+const action_string * const KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 {
 	&enc_as00,
 	&enc_as01,

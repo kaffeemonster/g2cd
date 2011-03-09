@@ -136,6 +136,8 @@ int main(int argc, char **args)
 	unsigned gpfd_num = 0, gpfd_len = THREAD_SUM_COM + 5;
 	bool long_poll = true;
 
+	cpu_detect_finish();
+
 	gpfd = malloc(gpfd_len * sizeof(*gpfd));
 	if(!gpfd) {
 		logg_errno(LOGF_ERR, "couldn't allocate mem for poll fds");

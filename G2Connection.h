@@ -206,7 +206,7 @@ typedef struct
 #  define _G2CON_EXTRNVAR(x)
 # endif /* _G2CONNECTION_C */
 
-_G2CON_EXTRNVAR(const action_string *KNOWN_ENCODINGS[];)
+_G2CON_EXTRNVAR(const action_string * const KNOWN_ENCODINGS[];)
 _G2CON_EXTRNVAR(const action_index  KNOWN_HEADER_FIELDS_INDEX[LONGEST_HEADER_FIELD];)
 _G2CON_EXTRNVAR(const action_string KNOWN_HEADER_FIELDS[];)
 

@@ -38,4 +38,8 @@ __init void patch_instruction(void *where, const struct test_cpu_feature *t, siz
 {
 }
 
+__init void cpu_detect_finish(void)
+{
+}
+
 static char const rcsid_mbg[] GCC_ATTR_USED_VAR = "$Id:$";

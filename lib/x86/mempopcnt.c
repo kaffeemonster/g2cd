@@ -58,18 +58,16 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 #endif
 #define CSA_SETUP 1
 
-static const uint8_t lut_st[16] GCC_ATTR_ALIGNED(16) =
-	{0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
-static const uint8_t reg_num_mask[16] GCC_ATTR_ALIGNED(16) =
-		{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
 static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 {
-	{0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa},
-	{0x33333333, 0x33333333, 0x33333333, 0x33333333},
-	{0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f},
-	{0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff},
-	{0x000001c0, 0x00000000, 0x000001c0, 0x00000000},
-	{0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff}
+	/*   0 */ {0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa},
+	/*  16 */ {0x33333333, 0x33333333, 0x33333333, 0x33333333},
+	/*  32 */ {0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f},
+	/*  48 */ {0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff},
+	/*  64 */ {0x000001c0, 0x00000000, 0x000001c0, 0x00000000},
+	/*  80 */ {0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff},
+	/*  96 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302}, /* lut_st */
+	/* 112 */ {0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d}  /* reg_num_mask */
 };
 
 //TODO: pimp for 64 bit (more regs)
@@ -86,10 +84,10 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"prefetchnta	(%3)\n\t"
 		"prefetchnta	0x20(%3)\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-		"movdqa	%5, %%xmm7\n\t" /*  */
-		"movdqa	32+%8, %%xmm6\n\t" /* 0x0f0f0f0f0f */
+		"movdqa	96+%5, %%xmm7\n\t" /* lut_st */
+		"movdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
 		"pxor	%%xmm5, %%xmm5\n\t"
-		"movdqa	%7, %%xmm1\n\t"
+		"movdqa	112+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%3, %1\n\t"
 		"and	$-16, %3\n\t"
@@ -184,7 +182,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 
 		"add	$256, %3\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-		"vbroadcastf128	32+%8, %%ymm4\n\t" /* 0x0f0f0f0f0f */
+		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
 
 		"vxorpd	%%ymm2, %%ymm3, %%ymm3\n\t"
 		"vandpd	%%ymm3, %%ymm2, %%ymm2\n\t"
@@ -200,7 +198,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 
 		"dec	%2\n\t"
 
-		"vmovdqa	%5, %%xmm2\n\t" /*  */
+		"vmovdqa	96+%5, %%xmm2\n\t" /* lut_st */
 
 		"vandpd	%%ymm4, %%ymm6, %%ymm0\n\t"
 		"vandnpd	%%ymm4, %%ymm6, %%ymm6\n\t"
@@ -256,12 +254,12 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"99:\n\t"
 #   endif
 		"vmovdqa	%%xmm2, %%xmm6\n\t"
-		"vbroadcastf128	32+%8, %%ymm4\n\t" /* 0x0f0f0f0f0f */
+		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
 		"call	avx_wrap\n\t"
 		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
 		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
 		"vmovdqa	%%ymm3, %%ymm5\n\t"
-		"vbroadcastf128	32+%8, %%ymm3\n\t" /* 0x0f0f0f0f0f */
+		"vbroadcastf128	32+%5, %%ymm3\n\t" /* 0x0f0f0f0f0f */
 		"vmovdqa	%%ymm3, %%ymm4\n\t"
 		"call	avx_wrap\n\t"
 		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
@@ -271,7 +269,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"call	avx_wrap\n\t"
 		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
 		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
-		"vmovdqa	64+%8, %%xmm2\n\t"
+		"vmovdqa	64+%5, %%xmm2\n\t"
 //TODO: This needs another constant
 		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
 		/* twice as much bits, twice the constant??? */
@@ -349,7 +347,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"movdqa	(%3), %%xmm0\n"
 		"3:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	%7, %%xmm0\n\t"
+		"movdqa	112+%5, %%xmm0\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
 		"pshufd	$0, %%xmm2, %%xmm2\n\t"
@@ -374,12 +372,11 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
 	: /* %4 */ "3" (s),
-	  /* %5 */ "m" (*lut_st),
-	  /* %6 */ CO  (len),
-	  /* %7 */ "m" (*reg_num_mask),
-	  /* %8 */ "m" (**vals)
+	  /* %5 */ "m" (vals[0][0]),
+	  /* %6 */ CO  (len)
+	: "cc", "memory"
 #  ifdef __SSE__
-	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #  endif
 	);
 
@@ -524,6 +521,7 @@ static size_t mempopcnt_SSE4A(const void *s, size_t len)
 				: /* %6 */ "0" (r),
 				  /* %7 */ "2" (sum),
 				  /* %8 */ "1" (p)
+				: "cc", "memory"
 			);
 		}
 		len %= SOST * 4;
@@ -589,10 +587,10 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 #  else
 		"88:\n\t"
 #  endif
-		"movdqa	%5, %%xmm7\n\t" /*  */
-		"movdqa	32+%8, %%xmm6\n\t" /* 0x0f0f0f0f0f */
+		"movdqa	96+%5, %%xmm7\n\t" /* lut_st */
+		"movdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
 		"pxor	%%xmm5, %%xmm5\n\t"
-		"movdqa	%7, %%xmm1\n\t"
+		"movdqa	112+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%3, %1\n\t"
 		"and	$-16, %3\n\t"
@@ -676,7 +674,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"por	%%xmm4, %%xmm0\n\t"
 
 		"add	$128, %3\n\t"
-		"movdqa	32+%8, %%xmm4\n\t" /* 0x0f0f0f0f0f */
+		"movdqa	32+%5, %%xmm4\n\t" /* 0x0f0f0f0f0f */
 
 		"pxor	%%xmm2, %%xmm3\n\t"
 		"pand	%%xmm3, %%xmm2\n\t"
@@ -692,7 +690,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 
 		"dec	%2\n\t"
 
-		"movdqa	%5, %%xmm2\n\t" /*  */
+		"movdqa	96+%5, %%xmm2\n\t" /* lut_st */
 
 		"movdqa	%%xmm6, %%xmm0\n\t"
 		"pand	%%xmm4, %%xmm0\n\t"
@@ -738,12 +736,12 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"99:\n\t"
 #   endif
 		"movdqa	%%xmm2, %%xmm6\n\t"
-		"movdqa	32+%8, %%xmm4\n\t" /* 0x0f0f0f0f0f */
+		"movdqa	32+%5, %%xmm4\n\t" /* 0x0f0f0f0f0f */
 		"call	ssse3_wrap\n\t"
 		"paddq	%%xmm7, %%xmm7\n\t"
 		"psubq	%%xmm5, %%xmm7\n\t"
 		"movdqa	%%xmm3, %%xmm5\n\t"
-		"movdqa	32+%8, %%xmm3\n\t" /* 0x0f0f0f0f0f */
+		"movdqa	32+%5, %%xmm3\n\t" /* 0x0f0f0f0f0f */
 		"movdqa	%%xmm3, %%xmm4\n\t"
 		"call	ssse3_wrap\n\t"
 		"paddq	%%xmm7, %%xmm7\n\t"
@@ -753,7 +751,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"call	ssse3_wrap\n\t"
 		"paddq	%%xmm7, %%xmm7\n\t"
 		"psubq	%%xmm5, %%xmm7\n\t"
-		"movdqa	64+%8, %%xmm2\n\t"
+		"movdqa	64+%5, %%xmm2\n\t"
 		"paddq	%%xmm2, %%xmm7\n\t"
 /*~~~~~~~~ cleanup ~~~~~~*/
 		"movdqa	16(%0), %%xmm5\n\t"
@@ -828,7 +826,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	(%3), %%xmm0\n"
 		"3:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	%7, %%xmm0\n\t"
+		"movdqa	112+%5, %%xmm0\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
 		"pshufd	$0, %%xmm2, %%xmm2\n\t"
@@ -853,12 +851,11 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
 	: /* %4 */ "3" (s),
-	  /* %5 */ "m" (*lut_st),
-	  /* %6 */ CO  (len),
-	  /* %7 */ "m" (*reg_num_mask),
-	  /* %8 */ "m" (**vals)
+	  /* %5 */ "m" (vals[0][0]),
+	  /* %6 */ CO  (len)
+	: "cc", "memory"
 #  ifdef __SSE__
-	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #  endif
 	);
 
@@ -909,7 +906,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"movdqa	32+%5, %%xmm6\n\t"
 		"pxor	%%xmm3, %%xmm3\n\t"
 		"pxor	%%xmm2, %%xmm2\n\t"
-		"movdqa	%7, %%xmm1\n\t"
+		"movdqa	112+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%2, %1\n\t"
 		"and	$-16, %2\n\t"
@@ -1154,7 +1151,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"movdqa	(%2), %%xmm0\n\t"
 		"3:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	%7, %%xmm0\n\t"
+		"movdqa	112+%5, %%xmm0\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
 		"pshufd	$0, %%xmm2, %%xmm2\n\t"
@@ -1179,11 +1176,11 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (**vals),
-	  /* %6 */ CO  (len),
-	  /* %7 */ "m" (*reg_num_mask)
+	  /* %5 */ "m" (vals[0][0]),
+	  /* %6 */ CO  (len)
+	: "cc", "memory"
 #ifdef __SSE__
-	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #endif
 	);
 
@@ -1487,10 +1484,11 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (**vals),
+	  /* %5 */ "m" (vals[0][0]),
 	  /* %6 */ CO (len)
+	: "cc", "memory"
 #ifdef __MMX__
-	: "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7"
+	, "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7"
 #endif
 	);
 
@@ -1823,10 +1821,11 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (**vals),
+	  /* %5 */ "m" (vals[0][0]),
 	  /* %6 */ CO  (len)
+	: "cc", "memory"
 #ifdef __MMX__
-	: "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7"
+	, "mm0", "mm1", "mm2", "mm3", "mm4", "mm5", "mm6", "mm7"
 #endif
 	);
 

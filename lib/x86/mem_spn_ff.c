@@ -190,8 +190,9 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "i" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+	: "cc"
 # ifdef __SSE2__
-	: "xmm0", "xmm1", "xmm2"
+	, "xmm0", "xmm1", "xmm2"
 # endif
 	);
 	return ret;
@@ -296,8 +297,9 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "i" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+	: "cc"
 #ifdef __SSE2__
-	: "xmm0", "xmm1", "xmm2"
+	, "xmm0", "xmm1", "xmm2"
 #endif
 	);
 	return ret;
@@ -393,8 +395,9 @@ static size_t mem_spn_ff_SSE(const void *s, size_t len)
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV8)),
 	  /* %7 */ "i" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV8))
+	: "cc"
 # ifdef __SSE__
-	: "mm0", "mm1", "mm2"
+	, "mm0", "mm1", "mm2"
 # endif
 	);
 	return ret;
@@ -425,6 +428,7 @@ static size_t mem_spn_ff_x86(const void *s, size_t len)
 			  "2" (len % SOST),
 			  "3" (~(size_t)0),
 			  "m" (*(const size_t *)p)
+			: "cc"
 		);
 	}
 	if(SOST != SO32)
