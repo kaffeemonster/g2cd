@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   sparc/sparc64 implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -300,8 +300,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	reduce_x(s1);
-	reduce_x(s2);
+	reduce_4(s1);
+	reduce_4(s2);
 	return s2 << 16 | s1;
 }
 

@@ -14,6 +14,7 @@
  * original, please go to zlib.net.
  */
 
+#define NO_DIVIDE
 #if defined(__ARM_NEON__) || defined(__ARM_ARCH_6__)  || \
     defined(__ARM_ARCH_6J__)  || defined(__ARM_ARCH_6Z__) || \
     defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_7A__)
@@ -60,7 +61,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 // TODO: byte order?
 	/*
 	 * big endian qwords are big endian within the dwords
-	 * but WRONG (really??) way round between lo and hi
+	 * but WRONG (really??) way round between lo and hi.
+	 * Creating some kind of PDP11 middle endian.
 	 * GCC wants to disable qword endian specific patterns
 	 */
 	if(HOST_IS_BIGENDIAN)
@@ -87,14 +89,14 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		vs1 = v0_32;
 		vs2 = v0_32;
 		/*
-		 * the accumulating of s1 for every round grows very fast
+		 * the accumulation of s1 for every round grows very fast
 		 * (quadratic?), even if we accumulate in 4 dwords, more
 		 * rounds means nonlinear growth.
 		 * We already split it out of s2, normaly it would be in
 		 * s2 times 16... and even grow faster.
 		 * Thanks to this split and vector reduction, we can stay
 		 * longer in the loops. But we have to prepare for the worst
-		 * (qht all 0xff), only do 6 times the work.
+		 * (all 0xff), only do 6 times the work.
 		 * (we could prop. stay a little longer since we have 4 sums,
 		 * not 2 like on x86).
 		 */
@@ -218,8 +220,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	s1 = reduce_x(s1);
-	s2 = reduce_x(s2);
+	s1 = reduce_4(s1);
+	s2 = reduce_4(s2);
 
 	return s2 << 16 | s1;
 }
@@ -259,6 +261,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			order_lo = 0x00020004;
 			order_hi = 0x00010003;
 		}
+// TODO: we could go over NMAX, since we have split the vs2 sum
 		k = len < NMAX ? len : NMAX;
 		len -= k;
 
@@ -325,8 +328,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s2 += s1;
 	} while (--len);
 	/* at this point we should no have so big s1 & s2 */
-	s1 = reduce_x(s1);
-	s2 = reduce_x(s2);
+	s1 = reduce_4(s1);
+	s2 = reduce_4(s2);
 
 	return s2 << 16 | s1;
 }

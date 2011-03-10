@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   generic implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2010 Jan Seiffert
+ * Copyright (C) 2010-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -26,7 +26,18 @@
 
 /* use NO_DIVIDE if your processor does not do division in hardware */
 #ifdef NO_DIVIDE
-# define MOD(a) \
+/* use NO_SHIFT if your processor does shift > 1 by loop */
+# ifdef NO_SHIFT
+#  define reduce(a) reduce_4(a)
+#  define reduce_4(a) \
+	do { \
+		if (a >= (BASE << 4)) a -= (BASE << 4); \
+		if (a >= (BASE << 3)) a -= (BASE << 3); \
+		if (a >= (BASE << 2)) a -= (BASE << 2); \
+		if (a >= (BASE << 1)) a -= (BASE << 1); \
+		if (a >= BASE) a -= BASE; \
+	} while (0)
+#  define reduce_full(a) \
 	do { \
 		if (a >= (BASE << 16)) a -= (BASE << 16); \
 		if (a >= (BASE << 15)) a -= (BASE << 15); \
@@ -46,8 +57,36 @@
 		if (a >= (BASE << 1)) a -= (BASE << 1); \
 		if (a >= BASE) a -= BASE; \
 	} while (0)
+# else
+#  define reduce(x) \
+	do { \
+		uint32_t y = x & 0x0000ffff; \
+		x >>= 16; \
+		y -= x; \
+		x <<= 4; \
+		return x + y; \
+	} while(0)
+#  define reduce_4(x) \
+	do { \
+		uint32_t y = x & 0x0000ffff; \
+		x >>= 16; \
+		y -= x; \
+		x <<= 4; \
+		x += y; \
+		return x >= BASE ? x - BASE : x; \
+	} while(0)
+#  define reduce_full(x) \
+	do { \
+		uint32_t y = x & 0x0000ffff; \
+		x >>= 16; \
+		y -= x; \
+		x <<= 4; \
+	} while(x >= BASE)
+# endif
 #else
-# define MOD(a) a %= BASE
+# define reduce(a) a %= BASE
+# define reduce_4(a) a %= BASE
+# define reduce_full(a) a %= BASE
 #endif
 
 #ifndef MIN_WORK
@@ -55,25 +94,6 @@
 #endif
 
 /* ========================================================================= */
-static inline uint32_t reduce(uint32_t x)
-{
-	uint32_t y = x & 0x0000ffff;
-	x >>= 16;
-	y -= x;
-	x <<= 4;
-	return x + y;
-}
-
-static inline uint32_t reduce_x(uint32_t x)
-{
-	uint32_t y = x & 0x0000ffff;
-	x >>= 16;
-	y -= x;
-	x <<= 4;
-	x += y;
-	return x >= BASE ? x - BASE : x;
-}
-
 static noinline uint32_t adler32_1(uint32_t adler, const uint8_t *buf, unsigned len GCC_ATTR_UNUSED_PARAM)
 {
 	uint32_t sum2;
@@ -106,7 +126,7 @@ static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsi
 	if(adler >= BASE)
 		adler -= BASE;
 	/* only added so many BASE's */
-	sum2 = reduce_x(sum2);
+	reduce_4(sum2);
 	return adler | (sum2 << 16);
 }
 
@@ -129,8 +149,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			DO16(buf);	/* 16 sums unrolled */
 			buf += 16;
 		} while(--n);
-		MOD(adler);
-		MOD(sum2);
+		reduce_full(adler);
+		reduce_full(sum2);
 	}
 
 	/* do remaining bytes (less than NMAX, still just one modulo) */
@@ -145,8 +165,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			adler += *buf++;
 			sum2 += adler;
 		}
-		MOD(adler);
-		MOD(sum2);
+		reduce_full(adler);
+		reduce_full(sum2);
 	}
 
 	/* return recombined sums */

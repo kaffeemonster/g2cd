@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   sparc/sparc64 implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -32,10 +32,11 @@
  * unit on your SUN server, where no code will ever use it (any
  * graphic processing stuff on your server? Maybe "Blinken Lights").
  *
- * And when unrolling makes your code slower (wtf?) even if you not
+ * And when unrolling makes your code slower (wtf?) even if you do not
  * bust your register set...
  * The VIS unit is nice, but misses some instructions, needs shorter
- * pipelines... And it could be wider...
+ * pipelines... And it could be wider... And not in the FPU, Niagara will
+ * hate this code...
  */
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
@@ -258,8 +259,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			s1 += *buf++;
 			s2 += s1;
 		} while (--k);
-		MOD(s1);
-		MOD(s2);
+		reduce_full(s1);
+		reduce_full(s2);
 	}
 
 	return s2 << 16 | s1;

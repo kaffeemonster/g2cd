@@ -13,6 +13,7 @@
  * but a heavily modified version. If you are looking for the
  * original, please go to zlib.net.
  */
+
 #if defined(__ALTIVEC__) && defined(__GNUC__)
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
@@ -29,7 +30,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 /*
  * Depending on length, this can be slower (short length < 64 bytes),
- * much faster (or beloved 128kb 22.2s generic to 3.4s vec, but cache
+ * much faster (our beloved 128kb 22.2s generic to 3.4s vec, but cache
  * is important...), to a little faster (very long length, 1.6MB, 47.6s
  * to 36s), which is prop. only capped by memory bandwith.
  * (The orig. 128k case was slower in AltiVec, because AltiVec loads
@@ -198,7 +199,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 #if 0
 		/*
 		 * OBSOLETE:
-		 * We know have a "cheap" reduce to get the vectors in a range
+		 * We now have a "cheap" reduce to get the vectors in a range
 		 * around BASE, they still need the final proper mod, but we can
 		 * stay on the vector unit and do not overflow.
 		 * ----------------------------------------------------------
@@ -218,7 +219,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 *
 		 * We can also work around this, but it is expensive.
 		 * So to be a win the input array better is really big,
-		 * that transfers over the stack hurt more than all this:
+		 * and that transfers over the stack hurt more than all this:
 		 */
 		v15_32 = vec_splat_u32(15);
 		vbase_recp = 4 times 0x080078071; /* a mem load hides here */

@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   ppc implementation
  * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2010 Jan Seiffert
+ * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -13,6 +13,22 @@
  * but a heavily modified version. If you are looking for the
  * original, please go to zlib.net.
  */
+
+// TODO: i hate synthetized processors
+	/*
+	 * If we have a full "high-speed" Multiply/Divide Unit,
+	 * the old multiply-by-reciproc should be the best way
+	 * (since then we should get a 32x32 mul in 2 cycles?),
+	 * but wait, we need 4 muls == 8 + 2 shift + 2 sub + 2 load
+	 * imidiate.
+	 * If we do not have the "full" MDU, a mul takes 32 cycles
+	 * and a div 25 (WTF?).
+	 * GCC generates a classic div, prop. needs the right -mtune
+	 * for a mul.
+	 * Use our hand reduce, 17 simple instructions for both operands.
+	 * We should do the same thing for loongson 2, but what about 3?
+	 */
+#define NO_DIVIDE
 #if (defined(__mips_loongson_vector_rev) || defined(__mips_dsp)) && defined(__GNUC__)
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
@@ -26,7 +42,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 /* We use the GCC vector internals, to make things simple for us. */
 
 //#define VNMAX (6*NMAX)
-# define VNMAX (4*NMAX)
+# define VNMAX (5*NMAX)
 
 static inline uint32x2_t vector_reduce(uint32x2_t x)
 {
@@ -246,15 +262,15 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	MOD(s1);
-	MOD(s2);
+	reduce(s1);
+	reduce(s2);
 
 	return s2 << 16 | s1;
 }
 
 static char const rcsid_a32ml[] GCC_ATTR_USED_VAR = "$Id: $";
 #elif defined(__mips_dsp) && defined(__GNUC__)
-# define VNMAX (4*NMAX)
+# define VNMAX ((5*NMAX)/2)
 /* We use the GCC vector internals, to make things simple for us. */
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -337,7 +353,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			 * Since the mips acc are special, gcc fears to treat.
 			 * Esp. gcc thinks it's cool to have the result ready in
 			 * the gpr at the end of this main loop, so he hoist a
-			 * move out of the acc and back in into the loop.
+			 * move out of the acc and back in into the acc into the
+			 * loop.
 			 *
 			 * So do it by hand...
 			 */
@@ -468,23 +485,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-// TODO: i hate synthetized processors
-	/*
-	 * If we have a full "high-speed" Multiply/Devide Unit,
-	 * the old multiply-by-reciproc should be the best way
-	 * (since then we should get a 32x32 mul in 2 cycles?),
-	 * but wait, we need 4 muls == 8 + 2 shift + 2 sub + 2 load
-	 * imidiate.
-	 * If we do not have the "full" MDU, a mul takes 32 cycles
-	 * and a div 25 (WTF?).
-	 * GCC generates a classic div, prop. needs the right -mtune
-	 * for a mul.
-	 * Use our hand reduce, 17 simple instructions for both operands.
-	 * Maybe we should do the same thing for loongson
-	 */
 	/* s2 should be something like 24 bit here */
-	s1 = reduce_x(s1);
-	s2 = reduce_x(s2);
+	s1 = reduce_4(s1);
+	s2 = reduce_4(s2);
 
 	return s2 << 16 | s1;
 }

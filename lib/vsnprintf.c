@@ -87,6 +87,11 @@
  * IP, so we can sweep away a lot of temp printing to stack
  * buffers throughout the program.
  *
+ * And finally, this gives some portabillity, since we have a
+ * "fixed" set of supported formats including the C99 z & j & ll
+ * and so on, so we do not need truck loads of casts and hacks
+ * through out the program to support not-C99 clean systems.
+ *
  * Known limitations:
  * - Does not always return the correct needed length when truncating
  * - Can barely print floating point
@@ -280,7 +285,7 @@ char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned q)
 
 static noinline char *put_dec(char *buf, unsigned num)
 {
-	/* larger numbers are a more unlikely, or: small numbers are common */
+	/* larger numbers are more unlikely, or: small numbers are common */
 	while(unlikely(num >= 100000)) {
 		unsigned rem = num % 100000;
 		num /= 100000;
