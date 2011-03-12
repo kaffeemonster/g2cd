@@ -58,8 +58,9 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 #endif
 #define CSA_SETUP 1
 
-static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
+static const struct { uint32_t d[8][4]; } vals GCC_ATTR_ALIGNED(16) =
 {
+	{
 	/*   0 */ {0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa},
 	/*  16 */ {0x33333333, 0x33333333, 0x33333333, 0x33333333},
 	/*  32 */ {0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f},
@@ -68,6 +69,7 @@ static const uint32_t vals[][4] GCC_ATTR_ALIGNED(16) =
 	/*  80 */ {0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff},
 	/*  96 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302}, /* lut_st */
 	/* 112 */ {0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d}  /* reg_num_mask */
+	}
 };
 
 //TODO: pimp for 64 bit (more regs)
@@ -372,7 +374,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
 	: /* %4 */ "3" (s),
-	  /* %5 */ "m" (vals[0][0]),
+	  /* %5 */ "m" (vals),
 	  /* %6 */ CO  (len)
 	: "cc", "memory"
 #  ifdef __SSE__
@@ -851,7 +853,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (cnt2),
 	  /* %3 */ "="CL"r" (s)
 	: /* %4 */ "3" (s),
-	  /* %5 */ "m" (vals[0][0]),
+	  /* %5 */ "m" (vals),
 	  /* %6 */ CO  (len)
 	: "cc", "memory"
 #  ifdef __SSE__
@@ -1176,7 +1178,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (vals[0][0]),
+	  /* %5 */ "m" (vals),
 	  /* %6 */ CO  (len)
 	: "cc", "memory"
 #ifdef __SSE__
@@ -1484,7 +1486,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (vals[0][0]),
+	  /* %5 */ "m" (vals),
 	  /* %6 */ CO (len)
 	: "cc", "memory"
 #ifdef __MMX__
@@ -1821,7 +1823,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 	  /* %2 */ "="CL"r" (s),
 	  /* %3 */ "="CL"r" (t)
 	: /* %4 */ "2" (s),
-	  /* %5 */ "m" (vals[0][0]),
+	  /* %5 */ "m" (vals),
 	  /* %6 */ CO  (len)
 	: "cc", "memory"
 #ifdef __MMX__

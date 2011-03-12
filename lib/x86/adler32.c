@@ -26,6 +26,13 @@ static uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 #include "../generic/adler32.c"
 #include "x86_features.h"
 
+static const struct { short d[24]; } vord GCC_ATTR_ALIGNED(16) = {
+	{1,1,1,1,1,1,1,1,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1}
+};
+static const struct { char d[16]; } vord_b GCC_ATTR_ALIGNED(16) = {
+	{16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1}
+};
+
 static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, uint32_t *s2, unsigned k)
 {
 	uint32_t t;
@@ -181,7 +188,6 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 # if HAVE_BINUTILS >= 217
 static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	static const char vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
@@ -192,13 +198,13 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"movdqa	(%5), %%xmm5\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
 		"cmovb	%4, %3\n\t"
 		"sub	%3, %4\n\t"
 		"cmp	$16, %3\n\t"
 		"jb	88f\n\t"
+		"movdqa	(%5), %%xmm5\n\t"
 		"prefetchnta	16(%0)\n\t"
 		"movd %2, %%xmm2\n\t"
 		"movd %1, %%xmm3\n\t"
@@ -266,7 +272,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /* %2 */ "=r" (s2),
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
-	: /* %5 */ "r" (vord),
+	: /* %5 */ "m" (vord_b),
 	 /*
 	  * somewhere between 5 & 6, psadbw 64 bit sums ruin the party
 	  * spreading the sums with palignr only brings it to 7 (?),
@@ -294,7 +300,6 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 
 static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	static const short vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
@@ -305,14 +310,14 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"movdqa	(%5), %%xmm6\n\t"
-		"movdqa	16(%5), %%xmm5\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
 		"cmovb	%4, %3\n\t"
 		"sub	%3, %4\n\t"
 		"cmp	$16, %3\n\t"
 		"jb	88f\n\t"
+		"movdqa	16+%5, %%xmm6\n\t"
+		"movdqa	32+%5, %%xmm5\n\t"
 		"prefetchnta	0x70(%0)\n\t"
 		"pxor	%%xmm4, %%xmm4\n\t"
 		"pxor	%%xmm7, %%xmm7\n\t"
@@ -389,7 +394,7 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /* %2 */ "=r" (s2),
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
-	: /* %5 */ "r" (vord),
+	: /* %5 */ "m" (vord),
 	  /* %6 */ "i" (5*NMAX),
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
@@ -417,7 +422,6 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
  */
 static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	static const short vord[] GCC_ATTR_ALIGNED(16) = {16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	unsigned k;
@@ -428,14 +432,14 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"movdqa	(%5), %%xmm6\n\t"
-		"movdqa	16(%5), %%xmm5\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
 		"cmovb	%4, %3\n\t"
 		"sub	%3, %4\n\t"
 		"cmp	$16, %3\n\t"
 		"jb	88f\n\t"
+		"movdqa	16+%5, %%xmm6\n\t"
+		"movdqa	32+%5, %%xmm5\n\t"
 		"prefetchnta	16(%0)\n\t"
 		"pxor	%%xmm7, %%xmm7\n\t"
 		"movd	%1, %%xmm4\n\t"
@@ -491,7 +495,7 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
 	  /* %2 */ "=r" (s2),
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
-	: /* %5 */ "r" (vord),
+	: /* %5 */ "m" (vord),
 	  /* %6 */ "i" (NMAX + NMAX/3),
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
@@ -517,7 +521,6 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
  */
 static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	static const short vord[] GCC_ATTR_ALIGNED(8) = {8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	int k;
@@ -528,14 +531,14 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"movq	(%5), %%mm6\n\t"
-		"movq	8(%5), %%mm5\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
 		"cmovb	%4, %3\n\t"
 		"sub	%3, %4\n\t"
 		"cmp	$8, %3\n\t"
 		"jb	88f\n\t"
+		"movq	32+%5, %%mm6\n\t"
+		"movq	40+%5, %%mm5\n\t"
 		"pxor	%%mm4, %%mm4\n\t"
 		"pxor	%%mm7, %%mm7\n\t"
 		"movd	%1, %%mm3\n\t"
@@ -607,7 +610,7 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /* %2 */ "=r" (s2),
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
-	: /* %5 */ "r" (vord),
+	: /* %5 */ "m" (vord),
 	  /* %6 */ "i" ((5*NMAX)/2),
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
@@ -628,7 +631,6 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 
 static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 {
-	static const short vord[] GCC_ATTR_ALIGNED(8) = {1,1,1,1,8,7,6,5,4,3,2,1};
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
 	int k;
@@ -639,9 +641,6 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"movq	(%5), %%mm5\n\t"
-		"movq	8(%5), %%mm7\n\t"
-		"movq	16(%5), %%mm6\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
 		"jae	11f\n\t"
@@ -650,17 +649,18 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		"sub	%3, %4\n\t"
 		"cmp	$8, %3\n\t"
 		"jb	88f\n\t"
+		"movq	32+%5, %%mm7\n\t"
+		"movq	40+%5, %%mm6\n\t"
 		"movd	%1, %%mm4\n\t"
-		"movd	%2, %%mm1\n\t"
+		"movd	%2, %%mm3\n\t"
+		"pxor	%%mm5, %%mm5\n\t"
 		".p2align 4,,7\n"
 		".p2align 3\n"
 		"1:\n\t"
 		"pxor	%%mm2, %%mm2\n\t"
-		"movq	%%mm4, %%mm3\n\t"
-		"subl	$8, %3\n\t"
-		"pslld	$3, %%mm3\n\t"
-		"paddd	%%mm1, %%mm3\n\t"
 		"movq	(%0), %%mm1\n\t"
+		"paddd	%%mm4, %%mm5\n\t"
+		"subl	$8, %3\n\t"
 		"addl	$8, %0\n\t"
 		"movq	%%mm1, %%mm0\n\t"
 		"cmpl	$7, %3\n\t"
@@ -668,19 +668,20 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		"punpcklbw	%%mm2, %%mm0\n\t"
 		"movq	%%mm0, %%mm2\n\t"
 		"pmaddwd	%%mm7, %%mm0\n\t"
-		"pmaddwd	%%mm5, %%mm2\n\t"
-		"paddd	%%mm3, %%mm0\n\t"
-		"paddd	%%mm4, %%mm2\n\t"
-		"movq	%%mm1, %%mm4\n\t"
+		"paddw	%%mm1, %%mm2\n\t"
 		"pmaddwd	%%mm6, %%mm1\n\t"
-		"pmaddwd	%%mm5, %%mm4\n\t"
-		"paddd	%%mm0, %%mm1\n\t"
+		"paddd	%%mm0, %%mm3\n\t"
+		"pmaddwd	%5, %%mm2\n\t"
+		"paddd	%%mm1, %%mm3\n\t"
 		"paddd	%%mm2, %%mm4\n\t"
 		"jg	1b\n\t"
-		"movq	%%mm1, %%mm0\n\t"
+		"movq	%%mm5, %%mm0\n\t"
+		"pxor	%%mm5, %%mm5\n\t"
 		"call	mmx_reduce\n\t"
+		"pslld	$3, %%mm0\n\t"
+		"paddd	%%mm3, %%mm0\n\t"
 		"call	mmx_reduce\n\t"
-		"movq	%%mm0, %%mm1\n\t"
+		"movq	%%mm0, %%mm3\n\t"
 		"movq	%%mm4, %%mm0\n\t"
 		"call	mmx_reduce\n\t"
 		"movq	%%mm0, %%mm4\n\t"
@@ -695,20 +696,20 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		"jg	1b\n\t"
 		"movd	%%mm4, %1\n\t"
 		"psrlq	$32, %%mm4\n\t"
-		"movd	%%mm1, %2\n\t"
-		"psrlq	$32, %%mm1\n\t"
+		"movd	%%mm3, %2\n\t"
+		"psrlq	$32, %%mm3\n\t"
 		"movd	%%mm4, %4\n\t"
 		"add	%4, %1\n\t"
-		"movd	%%mm1, %4\n\t"
+		"movd	%%mm3, %4\n\t"
 		"add	%4, %2\n\t"
-		"88:"
+		"88:\n\t"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
 	  /* %2 */ "=r" (s2),
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
-	: /* %5 */ "r" (vord),
-	  /* %6 */ "i" (NMAX + NMAX/3 + 302),
+	: /* %5 */ "m" (vord),
+	  /* %6 */ "i" (4 * NMAX),
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
 	  /*    */ "2" (s2),
