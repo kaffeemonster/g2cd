@@ -47,15 +47,16 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 		"lea	1f(,%5,8), %4\n\t"
 #   else
 #    define CLOB "&"
-		"call	i686_get_pc\n\t"
+		"call	9f\n\t"
 		"lea	1f-.(%4,%5,8), %4\n\t"
-		".subsection 2\n"
-		"i686_get_pc:\n\t"
-		"movl	(%%esp), %4\n\t"
-		"ret\n\t"
-		".previous\n\t"
 #   endif
 		"jmp	*%4\n\t"
+#   ifdef __PIC__
+		".p2align 1\n"
+		"9:\n\t"
+		"movl	(%%esp), %4\n\t"
+		"ret\n\t"
+#  endif
 #  else
 #   define CLOB "&"
 		"lea	1f(%%rip), %q4\n\t"
@@ -156,6 +157,7 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 #if 0
 		/*
 		 * Will XOP processors have SSSE3/AVX??
+		 * And what is the unaligned load performance?
 		 */
 		"prefetchnta	0x70(%0)\n\t"
 		"lddqu	(%0), %%xmm0\n\t"
@@ -184,8 +186,6 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 		"movd	%%xmm3, %1\n\t"
 #endif
 
-#ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 217
 static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1 = adler & 0xffff;
@@ -198,74 +198,107 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		buf = adler32_jumped(buf, &s1, &s2, k);
 
 	asm volatile (
-		"mov	%6, %3\n\t"
+		"mov	%6, %3\n\t"		/* get max. byte count VNMAX till v1_round_sum overflows */
 		"cmp	%3, %4\n\t"
-		"cmovb	%4, %3\n\t"
-		"sub	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"		/* k = len >= VNMAX ? k : len */
+		"sub	%3, %4\n\t"		/* len -= k */
 		"cmp	$16, %3\n\t"
-		"jb	88f\n\t"
-		"movdqa	(%5), %%xmm5\n\t"
-		"prefetchnta	16(%0)\n\t"
-		"movd %2, %%xmm2\n\t"
-		"movd %1, %%xmm3\n\t"
-		"pxor	%%xmm4, %%xmm4\n"
+		"jb	88f\n\t"		/* if(k < 16) goto OUT */
+#ifdef __ELF__
+		".subsection 2\n\t"
+#else
+		"jmp	77f\n\t"
+#endif
+		".p2align 2\n"
+		/*
+		 * reduction function to bring a vector sum within the range of BASE
+		 * This does no full reduction! When the sum is large, a number > BASE
+		 * is the result. To do a full reduction call multiple times.
+		 */
+		"sse2_reduce:\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"	/* y = x */
+		"pslld	$16, %%xmm1\n\t"	/* y <<= 16 */
+		"psrld	$16, %%xmm0\n\t"	/* x >>= 16 */
+		"psrld	$16, %%xmm1\n\t"	/* y >>= 16 */
+		"psubd	%%xmm0, %%xmm1\n\t"	/* y -= x */
+		"pslld	$4, %%xmm0\n\t"		/* x <<= 4 */
+		"paddd	%%xmm1, %%xmm0\n\t"	/* x += y */
+		"ret\n\t"
+#ifdef __ELF__
+		".previous\n\t"
+#else
+		"77:\n\t"
+#endif
+		"movdqa	%5, %%xmm5\n\t"		/* get vord_b */
+		"prefetchnta	0x70(%0)\n\t"
+		"movd %2, %%xmm2\n\t"		/* init vector sum vs2 with s2 */
+		"movd %1, %%xmm3\n\t"		/* init vector sum vs1 with s1 */
+		"pxor	%%xmm4, %%xmm4\n"	/* zero */
 		"3:\n\t"
-		"pxor	%%xmm7, %%xmm7\n\t"
+		"pxor	%%xmm7, %%xmm7\n\t"	/* zero vs1_round_sum */
 		".p2align 3,,3\n\t"
 		".p2align 2\n"
 		"2:\n\t"
-		"mov	$128, %1\n\t"
+		"mov	$128, %1\n\t"		/* inner_k = 128 bytes till vs2_i overflows */
 		"cmp	%1, %3\n\t"
-		"cmovb	%3, %1\n\t"
-		"and	$-16, %1\n\t"
-		"sub	%1, %3\n\t"
-		"shr	$4, %1\n\t"
-		"pxor	%%xmm6, %%xmm6\n\t"
-		".p2align 3,,3\n\t"
-		".p2align 2\n"
+		"cmovb	%3, %1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
+		"and	$-16, %1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
+		"sub	%1, %3\n\t"		/* k -= inner_k */
+		"shr	$4, %1\n\t"		/* inner_k /= 16 */
+		"pxor	%%xmm6, %%xmm6\n\t"	/* zero vs2_i */
+		".p2align 4,,7\n"
+		".p2align 3\n"
 		"1:\n\t"
-		"movdqa	(%0), %%xmm0\n\t"
-		"prefetchnta	64(%0)\n\t"
-		"paddd	%%xmm3, %%xmm7\n\t"
-		"add	$16, %0\n\t"
-		"dec	%1\n\t"
-		"movdqa	%%xmm0, %%xmm1\n\t"
-		"pmaddubsw %%xmm5, %%xmm0\n\t"
-		"psadbw	%%xmm4, %%xmm1\n\t"
-		"paddw	%%xmm0, %%xmm6\n\t"
-		"paddd	%%xmm1, %%xmm3\n\t"
-		"jnz	1b\n\t"
-		"movdqa	%%xmm6, %%xmm0\n\t"
-		"punpckhwd	%%xmm4, %%xmm0\n\t"
-		"punpcklwd	%%xmm4, %%xmm6\n\t"
-		"paddd	%%xmm0, %%xmm2\n\t"
-		"paddd	%%xmm6, %%xmm2\n\t"
+		"movdqa	(%0), %%xmm0\n\t"	/* fetch input data */
+		"prefetchnta	0x70(%0)\n\t"
+		"paddd	%%xmm3, %%xmm7\n\t"	/* vs1_round_sum += vs1 */
+		"add	$16, %0\n\t"		/* advance input data pointer */
+		"dec	%1\n\t"			/* decrement inner_k */
+		"movdqa	%%xmm0, %%xmm1\n\t"	/* make a copy of the input data */
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 217
+		"pmaddubsw %%xmm5, %%xmm0\n\t"	/* multiply all input bytes by vord_b bytes, add adjecent results to words */
+# else
+		".byte 0x66, 0x0f, 0x38, 0x04, 0xc5\n\t" /* pmaddubsw %%xmm5, %%xmm0 */
+# endif
+#else
+		".byte 0x66, 0x0f, 0x38, 0x04, 0xc5\n\t" /* pmaddubsw %%xmm5, %%xmm0 */
+#endif
+		"psadbw	%%xmm4, %%xmm1\n\t"	/* subtract zero from every byte, add 8 bytes to a sum */
+		"paddw	%%xmm0, %%xmm6\n\t"	/* vs2_i += in * vorder_b */
+		"paddd	%%xmm1, %%xmm3\n\t"	/* vs1 += psadbw */
+		"jnz	1b\n\t"			/* repeat if inner_k != 0 */
+		"movdqa	%%xmm6, %%xmm0\n\t"	/* copy vs2_i */
+		"punpckhwd	%%xmm4, %%xmm0\n\t"	/* zero extent vs2_i upper words to dwords */
+		"punpcklwd	%%xmm4, %%xmm6\n\t"	/* zero extent vs2_i lower words to dwords */
+		"paddd	%%xmm0, %%xmm2\n\t"	/* vs2 += vs2_i.upper */
+		"paddd	%%xmm6, %%xmm2\n\t"	/* vs2 += vs2_i.lower */
 		"cmp	$15, %3\n\t"
-		"jg	2b\n\t"
-		"movdqa	%%xmm7, %%xmm0\n\t"
-		"call	sse2_reduce\n\t"
-		"pslld	$4, %%xmm0\n\t"
-		"paddd	%%xmm2, %%xmm0\n\t"
-		"call	sse2_reduce\n\t"
-		"movdqa	%%xmm0, %%xmm2\n\t"
-		"movdqa	%%xmm3, %%xmm0\n\t"
-		"call	sse2_reduce\n\t"
-		"movdqa	%%xmm0, %%xmm3\n\t"
-		"add	%3, %4\n\t"
-		"mov	%6, %3\n\t"
+		"jg	2b\n\t"			/* if(k > 15) repeat */
+		"movdqa	%%xmm7, %%xmm0\n\t"	/* move vs1_round_sum */
+		"call	sse2_reduce\n\t"	/* reduce vs1_round_sum */
+		"pslld	$4, %%xmm0\n\t"		/* vs1_round_sum *= 16 */
+		"paddd	%%xmm2, %%xmm0\n\t"	/* vs2 += vs1_round_sum */
+		"call	sse2_reduce\n\t"	/* reduce again */
+		"movdqa	%%xmm0, %%xmm2\n\t"	/* move vs2 back in place */
+		"movdqa	%%xmm3, %%xmm0\n\t"	/* move vs1 */
+		"call	sse2_reduce\n\t"	/* reduce */
+		"movdqa	%%xmm0, %%xmm3\n\t"	/* move vs1 back in place */
+		"add	%3, %4\n\t"		/* len += k */
+		"mov	%6, %3\n\t"		/* get max. byte count VNMAX till v1_round_sum overflows */
 		"cmp	%3, %4\n\t"
-		"cmovb	%4, %3\n\t"
-		"sub	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"		/* k = len >= VNMAX ? k : len */
+		"sub	%3, %4\n\t"		/* len -= k */
 		"cmp	$15, %3\n\t"
-		"jg	3b\n\t"
-		"pshufd	$0xEE, %%xmm3, %%xmm1\n\t"
+		"jg	3b\n\t"			/* if(k > 15) repeat */
+		"pshufd	$0xEE, %%xmm3, %%xmm1\n\t"	/* collect vs1 & vs2 in lowest vector member */
 		"pshufd	$0xEE, %%xmm2, %%xmm0\n\t"
 		"paddd	%%xmm3, %%xmm1\n\t"
 		"paddd	%%xmm2, %%xmm0\n\t"
 		"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
 		"paddd	%%xmm0, %%xmm2\n\t"
-		"movd	%%xmm1, %1\n\t"
-		"movd	%%xmm2, %2\n\t"
+		"movd	%%xmm1, %1\n\t"		/* mov vs1 to s1 */
+		"movd	%%xmm2, %2\n"		/* mov vs2 to s2 */
 		"88:"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
@@ -284,9 +317,9 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /*    */ "2" (s2),
 	  /*    */ "4" (len)
 	: "cc", "memory"
-#  ifdef __SSE__
+#ifdef __SSE__
 	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
-#  endif
+#endif
 	);
 
 	if(unlikely(k))
@@ -295,8 +328,6 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 	reduce(s2);
 	return (s2 << 16) | s1;
 }
-# endif
-#endif
 
 static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -316,79 +347,70 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 		"sub	%3, %4\n\t"
 		"cmp	$16, %3\n\t"
 		"jb	88f\n\t"
-		"movdqa	16+%5, %%xmm6\n\t"
-		"movdqa	32+%5, %%xmm5\n\t"
 		"prefetchnta	0x70(%0)\n\t"
-		"pxor	%%xmm4, %%xmm4\n\t"
-		"pxor	%%xmm7, %%xmm7\n\t"
-		"movd	%1, %%xmm3\n\t"
-		"movd	%2, %%xmm2\n\t"
-#  ifdef __ELF__
-		".subsection 2\n\t"
-#  else
-		"jmp	77f\n\t"
-#  endif
+		"movd	%1, %%xmm4\n\t"
+		"movd	%2, %%xmm3\n\t"
+		"pxor	%%xmm2, %%xmm2\n\t"
+		"pxor	%%xmm5, %%xmm5\n\t"
 		".p2align 2\n"
-		"sse2_reduce:\n\t"
-		"movdqa	%%xmm0, %%xmm1\n\t"
-		"pslld	$16, %%xmm1\n\t"
-		"psrld	$16, %%xmm0\n\t"
-		"psrld	$16, %%xmm1\n\t"
-		"psubd	%%xmm0, %%xmm1\n\t"
-		"pslld	$4, %%xmm0\n\t"
-		"paddd	%%xmm1, %%xmm0\n\t"
-		"ret\n\t"
-#  ifdef __ELF__
-		".previous\n\t"
-#  else
-		"77:\n\t"
-#  endif
+		"3:\n\t"
+		"pxor	%%xmm6, %%xmm6\n\t"
+		"pxor	%%xmm7, %%xmm7\n\t"
+		"mov	$2048, %1\n\t"		/* get byte count till vs2_{l|h}_word overflows */
+		"cmp	%1, %3\n\t"
+		"cmovb	%3, %1\n"
+		"and	$-16, %1\n\t"
+		"sub	%1, %3\n\t"
+		"shr	$4, %1\n\t"
 		".p2align 4,,7\n"
 		".p2align 3\n"
 		"1:\n\t"
 		"prefetchnta	0x70(%0)\n\t"
-		"movdqa	(%0), %%xmm0\n\t"
-		"paddd	%%xmm3, %%xmm7\n\t"
+		"movdqa	(%0), %%xmm0\n\t"	/* fetch input data */
+		"paddd	%%xmm4, %%xmm5\n\t"	/* vs1_round_sum += vs1 */
 		"add	$16, %0\n\t"
-		"sub	$16, %3\n\t"
-		"movdqa	%%xmm0, %%xmm1\n\t"
+		"dec	%1\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"	/* copy input data */
+		"psadbw	%%xmm2, %%xmm0\n\t"	/* add all bytes horiz. */
+		"paddd	%%xmm0, %%xmm4\n\t"	/* add that to vs1 */
+		"movdqa	%%xmm1, %%xmm0\n\t"	/* copy input data */
+		"punpckhbw	%%xmm2, %%xmm1\n\t"	/* zero extent input upper bytes to words */
+		"punpcklbw	%%xmm2, %%xmm0\n\t"	/* zero extent input lower bytes to words */
+		"paddw	%%xmm1, %%xmm7\n\t"	/* vs2_h_words += in_high_words */
+		"paddw	%%xmm0, %%xmm6\n\t"	/* vs2_l_words += in_low_words */
+		"jnz	1b\n\t"
 		"cmp	$15, %3\n\t"
-		"psadbw	%%xmm4, %%xmm1\n\t"
-		"paddd	%%xmm1, %%xmm3\n\t"
-		"movdqa	%%xmm0, %%xmm1\n\t"
-		"punpcklbw	%%xmm4, %%xmm0\n\t"
-		"punpckhbw	%%xmm4, %%xmm1\n\t"
-		"pmaddwd	%%xmm6, %%xmm0\n\t"
-		"pmaddwd	%%xmm5, %%xmm1\n\t"
-		"paddd	%%xmm0, %%xmm2\n\t"
-		"paddd	%%xmm1, %%xmm2\n\t"
-		"jg	1b\n\t"
-		"movdqa	%%xmm7, %%xmm0\n\t"
-		"pxor	%%xmm7, %%xmm7\n\t"
+		"pmaddwd	32+%5, %%xmm7\n\t"	/* multiply vs2_h_words with order, add adjecend results */
+		"pmaddwd	16+%5, %%xmm6\n\t"	/* multiply vs2_l_words with order, add adjecend results */
+		"paddd	%%xmm7, %%xmm3\n\t"	/* add to vs2 */
+		"paddd	%%xmm6, %%xmm3\n\t"	/* add to vs2 */
+		"jg	3b\n\t"
+		"movdqa	%%xmm5, %%xmm0\n\t"
+		"pxor	%%xmm5, %%xmm5\n\t"
 		"call	sse2_reduce\n\t"
 		"pslld	$4, %%xmm0\n\t"
-		"paddd	%%xmm2, %%xmm0\n\t"
-		"call	sse2_reduce\n\t"
-		"movdqa	%%xmm0, %%xmm2\n\t"
-		"movdqa	%%xmm3, %%xmm0\n\t"
+		"paddd	%%xmm3, %%xmm0\n\t"
 		"call	sse2_reduce\n\t"
 		"movdqa	%%xmm0, %%xmm3\n\t"
+		"movdqa	%%xmm4, %%xmm0\n\t"
+		"call	sse2_reduce\n\t"
+		"movdqa	%%xmm0, %%xmm4\n\t"
 		"add	%3, %4\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
-		"cmovb	%4, %3\n\t"
+		"cmovb	%4, %3\n"
 		"sub	%3, %4\n\t"
 		"cmp	$15, %3\n\t"
-		"jg	1b\n\t"
-		"pshufd	$0xEE, %%xmm3, %%xmm1\n\t"
-		"pshufd	$0xEE, %%xmm2, %%xmm0\n\t"
-		"paddd	%%xmm2, %%xmm0\n\t"
-		"paddd	%%xmm3, %%xmm1\n\t"
-		"pshufd	$0xE5, %%xmm0, %%xmm2\n\t"
-		"paddd	%%xmm0, %%xmm2\n\t"
+		"jg	3b\n\t"
+		"pshufd	$0xEE, %%xmm4, %%xmm1\n\t"
+		"pshufd	$0xEE, %%xmm3, %%xmm0\n\t"
+		"paddd	%%xmm4, %%xmm1\n\t"
+		"paddd	%%xmm3, %%xmm0\n\t"
+		"pshufd	$0xE5, %%xmm0, %%xmm3\n\t"
+		"paddd	%%xmm0, %%xmm3\n\t"
 		"movd	%%xmm1, %1\n\t"
-		"movd	%%xmm2, %2\n\t"
-		"88:"
+		"movd	%%xmm3, %2\n"
+		"88:\n\t"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
 	  /* %2 */ "=r" (s2),
@@ -399,6 +421,7 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
 	  /*    */ "2" (s2),
+	  /*    */ "3" (k),
 	  /*    */ "4" (len)
 	: "cc", "memory"
 #ifdef __SSE__
@@ -416,9 +439,9 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 #if 0
 /*
  * The SSE2 version above is faster on my CPUs (Athlon64, Core2,
- * K10 Sempron), but has instruction stalls only a Out-Of-Order-
- * Execution CPU can solve.
- * So this Version may be better for the new old thing, Atom.
+ * P4 Xeon, K10 Sempron), but has instruction stalls only a
+ * Out-Of-Order-Execution CPU can solve.
+ * So this Version _may_ be better for the new old thing, Atom.
  */
 static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -488,7 +511,7 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
 		"paddd	%%xmm4, %%xmm1\n\t"
 		"movd	%%xmm1, %1\n\t"
 		"paddd	%%xmm0, %%xmm2\n\t"
-		"movd	%%xmm2, %2\n\t"
+		"movd	%%xmm2, %2\n"
 		"88:"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
@@ -517,7 +540,7 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
 
 #ifndef __x86_64__
 /*
- * This SSE version is mainly to help VIA-C3_2, P2 & P3
+ * SSE version to help VIA-C3_2, P2 & P3
  */
 static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -533,16 +556,14 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 	asm volatile (
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
-		"cmovb	%4, %3\n\t"
+		"cmovb	%4, %3\n"
 		"sub	%3, %4\n\t"
 		"cmp	$8, %3\n\t"
 		"jb	88f\n\t"
-		"movq	32+%5, %%mm6\n\t"
-		"movq	40+%5, %%mm5\n\t"
-		"pxor	%%mm4, %%mm4\n\t"
-		"pxor	%%mm7, %%mm7\n\t"
-		"movd	%1, %%mm3\n\t"
-		"movd	%2, %%mm2\n\t"
+		"movd	%1, %%mm4\n\t"
+		"movd	%2, %%mm3\n\t"
+		"pxor	%%mm2, %%mm2\n\t"
+		"pxor	%%mm5, %%mm5\n\t"
 # ifdef __ELF__
 		".subsection 2\n\t"
 # else
@@ -550,61 +571,77 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 # endif
 		".p2align 2\n"
 		"mmx_reduce:\n\t"
-		"movq	%%mm0, %%mm2\n\t"
-		"pslld	$16, %%mm2\n\t"
+		"movq	%%mm0, %%mm1\n\t"
+		"pslld	$16, %%mm1\n\t"
 		"psrld	$16, %%mm0\n\t"
-		"psrld	$16, %%mm2\n\t"
-		"psubd	%%mm0, %%mm2\n\t"
+		"psrld	$16, %%mm1\n\t"
+		"psubd	%%mm0, %%mm1\n\t"
 		"pslld	$4, %%mm0\n\t"
-		"paddd	%%mm2, %%mm0\n\t"
+		"paddd	%%mm1, %%mm0\n\t"
 		"ret\n\t"
 # ifdef __ELF__
 		".previous\n\t"
 # else
 		"77:\n\t"
 # endif
+		".p2align	2\n"
+		"3:\n\t"
+		"pxor	%%mm6, %%mm6\n\t"
+		"pxor	%%mm7, %%mm7\n\t"
+		"mov	$1024, %1\n\t"
+		"cmp	%1, %3\n\t"
+		"cmovb	%3, %1\n"
+		"and	$-8, %1\n\t"
+		"sub	%1, %3\n\t"
+		"shr	$3, %1\n\t"
 		".p2align 4,,7\n"
 		".p2align 3\n"
 		"1:\n\t"
 		"movq	(%0), %%mm0\n\t"
-		"paddd	%%mm3, %%mm7\n\t"
+		"paddd	%%mm4, %%mm5\n\t"
 		"add	$8, %0\n\t"
-		"sub	$8, %3\n\t"
+		"dec	%1\n\t"
 		"movq	%%mm0, %%mm1\n\t"
+		"psadbw	%%mm2, %%mm0\n\t"
+		"paddd	%%mm0, %%mm4\n\t"
+		"movq	%%mm1, %%mm0\n\t"
+		"punpckhbw	%%mm2, %%mm1\n\t"
+		"punpcklbw	%%mm2, %%mm0\n\t"
+		"paddw	%%mm1, %%mm7\n\t"
+		"paddw	%%mm0, %%mm6\n\t"
+		"jnz	1b\n\t"
 		"cmp	$7, %3\n\t"
-		"psadbw	%%mm4, %%mm1\n\t"
-		"paddd	%%mm1, %%mm3\n\t"
-		"movq	%%mm0, %%mm1\n\t"
-		"punpcklbw	%%mm4, %%mm0\n\t"
-		"punpckhbw	%%mm4, %%mm1\n\t"
-		"pmaddwd	%%mm6, %%mm0\n\t"
-		"pmaddwd	%%mm5, %%mm1\n\t"
-		"paddd	%%mm0, %%mm2\n\t"
-		"paddd	%%mm1, %%mm2\n\t"
-		"jg	1b\n\t"
-		"movq	%%mm7, %%mm0\n\t"
-		"pxor	%%mm7, %%mm7\n\t"
+		"pmaddwd	40+%5, %%mm7\n\t"
+		"pmaddwd	32+%5, %%mm6\n\t"
+		"paddd	%%mm7, %%mm3\n\t"
+		"paddd	%%mm6, %%mm3\n\t"
+		"jg	3b\n\t"
+		"movq	%%mm5, %%mm0\n\t"
+		"pxor	%%mm5, %%mm5\n\t"
 		"call	mmx_reduce\n\t"
 		"pslld	$3, %%mm0\n\t"
-		"paddd	%%mm2, %%mm0\n\t"
-		"call	mmx_reduce\n\t"
-		"movq	%%mm0, %%mm2\n\t"
-		"movq	%%mm3, %%mm0\n\t"
+		"paddd	%%mm3, %%mm0\n\t"
 		"call	mmx_reduce\n\t"
 		"movq	%%mm0, %%mm3\n\t"
+		"movq	%%mm4, %%mm0\n\t"
+		"call	mmx_reduce\n\t"
+		"movq	%%mm0, %%mm4\n\t"
 		"add	%3, %4\n\t"
 		"mov	%6, %3\n\t"
 		"cmp	%3, %4\n\t"
-		"cmovb	%4, %3\n\t"
+		"cmovb	%4, %3\n"
 		"sub	%3, %4\n\t"
 		"cmp	$7, %3\n\t"
-		"jg	1b\n\t"
-		"movd	%%mm2, %2\n\t"
-		"psrlq	$32, %%mm2\n\t"
-		"movd	%%mm3, %1\n\t"
-		"movd	%%mm2, %4\n\t"
-		"add	%4, %2\n\t"
-		"88:"
+		"jg	3b\n\t"
+		"movd	%%mm4, %1\n\t"
+		"psrlq	$32, %%mm4\n\t"
+		"movd	%%mm3, %2\n\t"
+		"psrlq	$32, %%mm3\n\t"
+		"movd	%%mm4, %4\n\t"
+		"add	%4, %1\n\t"
+		"movd	%%mm3, %4\n\t"
+		"add	%4, %2\n"
+		"88:\n\t"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
 	  /* %2 */ "=r" (s2),
@@ -615,6 +652,7 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
 	  /*    */ "2" (s2),
+	  /*    */ "3" (k),
 	  /*    */ "4" (len)
 	: "cc", "memory"
 #ifdef __MMX__
@@ -629,6 +667,12 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 	return (s2 << 16) | s1;
 }
 
+/*
+ * Processors which only have MMX will prop. not like this
+ * code, they are so old, they are not Out-Of-Order
+ * (maybe except AMD K6, Cyrix, Winchip/VIA).
+ * I did my best to get at least 1 instruction between result -> use
+ */
 static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1 = adler & 0xffff;
@@ -649,39 +693,57 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		"sub	%3, %4\n\t"
 		"cmp	$8, %3\n\t"
 		"jb	88f\n\t"
-		"movq	32+%5, %%mm7\n\t"
-		"movq	40+%5, %%mm6\n\t"
+		"sub	$8, %%esp\n\t"
 		"movd	%1, %%mm4\n\t"
-		"movd	%2, %%mm3\n\t"
+		"movd	%2, %%mm2\n\t"
+		"movq	%5, %%mm3\n"
+		"33:\n\t"
+		"movq	%%mm2, %%mm0\n\t"
+		"pxor	%%mm2, %%mm2\n\t"
 		"pxor	%%mm5, %%mm5\n\t"
+		".p2align 2\n"
+		"3:\n\t"
+		"movq	%%mm0, (%%esp)\n\t"
+		"pxor	%%mm6, %%mm6\n\t"
+		"pxor	%%mm7, %%mm7\n\t"
+		"mov	$1024, %1\n\t"
+		"cmp	%1, %3\n\t"
+		"jae	44f\n\t"
+		"mov	%3, %1\n"
+		"44:\n\t"
+		"and	$-8, %1\n\t"
+		"sub	%1, %3\n\t"
+		"shr	$3, %1\n\t"
 		".p2align 4,,7\n"
 		".p2align 3\n"
 		"1:\n\t"
-		"pxor	%%mm2, %%mm2\n\t"
-		"movq	(%0), %%mm1\n\t"
+		"movq	(%0), %%mm0\n\t"
 		"paddd	%%mm4, %%mm5\n\t"
-		"subl	$8, %3\n\t"
-		"addl	$8, %0\n\t"
-		"movq	%%mm1, %%mm0\n\t"
-		"cmpl	$7, %3\n\t"
-		"punpckhbw	%%mm2, %%mm1\n\t"
+		"add	$8, %0\n\t"
+		"dec	%1\n\t"
+		"movq	%%mm0, %%mm1\n\t"
 		"punpcklbw	%%mm2, %%mm0\n\t"
+		"punpckhbw	%%mm2, %%mm1\n\t"
+		"paddw	%%mm0, %%mm6\n\t"
+		"paddw	%%mm1, %%mm0\n\t"
+		"paddw	%%mm1, %%mm7\n\t"
+		"pmaddwd	%%mm3, %%mm0\n\t"
+		"paddd	%%mm0, %%mm4\n\t"
+		"jnz	1b\n\t"
+		"movq	(%%esp), %%mm0\n\t"
+		"cmp	$7, %3\n\t"
+		"pmaddwd	32+%5, %%mm6\n\t"
+		"pmaddwd	40+%5, %%mm7\n\t"
+		"paddd	%%mm6, %%mm0\n\t"
+		"paddd	%%mm7, %%mm0\n\t"
+		"jg	3b\n\t"
 		"movq	%%mm0, %%mm2\n\t"
-		"pmaddwd	%%mm7, %%mm0\n\t"
-		"paddw	%%mm1, %%mm2\n\t"
-		"pmaddwd	%%mm6, %%mm1\n\t"
-		"paddd	%%mm0, %%mm3\n\t"
-		"pmaddwd	%5, %%mm2\n\t"
-		"paddd	%%mm1, %%mm3\n\t"
-		"paddd	%%mm2, %%mm4\n\t"
-		"jg	1b\n\t"
 		"movq	%%mm5, %%mm0\n\t"
-		"pxor	%%mm5, %%mm5\n\t"
 		"call	mmx_reduce\n\t"
 		"pslld	$3, %%mm0\n\t"
-		"paddd	%%mm3, %%mm0\n\t"
+		"paddd	%%mm2, %%mm0\n\t"
 		"call	mmx_reduce\n\t"
-		"movq	%%mm0, %%mm3\n\t"
+		"movq	%%mm0, %%mm2\n\t"
 		"movq	%%mm4, %%mm0\n\t"
 		"call	mmx_reduce\n\t"
 		"movq	%%mm0, %%mm4\n\t"
@@ -693,15 +755,16 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 		"22:\n\t"
 		"sub	%3, %4\n\t"
 		"cmp	$7, %3\n\t"
-		"jg	1b\n\t"
+		"jg	33b\n\t"
+		"add	$8, %%esp\n\t"
 		"movd	%%mm4, %1\n\t"
 		"psrlq	$32, %%mm4\n\t"
-		"movd	%%mm3, %2\n\t"
-		"psrlq	$32, %%mm3\n\t"
+		"movd	%%mm2, %2\n\t"
+		"psrlq	$32, %%mm2\n\t"
 		"movd	%%mm4, %4\n\t"
 		"add	%4, %1\n\t"
-		"movd	%%mm3, %4\n\t"
-		"add	%4, %2\n\t"
+		"movd	%%mm2, %4\n\t"
+		"add	%4, %2\n"
 		"88:\n\t"
 	: /* %0 */ "=r" (buf),
 	  /* %1 */ "=r" (s1),
@@ -709,7 +772,7 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 	  /* %3 */ "=r" (k),
 	  /* %4 */ "=r" (len)
 	: /* %5 */ "m" (vord),
-	  /* %6 */ "i" (4 * NMAX),
+	  /* %6 */ "i" (4*NMAX),
 	  /*    */ "0" (buf),
 	  /*    */ "1" (s1),
 	  /*    */ "2" (s2),
@@ -768,7 +831,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 			 *
 			 * So turn this a little bit down for x86.
 			 * Instead we try to keep it in the register set. 4 sums fits
-			 * into i386 registerset with no framepointer.
+			 * into i386 register set with no framepointer.
 			 * x86_64 is a little more splendit, but still we can not
 			 * take 16, so take 8 sums.
 			 */
@@ -796,11 +859,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 
 static __init_cdata const struct test_cpu_feature tfeat_adler32_vec[] =
 {
-#ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))adler32_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
-# endif
-#endif
 	{.func = (void (*)(void))adler32_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
 	{.func = (void (*)(void))adler32_SSE,   .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV)}},
