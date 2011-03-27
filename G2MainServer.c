@@ -417,7 +417,7 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	 * This is scary and propably racy, and whatnot...
 	 */
 #ifdef __linux__
-// TODO: TIOCOUTQNSD
+// TODO: TIOCOUTQNSD/SIOCOUTQNSD
 	/* maybe there will be a new ioctl for the _not_ send data */
 	if(ioctl(con->com_socket, SIOCOUTQ, &val) < 0)
 #endif

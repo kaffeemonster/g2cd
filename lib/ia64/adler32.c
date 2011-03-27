@@ -300,8 +300,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	reduce_4(s1);
-	reduce_4(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 	return s2 << 16 | s1;
 }
 

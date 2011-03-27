@@ -407,14 +407,16 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			);
 
 			/* reduce vs1 round sum before multiplying by 8 */
-			vs1_r  = reduce(vs1_r);
-			vs1h_r = reduce(vs1h_r);
+			reduce(vs1_r);
+			reduce(vs1h_r);
 			/* add all vs1 for 8 times */
 			/* reduce the vectors to something in the range of BASE */
-			vs2  = reduce(vs2  + vs1_r  * 8);
-			vs2h = reduce(vs2h + vs1h_r * 8);
-			vs1  = reduce(vs1);
-			vs1h = reduce(vs1h);
+			vs2  += vs1_r  * 8;
+			vs2h += vs1h_r * 8;
+			reduce(vs2);
+			reduce(vs2h);
+			reduce(vs1);
+			reduce(vs1h);
 			len += k;
 			k = len < VNMAX ? (unsigned)len : VNMAX;
 			len -= k;
@@ -486,8 +488,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s2 += s1;
 	} while (--len);
 	/* s2 should be something like 24 bit here */
-	s1 = reduce_4(s1);
-	s2 = reduce_4(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 
 	return s2 << 16 | s1;
 }

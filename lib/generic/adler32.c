@@ -28,9 +28,11 @@
 #ifdef NO_DIVIDE
 /* use NO_SHIFT if your processor does shift > 1 by loop */
 # ifdef NO_SHIFT
-#  define reduce(a) reduce_4(a)
-#  define reduce_4(a) \
+#  define reduce(a) reduce_full(a)
+#  define reduce_x(a) \
 	do { \
+		if (MIN_WORK >= (1 << 6) && a >= (BASE << 6)) a -= (BASE << 6); \
+		if (MIN_WORK >= (1 << 5) && a >= (BASE << 5)) a -= (BASE << 5); \
 		if (a >= (BASE << 4)) a -= (BASE << 4); \
 		if (a >= (BASE << 3)) a -= (BASE << 3); \
 		if (a >= (BASE << 2)) a -= (BASE << 2); \
@@ -64,16 +66,16 @@
 		x >>= 16; \
 		y -= x; \
 		x <<= 4; \
-		return x + y; \
+		x += y; \
 	} while(0)
-#  define reduce_4(x) \
+#  define reduce_x(x) \
 	do { \
 		uint32_t y = x & 0x0000ffff; \
 		x >>= 16; \
 		y -= x; \
 		x <<= 4; \
 		x += y; \
-		return x >= BASE ? x - BASE : x; \
+		x = x >= BASE ? x - BASE : x; \
 	} while(0)
 #  define reduce_full(x) \
 	do { \
@@ -81,11 +83,12 @@
 		x >>= 16; \
 		y -= x; \
 		x <<= 4; \
+		x += y; \
 	} while(x >= BASE)
 # endif
 #else
 # define reduce(a) a %= BASE
-# define reduce_4(a) a %= BASE
+# define reduce_x(a) a %= BASE
 # define reduce_full(a) a %= BASE
 #endif
 
@@ -126,7 +129,7 @@ static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsi
 	if(adler >= BASE)
 		adler -= BASE;
 	/* only added so many BASE's */
-	reduce_4(sum2);
+	reduce_x(sum2);
 	return adler | (sum2 << 16);
 }
 

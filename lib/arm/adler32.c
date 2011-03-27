@@ -220,8 +220,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
-	s1 = reduce_4(s1);
-	s2 = reduce_4(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 
 	return s2 << 16 | s1;
 }
@@ -308,12 +308,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				k -= SOU32;
 			} while (k >= SOU32);
 			/* reduce vs1 round sum before multiplying by 4 */
-			vs1_r = reduce(vs1_r);
+			reduce(vs1_r);
 			/* add vs1 for this round (4 times) */
 			vs2 += vs1_r * 4;
 			/* reduce both sums to something within 17 bit */
-			vs2 = reduce(vs2);
-			vs1 = reduce(vs1);
+			reduce(vs2);
+			reduce(vs1);
 			len += k;
 			k = len < NMAX ? len : NMAX;
 			len -= k;
@@ -328,8 +328,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s2 += s1;
 	} while (--len);
 	/* at this point we should no have so big s1 & s2 */
-	s1 = reduce_4(s1);
-	s2 = reduce_4(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 
 	return s2 << 16 | s1;
 }

@@ -22,8 +22,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 #include "../generic/adler32.c"
 #include "alpha.h"
 
-#define VNMAX (2*NMAX)
 #if defined(__alpha_max__)
+# define VNMAX (2*NMAX+((9*NMAX)/10))
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1, s2;
@@ -39,12 +39,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s2 += s1;
 	} while (--k);
 
-	if(likely(len >= 2 * SOUL))
+	k = len < VNMAX ? (unsigned) len : VNMAX;
+	len -= k;
+	if(likely(k >= 2 * SOUL))
 	{
 		unsigned long vs1 = s1, vs2 = s2;
-
-		k = len < VNMAX ? (unsigned) len : VNMAX;
-		len -= k;
 
 		do
 		{
@@ -95,34 +94,34 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				vs2 += 8*a + 7*b + 6*c + 5*d + 4*e + 3*f + 2*g + 1*h;
 			} while(k >= SOUL);
 			/* reduce vs1 round sum before multiplying by 8 */
-			vs1_r = reduce(vs1_r);
+			reduce(vs1_r);
 			/* add vs1 for this round (8 times) */
 			vs2 += vs1_r * 8;
 			/* reduce both sums to something within 17 bit */
-			vs2 = reduce(vs2);
-			vs1 = reduce(vs1);
+			reduce(vs2);
+			reduce(vs1);
 			len += k;
 			k = len < VNMAX ? (unsigned) len : VNMAX;
 			len -= k;
 		} while(likely(k >= SOUL));
-		len += k;
 		s1 = vs1;
 		s2 = vs2;
 	}
 
-	if(unlikely(len)) do {
+	if(unlikely(k)) do {
 		s1 += *buf++;
 		s2 += s1;
 	} while (--len);
 	/* at this point we should not have so big s1 & s2 */
-	s1 = reduce_x(s1);
-	s2 = reduce_x(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 
 	return s2 << 16 | s1;
 }
 static char const rcsid_a32alpha_max[] GCC_ATTR_USED_VAR = "$Id: $";
 #else
 /* alpha has a hard time with byte access, exploit 64bit-risc-voodoo */
+# define VNMAX (2*NMAX+((9*NMAX)/10))
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1, s2;
@@ -200,9 +199,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			vs1s += ((vs1l_s      ) & 0x00000000ffffffffull) +
 			        ((vs1l_s >> 32) & 0x00000000ffffffffull);
 		} while(k >= SOUL);
-		vs1s = reduce(vs1s);
-		s2 = reduce(s2 + vs1s * 8 + vs2);
-		s1 = reduce(s1 + vs1);
+		reduce(vs1s);
+		s2 += vs1s * 8 + vs2;
+		reduce(s2);
+		s1 += vs1;
+		reduce(s1);
 		len += k;
 		k = len > VNMAX ? VNMAX : len;
 		len -= k;
@@ -212,8 +213,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		s1 += *buf++;
 		s2 += s1;
 	} while (--k);
-	s1 = reduce_4(s1);
-	s2 = reduce_4(s2);
+	reduce_x(s1);
+	reduce_x(s2);
 
 	return s2 << 16 | s1;
 }

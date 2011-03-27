@@ -174,6 +174,7 @@ static always_inline void cpuids(union cpuid_regs *regs, size_t func)
 static inline bool toggle_eflags_test(const size_t mask)
 {
 	size_t f;
+	bool result;
 
 	/*
 	 * This is a single toggle test, inspired by wine.
@@ -182,10 +183,13 @@ static inline bool toggle_eflags_test(const size_t mask)
 	 */
 	f = read_flags();
 	write_flags(f ^ mask);
-	if(unlikely(!((f ^ read_flags()) & mask)))
-		return false;
-
-	return true;
+	result = !!((f ^ read_flags()) & mask);
+	/*
+	 * restore the old flags, the test for i486 tests the alignment
+	 * check bit, and left set will confuse the x86 software world.
+	 */
+	write_flags(f);
+	return result;
 }
 
 static inline bool has_cpuid(void)
@@ -277,7 +281,6 @@ static __init void identify_cpu(void)
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
 
-	i = read_flags();
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
 	{
@@ -286,10 +289,7 @@ static __init void identify_cpu(void)
 		 * which can switch off cpuid in firmware...
 		 */
 		 /* distinguish 386 from 486, same trick for EFLAGS bit 18 */
-		bool t = is_486();
-		write_flags(i);
-		barrier();
-		if(t) {
+		if(is_486()) {
 			strlitcpy(our_cpu.vendor_str.s, "486?");
 			our_cpu.family = 4;
 		} else {
@@ -298,7 +298,6 @@ static __init void identify_cpu(void)
 		}
 		return;
 	}
-	write_flags(i);
 	barrier();
 
 	/* get vendor string */
