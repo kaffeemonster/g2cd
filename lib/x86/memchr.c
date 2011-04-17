@@ -65,8 +65,8 @@
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
-# if 0
 # if HAVE_BINUTILS >= 218
+# if 0
 static void *memchr_SSE42(const void *s, int c, size_t n)
 {
 	unsigned char *ret;
@@ -135,9 +135,107 @@ static void *memchr_SSE42(const void *s, int c, size_t n)
 	return ret;
 }
 # endif
+
+static void *memchr_SSE41(const void *s, int c, size_t n)
+{
+	const unsigned char *p;
+	void *ret;
+	size_t f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"movd	%k5, %%xmm1\n\t"
+		"pxor	%%xmm0, %%xmm0\n\t"
+		"pshufb	%%xmm0, %%xmm1\n\t"
+		"mov	%7, %k2\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"sub	%k3, %k2\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
+		"neg	%2\n\t"
+		"add	%7, %1\n\t"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"movdqa	%%xmm2, %%xmm0\n\t"
+		"add	%7, %1\n"
+		"10:\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"jmp	4f\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	%c7(%1), %%xmm2\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm2\n\t"
+		"ptest	%%xmm0, %%xmm0\n\t"
+		"jnz	10b\n\t"
+		"ptest	%%xmm2, %%xmm2\n\t"
+		"jnz	8b\n"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"ptest	%%xmm0, %%xmm0\n\t"
+		"jnz	10b\n\t"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
+	: /* %0 */ "=&a" (ret),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=&c" (f)
+	: 
+#  ifndef __x86_64__
+	  /* %4 */ "m" (n),
+	  /* %5 */ "m" (c),
+#  else
+	  /* %4 */ "r" (n),
+	  /* %5 */ "r" (c),
+#  endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "i" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+#  ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2"
+#  endif
+	);
+	return ret;
+}
 # endif
 
-#if HAVE_BINUTILS >= 217
+# if HAVE_BINUTILS >= 217
 static void *memchr_SSSE3(const void *s, int c, size_t n)
 {
 	const unsigned char *p;
@@ -220,13 +318,13 @@ static void *memchr_SSSE3(const void *s, int c, size_t n)
 	  /* %2 */ "=&r" (t),
 	  /* %3 */ "=&c" (f)
 	: 
-#ifndef __x86_64__
+#  ifndef __x86_64__
 	  /* %4 */ "m" (n),
 	  /* %5 */ "m" (c),
-#else
+#  else
 	  /* %4 */ "r" (n),
 	  /* %5 */ "r" (c),
-#endif
+#  endif
 	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
 	  /* %7 */ "i" (SOV16),
 	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
@@ -473,12 +571,13 @@ static void *memchr_x86(const void *s, int c, size_t n)
 static __init_cdata const struct test_cpu_feature tfeat_my_memchr[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 218
 #if 0
 // TODO: advanced code is buggy ATM
-# if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))memchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2), [0] = CFB(CFEATURE_CMOV)}},
-# endif
+	{.func = (void (*)(void))memchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 #endif
+	{.func = (void (*)(void))memchr_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
+# endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))memchr_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3)}},
 # endif

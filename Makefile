@@ -235,20 +235,20 @@ AUXS = \
 #	what should be made
 #
 OBJS = \
+	G2Packet.o \
+	G2Connection.o \
+	data.o \
 	G2MainServer.o \
 	G2Acceptor.o \
 	G2Handler.o \
 	G2UDP.o \
-	G2Connection.o \
 	G2ConHelper.o \
 	G2ConRegistry.o \
-	G2Packet.o \
 	G2PacketSerializer.o \
 	G2QHT.o \
 	G2KHL.o \
 	G2GUIDCache.o \
 	G2QueryKey.o \
-	data.o \
 	timeout.o \
 	idbus.lo \
 	gup.o
