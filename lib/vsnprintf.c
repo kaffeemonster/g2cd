@@ -72,7 +72,7 @@
  * FILE-stream, poking deep inside the internals of this opaque
  * libc internal, redirecting the output, checking the length.
  *
- * Unfornatly this it not very efficient if you want to generate
+ * Unfornatly this it not very efficient if you only want to generate
  * strings (you want to /format/ one time, but /print/ several
  * times), all those layers of abstraction clog your poor little
  * CPU.
@@ -171,6 +171,7 @@ struct format_spec
 			bool guid:1;
 			bool negative:1;
 			bool th_group:1;
+			bool uppercase:1;
 		} flags;
 		int xyz;
 	} u;
@@ -574,13 +575,13 @@ static char *put_hex_ll(char *buf, unsigned long long num, const char *hexchar)
 
 static noinline const char *hex_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
-	spec->wptr = put_hex(spec->conv_buf, spec->t_store.u, 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING);
+	spec->wptr = put_hex(spec->conv_buf, spec->t_store.u, spec->u.flags.uppercase ? HEXUC_STRING : HEXLC_STRING);
 	return hex_finish_real(buf, fmt, spec);
 }
 
 static noinline const char *hex_finish_ull(char *buf, const char *fmt, struct format_spec *spec)
 {
-	spec->wptr = put_hex_ll(spec->conv_buf, spec->t_store.ull, 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING);
+	spec->wptr = put_hex_ll(spec->conv_buf, spec->t_store.ull, spec->u.flags.uppercase ? HEXUC_STRING : HEXLC_STRING);
 	return hex_finish_real(buf, fmt, spec);
 }
 
@@ -595,7 +596,7 @@ static const char *v##prfx##toxa(char *buf, const char *fmt, struct format_spec 
 		spec->t_store.ull = n; \
 		return hex_finish_ull(buf, fmt, spec); \
 	} else { \
-		const char *hexchar = 'x' == *(fmt-1) ? HEXLC_STRING : HEXUC_STRING; \
+		const char *hexchar = spec->u.flags.uppercase ? HEXLC_STRING : HEXUC_STRING; \
 		char *wptr = spec->conv_buf; \
 		do { *wptr++ = hexchar[n % 16]; n /= 16; } while(n); \
 		spec->wptr = wptr; \
@@ -744,7 +745,7 @@ static const char *vnDDtoa(char *buf, const char *fmt, struct format_spec *spec)
  * FLOTING POINT - ROUGHLY (UN)IMPLEMENTED
  *
  * no long double
- * no hex
+ * no long double hex
  * does not obay any formating
  * no fancy anything
  * no exponential display
@@ -1145,6 +1146,16 @@ union dblou64
 	double d;
 };
 
+/* we don't want to pull math.h or -lm */
+static inline bool my_simple_isnan(double x)
+{
+	return x != x;
+}
+static inline bool my_simple_isinf(double x)
+{
+	return !my_simple_isnan(x) && my_simple_isnan(x - x);
+}
+
 static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	/* this eats stack big time! ~4k */
@@ -1182,7 +1193,35 @@ do \
 
 	if(sign)
 		ADD_CHAR_TO_BUF('-');
+	else if(unlikely(spec->u.flags.sign))
+		ADD_CHAR_TO_BUF('+');
 
+	if(unlikely(my_simple_isnan(v.d)))
+	{
+		if(spec->u.flags.uppercase) {
+			ADD_CHAR_TO_BUF('n');
+			ADD_CHAR_TO_BUF('a');
+			ADD_CHAR_TO_BUF('n');
+		} else {
+			ADD_CHAR_TO_BUF('N');
+			ADD_CHAR_TO_BUF('A');
+			ADD_CHAR_TO_BUF('N');
+		}
+		return end_format(buf, fmt, spec);
+	}
+	if(unlikely(my_simple_isinf(v.d)))
+	{
+		if(spec->u.flags.uppercase) {
+			ADD_CHAR_TO_BUF('i');
+			ADD_CHAR_TO_BUF('n');
+			ADD_CHAR_TO_BUF('f');
+		} else {
+			ADD_CHAR_TO_BUF('I');
+			ADD_CHAR_TO_BUF('N');
+			ADD_CHAR_TO_BUF('F');
+		}
+		return end_format(buf, fmt, spec);
+	}
 	if(unlikely(0 == f)) {
 		ADD_CHAR_TO_BUF('0');
 		return end_format(buf, fmt, spec);
@@ -1378,7 +1417,6 @@ out_of_fp:
 	return end_format(buf, fmt, spec);
 }
 #undef OUTDIG
-#undef ADD_CHAR_TO_BUF
 
 static noinline const char *fp_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
@@ -1393,17 +1431,82 @@ static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
+
+/*
+ * HEX FLOAT
+ */
+static inline big_digit rol64(big_digit f, unsigned num)
+{
+	return (f << num) | (f >> ((sizeof(f) * BITS_PER_CHAR) - num));
+}
+
 static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
-	double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, double);
-	return fp_finish(buf, fmt, spec);
+	big_digit f;
+	union dblou64 v;
+	const char *hchar = spec->u.flags.uppercase ? HEXUC_STRING : HEXLC_STRING;
+	char *wptr;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	int sign, e, i, d;
+
+	emit_emms();
+	v.d = va_arg(spec->ap, double);
+
+	/* decompose float into sign, mantissa & exponent */
+	sign = !!(v.u & 0x8000000000000000ULL);
+	e    =   (v.u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
+	f    =    v.u & 0x000FFFFFFFFFFFFFULL;
+
+	if(sign)
+		ADD_CHAR_TO_BUF('-');
+	else if(unlikely(spec->u.flags.sign))
+		ADD_CHAR_TO_BUF('+');
+	ADD_CHAR_TO_BUF('0');
+	ADD_CHAR_TO_BUF(spec->u.flags.uppercase ? 'X' : 'x');
+
+	if(e == 0 && f == 0) /* 0.0? */
+		ADD_CHAR_TO_BUF('0');
+	else if(e == 0 && f != 0) { /* subnormal? */
+		ADD_CHAR_TO_BUF('0');
+		e = -BIAS + 1;
+	} else { /* normalized */
+		ADD_CHAR_TO_BUF('1');
+		e -= BIAS;
+	}
+
+// TODO: ctz for the job?
+	for(i = 0, d = MAN_BITS2RIGHT/4; i < MAN_BITS2RIGHT/4; i++) {
+		if(!(f & (0xfull << (i*4))))
+			d--;
+		else
+			break;
+	}
+	if(d)
+	{
+		ADD_CHAR_TO_BUF('.');
+		f = rol64(f, (sizeof(f) * BITS_PER_CHAR) - MAN_BITS2RIGHT + 4);
+		for(i = 0; i < d; i++) {
+			ADD_CHAR_TO_BUF(hchar[f & 0xf]);
+			f = rol64(f, 4);
+		}
+	}
+
+	ADD_CHAR_TO_BUF(spec->u.flags.uppercase ? 'P' : 'p');
+	ADD_CHAR_TO_BUF(e >= 0 ? '+' : '-');
+	e = e >= 0 ? e : -e;
+	wptr = put_dec_trunc(spec->conv_buf, e);
+	wptr = strncpyrev(buf, wptr - 1, spec->conv_buf, sav);
+	spec->len += wptr - buf;
+	buf = wptr;
+	return end_format(buf, fmt, spec);
 }
+#undef ADD_CHAR_TO_BUF
+
 static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
 }
-
 
 /*
  * DECIMAL
@@ -1490,14 +1593,13 @@ static const fmt_func num_format_table[][MOD_MAX_NUM] =
 	 *                o       h       o        o         o         b         u        x        e        f       l       l        1
 	 *                 n       a       r        n         n         l         a        _        _        _       3       6        2
 	 *                  e       r       t        g         g         e         d        t        t        t       2       4        8
-	 *     HEXL */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa, vnHtoa, vnDtoa, vnDDtoa}, /* 0 */
-	/*     HEXU */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa, vnHtoa, vnDtoa, vnDDtoa}, /* 1 */
-	/* UNSIGNED */ {  vutoa,  vutoa,  vutoa,  vultoa,  vulltoa,  vulltoa,  vulltoa,  vujtoa,  vuztoa,  vuttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 2 */
-	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 3 */
-	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa, vnHtoa, vnDtoa, vnDDtoa}, /* 4 */
-	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa,  vHtoa,  vDtoa,  vDDtoa}, /* 5 */
-	/*    FPHEX */ { vdtoxa, vdtoxa, vdtoxa,  vdtoxa,   vdtoxa,  vldtoxa,   vdtoxa,  vdtoxa,  vdtoxa,  vdtoxa, vHtoxa, vDtoxa, vDDtoxa}, /* 6 */
-	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa, vnHtoa, vnDtoa, vnDDtoa}  /* 7 */
+	 *      HEX */ { vutoxa, vutoxa, vutoxa, vultoxa, vulltoxa, vulltoxa, vulltoxa, vujtoxa, vuztoxa, vuttoxa, vnHtoa, vnDtoa, vnDDtoa}, /* 0 */
+	/* UNSIGNED */ {  vutoa,  vutoa,  vutoa,  vultoa,  vulltoa,  vulltoa,  vulltoa,  vujtoa,  vuztoa,  vuttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 1 */
+	/*   SIGNED */ {  vitoa,  vitoa,  vitoa,   vltoa,   vlltoa,   vlltoa,   vlltoa,   vjtoa,   vztoa,   vttoa, vnHtoa, vnDtoa, vnDDtoa}, /* 2 */
+	/*    OCTAL */ { vutooa, vutooa, vutooa, vultooa, vulltooa, vulltooa, vulltooa, vujtooa, vuztooa, vuttooa, vnHtoa, vnDtoa, vnDDtoa}, /* 3 */
+	/*       FP */ {  vdtoa,  vdtoa,  vdtoa,   vdtoa,    vdtoa,   vldtoa,    vdtoa,   vdtoa,   vdtoa,   vdtoa,  vHtoa,  vDtoa,  vDDtoa}, /* 4 */
+	/*    FPHEX */ { vdtoxa, vdtoxa, vdtoxa,  vdtoxa,   vdtoxa,  vldtoxa,   vdtoxa,  vdtoxa,  vdtoxa,  vdtoxa, vHtoxa, vDtoxa, vDDtoxa}, /* 5 */
+	/*      NOP */ {  vntoa,  vntoa,  vntoa,  vnltoa,  vnlltoa,  vnlltoa,  vnlltoa,  vnjtoa,  vnztoa,  vnttoa, vnHtoa, vnDtoa, vnDDtoa}  /* 6 */
 };
 
 static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
@@ -1506,31 +1608,42 @@ static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *f_X(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[1][spec->mod](buf, fmt, spec);
+	spec->u.flags.uppercase = true;
+	return f_x(buf, fmt, spec);
 }
 static const char *f_u(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[2][spec->mod](buf, fmt, spec);
+	return num_format_table[1][spec->mod](buf, fmt, spec);
 }
 static const char *f_i(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[3][spec->mod](buf, fmt, spec);
+	return num_format_table[2][spec->mod](buf, fmt, spec);
 }
 static const char *f_o(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[4][spec->mod](buf, fmt, spec);
+	return num_format_table[3][spec->mod](buf, fmt, spec);
 }
 static const char *f_fp(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[5][spec->mod](buf, fmt, spec);
+	return num_format_table[4][spec->mod](buf, fmt, spec);
+}
+static const char *f_fpU(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->u.flags.uppercase = true;
+	return f_fp(buf, fmt, spec);
 }
 static const char *f_fpx(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[6][spec->mod](buf, fmt, spec);
+	return num_format_table[5][spec->mod](buf, fmt, spec);
+}
+static const char *f_fpX(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->u.flags.uppercase = true;
+	return f_fpx(buf, fmt, spec);
 }
 static const char *fmtnop(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[7][spec->mod](buf, fmt, spec);
+	return num_format_table[6][spec->mod](buf, fmt, spec);
 }
 /*
  * other conversion - uninmplemented
@@ -1998,11 +2111,6 @@ static const char *flag_p(char *buf, const char *fmt, struct format_spec *spec)
 	spec->u.flags.sign = true;
 	return format_dispatch(buf, fmt, spec);
 }
-static const char *flag_I(char *buf, const char *fmt, struct format_spec *spec)
-{
-	spec->u.flags.ip = true;
-	return format_dispatch(buf, fmt, spec);
-}
 static const char *flag_t(char *buf, const char *fmt, struct format_spec *spec)
 {
 	spec->u.flags.th_group = true;
@@ -2025,6 +2133,22 @@ static const char *lmod_H(char *buf, const char *fmt, struct format_spec *spec)
 static const char *lmod_D(char *buf, const char *fmt, struct format_spec *spec)
 {
 	spec->mod = MOD_DECIMAL64 != spec->mod ? MOD_DECIMAL64 : MOD_DECIMAL128;
+	return format_dispatch(buf, fmt, spec);
+}
+static const char *lmod_I(char *buf, const char *fmt, struct format_spec *spec)
+{
+	/* this mod is WIN32 */
+	char c = *fmt;
+	if('3' == c) {
+		fmt += 2;
+		if (sizeof(long) * BITS_PER_CHAR < 64)
+			spec->mod = MOD_LONG;
+	} else if ('6' == c) {
+		fmt += 2;
+		spec->mod = MOD_QUAD;
+	} else
+		/* this is only true for signed args, unsigned would be MOD_SIZE_T */
+		spec->mod = MOD_PTRDIFF_T;
 	return format_dispatch(buf, fmt, spec);
 }
 static const char *lmod_q(char *buf, const char *fmt, struct format_spec *spec)
@@ -2113,7 +2237,7 @@ static const fmt_func format_table[256] =
 	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
 	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
-	/* 40 */ fmtnop,  f_fpx, fmtnop,    f_c, lmod_D,   f_fp,   f_fp,   f_fp, lmod_H, flag_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
+	/* 40 */ fmtnop,  f_fpX, fmtnop,    f_c, lmod_D,  f_fpU,  f_fpU,  f_fpU, lmod_H, lmod_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
 	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
 	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */
@@ -2146,6 +2270,7 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 {
 	struct format_spec cur_fmt;
 	size_t diff;
+	char *obuf = buf;
 	const char *m;
 
 	va_copy(cur_fmt.ap, ap);
@@ -2180,6 +2305,8 @@ int my_vsnprintf(char *buf, size_t maxlen, const char *fmt, va_list ap)
 
 	if(likely(cur_fmt.len < maxlen))
 		*buf = '\0';
+	else
+		obuf[maxlen-1] = '\0';
 
 	return (int)cur_fmt.len;
 }
