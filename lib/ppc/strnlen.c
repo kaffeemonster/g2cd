@@ -47,7 +47,7 @@ size_t strnlen(const char *s, size_t maxlen)
 	v1 = vec_splat_u8(1);
 
 	f = ALIGN_DOWN_DIFF(s, SOVUC);
-	k = SOST - f - (ssize_t)maxlen;
+	k = SOVUC - f - (ssize_t)maxlen;
 
 	p = (const char *)ALIGN_DOWN(s, SOVUC);
 	c = vec_ldl(0, (const unsigned char *)p);
@@ -67,7 +67,9 @@ size_t strnlen(const char *s, size_t maxlen)
 	if(vec_any_eq(c, v0))
 		goto OUT;
 
-	maxlen -= SOST - f;
+	maxlen -= SOVUC - f;
+	if(unlikely(!maxlen))
+		return p + SOVUC - s;
 	do
 	{
 		p += SOVUC;
@@ -77,7 +79,7 @@ size_t strnlen(const char *s, size_t maxlen)
 		maxlen -= SOVUC;
 	} while(!vec_any_eq(c, v0));
 
-	k = SOST - (ssize_t)maxlen;
+	k = SOVUC - (ssize_t)maxlen;
 	if(k > 0)
 	{
 // TODO: +1 to give a break condition?

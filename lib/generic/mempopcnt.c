@@ -177,9 +177,13 @@ F_NAME(size_t, mempopcnt, _generic)(const void *s, size_t len)
 				len -= r * SOST * 8;
 				/*
 				 * popcnt instructions, even if nice, are seldomly the fasted
-				 * instructions. And when you have to do it by "sideways"
-				 * addition, you are screwed (lots of stalls, even if we try to
-				 * leverage this by taking several at once, but this needs regs).
+				 * instructions. Often they also have another restriction like
+				 * they can only be executed in one of several ALUs/pipelines,
+				 * or only count the single bytes.
+				 * And when you have to do it by "sideways" addition, you are
+				 * screwed (lots of stalls, large magic constants which make
+				 * RISC unhappy (or need register), even if we try to leverage
+				 * this by taking several at once, but this needs regs).
 				 *
 				 * There is another nice trick: compression (Harley's Method).
 				 * We shove several words (8) into one word and count that (its
@@ -187,8 +191,9 @@ F_NAME(size_t, mempopcnt, _generic)(const void *s, size_t len)
 				 * a few regs you can get a lot better (+33%) then our "unrolled"
 				 * approuch. (this is even a win on x86, with too few register
 				 * and no 3 operand asm).
+				 * Suprise: Alpha has such a fast, unrestricted popcnt, it is even...
 				 */
-				for(; r; r--, p += 8)
+				for(; likely(r); r--, p += 8)
 				{
 					size_t twos_l, twos_h, fours_l, fours_h;
 

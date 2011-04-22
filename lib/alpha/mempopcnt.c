@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, alpha implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,5 +49,16 @@ static inline size_t popcountst_int4(size_t n, size_t m, size_t o, size_t p)
 static char const rcsid_mpa[] GCC_ATTR_USED_VAR = "$Id: $";
 # define NO_GEN_POPER
 # define HAVE_FULL_POPCNT
+#elif __alpha_max__
+/*
+ * the Motion Video Extention (PCA56/57, EV6 and above) is
+ * older than the Count Extention (EV67 and above)
+ */
+# include "alpha.h"
+# define NO_SIDEWAYS_ADD
+static inline size_t sideways_add(size_t sum, size_t x)
+{
+	return sum + perr(x, 0);
+}
 #endif
 #include "../generic/mempopcnt.c"

@@ -65,6 +65,8 @@ size_t strnlen(const char *s, size_t maxlen)
 		return maxlen;
 
 	maxlen -= SOUL - f;
+	if(unlikely(!maxlen))
+		return p + SOUL - s;
 	asm (
 		"1:\n\t"
 		PA_LD",ma	"PA_TZ"(%0), %1\n\t"

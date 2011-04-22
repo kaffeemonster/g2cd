@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, generic implementation
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,6 +64,8 @@ size_t strnlen(const char *s, size_t maxlen)
 		return maxlen;
 
 	maxlen -= SOST - f;
+	if(unlikely(!maxlen))
+		return p + SOUL - s;
 	do
 	{
 		p += SOST;

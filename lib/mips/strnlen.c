@@ -217,6 +217,8 @@ size_t strnlen(const char *s, size_t maxlen)
 
 	maxlen -= SO32 - f;
 	r = 0;
+	if(unlikely(!maxlen))
+		return p + SO32 - s;
 # if MY_MIPS_IS_64 == 1
 	if(!IS_ALIGN(p, SOCT))
 	{
@@ -225,6 +227,8 @@ size_t strnlen(const char *s, size_t maxlen)
 		r1 = has_nul_byte32(r1);
 		if(r1)
 			r = r1;
+		else
+			maxlen -= SO32;
 		if(HOST_IS_BIGENDIAN)
 			r <<= SO32 * BITS_PER_CHAR;
 	}
@@ -232,6 +236,8 @@ size_t strnlen(const char *s, size_t maxlen)
 
 	if(!r)
 	{
+		if(unlikely(!maxlen))
+			return p + SO32 - s;
 		p -= SOCT - SO32;
 		do
 		{
