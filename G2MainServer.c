@@ -1238,12 +1238,31 @@ static noinline __init bool startup(int argc, char **args)
 		BOOL (WINAPI *sdep_proc)(DWORD);
 		WORD version_req = MAKEWORD(2, 2);
 		WSADATA wsa_data;
+		ULONG heap_info;
 		int err;
 
+		/* enable fancy protection things */
 		sdep_proc = (BOOL (WINAPI *)(DWORD))
 			GetProcAddress(GetModuleHandle(TEXT("kernel32")), "SetProcessDEPPolicy");
 		if(sdep_proc)
 			sdep_proc(0x03); /* PROCESS_DEP_ENABLE|PROCESS_DEP_DISABLE_ATL_THUNK_EMULATION */
+
+		/*
+		 * maybe this is neat, but i don't know the performance impact,
+		 * and if it does mix with a LFH
+		 */
+		/* HeapSetInformation(NULL, HeapEnableTerminationOnCorruption, NULL, 0); */
+
+		/*
+		 * Get ourself a low fragmentation heap, the normal heap under windows is
+		 * notoriously bad. Luckily we have not much goto-heap allocs (i worked hard
+		 * on that!). But at some point you have to, and then it is highly dynamic
+		 * and network driven, so the lifetime and tendency to fragment depends on
+		 * packet flow/speed.
+		 */
+		heap_info = 2;
+		HeapSetInformation(NULL, HeapCompatibilityInformation, &heap_info, sizeof(heap_info));
+		/* NewsFlash: lfh seem to disable heap exploition mitigation, maybe a hotfix will come */
 
 		err = WSAStartup(version_req, &wsa_data);
 		if(err)

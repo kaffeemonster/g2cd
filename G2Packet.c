@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004 - 2010 Jan Seiffert
+ * Copyright (c) 2004 - 2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1169,7 +1169,7 @@ static bool handle_KHLR(struct ptype_action_args *parg)
 		g2_packet_t *ukhlid = g2_packet_calloc();
 		if(ukhlid)
 		{
-			if(g2_packet_steal_data_space(yourip, 16))
+			if(g2_packet_steal_data_space(ukhlid, 16))
 			{
 				ukhlid->type = PT_UKHLID;
 				memcpy(buffer_start(ukhlid->data_trunk), rdata.id, 16);
