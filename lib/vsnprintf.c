@@ -491,12 +491,12 @@ MAKE_UFUNC( ut, ptrdiff_t)
 /*
  * HEX
  */
-static inline char *hex_insert_alternate(char *buf, size_t count)
+static inline char *hex_insert_alternate(char *buf, size_t count, bool upper)
 {
 	if(count--) {
 		*buf++ = '0';
 		if(count)
-			*buf++ = 'x';
+			*buf++ = upper ? 'X' : 'x';
 	}
 	return buf;
 }
@@ -516,7 +516,7 @@ static noinline const char *hex_finish_real(char *buf, const char *fmt, struct f
 		if(spec->u.flags.zero && !spec->u.flags.left)
 		{
 			if(spec->u.flags.alternate)
-				buf = hex_insert_alternate(buf, sav);
+				buf = hex_insert_alternate(buf, sav, spec->u.flags.uppercase);
 			if(spec->precision)
 				goto OUT_CPY;
 			while(i--)
@@ -533,11 +533,11 @@ static noinline const char *hex_finish_real(char *buf, const char *fmt, struct f
 			while(i--)
 				*ins++ = ' ';
 			if(spec->u.flags.alternate)
-				buf = hex_insert_alternate(buf, sav);
+				buf = hex_insert_alternate(buf, sav, spec->u.flags.uppercase);
 		}
 		len = spec->width;
 	} else if(spec->u.flags.alternate)
-		buf = hex_insert_alternate(buf, sav);
+		buf = hex_insert_alternate(buf, sav, spec->u.flags.uppercase);
 OUT_CPY:
 	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, sav);
 	spec->len += len;
@@ -1195,6 +1195,8 @@ do \
 		ADD_CHAR_TO_BUF('-');
 	else if(unlikely(spec->u.flags.sign))
 		ADD_CHAR_TO_BUF('+');
+	else if(unlikely(spec->u.flags.space))
+		ADD_CHAR_TO_BUF(' ');
 
 	if(unlikely(my_simple_isnan(v.d)))
 	{
@@ -1461,6 +1463,8 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 		ADD_CHAR_TO_BUF('-');
 	else if(unlikely(spec->u.flags.sign))
 		ADD_CHAR_TO_BUF('+');
+	else if(unlikely(spec->u.flags.space))
+		ADD_CHAR_TO_BUF(' ');
 	ADD_CHAR_TO_BUF('0');
 	ADD_CHAR_TO_BUF(spec->u.flags.uppercase ? 'X' : 'x');
 
@@ -1824,13 +1828,10 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 /*
  * CHAR
  */
-static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
+static noinline const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	size_t len;
-
-	if(unlikely('C' == *(fmt-1)))
-		spec->mod = MOD_LONG;
 
 	if(likely(MOD_LONG != spec->mod))
 	{
@@ -1850,7 +1851,7 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 		buf++;
 		len = 1;
 #else
-# if WINT_MAX < INT_MAX
+# if WINT_MAX-0 < INT_MAX
 #  define VARG_WINT_TYPE int
 # else
 #  define VARG_WINT_TYPE wint_t
@@ -1873,6 +1874,12 @@ static const char *f_c(char *buf, const char *fmt, struct format_spec *spec)
 
 	spec->len += len;
 	return end_format(buf, fmt, spec);
+}
+
+static const char *f_C(char *buf, const char *fmt, struct format_spec *spec)
+{
+	spec->mod = MOD_LONG;
+	return f_c(buf, fmt, spec);
 }
 
 /*
@@ -2237,7 +2244,7 @@ static const fmt_func format_table[256] =
 	/*        SPACE,      !,      ",      #,      $,      %,      &,      ',      (,      ),      *,      +,      ,,      -,      .,      /, */
 	/* 30 */ flag_0, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, widthn, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            0,      1,      2,      3,      4,      5,      6,      7,      8,      9,      :,      ;,      <,      =,      >,      ?, */
-	/* 40 */ fmtnop,  f_fpX, fmtnop,    f_c, lmod_D,  f_fpU,  f_fpU,  f_fpU, lmod_H, lmod_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
+	/* 40 */ fmtnop,  f_fpX, fmtnop,    f_C, lmod_D,  f_fpU,  f_fpU,  f_fpU, lmod_H, lmod_I, fmtnop, fmtnop, lmod_L, fmtnop, fmtnop, fmtnop,
 	/*            @,      A,      B,      C,      D,      E,      F,      G,      H,      I,      J,      K,      L,      M,      N,      O, */
 	/* 50 */ fmtnop, fmtnop, fmtnop,    f_s, fmtnop, fmtnop, fmtnop, fmtnop,    f_X, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*            P,      Q,      R,      S,      T,      U,      V,      W,      X,      Y,      Z,      [,      \,      ],      ^,      _, */
