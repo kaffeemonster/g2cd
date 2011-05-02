@@ -777,6 +777,9 @@ AC_CHECK_DECLS([TCP_CORK, TCP_THIN_LINEAR_TIMEOUTS, TCP_THIN_DUPACK, TCP_USER_TI
 # include <ws2tcpip.h>
 #endif]])
 AC_CHECK_DECLS([PR_SET_NAME], [], [], [[#include <sys/prctl.h>]])
+AC_CHECK_DECL([__SIZEOF_POINTER__], [], [
+AC_CHECK_SIZEOF(void *)
+])
 
 # do we need epoll compat?
 need_epoll_compat=no

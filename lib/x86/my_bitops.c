@@ -281,6 +281,15 @@ static __init void identify_cpu(void)
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
 
+	/*
+	 * on Linux the aux vector AT_HWCAP contains features[0]
+	 * but to read it we have to get to the aux vector, which
+	 * means some kind of symbol resolution (either by environ
+	 * or some magic unknown symbol), which means we can't access
+	 * it for ifuncs, only libc/ld.so knows where the pointer
+	 * to the aux vector is hidden...
+	 */
+
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
 	{

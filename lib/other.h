@@ -349,17 +349,25 @@ static inline int isgraph_a(int c)
 #endif /* HAVE_STDINT_H */
 
 /* most things won't work if BITS_PER_CHAR = 8 isn't true, but you never know */
-#ifdef __CHAR_BIT__
-# if __CHAR_BIT__ > 0
+#if __CHAR_BIT__-0 > 0
 #  define BITS_PER_CHAR __CHAR_BIT__
-# else
-#  include <limits.h>
-#  define BITS_PER_CHAR CHAR_BIT
-# endif /* __CHAR_BIT__ > 0 */
 #else
 # include <limits.h>
 # define BITS_PER_CHAR CHAR_BIT
 #endif /* __CHAR_BIT__ */
+
+#if __SIZEOF_POINTER__-0 > 0
+#  define BITS_PER_POINTER (__SIZEOF_POINTER__ * BITS_PER_CHAR)
+#elif SIZEOF_VOID_P-0 > 0
+#  define BITS_PER_POINTER (SIZEOF_VOID_P * BITS_PER_CHAR)
+#else
+# include <limits.h>
+# if __WORDSIZE-0 > 0
+#  define BITS_PER_POINTER (__WORDSIZE * BITS_PER_CHAR)
+# else
+#  error "couldn't find the size of pointers"
+# endif
+#endif
 
 #define SOTC (sizeof(uint16_t))
 #define BITS_PER_TCHAR (SOTC*BITS_PER_CHAR)

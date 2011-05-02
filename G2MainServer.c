@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1122,6 +1122,7 @@ static __init void init_prng(void)
 		                "         SECURITY of this G2 Hub. Please examine the\n"
 		                "         situation and configure a proper entropy source!\n");
 		gettimeofday(&now, 0);
+		/* create a speudo random seed */
 		t  = getpid() | (getppid() << 16);
 		t ^= now.tv_usec << 11;
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
@@ -1129,9 +1130,9 @@ static __init void init_prng(void)
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
 // TODO: more entropy sources for the mix?
 		/* something from the filesystem? the kernel?
-		 * AUX_VECTOR? Enviroment? some random read
-		 * from our .text section?
+		 * Enviroment? some random read from our .text section?
 		 */
+		/* mix the uninitialized stack buffer with this seed */
 		for(i = 0; i < anum(rd); i++) {
 			unsigned o_rd = rd[i];
 			rd[i] ^= t;
@@ -1139,6 +1140,52 @@ static __init void init_prng(void)
 			t ^= o_rd;
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 		}
+#ifdef __linux__
+		/*
+		 * On modern linux we can extract 16 byte of random
+		 * the kernel gives to every process on startup through
+		 * the aux vector, so he can ASLR and so on.
+		 * Fish for these 16 byte of entropy to mix into the
+		 * buffer.
+		 * Problem is: finding the aux vector isn't standarized.
+		 * On Linux it is put by the kernel behind the enviroment.
+		 * So the easiest way, short of a specific symbol to "link"
+		 * to the aux vector, is to walk behind the enviroment.
+		 * This isn't without risk: Our "official" access to the
+		 * enviroment is the POSIX global environ pointer. If
+		 * something changed the enviroment before we come here,
+		 * the enviroment may be relocated and so does not have
+		 * an aux vector behind it.
+		 */
+		{
+// TODO: using the pointer size is wrong...
+/* this should be the ELF size, 32 or 64 bit */
+# if BITS_PER_POINTER > 32
+			typedef uint64_t av_base_type;
+# else
+			typedef uint32_t av_base_type;
+# endif
+			char **envp = environ;
+			av_base_type *av;
+
+			while(*envp++)
+				/* walk environment to the end */;
+			/* walk the aux vector */
+			for(av = (av_base_type *)envp; av[0]; av += 2)
+			{
+				if(av[0] == 25) /* AT_RANDOM */
+				{
+					unsigned *ar = (unsigned *)av[1];
+					for(t = 0; t < (sizeof(rd)/16); t++) {
+						for(i = 0; i < (16/sizeof(unsigned)); i++)
+							rd[t * (16/sizeof(unsigned)) + i] ^= ar[i];
+					}
+					logg(LOGF_INFO, "Got some entropy directly from the kernel, but we need more!\n");
+					break;
+				}
+			}
+		}
+#endif
 		/*
 		 * Even if we could not get entropy, feed rd into the prng.
 		 * If everything failes, its "random" stack data, undefined
