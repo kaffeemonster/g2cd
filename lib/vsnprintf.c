@@ -52,6 +52,7 @@
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
 #endif
+#include <float.h>
 #include "my_bitops.h"
 #include "itoa.h"
 #include "log_facility.h"
@@ -756,14 +757,16 @@ static const char *vnDDtoa(char *buf, const char *fmt, struct format_spec *spec)
  */
 
 /* exponent stored + 1024, hidden bit to left of decimal point */
-#define BIAS 1023
-#define MAN_BITS2RIGHT 52
-#define HIDDEN_BIT 0x0010000000000000ULL
+#define DBL_BIAS (DBL_MAX_EXP - 1)
+#define DBL_MAN_BITS2RIGHT (DBL_MANT_DIG - 1)
+#define DBL_HIDDEN_BIT (1ULL << DBL_MAN_BITS2RIGHT)
+#define DBL_MANT_BIT (DBL_HIDDEN_BIT - 1)
+#define DBL_EXP_BIT (~0ULL & ~(DBL_MANT_BIT | DBL_SIGN_BIT))
+#define DBL_SIGN_BIT (1ULL << ((sizeof(double) * BITS_PER_CHAR) - 1))
 
-#define BIGSIZE 24
 #define MIN_E -1074
+#define BIGSIZE 24
 #define MAX_FIVE 325
-#define B_P1 (1ULL << MAN_BITS2RIGHT)
 
 typedef uint64_t big_digit;
 
@@ -1171,16 +1174,16 @@ static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 	v.d = va_arg(spec->ap, double);
 
 	/* decompose float into sign, mantissa & exponent */
-	sign = !!(v.u & 0x8000000000000000ULL);
-	e    =   (v.u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
-	f    =    v.u & 0x000FFFFFFFFFFFFFULL;
+	sign = !!(v.u & DBL_SIGN_BIT);
+	e    =   (v.u & DBL_EXP_BIT) >> DBL_MAN_BITS2RIGHT;
+	f    =    v.u & DBL_MANT_BIT;
 /*	printf("%i %i %llu\n", sign, e, f); */
 
 	if(e != 0) {
-		e  = e - BIAS - MAN_BITS2RIGHT;
-		f |= HIDDEN_BIT;
+		e  = e - DBL_BIAS - DBL_MAN_BITS2RIGHT;
+		f |= DBL_HIDDEN_BIT;
 	} else if(f != 0) /* denormalized */
-		e = 1 - BIAS - MAN_BITS2RIGHT;
+		e = 1 - DBL_BIAS - DBL_MAN_BITS2RIGHT;
 /*	printf("%i %i %llu\n", sign, e, f); */
 
 #define ADD_CHAR_TO_BUF(ch) \
@@ -1233,27 +1236,27 @@ do \
 
 	/* Compute the scaling factor estimate, k */
 	if(e > MIN_E)
-		k = estimate(e + MAN_BITS2RIGHT);
+		k = estimate(e + DBL_MAN_BITS2RIGHT);
 	else
 	{
 		int n;
 		big_digit y;
 
-		for(n = e + MAN_BITS2RIGHT, y = B_P1; f < y; n--)
+		for(n = e + DBL_MAN_BITS2RIGHT, y = DBL_HIDDEN_BIT; f < y; n--)
 			y >>= 1;
 		k = estimate(n);
 	}
 
 	if(e >= 0)
 	{
-		if(f != B_P1)
+		if(f != DBL_HIDDEN_BIT)
 			use_mp = false, f_n = e + 1, s_n = 1, m_n = e;
 		else
 			use_mp = true, f_n = e + 2, s_n = 2, m_n = e;
 	}
 	else
 	{
-		if((e == MIN_E) || (f != B_P1))
+		if((e == MIN_E) || (f != DBL_HIDDEN_BIT))
 			use_mp = false, f_n = 1, s_n = 1 - e, m_n = 0;
 		else
 			use_mp = true, f_n = 2, s_n = 2 - e, m_n = 0;
@@ -1430,8 +1433,13 @@ static noinline const char *fp_finish(char *buf, const char *fmt, struct format_
 
 static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
+#if LDBL_MANT_DIG-0 == DBL_MANT_DIG
+	/* some systems set long double to double */
+	return vdtoa(buf, fmt, spec);
+#else
 	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
+#endif
 }
 
 /*
@@ -1455,9 +1463,9 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 	v.d = va_arg(spec->ap, double);
 
 	/* decompose float into sign, mantissa & exponent */
-	sign = !!(v.u & 0x8000000000000000ULL);
-	e    =   (v.u & 0x7FF0000000000000ULL) >> MAN_BITS2RIGHT;
-	f    =    v.u & 0x000FFFFFFFFFFFFFULL;
+	sign = !!(v.u & DBL_SIGN_BIT);
+	e    =   (v.u & DBL_EXP_BIT) >> DBL_MAN_BITS2RIGHT;
+	f    =    v.u & DBL_MANT_BIT;
 
 	if(sign)
 		ADD_CHAR_TO_BUF('-');
@@ -1472,14 +1480,14 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 		ADD_CHAR_TO_BUF('0');
 	else if(e == 0 && f != 0) { /* subnormal? */
 		ADD_CHAR_TO_BUF('0');
-		e = -BIAS + 1;
+		e = -DBL_BIAS + 1;
 	} else { /* normalized */
 		ADD_CHAR_TO_BUF('1');
-		e -= BIAS;
+		e -= DBL_BIAS;
 	}
 
 // TODO: ctz for the job?
-	for(i = 0, d = MAN_BITS2RIGHT/4; i < MAN_BITS2RIGHT/4; i++) {
+	for(i = 0, d = DBL_MAN_BITS2RIGHT/4; i < DBL_MAN_BITS2RIGHT/4; i++) {
 		if(!(f & (0xfull << (i*4))))
 			d--;
 		else
@@ -1488,7 +1496,7 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 	if(d)
 	{
 		ADD_CHAR_TO_BUF('.');
-		f = rol64(f, (sizeof(f) * BITS_PER_CHAR) - MAN_BITS2RIGHT + 4);
+		f = rol64(f, (sizeof(f) * BITS_PER_CHAR) - DBL_MAN_BITS2RIGHT + 4);
 		for(i = 0; i < d; i++) {
 			ADD_CHAR_TO_BUF(hchar[f & 0xf]);
 			f = rol64(f, 4);
@@ -1504,13 +1512,18 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 	buf = wptr;
 	return end_format(buf, fmt, spec);
 }
-#undef ADD_CHAR_TO_BUF
 
 static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
+#if LDBL_MANT_DIG-0 == DBL_MANT_DIG
+	/* some systems set long double to double */
+	return vdtoxa(buf, fmt, spec);
+#else
 	long double n GCC_ATTRIB_UNUSED = va_arg(spec->ap, long double);
 	return fp_finish(buf, fmt, spec);
+#endif
 }
+#undef ADD_CHAR_TO_BUF
 
 /*
  * DECIMAL

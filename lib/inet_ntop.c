@@ -3,7 +3,7 @@
  *
  * print IPv4 and IPv6 addresses
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -180,7 +180,7 @@ static char *print_ipv6_c_rev(const struct in6_addr *src, char *dst)
 			}
 		}
 	}
-	/* make shure we have the best run after the loop */
+	/* make sure we have the best run after the loop */
 	if(-1 != cur.start) {
 		if(-1 == best.start || cur.len > best.len)
 			best = cur;

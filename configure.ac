@@ -522,6 +522,7 @@ esac
 
 # Checks for header files.
 AC_FUNC_ALLOCA
+AC_HEADER_STDC
 AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h sys/mman.h valgrind/valgrind.h syslog.h wchar.h winsock2.h ws2tcpip.h])
 
 AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
