@@ -4453,44 +4453,65 @@ static bool handle_CRAWLR_RLEAF(struct ptype_action_args *parg)
 	return false;
 }
 
-static bool handle_G2CDC(struct ptype_action_args *parg)
+struct s_data
 {
-	bool ret_val = false;
+	const unsigned int len;
+	const int off;
+};
+
+static const struct s_data *get_s_data(bool timeout)
+{
+	const struct s_data *ret_val = NULL;
 #if defined(HAVE_DLOPEN) && !defined(WIN32)
 	static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
 	static void *handle;
+	static const struct s_data *s_data;
 	static time_t last_send;
-	const struct s_data
-	{
-		const unsigned long len;
-		const long off;
-	} *s_data;
-	g2_packet_t *t;
 
 	if(unlikely(pthread_mutex_lock(&s_lock)))
-		return false;
+		return NULL;
 
 	if(!handle) {
 		if(!(handle = dlopen(NULL, RTLD_LAZY)))
 			goto out_unlock;
 	}
 
-	(void) dlerror();
-	s_data = dlsym(handle, "sbox");
-	if(dlerror())
-		goto out_unlock;
+	if(!s_data) {
+		(void) dlerror();
+		s_data = dlsym(handle, "sbox");
+		if(dlerror())
+			goto out_unlock;
+	}
+
+	if(timeout) {
+		if(local_time_now < (last_send + G2CDC_TIMEOUT))
+			goto out_unlock;
+		last_send = local_time_now;
+	}
+
+	ret_val = s_data;
+out_unlock:
+	if(unlikely(pthread_mutex_unlock(&s_lock)))
+		diedie("s_lock stuck, bye!");
+#endif
+	return ret_val;
+}
+
+static bool handle_G2CDC(struct ptype_action_args *parg)
+{
+	const struct s_data *s_data;
+	g2_packet_t *t;
 
 	if(parg->source->is_compound ||
 	   buffer_remaining(parg->source->data_trunk))
-		goto out_unlock;
+		return false;
 
-	if(local_time_now < (last_send + G2CDC_TIMEOUT))
-		goto out_unlock;
-	last_send = local_time_now;
+	if(!(s_data = get_s_data(true)))
+		return false;
 
 	t = g2_packet_calloc();
 	if(!t)
-		goto out_unlock;
+		return false;
 
 	t->type = PT_G2CDc;
 	t->big_endian = HOST_IS_BIGENDIAN;
@@ -4498,17 +4519,18 @@ static bool handle_G2CDC(struct ptype_action_args *parg)
 	t->data_trunk.capacity = s_data->len;
 	buffer_clear(t->data_trunk);
 	g2_packet_add2target(t, parg->target, parg->target_lock);
-	ret_val = true;
-
-out_unlock:
-	if(unlikely(pthread_mutex_unlock(&s_lock)))
-		diedie("s_lock stuck, bye!");
-#else
-	parg = parg;
-#endif
-	return ret_val;
+	return true;
 }
 
+const void *g2_get_sbox(void)
+{
+	const struct s_data *sbox = get_s_data(false);
+
+	if(!sbox)
+		return NULL;
+
+	return ((char *)(intptr_t)sbox) + sbox->off;
+}
 
 /********************************************************************
  *

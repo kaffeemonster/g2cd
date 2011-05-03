@@ -1074,6 +1074,25 @@ static __init void setup_resources(void)
 #endif
 }
 
+static inline const char *get_etext(void)
+{
+#ifndef HAVE_NO_ETEXT
+	extern const char __etext;
+	return &__etext - 0x1fffe;
+#else
+	const char *rval;
+	/*
+	 * force the address of some func int the middle of the .text segment
+	 * into an register, then do nothing with it. This way it comes out
+	 * as an char pointer (arithmetic on function pointer is forbidden,
+	 * and GCC is _*very*_ persitent about that. No matter how much you
+	 * cast it, he will not take it)
+	 */
+	asm("" : "=r" (rval) : "0" (_g2_con_clear));
+	return rval; /* now we should have a pointer into the text segment */
+#endif
+}
+
 static __init void init_prng(void)
 {
 	/*
@@ -1084,7 +1103,6 @@ static __init void init_prng(void)
 	bool have_entropy = false;
 #ifndef WIN32
 	int fin;
-
 	/*
 	 * we could use the libc fopen/fread etc. to be portable, but...
 	 * A truss on FreeBSD reveales that the libc to buffer I/O is
@@ -1116,39 +1134,50 @@ static __init void init_prng(void)
 		struct timeval now;
 		unsigned i, t;
 		unsigned magic = 0x5BD1E995;
+		const char *sbox;
 
 		logg(LOGF_CRIT, "WARNING: We could not gather high quality entropy!\n"
 		                "         Will try to rectify, but this may impact the\n"
 		                "         SECURITY of this G2 Hub. Please examine the\n"
 		                "         situation and configure a proper entropy source!\n");
+		sbox = g2_get_sbox();
 		gettimeofday(&now, 0);
-		/* create a speudo random seed */
+		/* create a pseudo random seed */
 		t  = getpid() | (getppid() << 16);
 		t ^= now.tv_usec << 11;
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
 		t ^= now.tv_sec << 3;
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
-// TODO: more entropy sources for the mix?
-		/* something from the filesystem? the kernel?
-		 * Enviroment? some random read from our .text section?
+// TODO: some more entropy sources for the mix?
+		/* Something from the filesystem? The Kernel?
+		 * The Enviroment?
 		 */
+		if(sbox)
+			sbox = sbox + 0x4000 + (t & 0xffff);
+		else
+			sbox = get_etext() + (t & 0xffff);
+		t ^= get_unaligned((const unsigned *)sbox);
+		t ^= ((t >> 13) ^ (t << 7)) * magic;
 		/* mix the uninitialized stack buffer with this seed */
 		for(i = 0; i < anum(rd); i++) {
 			unsigned o_rd = rd[i];
 			rd[i] ^= t;
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
-			t ^= o_rd;
+			t ^= o_rd ^ get_unaligned((const unsigned *)(sbox + (t & 0xffff)));
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 		}
 #ifdef __linux__
 		/*
-		 * On modern linux we can extract 16 byte of random
+		 * On modern Linux we can extract 16 byte of random
 		 * the kernel gives to every process on startup through
 		 * the aux vector, so he can ASLR and so on.
 		 * Fish for these 16 byte of entropy to mix into the
 		 * buffer.
 		 * Problem is: finding the aux vector isn't standarized.
-		 * On Linux it is put by the kernel behind the enviroment.
+		 * We could go over /proc/self/auxv and read that and parse
+		 * it...
+		 * Or: On Linux the aux vector is put by the kernel behind
+		 * the enviroment.
 		 * So the easiest way, short of a specific symbol to "link"
 		 * to the aux vector, is to walk behind the enviroment.
 		 * This isn't without risk: Our "official" access to the
@@ -1175,12 +1204,12 @@ static __init void init_prng(void)
 			{
 				if(av[0] == 25) /* AT_RANDOM */
 				{
-					unsigned *ar = (unsigned *)av[1];
-					for(t = 0; t < (sizeof(rd)/16); t++) {
-						for(i = 0; i < (16/sizeof(unsigned)); i++)
-							rd[t * (16/sizeof(unsigned)) + i] ^= ar[i];
-					}
-					logg(LOGF_INFO, "Got some entropy directly from the kernel, but we need more!\n");
+					unsigned char *ar = (unsigned char *)av[1];
+					uint16_t *rds = (uint16_t *)rd;
+					for(sbox -= ar[0], i = 0; i < 15; i++, ar++)
+						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)ar)));
+					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *ar));
+					logg(LOGF_INFO, "Got some entropy directly from the kernel, but this is only a bandage!\n");
 					break;
 				}
 			}

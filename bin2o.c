@@ -377,7 +377,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		if(!rel_tramp)
 			w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data\n", (unsigned long) buf->len, buf->name);
 		else
-			w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s-%s_base_data\n", (unsigned long) buf->len, buf->name, buf->name);
+			w_ptr += sprintf(w_ptr, "\t.long %lu\n\t.long %s_base_data-%s\n", (unsigned long) buf->len, buf->name, buf->name);
 		if(COFF == as_dia) {
 			w_ptr += sprintf(w_ptr, "\t.def %s\n\t\t.size . - %s\n", buf->name, buf->name);
 			w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");

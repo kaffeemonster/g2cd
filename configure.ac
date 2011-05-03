@@ -916,6 +916,17 @@ if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)
 fi
 
+m4_include([m4/ax_check_var.m4])
+AC_CHECK_VAR(__etext, [], [
+	AC_CHECK_VAR(_etext, [
+		AC_DEFINE(__etext, _etext, no __etext but _etext)][
+		AC_CHECK_VAR(etext, [
+			AC_DEFINE(__etext, etext, no __etext but etext)][
+		][
+			AC_DEFINE(HAVE_NO_ETEXT, 1, no __etext whatsoever)])
+	])
+])
+
 AC_MSG_CHECKING([wheter we can safely swap on /dev/fd0])
 AC_MSG_RESULT([yes])
 

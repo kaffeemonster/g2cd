@@ -241,6 +241,7 @@ typedef struct g2_packet
 		INIT_LIST_HEAD(&(x)->children); \
 	} while(0)
 
+_G2PACK_EXTRN(const void *g2_get_sbox(void));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_init(g2_packet_t *));
 _G2PACK_EXTRN(g2_packet_t *g2_packet_calloc(void) GCC_ATTR_MALLOC);
 _G2PACK_EXTRN(g2_packet_t *g2_packet_clone(g2_packet_t *) GCC_ATTR_MALLOC);

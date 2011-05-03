@@ -2,7 +2,7 @@
  * five_tab_gen.c
  * float print helper table generation
  *
- * Copyright (c) 2009-210 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *

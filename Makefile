@@ -203,6 +203,7 @@ AUX = \
 	m4/ax_check_linker_flags.m4 \
 	m4/ax_check_compiler_flags.m4 \
 	m4/ax_check_zlib.m4 \
+	m4/ax_check_var.m4 \
 	m4/ax_sys_dev_poll.m4 \
 	m4/ax_wint_t.m4 \
 	m4/test_asm.m4 \

@@ -115,7 +115,7 @@ DBGFLAGS += -foptimize-sibling-calls
 #	sun studio knows this
 #DBGFLAGS += -keeptemp
 #
-#CFLAGS = $(DBGFLAGS)
+#CFLAGS += $(DBGFLAGS)
 
 #
 # !! mashine-dependent !! non-x86 please see here
