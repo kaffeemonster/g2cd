@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -35,6 +36,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
+#include "lib/my_bitopsm.h"
 
 #undef false
 #undef true
@@ -45,6 +47,9 @@
 #define mkstr(s) mkstr2(s)
 #define strsize(s) (sizeof(s)-1)
 #define writestr(fd, s) (strsize(s) == write(fd, s, strsize(s)))
+#define output_writestr(fd, s) output_write(fd, s, strsize(s))
+#define BITS_PER_CHAR CHAR_BIT
+#define HOST_IS_BIGENDIAN host_is_bigendian()
 
 enum as_dialect
 {
@@ -61,8 +66,7 @@ struct xf_buf
 };
 
 static int invokation(char *);
-static char *char2hex(char *, char);
-static char *dump_line(const char *, char *, int);
+static int output_write(int, void *, size_t);
 static int dump_region(struct xf_buf *, int);
 static void get_file(struct xf_buf *, const char *);
 static void put_file(struct xf_buf *);
@@ -82,8 +86,10 @@ static int export_base_data;
 static int unhidden_tramp;
 static int rel_tramp;
 static int no_tramp;
-#define PBUF_SIZE (1<<15)
+#define PBUF_SIZE (1<<14)
 static char pbuf[PBUF_SIZE];
+/*               hex chars   "0x"        ", "        ".byte"                        "\n\t"                         reserve */
+static char fbuf[PBUF_SIZE + PBUF_SIZE + PBUF_SIZE + DIV_ROUNDUP(PBUF_SIZE, 16)*6 + DIV_ROUNDUP(PBUF_SIZE, 16)*2 + 4];
 
 int main(int argc, char **argv)
 {
@@ -207,27 +213,15 @@ int main(int argc, char **argv)
 	if(GAS == as_dia)
 	{
 // TODO: only set gnu stack on __linux__ && __ELF__
-		if(verbose)
-			(void)writestr(STDOUT_FILENO, "\t.section .note.GNU-stack,\"\",@progbits\n");
-		if(!writestr(as_fd, "\t.section .note.GNU-stack,\"\",@progbits\n"))
+		if(!output_writestr(as_fd, "\t.section .note.GNU-stack,\"\",@progbits\n"))
 			goto out;
-		if(verbose)
-			(void)writestr(STDOUT_FILENO, "\t.section .rodata,\"a\",@progbits\n");
-		if(!writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
+		if(!output_writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
 			goto out;
-	}
-	else if(SUN == as_dia)
-	{
-		if(verbose)
-			(void)writestr(STDOUT_FILENO, "\t.section \".rodata\"\n");
-		if(!writestr(as_fd, "\t.section \".rodata\"\n"))
+	} else if(SUN == as_dia) {
+		if(!output_writestr(as_fd, "\t.section \".rodata\"\n"))
 			goto out;
-	}
-	else if(COFF == as_dia)
-	{
-		if(verbose)
-			(void)writestr(STDOUT_FILENO, "\t.section .rdata,\"dr\"\n");
-		if(!writestr(as_fd, "\t.section .rdata,\"dr\"\n"))
+	} else if(COFF == as_dia) {
+		if(!output_writestr(as_fd, "\t.section .rdata,\"dr\"\n"))
 			goto out;
 	}
 
@@ -243,11 +237,8 @@ int main(int argc, char **argv)
 	}
 	if(opt_pack)
 		trav_dir(opt_pack, 0);
-//		if(!writestr(as_fd, "\t.section .comments,\"a\",@progbits\n"))
-//			goto end_pack;
-	if(verbose)
-		(void)writestr(STDOUT_FILENO, "\t.ident \"G2C bin2o-0.1\"\n\n");
-	if(!writestr(as_fd, "\t.ident \"G2C bin2o-0.1\"\n\n"))
+
+	if(!output_writestr(as_fd, "\t.ident \"G2C bin2o-0.1\"\n\n"))
 		goto out;
 
 out:
@@ -255,54 +246,192 @@ out:
 	return collect_child(ch_pid);
 }
 
-static char *char2hex(char *buf, char c)
+static int output_write(int fd, void *buf, size_t len)
 {
-	static const char hexchars[] = "0123456789ABCDEF";
-	*buf++ = '0';
-	*buf++ = 'x';
-	*buf++ = hexchars[(c & 0x0f0) >> 4];
-	*buf++ = hexchars[c & 0x00f];
-	return buf;
-}
-
-static char *dump_line(const char *in, char *out, int count)
-{
-#define dump_a_hex(out, in) *out++ = ' '; out = char2hex(out, in); *out++ = ',';
-	int i = 0;
-	*out++ = '\t'; *out++ = '.'; *out++ = 'b'; *out++ = 'y'; *out++ = 't'; *out++ = 'e';
-	switch(count % 8)
-	{
-	case 0:
-		while(i < count)
-		{
-			dump_a_hex(out, in[i++])
-	case 1:
-			dump_a_hex(out, in[i++])
-	case 2:
-			dump_a_hex(out, in[i++])
-	case 3:
-			dump_a_hex(out, in[i++])
-	case 4:
-			dump_a_hex(out, in[i++])
-	case 5:
-			dump_a_hex(out, in[i++])
-	case 6:
-			dump_a_hex(out, in[i++])
-	case 7:
-			dump_a_hex(out, in[i++])
+	if(verbose) {
+		if(len != write(STDOUT_FILENO, buf, len)) {
+			/* if this fails, so what... */
 		}
 	}
-#undef dump_a_hex
-	/* remove last ',' */
-	*(out-1) = '\n';
-	*out = '\0';
-	return out;
+	if(len != write(fd, buf, len))
+		return false;
+	return true;
+}
+
+static int host_is_bigendian(void)
+{
+	static const union {
+		unsigned int d;
+		unsigned char endian[sizeof(unsigned int)];
+	} x = {1};
+	return x.endian[0] == 0;
+}
+
+char *to_base16(char *dst, const unsigned char *src, unsigned int len)
+{
+	static const unsigned char base16c[] = "0123456789abcdef";
+	unsigned i;
+
+	static const unsigned long vals[] =
+	{
+		MK_C(0x0f0f0f0fUL),
+		MK_C(0x30303030UL),
+	};
+
+	for(; len >= SOST; len -= SOST, src += SOST)
+	{
+		size_t in_l, in_h, m_l, m_h;
+		size_t t1, t2;
+
+		in_l = *(const size_t *)src;
+
+		in_h  = (in_l & (~vals[0])) >> 4;
+		in_l &= vals[0];
+		in_h += vals[1];
+		in_l += vals[1];
+		m_h   = has_greater(in_h, 0x39);
+		m_l   = has_greater(in_l, 0x39);
+		m_h >>= 7;
+		m_l >>= 7;
+		in_h += 0x27 * m_h;
+		in_l += 0x27 * m_l;
+		if(!HOST_IS_BIGENDIAN)
+		{
+			t1 = in_h;
+			t2 = in_l;
+			for(i = 0; i < SOST; i++, dst += 2) {
+				dst[0] = (t1 & 0x000000ff);
+				dst[1] = (t2 & 0x000000ff);
+				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
+			}
+		}
+		else
+		{
+			t1 = in_h;
+			t2 = in_l;
+			for(i = SOST; i; i--, dst += 2) {
+				dst[(i * 2) - 2] = (t1 & 0x000000ff);
+				dst[(i * 2) - 1] = (t2 & 0x000000ff);
+				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
+			}
+		}
+	}
+
+	for(i = 0; i < len; i++) {
+		*dst++ = base16c[src[i] / 16];
+		*dst++ = base16c[src[i] % 16];
+	}
+	return dst;
+}
+
+static void prep_buffer(unsigned int lines)
+{
+	unsigned short *dstl = (unsigned short *)(fbuf + 2);
+	unsigned i, j;
+	unsigned short cs, ox, nt, pb, yt, es;
+
+	if(HOST_IS_BIGENDIAN)
+	{
+		pb = 0x2e62;
+		yt = 0x7974;
+		es = 0x6520;
+		cs = 0x2c20;
+		ox = 0x3078;
+		nt = 0x0a09;
+	}
+	else
+	{
+		pb = 0x622e;
+		yt = 0x7479;
+		es = 0x2065;
+		cs = 0x202c;
+		ox = 0x7830;
+		nt = 0x090a;
+	}
+
+	fbuf[0] = '\n';
+	fbuf[1] = '\t';
+	i = lines;
+	while(i--)
+	{
+		*dstl++ = pb;
+		*dstl++ = yt;
+		*dstl++ = es;
+		for(j = 16; j; j--) {
+			*dstl++ = ox;
+			*dstl++ = 0;
+			*dstl++ = cs;
+		}
+		dstl[-1] = nt;
+	}
+}
+
+static char *format_lines(char *dst, char *src, unsigned int len)
+{
+	unsigned short *srcl = (unsigned short *)src;
+	unsigned short *dstl = (unsigned short *)dst;
+	unsigned int i, j;
+
+	i = len / 32;
+	len -= i * 32;
+	dstl++;
+	while(i--)
+	{
+		dstl += 3;
+		dstl[ 0] = srcl[ 0];
+		dstl[ 3] = srcl[ 1];
+		dstl[ 6] = srcl[ 2];
+		dstl[ 9] = srcl[ 3];
+		dstl[12] = srcl[ 4];
+		dstl[15] = srcl[ 5];
+		dstl[18] = srcl[ 6];
+		dstl[21] = srcl[ 7];
+		dstl[24] = srcl[ 8];
+		dstl[27] = srcl[ 9];
+		dstl[30] = srcl[10];
+		dstl[33] = srcl[11];
+		dstl[36] = srcl[12];
+		dstl[39] = srcl[13];
+		dstl[42] = srcl[14];
+		dstl[45] = srcl[15];
+		srcl += 16;
+		dstl += 48;
+	}
+	if(len)
+	{
+		dstl += 3;
+		for(j = len/2; j--;) {
+			*dstl++ = *srcl++;
+			dstl += 2;
+		}
+	}
+	dstl -= 2;
+	return (char *)dstl;
+}
+
+static int hexdump_region(struct xf_buf *buf, int as_fd)
+{
+	size_t pos = 0;
+	char *wptr;
+	unsigned int len = buf->len - pos > PBUF_SIZE/2 ? PBUF_SIZE/2 : buf->len - pos;
+
+	prep_buffer(DIV_ROUNDUP(len, 16));
+	while(buf->len - pos)
+	{
+		to_base16(pbuf, (unsigned char *)buf->buf + pos, len);
+		wptr = format_lines(fbuf + 2, pbuf, len * 2);
+		if(!output_write(as_fd, fbuf, wptr - fbuf))
+			return false;
+		pos += len;
+		len = buf->len - pos > PBUF_SIZE/2 ? PBUF_SIZE/2 : buf->len - pos;
+	}
+
+	return true;
 }
 
 static int dump_region(struct xf_buf *buf, int as_fd)
 {
 	static int e_sym = 0xA000;
-	size_t pos;
 	char *c_ptr;
 	char *w_ptr;
 
@@ -322,10 +451,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 	while((c_ptr = strchr(buf->name, '-')))
 		*c_ptr = '_';
 	if(opt_pack && !strcmp("sbox", buf->name))
-	{
-		puts("setze opt_pack null");
 		opt_pack = NULL;
-	}
 
 	/* add a leading underscore if coff */
 	if(COFF == as_dia) {
@@ -339,33 +465,18 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		w_ptr += sprintf(w_ptr, ".globl %s_base_data\n", buf->name);
 	}
 	w_ptr += sprintf(w_ptr, "%s_base_data:\n", buf->name);
-	for(pos = 0; (pos + 16) < buf->len; pos += 16)
-	{
-		if(w_ptr > (pbuf + PBUF_SIZE - 240))
-		{
-			if(verbose) {
-				if(w_ptr - pbuf != write(STDOUT_FILENO, pbuf, w_ptr - pbuf)) {
-				}
-			}
-			if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
-				return false;
-			w_ptr = pbuf;
-		}
-		w_ptr = dump_line(buf->buf + pos, w_ptr, 16);
-	}
-	w_ptr = dump_line(buf->buf + pos, w_ptr, buf->len - pos);
-	if(verbose) {
-		if(w_ptr - pbuf != write(STDOUT_FILENO, pbuf, w_ptr - pbuf)) {
-		}
-	}
-	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
+	if(!output_write(as_fd, pbuf, w_ptr - pbuf))
 		return false;
+
+	if(!hexdump_region(buf, as_fd))
+		return false;
+
 	if(COFF == as_dia) {
-		w_ptr  = pbuf + sprintf(pbuf, "\t.def %s_base_data\n\t\t.size . - %s_base_data\n", buf->name, buf->name);
+		w_ptr  = pbuf + sprintf(pbuf, "\n\t.def %s_base_data\n\t\t.size . - %s_base_data\n", buf->name, buf->name);
 		w_ptr += sprintf(w_ptr, "\t\t.scl 3\n");
 		w_ptr += sprintf(w_ptr, "\t\t.type 60\n\t.endef\n");
 	} else {
-		w_ptr  = pbuf + sprintf(pbuf, "\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
+		w_ptr  = pbuf + sprintf(pbuf, "\n\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
 		w_ptr += sprintf(w_ptr, "\t.type %s_base_data, %cobject\n", buf->name, GAS == as_dia ? '@' : '#');
 	}
 	if(!(export_base_data && no_tramp))
@@ -387,11 +498,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 			w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? '@' : '#');
 		}
 	}
-	if(verbose) {
-		if(w_ptr - pbuf != write(STDOUT_FILENO, pbuf, w_ptr - pbuf)) {
-		}
-	}
-	if((w_ptr - pbuf) != write(as_fd, pbuf, w_ptr - pbuf))
+	if(!output_write(as_fd, pbuf, w_ptr - pbuf))
 		return false;
 	return true;
 }
@@ -415,20 +522,17 @@ static void get_file(struct xf_buf *buf, const char *file_name)
 			tmp_len = st_buf.st_size;
 		else
 		{
-			if((off_t)-1 == (tmp_len = lseek(fd, 0, SEEK_END)))
-			{
+			if((off_t)-1 == (tmp_len = lseek(fd, 0, SEEK_END))) {
 				fprintf(stderr, __FILE__ ", " mkstr(__LINE__) ", finding filesize of '%s': %s\n", file_name, strerror(errno));
 				exit(EXIT_FAILURE);
 			}
-			if((off_t)-1 == lseek(fd, 0, SEEK_SET))
-			{
+			if((off_t)-1 == lseek(fd, 0, SEEK_SET)) {
 				fprintf(stderr, __FILE__ "," mkstr(__LINE__) ", rewinding file '%s': %s\n", file_name, strerror(errno));
 				exit(EXIT_FAILURE);
 			}
 		}
 
-		if(tmp_len > 0x7FFFFFFF)
-		{
+		if(tmp_len > 0x7FFFFFFF) {
 			fputs(__FILE__ ", " mkstr(__LINE__) ", do you really want to generate such large files?\n", stderr);
 			exit(EXIT_FAILURE);
 		}
@@ -436,14 +540,12 @@ static void get_file(struct xf_buf *buf, const char *file_name)
 	}
 
 #if _POSIX_MAPPED_FILES > 0
-	if(MAP_FAILED == (tmp_buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0)))
-	{
+	if(MAP_FAILED == (tmp_buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0))) {
 		fprintf(stderr, __FILE__ ", " mkstr(__LINE__) ", mmaping infile '%s': %s\n", file_name, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 #else
-	if(!(tmp_buf = malloc(len)))
-	{
+	if(!(tmp_buf = malloc(len))) {
 		fprintf(stderr, __FILE__ ", " mkstr(__LINE__) ", allocating memory for '%s':s %s\n", file_name, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -455,16 +557,12 @@ static void get_file(struct xf_buf *buf, const char *file_name)
 		{
 			ssize_t ret_val = read(fd, tmp_buf + len - tmp_len, tmp_len);
 
-			if(-1 == ret_val)
-			{
-				if(EINTR != errno)
-				{
+			if(-1 == ret_val) {
+				if(EINTR != errno) {
 					fprintf(stderr, __FILE__ ", " mkstr(__LINE__) ", reading '%s':s %s\n", file_name, strerror(errno));
 					exit(EXIT_FAILURE);
 				}
-			}
-			else if(0 == ret_val)
-			{
+			} else if(0 == ret_val) {
 				len -= tmp_len;
 				break;
 			}
