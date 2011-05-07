@@ -211,14 +211,8 @@ AUX = \
 	obs_build/debian.changelog \
 	obs_build/debian.control \
 	obs_build/debian.rules \
-	obs_build/g2cd-Debian_5.0.dsc \
-	obs_build/g2cd-Debian_Etch.dsc \
+	obs_build/g2cd.dsc \
 	obs_build/g2cd.spec \
-	obs_build/g2cd-xUbuntu_10.10.dsc \
-	obs_build/g2cd-xUbuntu_10.04.dsc \
-	obs_build/g2cd-xUbuntu_8.04.dsc \
-	obs_build/g2cd-xUbuntu_9.04.dsc \
-	obs_build/g2cd-xUbuntu_9.10.dsc \
 	obs_build/g2cd-xUbuntu_6.06.dsc
 
 #
