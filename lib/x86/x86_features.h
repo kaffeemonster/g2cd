@@ -154,6 +154,8 @@
 	FEATURE4( TOPOEXT   , 22, "Topology ext. CPUID leafs"         ), \
 	FEATURE5( FGSBASE   ,  0, "User Baseregister manipulation"    ), \
 	FEATURE5( BMI       ,  3, "Bit manipulation inst." /*tzcnt*/  ), \
+	FEATURE5( SMEP      ,  7, "Supervisor Mode NX"                ), \
+	FEATURE5( ERMS      ,  9, "Enhanced REP MOVSB/STOSB"          ), \
 	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
