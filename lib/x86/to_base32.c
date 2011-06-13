@@ -56,6 +56,46 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 };
 
 #ifdef HAVE_BINUTILS
+# if 0
+static unsigned char *do_40bit_bmi2(unsigned char *dst, uint64_t d1)
+{
+	uint64_t d2;
+#  if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
+	uint64_t m1;
+
+	asm ("pdep %2, %1, %0" : "=r" (d2) : "r" (d1), "r" (0x1F1F1F1F1F1F1F1FULL));
+	d1 = d2;
+
+	/* convert */
+	d1  += 0x6161616161616161ULL;
+	m1   = has_greater(d1, 0x7A);
+	m1 >>= 7;
+	m1   = 0x49 * m1;
+	d1  -= m1;
+	/* write out */
+	put_unaligned_be64(d1, dst);
+# else
+	uint32_t a1, a2;
+	uint32_t b1, b2;
+	uint32_t m1, m2;
+
+	asm ("pdep %2, %k1, %0" : "=r" (a2) : "r" (d1), "r" (0x1F1F1F1FUL));
+	asm ("pdep %2, %k1, %0" : "=r" (a1) : "r" (d1 >> 20), "r" (0x1F1F1F1FUL));
+
+	/* convert */
+	a1  += 0x61616161UL;          a2  += 0x61616161UL;
+	m1   = has_greater(a1, 0x7A); m2   = has_greater(a2, 0x7A);
+	m1 >>= 7;                     m2 >>= 7;
+	m1   = 0x49 * m1;             m2   = 0x49 * m2;
+	a1  -= m1;                    a2  -= m2;
+	/* write out */
+	put_unaligned_be32(a1, dst);
+	put_unaligned_be32(a2, dst+4);
+#  endif
+	return dst + 8;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len)
 {

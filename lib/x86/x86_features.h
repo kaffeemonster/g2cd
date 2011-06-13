@@ -83,7 +83,7 @@
 	FEATURE2( XTPR      , 14, "xTPR Update Control"               ), \
 	FEATURE2( PDCM      , 15, "Performance and Debug Capabillity" ), \
 	FEATURE2( RES_2_16  , 16, "Reserved"                          ), \
-	FEATURE2( RES_2_17  , 17, "Reserved"                          ), \
+	FEATURE2( PCID      , 17, "Process-context identifiers"       ), \
 	FEATURE2( DCA       , 18, "Direct Cache Access"               ), \
 	FEATURE2( SSE4_1    , 19, "SSE4.1 Extensions"                 ), \
 	FEATURE2( SSE4_2    , 20, "SSE4.2 Extensions"                 ), \
@@ -154,8 +154,11 @@
 	FEATURE4( TOPOEXT   , 22, "Topology ext. CPUID leafs"         ), \
 	FEATURE5( FGSBASE   ,  0, "User Baseregister manipulation"    ), \
 	FEATURE5( BMI       ,  3, "Bit manipulation inst." /*tzcnt*/  ), \
+	FEATURE5( AVX2      ,  5, "AVX2"                              ), \
 	FEATURE5( SMEP      ,  7, "Supervisor Mode NX"                ), \
+	FEATURE5( BMI2      ,  8, "BMI2"                              ), \
 	FEATURE5( ERMS      ,  9, "Enhanced REP MOVSB/STOSB"          ), \
+	FEATURE5( INVPCID   , 10, "Invalidate Process-context ID"     ), \
 	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
