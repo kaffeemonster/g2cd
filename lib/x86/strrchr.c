@@ -61,6 +61,7 @@
 
 #include "x86_features.h"
 
+#define SOV32	32
 #define SOV16	16
 #define SOV8	8
 
@@ -70,6 +71,114 @@ static noinline char *strrchr_null(const char *s, int c GCC_ATTR_UNUSED_PARAM)
 }
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static char *strrchr_AVX2(const char *s, int c)
+{
+	char *ret;
+	const char *p, *p_o;
+	size_t t, m;
+
+	asm (
+		/*
+		 * hate doing this, but otherwise the compiler thinks
+		 * he absolutly needs to put everything in the wrong
+		 * reg, so he better shuffeles it all around, and for
+		 * this he needs another reg, ohh, lets spill one...
+		 */
+		"mov	%5, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+#  ifdef __i386__
+		"vbroadcastb	%6, %%ymm2\n\t"
+#  else
+		"movd	%k6, %%ymm0\n\t"
+#  endif
+		"mov	%1, %2\n\t"
+		"and	%7*$-1, %1\n\t"
+		"and	%7-1, %2\n\t"
+		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
+#  ifndef __i386__
+		"vbroadcastb	%%ymm0, %%ymm2\n\t"
+#  endif
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm2, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"vpmovmskb	%%ymm3, %k3\n\t"
+		"shr	%b2, %0\n\t"
+		"shr	%b2, %3\n\t"
+		"shl	%b2, %0\n\t"
+		"shl	%b2, %3\n\t"
+		"vpxor	%%ymm4, %%ymm4, %%ymm4\n\t"
+		"mov	%1, %4\n\t"
+		"test	%0, %0\n\t"
+		"jnz	3f\n\t"
+		"test	%3, %3\n\t"
+		"jz	1f\n\t"
+		"vmovdqa	%%ymm3, %%ymm4\n"
+		"jmp	1f\n"
+		"6:\n\t"
+		"vpmovmskb	%%ymm4, %k2\n\t"
+		"test	%2, %2\n\t"
+		"jz	5f\n\t"
+		"bsr	%2, %0\n\t"
+		"mov	%4, %1\n"
+		"jmp	9f\n"
+		"5:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	10f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"vmovdqa	%c7(%1), %%ymm0\n\t"
+		"add	%7, %1\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm2, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vptest	%%ymm0, %%ymm1\n\t"
+		"jnc	2f\n\t"
+		"vptest	%%ymm3, %%ymm1\n\t"
+		"jc	1b\n\t"
+		"mov	%1, %4\n\t"
+		"vmovdqa	%%ymm3, %%ymm4\n\t"
+		"jmp	1b\n"
+		"2:\n\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"vpmovmskb	%%ymm3, %k3\n"
+		"3:\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsf	%0, %2\n\t"
+		"sub	%7, %2\n\t"
+		"neg	%2\n\t"
+		"shl	%b2, %k3\n\t"
+		"shr	%b2, %k3\n\t"
+		"test	%3, %3\n\t"
+		"jz	6b\n\t"
+		"bsr	%3, %0\n\t"
+		"9:\n\t"
+		"add	%1, %0\n"
+		"10:"
+		: /* %0 */ "=&a" (ret),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t),
+		  /* %3 */ "=&r" (m),
+		  /* %4 */ "=&r" (p_o)
+#  ifdef __i386__
+		: /* %5 */ "m" (s),
+		  /* %6 */ "m" (c),
+#  else
+		: /* %5 */ "r" (s),
+		  /* %6 */ "r" (c),
+#  endif
+		  /* %7 */ "i" (SOV32)
+#  ifdef __AVX__
+		: "ymm0", "ymm1", "ymm2", "ymm3", "ymm4"
+#  elif defined(__SSE__)
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
+#  endif
+	);
+	return ret;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 #if 0
 /* needs adaption to match the proper last elem */
@@ -609,6 +718,9 @@ static char *strrchr_x86(const char *s, int c)
 static __init_cdata const struct test_cpu_feature tfeat_strrchr[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))strrchr_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 #if 0
 	{.func = (void (*)(void))strrchr_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},

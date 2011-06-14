@@ -85,19 +85,46 @@ static char *strlpcpy_x86(char *dst, const char *src, size_t maxlen);
 		dst += SO32; \
 	}
 
-#ifndef __x86_64__
-# define cpy_one_u64(dst, src, i, maxlen) \
+#define cpy_one_u32_SSE2(dst, src, i, maxlen) \
+	if(likely(SO32M1 < i)) \
+	{ \
+		unsigned rsse; \
+		asm( \
+			"pxor	%%xmm0, %%xmm0\n\t" \
+			"movd	%2, %%xmm1\n\t" \
+			"pcmpeqb	%%xmm1, %%xmm0\n\t" \
+			"pmovmskb	%%xmm0, %0\n\t" \
+			"test	%0, %0\n\t" \
+			"jnz	1f\n\t" \
+			"movd	%%xmm1, %3\n" \
+			"1:\n" \
+		: /* %0 */ "=&r" (rsse), \
+		  /* %1 */ "=m" (*dst) \
+		: /* %2 */ "m" (*src), \
+		  /* %3 */ "m" (*dst) \
+		); \
+		if(likely(rsse)) { \
+			asm ("bsf %1, %0" : "=r" (rsse) : "r" (rsse) : "cc"); \
+			return cpy_rest0(dst, src, rsse); \
+		} \
+		i -= SO32; \
+		maxlen -= SO32; \
+		src += SO32; \
+		dst += SO32; \
+	}
+
+#define cpy_one_u64(dst, src, i, maxlen) \
 	if(likely(SOV8M1 < i)) \
 	{ \
 		unsigned rsse; \
 		asm( \
-			"pxor	%%mm0, %%mm0\n\t" \
-			"movq	%2, %%mm1\n\t" \
-			"pcmpeqb	%%mm1, %%mm0\n\t" \
-			"pmovmskb	%%mm0, %0\n\t" \
+			"pxor	%%xmm0, %%xmm0\n\t" \
+			"movq	%2, %%xmm1\n\t" \
+			"pcmpeqb	%%xmm1, %%xmm0\n\t" \
+			"pmovmskb	%%xmm0, %0\n\t" \
 			"test	%0, %0\n\t" \
 			"jnz	1f\n\t" \
-			"movq	%%mm1, %3\n" \
+			"movq	%%xmm1, %3\n" \
 			"1:\n" \
 		: /* %0 */ "=&r" (rsse), \
 		  /* %1 */ "=m" (*dst) \
@@ -113,23 +140,6 @@ static char *strlpcpy_x86(char *dst, const char *src, size_t maxlen);
 		src += SOV8; \
 		dst += SOV8; \
 	}
-#else
-# define cpy_one_u64(dst, src, i, maxlen) \
-	if(likely(SOSTM1 < i)) \
-	{ \
-		size_t c = *(const size_t *)src; \
-		size_t r64 = has_nul_byte(c); \
-		if(likely(r64)) { \
-			asm ("bsf %1, %0" : "=r" (r64) : "r" (r64) : "cc"); \
-			return cpy_rest0(dst, src, r64 / BITS_PER_CHAR); \
-		} \
-		*(size_t *)dst = c; \
-		i -= SOST; \
-		maxlen -= SOST; \
-		src += SOST; \
-		dst += SOST; \
-	}
-#endif
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
@@ -195,7 +205,7 @@ CPY_NEXT:
 		maxlen -= (cycles - i);
 	}
 	cpy_one_u64(dst, src, i, maxlen);
-	cpy_one_u32(dst, src, i, maxlen);
+	cpy_one_u32_SSE2(dst, src, i, maxlen);
 
 	/* slowly go over the page boundry */
 	for(; i && *src; i--, maxlen--)
@@ -270,7 +280,7 @@ CPY_NEXT:
 		maxlen -= (cycles - i);
 	}
 	cpy_one_u64(dst, src, i, maxlen);
-	cpy_one_u32(dst, src, i, maxlen);
+	cpy_one_u32_SSE2(dst, src, i, maxlen);
 
 	/* slowly go over the page boundry */
 	for(; i && *src; i--, maxlen--)
@@ -342,7 +352,32 @@ CPY_NEXT:
 		}
 		maxlen -= (cycles - i);
 	}
-	cpy_one_u32(dst, src, i, maxlen);
+	if(likely(SO32M1 < i))
+	{
+		unsigned rsse;
+		asm( \
+			"pxor	%%mm0, %%mm0\n\t"
+			"movd	%2, %%mm1\n\t"
+			"pcmpeqb	%%mm1, %%mm0\n\t"
+			"pmovmskb	%%mm0, %0\n\t"
+			"test	%0, %0\n\t"
+			"jnz	1f\n\t"
+			"movd	%%mm1, %3\n"
+			"1:\n"
+		: /* %0 */ "=&r" (rsse),
+		  /* %1 */ "=m" (*dst)
+		: /* %2 */ "m" (*src),
+		  /* %3 */ "m" (*dst)
+		);
+		if(likely(rsse)) {
+			asm ("bsf %1, %0" : "=r" (rsse) : "r" (rsse) : "cc");
+			return cpy_rest0(dst, src, rsse);
+		}
+		i -= SO32;
+		maxlen -= SO32;
+		src += SO32;
+		dst += SO32;
+	}
 
 	/* slowly go over the page boundry */
 	for(; i && *src; i--, maxlen--)

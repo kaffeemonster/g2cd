@@ -61,10 +61,81 @@
 
 #include "x86_features.h"
 
+#define SOV32	32
 #define SOV16	16
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static char *strchrnul_AVX2(const char *s, int c)
+{
+	char *ret;
+	const char *p;
+	size_t t;
+
+	asm (
+		/*
+		 * hate doing this, but otherwise the compiler thinks
+		 * he absolutly needs to put everything in the wrong
+		 * reg, so he better shuffeles it all around, and for
+		 * this he needs another reg, ohh, lets spill one...
+		 */
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+#  ifdef __i386__
+		"vbroadcastb	%4, %%ymm2\n\t"
+#  else
+		"movd	%k4, %%ymm0\n\t"
+#  endif
+		"mov	%1, %2\n\t"
+		"and	$-32, %1\n\t"
+		"and	$0x1f, %2\n\t"
+		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
+#  ifndef __i386__
+		"vbroadcastb	%%xmm0, %%ymm2\n\t"
+#  endif
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm2, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpor	%%ymm0, %%xmm3, %%xmm0\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
+		"test	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"vmovdqa	32(%1), %%ymm0\n\t"
+		"add	$32, %1\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm2, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpor	%%ymm0, %%ymm3, %%ymm0\n\t"
+		"vptest	%%ymm0, %%ymm1\n\t"
+		"jc	1b\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
+		"2:"
+		"bsf	%0, %0\n\t"
+		"add	%1, %0\n\t"
+		: /* %0 */ "=&r" (ret),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#  ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "m" (c)
+#  else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#  endif
+#  ifdef __AVX__
+		: "ymm0", "ymm1", "ymm2", "ymm3"
+#  elif defined(__SSE__)
+		: "xmm0", "xmm1", "xmm2", "xmm3"
+#  endif
+	);
+	return ret;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 static char *strchrnul_SSE42(const char *s, int c)
 {
@@ -127,7 +198,7 @@ static char *strchrnul_SSE42(const char *s, int c)
 }
 # endif
 
-#if HAVE_BINUTILS >= 217
+# if HAVE_BINUTILS >= 217
 static char *strchrnul_SSSE3(const char *s, int c)
 {
 	char *ret;
@@ -421,6 +492,9 @@ static char *strchrnul_x86(const char *s, int c)
 static __init_cdata const struct test_cpu_feature tfeat_strchrnul[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))strchrnul_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strchrnul_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif

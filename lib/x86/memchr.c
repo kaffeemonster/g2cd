@@ -61,10 +61,119 @@
 
 #include "x86_features.h"
 
+#define SOV32	32
 #define SOV16	16
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static void *memchr_AVX2(const void *s, int c, size_t n)
+{
+	const unsigned char *p;
+	void *ret;
+	size_t f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+#  ifndef __x86_64__
+		"vbroadcastb	%5, %%ymm1\n\t"
+#  else
+		"movd	%k5, %%ymm2\n\t"
+#  endif
+		"vpxor	%%ymm0, %%ymm0, %%ymm0\n\t"
+#  ifdef __x86_64__
+		"vbroadcastb	%%ymm2, %%ymm1\n\t"
+#  endif
+		"mov	%7, %k2\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"sub	%k3, %k2\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
+		"neg	%2\n\t"
+		"add	%7, %1\n\t"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"xor	%0, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"vmovdqa	%%ymm2, %%ymm0\n\t"
+		"add	%7, %1\n"
+		"10:\n\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"jmp	4f\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vmovdqa	%c7(%1), %%ymm2\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm1, %%ymm2\n\t"
+		"vptest	%%ymm0, %%ymm0\n\t"
+		"jnz	10b\n\t"
+		"vptest	%%ymm2, %%ymm2\n\t"
+		"jnz	8b\n"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vptest	%%ymm0, %%ymm0\n\t"
+		"jnz	10b\n\t"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
+		"shl	%b3, %k0\n\t"
+		"shr	%b3, %k0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
+	: /* %0 */ "=&a" (ret),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=&c" (f)
+	: 
+#  ifndef __x86_64__
+	  /* %4 */ "m" (n),
+	  /* %5 */ "m" (c),
+#  else
+	  /* %4 */ "r" (n),
+	  /* %5 */ "r" (c),
+#  endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV32)),
+	  /* %7 */ "i" (SOV32),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV32))
+#  ifdef __AVX__
+	: "ymm0", "ymm1", "ymm2"
+#  elif defined(__SSE__)
+	: "xmm0", "xmm1", "xmm2"
+#  endif
+	);
+	return ret;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 # if 0
 static void *memchr_SSE42(const void *s, int c, size_t n)
@@ -571,6 +680,9 @@ static void *memchr_x86(const void *s, int c, size_t n)
 static __init_cdata const struct test_cpu_feature tfeat_my_memchr[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))memchr_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 #if 0
 // TODO: advanced code is buggy ATM

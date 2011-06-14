@@ -68,8 +68,28 @@
 #define SOV8M1	(SOV8-1)
 #define SOV16	16
 #define SOV16M1	(SOV16-1)
+#define SOV32	32
+#define SOV32M1	(SOV32-1)
+
+static const struct {
+	char d[SOV32];
+} y GCC_ATTR_ALIGNED(SOV32) =
+{{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
+  '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
+  '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
+  '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'}};
+static const struct {
+	char d[SOV32];
+} z GCC_ATTR_ALIGNED(SOV32) =
+{{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
+  '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
+  '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
+  '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'}};
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static void *mem_searchrn_AVX2(void *src, size_t len);
+# endif
 # if HAVE_BINUTILS >= 218
 static void *mem_searchrn_SSE42(void *src, size_t len);
 # endif
@@ -81,6 +101,127 @@ static void *mem_searchrn_SSE(void *src, size_t len);
 static void *mem_searchrn_x86(void *src, size_t len);
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static void *mem_searchrn_AVX2(void *s, size_t len)
+{
+	char *p, *f;
+	ssize_t k;
+	size_t rr, t;
+
+	asm (
+		"prefetcht0	(%1)\n\t"
+		"test	%7, %7\n\t" /* len NULL? */
+#  ifdef __x86_64__
+		"cmovz	%7, %0\n\t" /* create NULL */
+#  endif
+		"jz	9f\n\t" /* outa here */
+		"test	%1, %1\n\t" /* src NULL? */
+		"cmovz	%1, %0\n\t" /* create NULL */
+		"jz	9f\n\t" /* outa here */
+		"vmovdqa	%8, %%ymm0\n\t" /* load search strings */
+		"vmovdqa	%9, %%ymm1\n\t"
+		"mov	%1, %2\n\t" /* duplicate src */
+		"and	$31, %2\n\t" /* create align difference */
+		"and	$-32, %1\n\t" /* align down src */
+		"vmovdqa	(%1), %%ymm3\n\t" /* load data */
+		"vmovdqa	%%ymm3, %%ymm2\n\t"
+		"sub	%2, %4\n\t" /* k -= align diff */
+		"vpcmpeqb	%%ymm3, %%ymm1, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm2\n\t"
+		"vpsrldq	$1, %%ymm3, %%ymm3\n\t" /* shift '\n' one down */
+		"sub	%7, %4\n\t" /* k -= len */
+		"vpmovmskb	%%ymm3, %3\n\t"
+		"vpmovmskb	%%ymm2, %0\n\t"
+		"ja	6f\n\t" /* k > 0 ? -> we are done */
+		"shr	%b2, %0\n\t" /* mask out lower stuff */
+		"shl	%b2, %0\n\t"
+		"xchg	%3, %0\n\t" /* copy rr to last_rr */
+		"and	%3, %0\n\t" /* put rn together with rr */
+		"bsf	%0, %0\n\t" /* create index */
+		"jnz	7f\n\t" /* match? -> out */
+		"neg	%4\n\t" /* restore len */
+		"jmp	3f\n\t" /* jump in loop */
+		".p2align 2\n"
+		"1:\n\t"
+		"sub	$32, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"3:\n\t"
+		"shr	$31, %k3\n\t" /* pull high bit down */
+		"vmovdqa	32(%1), %%ymm2\n\t" /* load next data */
+		"vmovdqa	%%ymm2, %%ymm3\n\t" /* load next data */
+		"add	$32, %1\n\t" /* p += SOV32 */
+		"vpcmpeqb	%%ymm3, %%ymm1, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm2\n\t"
+		"vpmovmskb	%%ymm3, %k2\n\t"
+		"and	%k2, %k3\n\t" /* match between rn and last_rr? */
+		"neg	%k3\n\t"
+		"cmovc	%k3, %k0\n\t"
+		"jc	7f\n\t"
+		"vpmovmskb	%%ymm2, %k0\n\t"
+		"shr	$1, %k2\n\t"
+		"cdq\n\t" /* copy high bit */
+		"and	%k2, %k0\n\t" /* generate match */
+		"jz	1b\n\t" /* no bits overlapped? -> continue loop */
+		"sub	$32, %4\n\t" /* buffer space left? */
+		"jb	4f\n" /* are we at the buffer end? -> adjust mask */
+		"2:\n\t"
+		"bsf	%0, %0\n\t" /* find index */
+		"cmovz	%0, %1\n" /* no match, set p to zero */
+		"7:\n\t"
+		"add	%1, %0\n\t" /* add match index to p */
+		/*
+		 * done!
+		 * out
+		 */
+#  ifdef __ELF__
+		".subsection 2\n\t"
+#  else
+		"jmp	9f\n\t"
+#  endif
+		".p2align 2\n"
+		"4:\n\t"
+		"neg	%4\n\t" /* correct k's sign ;) */
+		"jmp	10f\n\t"
+		".p2align 1\n"
+		"6:\n\t"
+		"and	%3, %0\n\t" /* see if an '\n' matches */
+		"shr	%b2, %0\n\t" /* cut mask lower bits */
+		"shl	%b2, %0\n"
+		"10:\n\t"
+		"mov	%4, %2\n\t" /* get k */
+		"shl	%b2, %k0\n\t" /* cut mask upper bits */
+		"shr	%b2, %k0\n\t"
+		"jmp 2b\n\t"/* back to generate result */
+#  ifdef __ELF__
+		".previous\n"
+#  endif
+		"9:"
+	: /*  %0 */ "=a" (p),
+	  /*  %1 */ "=r" (f),
+	  /*  %2 */ "=c" (rr),
+	  /*  %3 */ "=d" (k),
+	  /*  %4 */ "=r" (t)
+	: /*  %5 */ "4" (SOV32),  /* k = SOV32 */
+	  /*  %6 */ "1" (s),
+#  ifndef __x86_64__
+	  /*  %7 */ "0" (len),
+#  else
+	  /* amd64 has enough call clobbered regs not to spill */
+	  /*  %7 */ "r" (len),
+#  endif
+	  /*  %8 */ "m" (y),
+	  /*  %9 */ "m" (z)
+#  ifdef __AVX__
+	: "ymm0", "ymm1", "ymm2", "ymm3"
+#  elif defined(__SSE__)
+	: "xmm0", "xmm1", "xmm2", "xmm3"
+#  endif
+	);
+
+	return p;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 static void *mem_searchrn_SSE42(void *s, size_t len)
 {
@@ -179,12 +320,6 @@ static void *mem_searchrn_SSE42(void *s, size_t len)
 
 static void *mem_searchrn_SSE2(void *s, size_t len)
 {
-	static const char y[SOV16] GCC_ATTR_ALIGNED(SOV16) =
-		{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r',
-		 '\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
-	static const char z[SOV16] GCC_ATTR_ALIGNED(SOV16) =
-		{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n',
-		 '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
 	char *p, *f;
 	ssize_t k;
 	size_t rr, t;
@@ -290,8 +425,8 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 	  /* amd64 has enough call clobbered regs not to spill */
 	  /*  %7 */ "r" (len),
 #endif
-	  /*  %8 */ "m" (*y),
-	  /*  %9 */ "m" (*z)
+	  /*  %8 */ "m" (y),
+	  /*  %9 */ "m" (z)
 #ifdef __SSE__
 	: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
@@ -303,10 +438,6 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 #ifndef __x86_64__
 static void *mem_searchrn_SSE(void *s, size_t len)
 {
-	static const char y[SOV8] GCC_ATTR_ALIGNED(SOV8) =
-		{'\r', '\r', '\r', '\r', '\r', '\r', '\r', '\r'};
-	static const char z[SOV8] GCC_ATTR_ALIGNED(SOV8) =
-		{'\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'};
 	char *p, *f;
 	ssize_t k;
 	size_t rr, t;
@@ -404,8 +535,8 @@ static void *mem_searchrn_SSE(void *s, size_t len)
 	: /*  %5 */ "4" (SOV8),  /* k = SOV8 */
 	  /*  %6 */ "1" (s),
 	  /*  %7 */ "0" (len),
-	  /*  %8 */ "m" (*y),
-	  /*  %9 */ "m" (*z)
+	  /*  %8 */ "m" (y),
+	  /*  %9 */ "m" (z)
 #ifdef __SSE__
 	: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
@@ -493,6 +624,9 @@ void *mem_searchrn_x86(void *s, size_t len)
 static __init_cdata const struct test_cpu_feature tfeat_mem_searchrn[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))mem_searchrn_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))mem_searchrn_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif

@@ -66,10 +66,57 @@
 
 #include "x86_features.h"
 
+#define SOV32	32
 #define SOV16	16
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static size_t tstrlen_AVX2(const tchar_t *s)
+{
+	size_t len;
+	const tchar_t *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	asm (
+		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqw	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"vmovdqa	32(%1), %%ymm0\n\t"
+		"add	$32, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"vpcmpeqw	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vptest	%%ymm0, %%ymm1\n\t"
+		"jc	1b\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%2, %0\n\t"
+		"2:"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p)
+#  ifdef __i386__
+		: /* %2 */ "m" (s),
+#  else
+		: /* %2 */ "r" (s),
+#  endif
+		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV32)),
+		  /* %4 */ "1" (ALIGN_DOWN(s, SOV32))
+#  ifdef __AVX__
+		: "ymm0", "ymm1"
+#  elif defined(__SSE__)
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return len / sizeof(tchar_t);
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 static size_t tstrlen_SSE42(const tchar_t *s)
 {
@@ -282,6 +329,9 @@ static size_t tstrlen_x86(const tchar_t *s)
 static __init_cdata const struct test_cpu_feature tfeat_tstrlen[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))tstrlen_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))tstrlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
 # endif

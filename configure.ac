@@ -502,6 +502,9 @@ if test x"$as_tst_needed" != xno; then
 		AS_CHECK_FEATURE(SSE4.2, as_cv_sse42_tst, [-c], [pcmpestri $0b0010100, (%eax), %xmm1], [susp_binutils=218])
 		if test x"$as_cv_sse42_tst" != xno; then
 			AS_CHECK_FEATURE(AVX, as_cv_avx_tst, [-c], [vandpd %ymm0, %ymm1, %ymm0], [susp_binutils=219])
+			if test x"$as_cv_avx_tst" != xno; then
+				AS_CHECK_FEATURE(AVX2, as_cv_avx2_tst, [-c], [vpxor %ymm0, %ymm1, %ymm0], [susp_binutils=222])
+			fi
 		fi
 	fi
 fi

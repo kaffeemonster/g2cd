@@ -30,10 +30,11 @@
 #include "x86_features.h"
 
 #ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 218
-static void strreverse_l_SSE41(char *begin, char *end);
+# if HAVE_BINUTILS >= 222
+static void strreverse_l_AVX2(char *begin, char *end);
 # endif
 # if HAVE_BINUTILS >= 217
+static void strreverse_l_SSSE3(char *begin, char *end);
 static void strreverse_l_SSE3(char *begin, char *end);
 # endif
 #endif
@@ -42,23 +43,121 @@ static void strreverse_l_SSE2(char *begin, char *end);
 static void strreverse_l_SSE(char *begin, char *end);
 #endif
 
-static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
+static const struct {
+	unsigned char d[16];
+} vals GCC_ATTR_ALIGNED(16) =
 {
 	/* 1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16 */
 	{0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00},
 };
 
 #ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 218
-static void strreverse_l_SSE41(char *begin, char *end)
+# if HAVE_BINUTILS >= 222
+static void strreverse_l_AVX2(char *begin, char *end)
 {
 	char *t;
 
 	asm (
+#  ifndef __x86_64__
+			"lea	-15(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	4f\n"
+			"vmovdqa	%3, %%xmm4\n\t"
+#  endif
 			"lea	-31(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
 			"jae	2f\n\t"
+#  ifndef __x86_64__
+			"vmovdqa	%3, %%xmm4\n\t"
+#  endif
+			"lea	-63(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	3f\n\t"
+			"vperm2i128	$0, %%ymm4, %%ymm4, %%ymm4\n\t"
+			".p2align 2\n"
+			"1:\n\t"
+			"vlddqu	-31(%1), %%ymm0\n\t"       /* fetch input data */
+			"vlddqu	(%0), %%ymm2\n\t"
+			/* swab endianess */
+			"vpshufb	%%ymm4, %%ymm0, %%ymm0\n\t"
+			"vpshufb	%%ymm4, %%ymm2, %%ymm2\n\t"
+			"vperm2i128	$1, %%ymm0, %%ymm0, %%ymm0\n\t"
+			"vperm2i128	$1, %%ymm2, %%ymm2, %%ymm2\n\t"
+			"vmovdqu	%%ymm0, (%0)\n\t"
+			"add	$32, %0\n\t"
+			"vmovdqu	%%ymm2, -31(%1)\n\t"
+			"sub	$32, %1\n\t"
+			"lea	-63(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jb	1b\n"
+			"lea	-31(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	5f\n"
+			"3:\n\t"
+			"vlddqu	-15(%1), %%xmm0\n\t"       /* fetch input data */
+			"vlddqu	(%0), %%xmm2\n\t"
+			/* swab endianess */
+			"vpshufb	%%ymm4, %%ymm0, %%ymm0\n\t"
+			"vpshufb	%%ymm4, %%ymm2, %%ymm2\n\t"
+			"vmovdqu	%%xmm0, (%0)\n\t"
+			"add	$16, %0\n\t"
+			"vmovdqu	%%xmm2, -15(%1)\n\t"
+			"sub	$16, %1\n"
+			"5:\n\t"
+#  ifndef __x86_64__
+			"lea	-15(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	4f\n"
+#  endif
+			"2:\n\t"
+#  ifndef __x86_64__
+			"vmovq	-7(%1), %%xmm0\n\t"       /* fetch input data */
+			"vmovq	(%0), %%xmm2\n\t"
+			/* swab mask */
+			"vpshufd	$0x4E, %%xmm4, %%xmm4\n\t"
+			/* swab endianess */
+			"vpshufb	%%xmm4, %%xmm0, %%xmm0\n\t"
+			"vpshufb	%%xmm4, %%xmm2, %%xmm2\n\t"
+			"vmovq	%%xmm0, (%0)\n\t"
+			"add	$8, %0\n\t"
+			"vmovq	%%xmm2, -7(%1)\n\t"
+			"sub	$8, %1\n\t"
+			"4:"
+#  endif
+		: /* %0 */ "=r" (begin),
+		  /* %1 */ "=r" (end),
+		  /* %2 */ "=r" (t)
+		: /* %3 */ "m" (vals),
+		  /*    */ "0" (begin),
+		  /*    */ "1" (end)
+#  ifdef __AVX__
+		: "ymm0", "ymm1", "ymm2", "ymm3", "ymm4"
+#  elif defined(__SSE__)
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
+#  endif
+	);
+	strreverse_l_generic(begin, end);
+}
+# endif
+
+# if HAVE_BINUTILS >= 218
+static void strreverse_l_SSSE3(char *begin, char *end)
+{
+	char *t;
+
+	asm (
+#  ifndef __x86_64__
+			"lea	-15(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	4f\n"
 			"movdqa	%3, %%xmm4\n\t"
+#  endif
+			"lea	-31(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	2f\n\t"
+#  ifdef __x86_64__
+			"movdqa	%3, %%xmm4\n\t"
+#  endif
 			".p2align 2\n"
 			"1:\n\t"
 			"lddqu	-15(%1), %%xmm0\n\t"       /* fetch input data */
@@ -73,42 +172,35 @@ static void strreverse_l_SSE41(char *begin, char *end)
 			"lea	-31(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
 			"jb	1b\n"
-			"2:\n\t"
-#ifndef __x86_64__
+#  ifndef __x86_64__
 			"lea	-15(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
 			"jae	4f\n"
-			"3:\n\t"
+#  endif
+			"2:\n\t"
+#  ifndef __x86_64__
 			"movq	-7(%1), %%xmm0\n\t"       /* fetch input data */
 			"movq	(%0), %%xmm2\n\t"
+			/* swab mask */
+			"pshufd	$0x4E, %%xmm4, %%xmm4\n\t"
 			/* swab endianess */
-// TODO: pshufd the mask, pshufb the bytes
-			/* or put all bytes into one reg hi/lo */
-			"movdqa	%%xmm0, %%xmm1\n\t"
-			"movdqa	%%xmm2, %%xmm3\n\t"
-			"psrlw	$8, %%xmm0\n\t"
-			"psrlw	$8, %%xmm2\n\t"
-			"psllw	$8, %%xmm1\n\t"
-			"psllw	$8, %%xmm3\n\t"
-			"por	%%xmm1, %%xmm0\n\t"
-			"por	%%xmm3, %%xmm2\n\t"
-			"pshuflw	$0x1b, %%xmm0, %%xmm0\n\t"
-			"pshuflw	$0x1b, %%xmm2, %%xmm2\n\t"
+			"pshufb	%%xmm4, %%xmm0\n\t"
+			"pshufb	%%xmm4, %%xmm2\n\t"
 			"movq	%%xmm0, (%0)\n\t"
 			"add	$8, %0\n\t"
 			"movq	%%xmm2, -7(%1)\n\t"
 			"sub	$8, %1\n\t"
 			"4:"
-#endif
+#  endif
 		: /* %0 */ "=r" (begin),
 		  /* %1 */ "=r" (end),
 		  /* %2 */ "=r" (t)
-		: /* %3 */ "m" (vals[0][0]),
+		: /* %3 */ "m" (vals),
 		  /*    */ "0" (begin),
 		  /*    */ "1" (end)
-#ifdef __SSE__
+#  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
-#endif
+#  endif
 	);
 	strreverse_l_generic(begin, end);
 }
@@ -307,10 +399,11 @@ static void strreverse_l_SSE(char *begin, char *end)
 static __init_cdata const struct test_cpu_feature tfeat_strreverse_l[] =
 {
 #ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 218
-	{.func = (void (*)(void))strreverse_l_SSE41,   .features = {[1] = CFB(CFEATURE_SSE4_1)}},
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))strreverse_l_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))strreverse_l_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},
 	{.func = (void (*)(void))strreverse_l_SSE3,    .features = {[1] = CFB(CFEATURE_SSE3)}},
 # endif
 #endif
