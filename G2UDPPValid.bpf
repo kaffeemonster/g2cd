@@ -1,0 +1,53 @@
+;
+; G2UDPPValid.bpf
+; berkely packet filter program to prefilter packets on the udp socket
+;
+; Copyright (c) 2011 Jan Seiffert
+;
+; This file is part of g2cd.
+;
+; g2cd is free software; you can redistribute it and/or modify
+; it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3
+; of the License, or (at your option) any later version.
+;
+; g2cd is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public
+; License along with g2cd.
+; If not, see <http://www.gnu.org/licenses/>.
+;
+; $Id:$
+;
+
+; TODO: we could filter for priv/bogus addresses
+; but then there would be no override possible + it would may be expensive
+; + we want to optimize it
+; Esp. since this is a socket filter on non-raw sockets, can we still access
+; the IP header?
+;
+
+; TODO: we could drop the length check, since we access the 8 byte afterwards
+;  But how good translates this in the JIT + if there are really a lot of to small packets this hits early
+	ld	#len						; load packet len
+	jge	#UDP_RELIABLE_LENGTH + 8, #next, DROP		; if packet < G2_MIN_LEN + UDP_HDR_LEN goto grop
+	ld	[8]						; load complete first 4 byte
+; TODO: loaded data should be in host byte order, but it isn't ?
+	and	#0xffffff00					; mask first 3 byte
+	jeq	#0x474e4400, #next, DROP			; if first 3 byte != "GND" goto drop
+	ldb	[15]						; get count
+; TODO: since we are not really interrestet in ACKs (count == 0), we could drop them
+	jgt	#0, #next, ACCEPT				; if count == 0 goto accept
+	ldb	[11]						; load the flags
+	jset	#FLAG_ACK, ACCEPT, #next			; if ack is set goto accept
+	ld	#len						; load packet len
+; TODO: on single part packets we could check for MIN_PACKET_LENGTH
+	jge	#UDP_RELIABLE_LENGTH + 8 + 1, #next, DROP	; if there isn't a single byte of data in this packet goto drop
+ACCEPT:
+	ld	#len						; load packet len
+	ret	a						; accept whole packet
+DROP:
+	ret	#0						; drop packet

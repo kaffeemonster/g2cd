@@ -1865,43 +1865,16 @@ static void udp_setup_filter(some_fd udp_so, union combo_addr *our_addr)
 	 * interpreter, except 2.6.39 which grew a JIT), but these are a few
 	 * simple tests (13 ops here), and if they "hit", we can save a
 	 * taskswitch and a copy to userspace. This becomes important under
-	 * DOS (OK, now your DOS packets have to be a little more elaborate).
+	 * DoS (OK, now your DoS packets have to be a little more elaborate).
 	 *
 	 * If this fails or is not avail., it's OK.
 	 */
-// TODO: we could filter for priv/bogus addresses
-	/* but then there would be no override possible + it would may be expensive
-	 * + we want to optimize it
-	 */
-# define DROP_INSN 13
-# define ACCE_INSN 11
+# include "G2UDPPValid.h"
 	struct bpf_program prg;
-	struct bpf_insn insns[] = {
-// TODO: we could drop the length check, since we access the 8 byte afterwards
-	/* But how good translates this in the JIT + if there are really a lot of to small packets this hits early */
-	/*  0 */ BPF_STMT(BPF_LD|BPF_W|BPF_LEN, 0), /* load packet length */
-
-	/*  1 */ BPF_JUMP(BPF_JMP|BPF_JGE|BPF_K, UDP_RELIABLE_LENGTH + 8, 0, DROP_INSN-2), /* if packet len < G2_MINLEN+UDP_HDR_LEN goto drop */
-	/*  2 */ BPF_STMT(BPF_LD|BPF_W|BPF_ABS, 8), /* load complete first 4 byte */
-// TODO: loaded data should be in host byte order, but it isn't ?
-	/*  3 */ BPF_STMT(BPF_ALU|BPF_AND|BPF_K, 0xffffff00), /* mask first 3 byte */
-	/*  4 */ BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, 0x474e4400, 0, DROP_INSN-5), /* if first 3 byte != "GND" goto drop */
-	/*  5 */ BPF_STMT(BPF_LD|BPF_B|BPF_ABS, 15), /* get count */
-// TODO: since we are not really interrestet in ACKs (count == 0), we could drop them
-	/*  6 */ BPF_JUMP(BPF_JMP|BPF_JGT|BPF_K, 0, 0, ACCE_INSN-7), /* if count == 0 goto accept */
-	/*  7 */ BPF_STMT(BPF_LD|BPF_B|BPF_ABS, 11), /* load the flags */
-	/*  8 */ BPF_JUMP(BPF_JMP|BPF_JSET|BPF_K, FLAG_ACK, ACCE_INSN-9, 0), /* if ack is set goto accept */
-	/*  9 */ BPF_STMT(BPF_LD|BPF_W|BPF_LEN, 0), /* load packet length */
-// TODO: on single part packets we could check for MIN_PACKET_LENGTH
-	/* 10 */ BPF_JUMP(BPF_JMP|BPF_JGE|BPF_K, UDP_RELIABLE_LENGTH + 8 + 1, 0, DROP_INSN-11), /* if there isn't a single byte of data in this packet goto drop */
-	/* 11 */ BPF_STMT(BPF_LD|BPF_W|BPF_LEN, 0), /* load packet length */
-	/* 12 */ BPF_STMT(BPF_RET|BPF_A, 0), /* accept complete packet */
-	/* 13 */ BPF_STMT(BPF_RET|BPF_K, 0), /* drop packet */
-	};
 	int ret_val;
 
-	prg.bf_len   = anum(insns);
-	prg.bf_insns = insns;
+	prg.bf_len   = anum(G2UDPPValid);
+	prg.bf_insns = G2UDPPValid;
 
 	ret_val = setsockopt(udp_so, SOL_SOCKET, SO_ATTACH_FILTER, &prg, sizeof(prg));
 	if (ret_val)

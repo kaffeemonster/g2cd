@@ -134,6 +134,7 @@ HEADS = \
 	G2Acceptor.h \
 	G2Handler.h \
 	G2UDP.h \
+	G2UDPPValid.h \
 	G2HeaderStrings.h \
 	G2Connection.h \
 	G2ConHelper.h \
@@ -199,6 +200,8 @@ AUX = \
 	config.guess \
 	config.sub \
 	install-sh \
+	bpfasm.py \
+	G2UDPPValid.bpf \
 	m4/acx_pthread.m4 \
 	m4/ax_check_linker_flags.m4 \
 	m4/ax_check_compiler_flags.m4 \
@@ -467,7 +470,7 @@ clean: eclean
 distclean: libdclean zlibdclean clean
 	-$(RM) config.status config.log config_auto.h config_auto.make version.h tags cscope.out TODO stubmakerz core gmon.out  *.bb *.bbg *.da *.i *.s *.bin *.rtl
 edistclean: distclean
-	$(RM) G2PacketTyper.h
+	$(RM) G2PacketTyper.h G2HeaderFields.h G2UDPPValid.h
 
 #	generate dependencies on whish
 #depend: $(DEPENDS)
@@ -621,6 +624,9 @@ G2PacketTyper.h: G2PacketTyperGenerator ccdrv
 G2HeaderFields.h: G2HeaderFieldsSort ccdrv
 	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./G2HeaderFieldsSort $@"
 
+G2UDPPValid.h: G2UDPPValid.bpf bpfasm.py ccdrv
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./bpfasm.py G2UDPPValid.bpf > $@"
+
 #	Batch-creation of version-info
 version.h: Makefile
 	@$(PORT_PR)	"\tCREATE[$@]\n"; \
@@ -653,7 +659,7 @@ data.o: sbox.bin bin2o
 G2MainServer.o: G2Handler.h G2Connection.h G2ConRegistry.h G2KHL.h G2GUIDCache.h G2QueryKey.h timeout.h idbus.h lib/hzp.h lib/atomic.h lib/backtrace.h lib/config_parser.h lib/my_bitopsm.h version.h builtin_defaults.h
 G2Acceptor.o: G2Acceptor.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2KHL.h gup.h lib/recv_buff.h lib/combo_addr.h lib/my_epoll.h lib/atomic.h lib/itoa.h
 G2Handler.o: G2Handler.h G2Connection.h G2ConHelper.h G2ConRegistry.h G2Packet.h G2PacketSerializer.h lib/recv_buff.h lib/my_epoll.h lib/hzp.h
-G2UDP.o: G2UDP.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
+G2UDP.o: G2UDP.h G2UDPPValid.h G2Packet.h G2PacketSerializer.h G2QHT.h gup.h lib/my_bitopsm.h lib/atomic.h lib/recv_buff.h lib/udpfromto.h lib/hzp.h
 G2Connection.o: G2Connection.h G2QHT.h G2ConRegistry.h G2KHL.h G2HeaderFields.h lib/recv_buff.h lib/atomic.h lib/hzp.h
 G2ConHelper.o: G2ConHelper.h G2ConRegistry.h G2Connection.h G2QHT.h lib/my_epoll.h lib/atomic.h lib/recv_buff.h 
 G2ConRegistry.o: G2ConRegistry.h G2Connection.h G2QHT.h lib/combo_addr.h lib/hlist.h lib/hthash.h lib/hzp.h
