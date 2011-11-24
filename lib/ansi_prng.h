@@ -2,7 +2,7 @@
  * ansi_prng.h
  * Pseudo random number generator according to ANSI X9.31
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,5 +33,6 @@
 # define RAND_BLOCK_BYTE 16
 
 LIB_ANSI_PRNG_EXTRN(void random_bytes_get(void *ptr, size_t len));
+LIB_ANSI_PRNG_EXTRN(void random_bytes_rekey(const char data[RAND_BLOCK_BYTE]));
 LIB_ANSI_PRNG_EXTRN(void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2]));
 #endif

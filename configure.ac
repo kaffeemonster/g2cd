@@ -722,6 +722,9 @@ AC_CHECK_TYPE([struct in_pktinfo], [AC_DEFINE(HAVE_IP_PKTINFO, 1, do we have pkt
 # include <ws2tcpip.h>
 #endif]])
 AC_CHECK_TYPE([struct in6_pktinfo], [AC_DEFINE(HAVE_IP6_PKTINFO, 1, do we have pktinfo v6)],[], [[#ifndef WIN32
+# ifdef __APPLE__
+#  define __APPLE_USE_RFC_3542
+# endif
 # include <netinet/in.h>
 #else
 # include <winsock2.h>

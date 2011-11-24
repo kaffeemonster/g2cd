@@ -70,7 +70,7 @@ void guid_generate(unsigned char out[GUID_SIZE])
 
 void guid_tick(void)
 {
-	unsigned char key[16];
+	unsigned char key[RAND_BLOCK_BYTE];
 
 	/* get random bytes for a key */
 	random_bytes_get(&key, sizeof(key));

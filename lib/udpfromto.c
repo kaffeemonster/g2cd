@@ -36,6 +36,12 @@
  * Version: $Id: udpfromto.c,v 1.4.4.1 2006/03/15 15:37:58 nbk Exp $
  */
 
+#ifdef __APPLE__
+/* Define before netinet/in.h for IPV6_PKTINFO */
+# define __APPLE_USE_RFC_3542
+/* there is also a RFC_2292 whihc makes PKTINFO
+ * compatible with the older RFC */
+#endif
 #include "../config.h"
 #include <stdlib.h>
 #include <stddef.h>
@@ -59,7 +65,7 @@
 /*
  * First we will have to redefine everything and the kitchen sink.
  * This is highly non portable, so to get this code compiling
- * (did i say working???), we have to turn some things to our favour.
+ * n(did i say working???), we have to turn some things to our favour.
  * Some fallback and magic in here so it may also work, hopefully...
  */
 
@@ -344,7 +350,7 @@ ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags)
 	 * sender, we have to provide something.
 	 * This also "primes" the buffer.
 	 */
-	if((err = getsockname(s, info[0].to, &info[0].to_len)) < 0)
+	if(unlikely((err = getsockname(s, info[0].to, &info[0].to_len)) < 0))
 		return err;
 
 // TODO: test new recvmmsg

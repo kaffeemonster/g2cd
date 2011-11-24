@@ -73,6 +73,7 @@ struct cpuinfo
 	int num_cores;
 	uint32_t features[7];
 	unsigned short clflush_size;
+	bool fdiv_bug;
 	bool init_done;
 };
 
@@ -114,6 +115,7 @@ const char x86_cpu_feature_names[][16] =
  */
 static void identify_vendor(struct cpuinfo *);
 static void identify_cpu(void) GCC_ATTR_CONSTRUCT;
+static void check_for_fdiv_bug(void);
 
 /*
  * grity asm helper
@@ -276,7 +278,7 @@ static __init void identify_cpu(void)
 	 */
 	our_cpu.init_done = true;
 	/* prevent the compiler from moving this around */
-	barrier();
+	mbarrier();
 
 	/* set the cpu count to a default value, we must have at least one ;) */
 	our_cpu.count = 1;
@@ -289,6 +291,9 @@ static __init void identify_cpu(void)
 	 * it for ifuncs, only libc/ld.so knows where the pointer
 	 * to the aux vector is hidden...
 	 */
+
+	/* check for the fdiv bug */
+	check_for_fdiv_bug();
 
 	/* do we have cpuid? we don't want to SIGILL */
 	if(unlikely(!has_cpuid()))
@@ -400,8 +405,7 @@ static __init void identify_cpu(void)
 	}
 
 	/* poke on the basic set again */
-	if(our_cpu.max_basic >= 0x00000007)
-	{
+	if(our_cpu.max_basic >= 0x00000007) {
 		cpuids(&a, 0x00000007);
 		our_cpu.features[4] = a.r.ebx;
 	}
@@ -521,6 +525,7 @@ static __init void identify_cpu(void)
 	 *    main crash)
 	 *  - those OS are OLD and IMHO broken
 	 */
+	cpu_feature_clear(CFEATURE_SSE4_2);
 
 	return;
 }
@@ -528,6 +533,9 @@ static __init void identify_cpu(void)
 __init void cpu_detect_finish(void)
 {
 	identify_cpu();
+
+	if(our_cpu.fdiv_bug)
+		logg_pos(LOGF_WARN, "Your CPU seems to have the Pentium FDIV Bug!\n");
 
 	if(our_cpu.family < 5)
 	{
@@ -719,8 +727,37 @@ static __init void identify_vendor(struct cpuinfo *cpu)
 		cpu->vendor = X86_VENDOR_OTHER;
 }
 
+static void check_for_fdiv_bug(void)
+{
+	static const double a = 4195835.0;
+	static const double b = 3145727.0;
+	int32_t have_bug;
+	uint32_t res;
+
+	asm volatile (
+		"movb	$1, %0\n\t"
+		"fninit\n\t"
+		"fldl	%2\n\t"
+		"fdivl	%3\n\t"
+		"fmull	%3\n\t"
+		"fldl	%2\n\t"
+		"fsubp	%%st, %%st(1)\n\t"
+		"fistpl	%0\n\t"
+		"fwait\n\t"
+		"fninit\n\t"
+		"cmpb	$0, %0\n\t"
+		"movl	$0xc909c9ff, %1\n\t"
+		".byte 0x75, 0xfa"
+		: /* %0 */ "=m" (have_bug),
+		  /* %1 */ "=c" (res)
+		: /* %2 */ "m" (a),
+		  /* %3 */ "m" (b)
+	);
+	our_cpu.fdiv_bug = !res;
+}
+
 /*
- * emit a emms, or float math (with is normaly verboten)
+ * emit a emms, or float math (which is normaly verboten)
  * may crash
  */
 #define HAVE_EMIT_EMMS

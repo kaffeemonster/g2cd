@@ -2,7 +2,7 @@
  * ansi_prng.c
  * Pseudo random number generator according to ANSI X9.31
  *
- * Copyright (c) 2009 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -186,6 +186,16 @@ void noinline random_bytes_get(void *ptr, size_t len)
 		}
 	} while(len);
 
+	pthread_mutex_unlock(&ctx.lock);
+}
+
+void random_bytes_rekey(const char data[RAND_BLOCK_BYTE])
+{
+	struct aes_encrypt_ctx tctx;
+	/* create a random key */
+	aes_encrypt_key128(&tctx, data);
+	pthread_mutex_lock(&ctx.lock);
+	ctx.actx = tctx;
 	pthread_mutex_unlock(&ctx.lock);
 }
 

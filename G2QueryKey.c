@@ -2,7 +2,7 @@
  * G2QueryKey.c
  * Query Key syndication
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -251,6 +251,7 @@ void __init g2_qk_init(void)
 
 void g2_qk_tick(void)
 {
+	static long last_k_upd;
 	unsigned n_salt, t;
 	long t_diff;
 
@@ -266,8 +267,15 @@ void g2_qk_tick(void)
 	if(t_diff < TIME_SLOT_SECS)
 		return;
 
-	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
+	t_diff = local_time_now - last_k_upd;
+	t_diff = t_diff >= 0 ? t_diff : -t_diff;
+	if(t_diff < 60*60*24) {
+		char dt[RAND_BLOCK_BYTE];
+		random_bytes_get(dt, sizeof(dt));
+		random_bytes_rekey(dt);
+	}
 
+	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));
 	check_salt_vals(n_salt);
 	/*
