@@ -33,6 +33,6 @@
 # define RAND_BLOCK_BYTE 16
 
 LIB_ANSI_PRNG_EXTRN(void random_bytes_get(void *ptr, size_t len));
-LIB_ANSI_PRNG_EXTRN(void random_bytes_rekey(const char data[RAND_BLOCK_BYTE]));
+LIB_ANSI_PRNG_EXTRN(void random_bytes_rekey(void));
 LIB_ANSI_PRNG_EXTRN(void random_bytes_init(const char data[RAND_BLOCK_BYTE * 2]));
 #endif

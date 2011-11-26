@@ -269,11 +269,8 @@ void g2_qk_tick(void)
 
 	t_diff = local_time_now - last_k_upd;
 	t_diff = t_diff >= 0 ? t_diff : -t_diff;
-	if(t_diff < 60*60*24) {
-		char dt[RAND_BLOCK_BYTE];
-		random_bytes_get(dt, sizeof(dt));
-		random_bytes_rekey(dt);
-	}
+	if(t_diff < 60*60*24)
+		random_bytes_rekey();
 
 	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));

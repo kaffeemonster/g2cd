@@ -65,6 +65,7 @@ static struct
 	union dvector V;
 	struct aes_encrypt_ctx actx;
 	pthread_mutex_t lock;
+	union dvector ne[4];
 	unsigned bytes_used;
 } ctx;
 
@@ -189,21 +190,55 @@ void noinline random_bytes_get(void *ptr, size_t len)
 	pthread_mutex_unlock(&ctx.lock);
 }
 
-void random_bytes_rekey(const char data[RAND_BLOCK_BYTE])
+void random_bytes_rekey(void)
 {
 	struct aes_encrypt_ctx tctx;
-	/* create a random key */
-	aes_encrypt_key128(&tctx, data);
+	unsigned i;
+	/* create a new random key */
+	aes_encrypt_key128(&tctx, &ctx.ne[0]);
+	/* lock other out */
 	pthread_mutex_lock(&ctx.lock);
+	/* set new key */
 	ctx.actx = tctx;
+	/* fuzz internal vectors */
+	/* set the initial vector state to some random value */
+	xor_vectors(&ctx.V, &ctx.ne[1], &ctx.V);
+	xor_vectors(&ctx.DT, &ctx.ne[2], &ctx.DT);
+	xor_vectors(&ctx.I, &ctx.ne[3], &ctx.I);
+	/* get new random data */
+	more_random_bytes();
+	memcpy(&ctx.ne[0], &ctx.rand_data, RAND_BLOCK_BYTE);
+	more_random_bytes();
+	memcpy(&ctx.ne[1], &ctx.rand_data, RAND_BLOCK_BYTE);
+	more_random_bytes();
+	memcpy(&ctx.ne[2], &ctx.rand_data, RAND_BLOCK_BYTE);
+	more_random_bytes();
+	memcpy(&ctx.ne[3], &ctx.rand_data, RAND_BLOCK_BYTE);
+	/*
+	 * keep the crng running for ?? times, more iterations make it harder to
+	 * get to the initial state, and so to the results of the above calls
+	 * and the input for the rekeying in 24 hours.
+	 */
+	for(i = (ctx.ne[0].c[0] % 32) + 8; i--;)
+		more_random_bytes();
 	pthread_mutex_unlock(&ctx.lock);
+}
+
+static const char *get_text(void)
+{
+	const char *rval;
+	/* get address of some func in text segment */
+	asm("" : "=r" (rval) : "0" (more_random_bytes));
+	return rval;
 }
 
 void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 {
 	union dvector td;
 	struct timeval now;
-	uint32_t t;
+	uint32_t *p, i, t;
+	const char *sbox;
+	const unsigned magic = 0x5BD1E995;
 
 	/*
 	 * <paranoid mode>
@@ -231,12 +266,7 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	}
 #endif
 	ctx.bytes_used = RAND_BLOCK_BYTE;
-
-	/* create a random key */
-	aes_encrypt_key128(&ctx.actx, data);
-
-	/* set the initial vector state to some random value */
-	memcpy(&ctx.V, data + RAND_BLOCK_BYTE, RAND_BLOCK_BYTE);
+	memcpy(&ctx.ne[0], data, RAND_BLOCK_BYTE * 2);
 
 	/*
 	 * set the counter to some random start value
@@ -244,18 +274,32 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	 * this is not that important
 	 */
 	t = getpid() | (getppid() << 16);
-	ctx.DT.u[3] = t;
-/*	old way to create initial vector
-	unsigned i;
-	for(i = 0; i < anum(ctx.V.u); i++) {
-		ctx.V.u[i] = t;
-		t = ((t >> 13) ^ (t << 7)) + 65521;
-	}*/
+	ctx.ne[2].u[3] = t;
 
 	gettimeofday(&now, 0);
 	/* if gtod fails, we deliberatly pick up stack garbage as fallback */
-	memcpy(ctx.DT.c, &now.tv_usec, sizeof(now.tv_usec));
-	memcpy(ctx.DT.c + sizeof(now.tv_usec), &now.tv_sec, sizeof(now.tv_sec));
+	memcpy(ctx.ne[2].c, &now.tv_usec, sizeof(now.tv_usec));
+	memcpy(ctx.ne[2].c + sizeof(now.tv_usec), &now.tv_sec, sizeof(now.tv_sec));
+
+	/* let the milliseconds decide where we pick the text segment */
+	sbox = get_text() + (now.tv_usec / 1000);
+
+	/* fill the I vector */
+	memcpy(&ctx.ne[3], sbox - 8192, RAND_BLOCK_BYTE);
+
+	/* mix it baby */
+	t = ctx.ne[0].u[0] ^ get_unaligned((const uint32_t *)sbox);
+	t ^= ((t >> 13) ^ (t << 7)) * magic;
+	for(i = 0, p = &ctx.ne[2].u[0]; i++ < ((RAND_BLOCK_BYTE * 2)/SO32);) {
+			uint32_t o_rd = *p;
+			*p++ ^= t;
+			t ^= ((t >> 13) ^ (t << 7)) * magic;
+			t ^= o_rd ^ get_unaligned((const uint32_t *)(sbox + (t & 0xffff)));
+			t ^= ((t >> 13) ^ (t << 7)) * magic;
+	}
+
+	/* now init the real data */
+	random_bytes_rekey();
 
 	/* initialise clib rands */
 	random_bytes_get(&td, sizeof(td));
