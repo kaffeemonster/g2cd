@@ -196,6 +196,68 @@ static char *strchrnul_SSE42(const char *s, int c)
 	);
 	return ret;
 }
+
+static char *strchrnul_SSE41(const char *s, int c)
+{
+	char *ret;
+	const char *p;
+	size_t t;
+
+	asm (
+		/*
+		 * hate doing this, but otherwise the compiler thinks
+		 * he absolutly needs to put everything in the wrong
+		 * reg, so he better shuffeles it all around, and for
+		 * this he needs another reg, ohh, lets spill one...
+		 */
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"movd	%k4, %%xmm2\n\t"
+		"mov	%1, %2\n\t"
+		"and	$-16, %1\n\t"
+		"and	$0x0f, %2\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"pshufb	%%xmm1, %%xmm2\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm2, %%xmm3\n\t"
+		"por	%%xmm3, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
+		"test	%0, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"movdqa	%%xmm0, %%xmm3\n\t"
+		"add	$16, %1\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pcmpeqb	%%xmm2, %%xmm3\n\t"
+		"por	%%xmm3, %%xmm0\n\t"
+		"ptest	%%xmm0, %%xmm1\n\t"
+		"jc	1b\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"2:"
+		"bsf	%0, %0\n\t"
+		"add	%1, %0\n\t"
+		: /* %0 */ "=&r" (ret),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#  ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "m" (c)
+#  else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#  endif
+#  ifdef __SSE2__
+		: "xmm0", "xmm1", "xmm2", "xmm3"
+#  endif
+	);
+	return ret;
+}
 # endif
 
 # if HAVE_BINUTILS >= 217
@@ -497,6 +559,7 @@ static __init_cdata const struct test_cpu_feature tfeat_strchrnul[] =
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strchrnul_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
+	{.func = (void (*)(void))strchrnul_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
 # endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))strchrnul_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3)}},

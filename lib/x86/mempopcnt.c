@@ -25,11 +25,13 @@
 
 #include "x86_features.h"
 
+#define CSA_SETUP 1
+
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
 static size_t mempopcnt_AVX(const void *s, size_t len);
 # endif
-# if HAVE_BINUTILS >= 218 && defined(__x86_64__)
+# if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 static size_t mempopcnt_SSE4A(const void *s, size_t len);
 # endif
 # if HAVE_BINUTILS >= 217
@@ -56,7 +58,6 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 # define BX "%%ebx"
 # define SP "%%esp"
 #endif
-#define CSA_SETUP 1
 
 static const struct { uint32_t d[8][4]; } vals GCC_ATTR_ALIGNED(16) =
 {
@@ -386,7 +387,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 }
 # endif
 
-# if HAVE_BINUTILS >= 218 && defined(__x86_64__)
+# if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 /*
  * Only use on 64 bit, SSE2 is faster on 32 bit (for
  * non trivial arrays).
@@ -394,6 +395,8 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
  * at best. But that needs unrolling, which 32 bit does
  * not have enough register for.
  * On 64 Bit we should get near 8 byte/cycle, near...
+ * But, the SSSE3 CSA is still faster.
+ * So maybe on something like the AMD Bulldozer?
  */
 static inline size_t popcountst_intSSE4(size_t n)
 {
@@ -1845,7 +1848,7 @@ static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 # if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))mempopcnt_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
-# if HAVE_BINUTILS >= 218 && defined(__x86_64__)
+# if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_POPCNT)}},
 	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[3] = CFB(CFEATURE_SSE4A)}},
 	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_SSE4_2)}},

@@ -1621,7 +1621,7 @@ static const fmt_func num_format_table[][MOD_MAX_NUM] =
 
 static const char *f_x(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[0][spec->mod](buf, fmt, spec);
+	return num_format_table[0][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_X(char *buf, const char *fmt, struct format_spec *spec)
 {
@@ -1630,19 +1630,19 @@ static const char *f_X(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *f_u(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[1][spec->mod](buf, fmt, spec);
+	return num_format_table[1][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_i(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[2][spec->mod](buf, fmt, spec);
+	return num_format_table[2][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_o(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[3][spec->mod](buf, fmt, spec);
+	return num_format_table[3][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_fp(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[4][spec->mod](buf, fmt, spec);
+	return num_format_table[4][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_fpU(char *buf, const char *fmt, struct format_spec *spec)
 {
@@ -1651,7 +1651,7 @@ static const char *f_fpU(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *f_fpx(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[5][spec->mod](buf, fmt, spec);
+	return num_format_table[5][(unsigned)spec->mod](buf, fmt, spec);
 }
 static const char *f_fpX(char *buf, const char *fmt, struct format_spec *spec)
 {
@@ -1660,7 +1660,7 @@ static const char *f_fpX(char *buf, const char *fmt, struct format_spec *spec)
 }
 static const char *fmtnop(char *buf, const char *fmt, struct format_spec *spec)
 {
-	return num_format_table[6][spec->mod](buf, fmt, spec);
+	return num_format_table[6][(unsigned)spec->mod](buf, fmt, spec);
 }
 /*
  * other conversion - uninmplemented

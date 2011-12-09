@@ -75,6 +75,93 @@
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+static size_t strnlen_AVX2(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"mov	$32, %b0\n\t"
+		"neg	%2\n\t"
+		"jz	6f\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"vmovdqa	32(%1), %%ymm0\n\t"
+		"add	$32, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"cmp	$32, %2\n\t"
+		"jbe	3f\n\t"
+		"sub	$32, %2\n\t"
+		"vptest	%%ymm0, %%ymm1\n\t"
+		"jc	2b\n"
+		"3:\n\t"
+		"vpmovmskb	%%xmm0, %0\n\t"
+		"mov	%2, %3\n\t"
+		"sub	$32, %3\n\t"
+		"jae	4f\n\t"
+		"neg	%3\n\t"
+		"shl	%b3, %0\n\t"
+		"shr	%b3, %0\n"
+		"4:\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%2, %0\n"
+		"6:\n\t"
+		"add	%1, %0\n\t"
+		"sub	%5, %0\n\t"
+#ifdef __ELF__
+		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %0\n\t"
+		"shr	%b3, %0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+#ifdef __ELF__
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=&c" (f)
+#ifdef __i386__
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+#else
+	: /* %4 */ "r" (maxlen),
+	  /* %5 */ "r" (s),
+#endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV32)),
+	  /* %7 */ "2" (SOV32),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV32))
+#ifdef __SSE__
+	: "xmm0", "xmm1"
+#endif
+	);
+	return len;
+}
+# endif
+
 # if HAVE_BINUTILS >= 218
 static size_t strnlen_SSE42(const char *s, size_t maxlen)
 {
@@ -149,6 +236,91 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 #  ifdef __SSE__
 	: "xmm0", "xmm1"
 #  endif
+	);
+	return len;
+}
+
+static size_t strnlen_SSE41(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"movdqa	(%1), %%xmm0\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"mov	$16, %b0\n\t"
+		"neg	%2\n\t"
+		"jz	6f\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"movdqa	16(%1), %%xmm0\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		"cmp	$16, %2\n\t"
+		"jbe	3f\n\t"
+		"sub	$16, %2\n\t"
+		"ptest	%%xmm0, %%xmm1\n\t"
+		"jc	2b\n"
+		"3:\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"mov	%2, %3\n\t"
+		"sub	$16, %3\n\t"
+		"jae	4f\n\t"
+		"neg	%3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n"
+		"4:\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%2, %0\n"
+		"6:\n\t"
+		"add	%1, %0\n\t"
+		"sub	%5, %0\n\t"
+#ifdef __ELF__
+		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+#ifdef __ELF__
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=&c" (f)
+#ifdef __i386__
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+#else
+	: /* %4 */ "r" (maxlen),
+	  /* %5 */ "r" (s),
+#endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "2" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+#ifdef __SSE__
+	: "xmm0", "xmm1"
+#endif
 	);
 	return len;
 }
@@ -366,8 +538,12 @@ static size_t strnlen_x86(const char *s, size_t maxlen)
 static __init_cdata const struct test_cpu_feature tfeat_strnlen[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))strnlen_AVX2 , .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strnlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2),  [0] = CFB(CFEATURE_CMOV)}},
+	{.func = (void (*)(void))strnlen_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1),  [0] = CFB(CFEATURE_CMOV)}},
 # endif
 #endif
 	{.func = (void (*)(void))strnlen_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
@@ -375,7 +551,7 @@ static __init_cdata const struct test_cpu_feature tfeat_strnlen[] =
 	{.func = (void (*)(void))strnlen_SSE,   .features = {[0] = CFB(CFEATURE_SSE)|CFB(CFEATURE_CMOV)}},
 	{.func = (void (*)(void))strnlen_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT), [0] = CFB(CFEATURE_CMOV)}},
 #endif
-	{.func = (void (*)(void))strnlen_x86, .features = {}, .flags = CFF_DEFAULT},
+	{.func = (void (*)(void))strnlen_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
 DYN_JMP_DISPATCH(size_t, strnlen, (const char *s, size_t maxlen), (s, maxlen))

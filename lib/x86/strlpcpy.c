@@ -222,6 +222,79 @@ CPY_NEXT:
 		*dst = '\0';
 	return dst;
 }
+
+static char *strlpcpy_SSE41(char *dst, const char *src, size_t maxlen)
+{
+	size_t i;
+	unsigned r;
+
+	prefetch(src);
+	prefetchw(dst);
+	if(unlikely(!src || !dst || !maxlen))
+		return dst;
+
+	i = ALIGN_DIFF(src, 4096);
+	i = i ? i : 4096;
+	i = i < maxlen ? i : maxlen;
+CPY_NEXT:
+	if(likely(SOV16M1 < i))
+	{
+		size_t cycles = i;
+		asm (
+			"pxor	%%xmm2, %%xmm2\n\t"
+			"jmp	1f\n"
+			".p2align 2\n\t"
+			"3:\n\t"
+			"sub	$16, %0\n\t"
+			"add	$16, %1\n\t"
+			"movdqu	%%xmm1, (%2)\n\t"
+			"add	$16, %2\n\t"
+			"cmp	$15, %0\n\t"
+			"jbe	2f\n"
+			"1:\n\t"
+			"movdqu	(%1), %%xmm1\n\t"
+			"movdqa	%%xmm1, %%xmm0\n\t"
+			"pcmpeqb	%%xmm2, %%xmm0\n\t"
+			"ptest	%%xmm0, %%xmm2\n\t"
+			"jc	3b\n"
+			"pmovmskb	%%xmm0, %3\n\t"
+		/* there is maskmovdqu since sse2, but creating the mask is a PITA */
+			"2:"
+		: /* %0 */ "=r" (i),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (dst),
+		  /* %3 */ "=r" (r)
+		: /* %4 */ "0" (i),
+		  /* %5 */ "1" (src),
+		  /* %6 */ "2" (dst)
+#ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2"
+#endif
+		);
+		if(likely(r)) {
+			asm ("bsf %1, %0" : "=r" (r) : "r" (r) : "cc");
+			return cpy_rest0(dst, src, r);
+		}
+		maxlen -= (cycles - i);
+	}
+	cpy_one_u64(dst, src, i, maxlen);
+	cpy_one_u32_SSE2(dst, src, i, maxlen);
+
+	/* slowly go over the page boundry */
+	for(; i && *src; i--, maxlen--)
+		*dst++ = *src++;
+
+	/* src is aligned, life is good... */
+	if(likely(*src) && likely(maxlen)) {
+		i = maxlen;
+		/* since only src is aligned, simply continue with movdqu */
+		goto CPY_NEXT;
+	}
+
+	if(likely(maxlen))
+		*dst = '\0';
+	return dst;
+}
 # endif
 #endif
 
@@ -465,6 +538,7 @@ static __init_cdata const struct test_cpu_feature tfeat_strlpcpy[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strlpcpy_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
+	{.func = (void (*)(void))strlpcpy_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
 # endif
 #endif
 	{.func = (void (*)(void))strlpcpy_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
