@@ -53,6 +53,18 @@ static inline vector unsigned char vec_align_and_rev(const char *p)
 	return ret;
 }
 
+static inline vector unsigned int vector_load_one_u32(unsigned int x)
+{
+	vector unsigned int val = vec_lde(0, &x);
+	vector unsigned char vperm, mask;
+
+	mask = (vector unsigned char)vec_cmpgt(vec_identl(0), vec_splat_u8(3));
+	vperm = (vector unsigned char)vec_splat((vector unsigned int)vec_lvsl(0, &x), 0);
+	val = vec_perm(val, val, vperm);
+	val = vec_sel(val, vec_splat_u32(0), (vector unsigned int)mask);
+	return val;
+}
+
 /* multiply two 32 bit ints, return the low 32 bit */
 static inline vector unsigned int vec_mullw(vector unsigned int a, vector unsigned int b)
 {

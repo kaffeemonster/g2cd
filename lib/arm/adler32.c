@@ -1,7 +1,7 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   arm implementation
- * Copyright (C) 1995-2004 Mark Adler
+ * Copyright (C) 1995-2007 Mark Adler
  * Copyright (C) 2009-2011 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
@@ -15,24 +15,45 @@
  */
 
 #define NO_DIVIDE
-#if defined(__ARM_NEON__) || defined(__ARM_ARCH_6__)  || \
-    defined(__ARM_ARCH_6J__)  || defined(__ARM_ARCH_6Z__) || \
-    defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_7A__)
-
+#if (defined(__ARM_NEON__) && defined(__ARMEL__)) || defined (__IWMMXT__) || \
+    (0 && defined(__GNUC__) && ( \
+        defined(__thumb2__)  && ( \
+            !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
+        ) || ( \
+        !defined(__thumb__) && ( \
+            defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
+            defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
+            defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
+        )) \
+    ))
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
-# define MIN_WORK 16
+# if defined(__ARM_NEON__) || defined (__IWMMXT__)
+#  define MIN_WORK 32
+# else
+#  define MIN_WORK 16
+# endif
 #endif
 
 #include "../generic/adler32.c"
 
-#if defined(__ARM_NEON__)
+#if defined(__ARM_NEON__) && defined(__ARMEL__)
+/*
+ * Big endian NEON qwords are kind of broken.
+ * They are big endian within the dwords, but WRONG
+ * (really??) way round between lo and hi.
+ * Creating some kind of PDP11 middle endian.
+ *
+ * This is madness and unsupportable. For this reason
+ * GCC wants to disable qword endian specific patterns.
+ */
 # include <arm_neon.h>
 # include "my_neon.h"
 /* since we do not have the 64bit psadbw sum, we could prop. do a little more */
 # define VNMAX (6*NMAX)
 
-static inline uint32x4_t vector_reduce(uint32x4_t x)
+/* ========================================================================= */
+static inline uint32x4_t vector_chop(uint32x4_t x)
 {
 	uint32x4_t y;
 
@@ -44,6 +65,7 @@ static inline uint32x4_t vector_reduce(uint32x4_t x)
 	return x;
 }
 
+/* ========================================================================= */
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32x4_t v0_32 = (uint32x4_t){0,0,0,0};
@@ -58,17 +80,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
 
-// TODO: byte order?
-	/*
-	 * big endian qwords are big endian within the dwords
-	 * but WRONG (really??) way round between lo and hi.
-	 * Creating some kind of PDP11 middle endian.
-	 * GCC wants to disable qword endian specific patterns
-	 */
-	if(HOST_IS_BIGENDIAN)
-		vord = (uint8x16_t){16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
-	else
-		vord = (uint8x16_t){1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+	vord = (uint8x16_t){16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
 
 	if(likely(len >= 2*SOVUCQ))
 	{
@@ -78,8 +90,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 * Add stuff to achieve alignment
 		 */
 		/* align hard down */
-		f = (unsigned) ALIGN_DOWN_DIFF(buf, SOVUCQ);
-		n = SOVUCQ - f;
+		f   = (unsigned) ALIGN_DOWN_DIFF(buf, SOVUCQ);
+		n   = SOVUCQ - f;
 		buf = (const unsigned char *)ALIGN_DOWN(buf, SOVUCQ);
 
 		/* add n times s1 to s2 for start round */
@@ -100,7 +112,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		 * (we could prop. stay a little longer since we have 4 sums,
 		 * not 2 like on x86).
 		 */
-		k = len < VNMAX ? (unsigned)len : VNMAX;
+		k    = len < VNMAX ? (unsigned)len : VNMAX;
 		len -= k;
 		/* insert scalar start somewhere */
 		vs1 = vsetq_lane_u32(s1, vs1, 0);
@@ -109,78 +121,71 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		/* get input data */
 		in16 = *(const uint8x16_t *)buf;
 		/* mask out excess data */
-		if(HOST_IS_BIGENDIAN) {
-			in16 = neon_simple_alignq(v0, in16, n);
-			vord_a = neon_simple_alignq(v0, vord, n);
-		} else {
-			in16 = neon_simple_alignq(in16, v0, f);
-			vord_a = neon_simple_alignq(vord, v0, f);
-		}
-
+		in16 = neon_simple_alignq(in16, v0, f);
+		vord_a = neon_simple_alignq(vord, v0, f);
 		/* pairwise add bytes and long, pairwise add word long acc */
 		vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
 		/* apply order, add words, pairwise add word long acc */
 		vs2 = vpadalq_u16(vs2,
-			vmlal_u8(
-				vmull_u8(vget_low_u8(in16), vget_low_u8(vord_a)),
-				vget_high_u8(in16), vget_high_u8(vord_a)
-			)
-		);
+		      vmlal_u8(vmull_u8(vget_low_u8(in16), vget_low_u8(vord_a)),
+		               vget_high_u8(in16), vget_high_u8(vord_a)
+		              )
+		      );
 
 		buf += SOVUCQ;
-		k -= n;
+		k   -= n;
 
 		if(likely(k >= SOVUCQ)) do
 		{
 			uint32x4_t vs1_r = v0_32;
 			do
 			{
-				/* add vs1 for this round */
-				vs1_r = vaddq_u32(vs1_r, vs1);
+				uint16x8_t vs2_lo = (uint16x8_t)v0_32, vs2_hi = (uint16x8_t)v0_32;
+				unsigned j;
 
-				/* get input data */
-				in16 = *(const uint8x16_t *)buf;
+				j  = (k/16) > 16 ? 16 : k/16;
+				k -= j * 16;
+				do
+				{
+					/*
+					 * GCC does not create the most pretty inner loop,
+					 * with extra moves and stupid scheduling, but
+					 * i am not in the mood for inline ASM, keep it
+					 * compatible.
+					 */
+					/* get input data */
+					in16 = *(const uint8x16_t *)buf;
+					buf += SOVUCQ;
 
-// TODO: make work in inner loop more tight
-				/*
-				 * decompose partial sums, so we do less instructions and
-				 * build loops around it to do acc and so on only from time
-				 * to time.
-				 * This is hard with NEON, because the instruction are nice:
-				 * we have the stuff in widening and with acc (practicaly
-				 * for free...)
-				 */
-				/* pairwise add bytes and long, pairwise add word long acc */
-				vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
-				/* apply order, add words, pairwise add word long acc */
-				vs2 = vpadalq_u16(vs2,
-					vmlal_u8(
-						vmull_u8(vget_low_u8(in16), vget_low_u8(vord)),
-						vget_high_u8(in16), vget_high_u8(vord)
-					)
-				);
+					/* add vs1 for this round */
+					vs1_r = vaddq_u32(vs1_r, vs1);
 
-				buf += SOVUCQ;
-				k -= SOVUCQ;
-			} while (k >= SOVUCQ);
-			/* reduce vs1 round sum before multiplying by 16 */
-			vs1_r = vector_reduce(vs1_r);
+					/* pairwise add bytes and long, pairwise add word long acc */
+					vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
+					/* apply order, word long and acc */
+					vs2_lo = vmlal_u8(vs2_lo, vget_low_u8(in16), vget_low_u8(vord));
+					vs2_hi = vmlal_u8(vs2_hi, vget_high_u8(in16), vget_high_u8(vord));
+				} while(--j);
+				/* pair wise add long and acc */
+				vs2 = vpadalq_u16(vs2, vs2_lo);
+				vs2 = vpadalq_u16(vs2, vs2_hi);
+			} while(k >= SOVUCQ);
+			/* chop vs1 round sum before multiplying by 16 */
+			vs1_r = vector_chop(vs1_r);
 			/* add vs1 for this round (16 times) */
 			/* they have shift right and accummulate, where is shift left and acc?? */
 			vs2 = vaddq_u32(vs2, vshlq_n_u32(vs1_r, 4));
-			/* reduce both vectors to something within 17 bit */
-			vs2 = vector_reduce(vs2);
-			vs1 = vector_reduce(vs1);
+			/* chop both vectors to something within 16 bit */
+			vs2 = vector_chop(vs2);
+			vs1 = vector_chop(vs1);
 			len += k;
 			k = len < VNMAX ? (unsigned) len : VNMAX;
 			len -= k;
-		} while(likely(k >= SOVUC));
+		} while(likely(k >= SOVUCQ));
 
 		if(likely(k))
 		{
-			/*
-			 * handle trailer
-			 */
+			/* handle trailer */
 			f = SOVUCQ - k;
 			/* add k times vs1 for this trailer */
 			vs2 = vmlaq_u32(vs2, vs1, vdupq_n_u32(k));
@@ -188,20 +193,17 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			/* get input data */
 			in16 = *(const uint8x16_t *)buf;
 			/* masks out bad data */
-			if(HOST_IS_BIGENDIAN)
-				in16 = neon_simple_alignq(in16, v0, f);
-			else
-				in16 = neon_simple_alignq(v0, in16, k);
+			in16 = neon_simple_alignq(v0, in16, k);
 
 			/* pairwise add bytes and long, pairwise add word long acc */
 			vs1 = vpadalq_u16(vs1, vpaddlq_u8(in16));
 			/* apply order, add words, pairwise add word long acc */
 			vs2 = vpadalq_u16(vs2,
-				vmlal_u8(
-					vmull_u8(vget_low_u8(in16), vget_low_u8(vord)),
-					vget_high_u8(in16), vget_high_u8(vord)
-				)
-			);
+			      vmlal_u8(
+			               vmull_u8(vget_low_u8(in16), vget_low_u8(vord)),
+			                        vget_high_u8(in16), vget_high_u8(vord)
+			              )
+			      );
 
 			buf += k;
 			k -= k;
@@ -219,24 +221,317 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	if(unlikely(len)) do {
 		s1 += *buf++;
 		s2 += s1;
-	} while (--len);
-	reduce_x(s1);
-	reduce_x(s2);
+	} while(--len);
+	MOD28(s1);
+	MOD28(s2);
 
-	return s2 << 16 | s1;
+	return (s2 << 16) | s1;
 }
 static char const rcsid_a32n[] GCC_ATTR_USED_VAR = "$Id: $";
 
-#elif defined(__ARM_ARCH_6__)  || defined(__ARM_ARCH_6J__)  || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
-/* ARM v6 or better */
-# define SOU32 (sizeof(uint32_t))
+#elif defined(__IWMMXT__)
+# ifndef __GNUC__
+/* GCC doesn't take it's own intrinsic header and ICEs if forced to */
+#  include <mmintrin.h>
+# else
+typedef unsigned long long __m64;
 
+// TODO: older gcc may need U constrain instead of y?
+static inline __m64 _mm_setzero_si64(void)
+{
+	__m64 r;
+# if 0
+	asm ("wzero %0" : "=y" (r));
+# else
+	r = 0;
+# endif
+	return r;
+}
+/* there is slli/srli and we want to use it, but it's iWMMXt-2 */
+static inline __m64 _mm_sll_pi32(__m64 a, __m64 c)
+{
+	asm ("wsllw %0, %1, %2" : "=y" (a) : "y" (a), "y" (c));
+	return a;
+}
+static inline __m64 _mm_srl_pi32(__m64 a, __m64 c)
+{
+	asm ("wsrlw %0, %1, %2" : "=y" (a) : "y" (a), "y" (c));
+	return a;
+}
+static inline __m64 _mm_sub_pi32(__m64 a, __m64 b)
+{
+	asm ("wsubw %0, %1, %2" : "=y" (a) : "y" (a), "y" (b));
+	return a;
+}
+static inline __m64 _mm_add_pi16(__m64 a, __m64 b)
+{
+	asm ("waddh %0, %1, %2" : "=y" (a) : "y" (a), "y" (b));
+	return a;
+}
+static inline __m64 _mm_add_pi32(__m64 a, __m64 b)
+{
+	asm ("waddw %0, %1, %2" : "=y" (a) : "y" (a), "y" (b));
+	return a;
+}
+static inline __m64 _mm_sada_pu8(__m64 acc, __m64 a, __m64 b)
+{
+	asm ("wsadb %0, %1, %2" : "=y" (acc) : "y" (a), "y" (b), "0" (acc));
+	return acc;
+}
+static inline __m64 _mm_madd_pu16(__m64 a, __m64 b)
+{
+	asm ("wmaddu %0, %1, %2" : "=y" (a) : "y" (a), "y" (b));
+	return a;
+}
+static inline __m64 _mm_mac_pu16(__m64 acc, __m64 a, __m64 b)
+{
+	asm ("wmacu %0, %1, %2" : "=y" (acc) : "y" (a), "y" (b), "0" (acc));
+	return acc;
+}
+static inline __m64 _mm_unpackel_pu8(__m64 a)
+{
+	asm ("wunpckelub %0, %1" : "=y" (a) : "y" (a));
+	return a;
+}
+static inline __m64 _mm_unpackeh_pu8(__m64 a)
+{
+	asm ("wunpckehub %0, %1" : "=y" (a) : "y" (a));
+	return a;
+}
+static inline __m64 _mm_shuffle_pi16(__m64 a, const int m)
+{
+	asm ("wshufh %0, %1, %2" : "=y" (a) : "y" (a), "i" (m));
+	return a;
+}
+static inline unsigned int _mm_extract_pu32(__m64 a, const int m)
+{
+	unsigned int r;
+	asm ("textrmuw %0, %1, %2" : "=r" (r) : "y" (a), "i" (m));
+	return r;
+}
+static inline __m64 _mm_insert_pi32(__m64 a, unsigned int b, const int m)
+{
+	asm ("tinsrw %0, %1, %2" : "=y" (a) : "r" (b), "i" (m), "0" (a));
+	return a;
+}
+static inline __m64 _mm_align_si64(__m64 a, __m64 b, int c)
+{
+	asm ("walignr%U3 %0, %1, %2" : "=y" (a) : "y" (a), "y" (b), "z" (c));
+	return a;
+}
+static inline __m64 _mm_set_pi16(short a, short b, short c, short d)
+{
+	__m64 r = (unsigned long long)d;
+	r |= ((unsigned long long)c) << 16;
+	r |= ((unsigned long long)b) << 32;
+	r |= ((unsigned long long)a) << 48;
+	return r;
+}
+# endif
+
+// TODO: we could go over NMAX, since we have split the vs2 sum
+/* but we shuffle vs1_r only every 2056 byte, so we can not go full */
+# define VNMAX (3*NMAX)
+# define SOV8 (sizeof(__m64))
+
+/* ========================================================================= */
+static inline __m64 vector_chop(__m64 x)
+{
+	static const __m64 four = 4;
+	static const __m64 sixten = 16;
+	__m64 y = _mm_sll_pi32(x, sixten);
+	x = _mm_srl_pi32(x, sixten);
+	y = _mm_srl_pi32(y, sixten);
+	y = _mm_sub_pi32(y, x);
+	x = _mm_add_pi32(y, _mm_sll_pi32(x, four));
+	return x;
+}
+
+/* ========================================================================= */
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1, s2;
-	unsigned k;
+	unsigned int k;
+
+	s1 = adler & 0xffff;
+	s2 = (adler >> 16) & 0xffff;
+
+	if(likely(len >= 4 * SOV8))
+	{
+		static const __m64 three = 3;
+		__m64 vs1, vs2;
+		__m64 vzero;
+		__m64 vorder_l, vorder_h;
+		unsigned int f, n;
+
+		vzero = _mm_setzero_si64();
+
+		/* align hard down */
+		f = (unsigned int) ALIGN_DOWN_DIFF(buf, SOV8);
+		buf = (const uint8_t *)ALIGN_DOWN(buf, SOV8);
+		n = SOV8 - f;
+
+		/* add n times s1 to s2 for start round */
+		s2 += s1 * n;
+
+		k = len < VNMAX ? len : VNMAX;
+		len -= k;
+
+		/* insert scalar start */
+		vs1 = _mm_insert_pi32(vzero, s1, 0);
+		vs2 = _mm_insert_pi32(vzero, s2, 0);
+
+		// TODO: byte order?
+		if(HOST_IS_BIGENDIAN) {
+			vorder_l = _mm_set_pi16(4, 3, 2, 1);
+			vorder_h = _mm_set_pi16(8, 7, 6, 5);
+		} else {
+			vorder_l = _mm_set_pi16(5, 6, 7, 8);
+			vorder_h = _mm_set_pi16(1, 2, 3, 4);
+		}
+
+		{
+			__m64 in = *(const __m64 *)buf;
+
+			/* mask excess info out */
+			if(HOST_IS_BIGENDIAN) {
+				in = _mm_align_si64(vzero, in, n);
+				in = _mm_align_si64(in, vzero, f);
+			} else {
+				in = _mm_align_si64(in, vzero, f);
+				in = _mm_align_si64(vzero, in, n);
+			}
+
+			/* add horizontal and acc */
+			vs1 = _mm_sada_pu8(vs1, in, vzero);
+
+			/* widen bytes to words, apply order and acc */
+			vs2 = _mm_mac_pu16(vs2, _mm_unpackel_pu8(in), vorder_l);
+			vs2 = _mm_mac_pu16(vs2, _mm_unpackeh_pu8(in), vorder_h);
+		}
+
+		buf += SOV8;
+		k   -= n;
+
+		do
+		{
+			__m64 vs1_r = vzero;
+
+			do
+			{
+				__m64 vs2_l = vzero, vs2_h = vzero;
+				unsigned int j;
+
+				j  = k >= (257 * SOV8) ? 257 * SOV8 : k;
+				j /= SOV8;
+				k -= j * SOV8;
+				do
+				{
+					/* get input data */
+					__m64 in = *(const __m64 *)buf;
+					buf += SOV8;
+
+					/* add vs1 for this round */
+					vs1_r = _mm_add_pi32(vs1_r, vs1);
+
+					/* add horizontal and acc */
+					// TODO: how does wsad really work?
+					/*
+					 * the Intel iwmmxt 1 & 2 manual says the wsad instruction
+					 * always zeros the upper word (32 in the arm context),
+					 * and then adds all sad into the lower word (again 32
+					 * bit). If the z version is choosen, the lower word is
+					 * also zeroed before, otherwise we get an acc.
+					 *
+					 * Visual studio only knows the sada intrinsic to reflect
+					 * that, but no description, no prototype.
+					 *
+					 * But there is no sada intrinsic in the Intel manual.
+					 * The Intel iwmmxt-1 manual only knows sad & sadz, two
+					 * operands, instead the acc is done with the lvalue
+					 * (which only really works with spec. compiler builtins).
+					 * GCC follows the intel manual (but does gcc manages to
+					 * use the lvalue?).
+					 * To make matters worse the description for the _mm_sad_pu8
+					 * intrinsic says it clears the upper _3_ fields, and only
+					 * acc in the lowest, so only working in 16 Bit.
+					 * So who is wrong?
+					 *
+					 * If this is different between 1 & 2 we are screwed, esp.
+					 * since i can not find a preprocessor define if 1 or 2.
+					 */
+					vs1 = _mm_sada_pu8(vs1, in, vzero);
+
+					/* widen bytes to words and acc */
+					vs2_l = _mm_add_pi16(vs2_l, _mm_unpackel_pu8(in));
+					vs2_h = _mm_add_pi16(vs2_h, _mm_unpackeh_pu8(in));
+				} while(--j);
+				/* shake and roll vs1_r, so both 32 bit sums get some input */
+				vs1_r = _mm_shuffle_pi16(vs1_r, 0x4e);
+				/* apply order and add to 32 bit */
+				vs2_l = _mm_madd_pu16(vs2_l, vorder_l);
+				vs2_h = _mm_madd_pu16(vs2_h, vorder_h);
+				/* acc */
+				vs2 = _mm_add_pi32(vs2, vs2_l);
+				vs2 = _mm_add_pi32(vs2, vs2_h);
+			} while(k >= SOV8);
+			/* chop vs1 round sum before multiplying by 8 */
+			vs1_r = vector_chop(vs1_r);
+			/* add vs1 for this round (8 times) */
+			vs2 = _mm_add_pi32(vs2, _mm_sll_pi32(vs1_r, three));
+			/* chop both sums to something within 16 bit */
+			vs2 = vector_chop(vs2);
+			vs1 = vector_chop(vs1);
+			len += k;
+			k = len < VNMAX ? len : VNMAX;
+			len -= k;
+		} while(likely(k >= SOV8));
+		len += k;
+		vs1 = _mm_add_pi32(vs1, _mm_shuffle_pi16(vs1, 0x4e));
+		vs2 = _mm_add_pi32(vs2, _mm_shuffle_pi16(vs2, 0x4e));
+		s1 = _mm_extract_pu32(vs1, 0);
+		s2 = _mm_extract_pu32(vs2, 0);
+	}
+
+	if(unlikely(len)) do {
+		s1 += *buf++;
+		s2 += s1;
+	} while(--len);
+	/* at this point we should have not so big s1 & s2 */
+	MOD28(s1);
+	MOD28(s2);
+
+	return (s2 << 16) | s1;
+}
+
+static char const rcsid_a32iwmmxt[] GCC_ATTR_USED_VAR = "$Id: $";
+/* inline asm, so only on GCC (or compatible) && ARM v6 or better */
+#elif 0 && defined(__GNUC__) && ( \
+        defined(__thumb2__)  && ( \
+            !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
+        ) || ( \
+        !defined(__thumb__) && ( \
+            defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
+            defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
+            defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
+        )) \
+    )
+/* This code is disabled, since it is not faster, only for reference.
+ * We are at speedup: 0.952830
+ * Again counting instructions is futile, 5 instructions per 4 bytes
+ * against at least 3 per byte (loop overhead excluded) is no win.
+ * And split sums also does not save us.
+ */
+#  define SOU32 (sizeof(unsigned int))
+// TODO: maybe 2*NMAX is possible, but that's very thin
+/* this way we are at 0xda */
+#  define VNMAX (NMAX+((NMAX*9)/10))
+
+/* ========================================================================= */
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	uint32_t s1, s2;
+	unsigned int k;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
@@ -246,14 +541,13 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	if(k) do {
 		s1 += *buf++;
 		s2 += s1;
-	} while (--k);
+	} while(--k);
 
 	if(likely(len >= 4 * SOU32))
 	{
-		uint32_t vs1 = s1, vs2 = s2;
-		uint32_t order_lo, order_hi;
+		unsigned int vs1 = s1, vs2 = s2;
+		unsigned int order_lo, order_hi;
 
-// TODO: byte order?
 		if(HOST_IS_BIGENDIAN) {
 			order_lo = 0x00030001;
 			order_hi = 0x00040002;
@@ -261,63 +555,47 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			order_lo = 0x00020004;
 			order_hi = 0x00010003;
 		}
-// TODO: we could go over NMAX, since we have split the vs2 sum
-		k = len < NMAX ? len : NMAX;
+		k = len < VNMAX ? len : VNMAX;
 		len -= k;
 
 		do
 		{
-			uint32_t vs1_r = 0;
+			unsigned int vs1_r = 0;
 			do
 			{
-				uint32_t t21, t22, in;
+				unsigned int j;
+				unsigned int vs2_lo = 0, vs2_hi = 0;
 
-				/* get input data */
-				in = *(const uint32_t *)buf;
-
-				/* add vs1 for this round */
-				vs1_r += vs1;
-
-				/* add horizontal and acc */
-				asm("usada8 %0, %1, %2, %3" : "=r" (vs1) : "r" (in), "r" (0), "r" (vs1));
-				/* widen bytes to words, apply order, add and acc */
-				asm("uxtb16 %0, %1" : "=r" (t21) : "r" (in));
-				asm("uxtb16 %0, %1, ror #8" : "=r" (t22) : "r" (in));
-// TODO: instruction result latency
-				/*
-				 * The same problem like the classic serial sum:
-				 * Chip maker sell us 1-cycle instructions, but that is not the
-				 * whole story. Nearly all 1-cycle chips are pipelined, so
-				 * you can get one result per cycle, but only if _they_ (plural)
-				 * are independent.
-				 * If you are depending on the result of an preciding instruction,
-				 * in the worst case you hit the instruction latency which is worst
-				 * case >= pipeline length. On the other hand there are result-fast-paths.
-				 * This could all be a wash with the classic sum (4 * 2 instructions,
-				 * + dependence), since smald is:
-				 * - 2 cycle issue
-				 * - needs the acc in pipeline step E1, instead of E2
-				 * But the Cortex has a fastpath for acc.
-				 * I don't know.
-				 * We can not even unroll, we would need 4 order vars, return ENOREGISTER.
-				 */
-				asm("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (t21) , "r" (order_lo), "r" (vs2));
-				asm("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (t22) , "r" (order_hi), "r" (vs2));
-
-				buf += SOU32;
-				k -= SOU32;
-			} while (k >= SOU32);
-			/* reduce vs1 round sum before multiplying by 4 */
-			reduce(vs1_r);
+				j  = (k/4) >= 128 ? 128 : (k/4);
+				k -= j * 4;
+				do
+				{
+					/* get input data */
+					unsigned int in = *(const unsigned int *)buf;
+					buf += SOU32;
+					/* add vs1 for this round */
+					vs1_r += vs1;
+					/* add horizontal and acc */
+					asm ("usada8 %0, %1, %2, %3" : "=r" (vs1) : "r" (in), "r" (0), "r" (vs1));
+					/* widen bytes to words and acc */
+					asm ("uxtab16 %0, %1, %2" : "=r" (vs2_lo) : "r" (vs2_lo), "r" (in));
+					asm ("uxtab16 %0, %1, %2, ror #8" : "=r" (vs2_hi) : "r" (vs2_hi), "r" (in));
+				} while (--j);
+				/* aply order and acc */
+				asm ("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (vs2_lo) , "r" (order_lo), "r" (vs2));
+				asm ("smlad %0, %1, %2, %3" : "=r" (vs2) : "r" (vs2_hi) , "r" (order_hi), "r" (vs2));
+			} while(k >= SOU32);
+			/* chop vs1 round sum before multiplying by 4 */
+			CHOP(vs1_r);
 			/* add vs1 for this round (4 times) */
 			vs2 += vs1_r * 4;
-			/* reduce both sums to something within 17 bit */
-			reduce(vs2);
-			reduce(vs1);
+			/* chop both sums */
+			CHOP(vs2);
+			CHOP(vs1);
 			len += k;
-			k = len < NMAX ? len : NMAX;
+			k = len < VNMAX ? len : VNMAX;
 			len -= k;
-		} while(likely(k >= 4 * SOU32));
+		} while(likely(k >= SOU32));
 		len += k;
 		s1 = vs1;
 		s2 = vs2;
@@ -326,12 +604,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	if(unlikely(len)) do {
 		s1 += *buf++;
 		s2 += s1;
-	} while (--len);
-	/* at this point we should no have so big s1 & s2 */
-	reduce_x(s1);
-	reduce_x(s2);
+	} while(--len);
+	/* at this point we should not have so big s1 & s2 */
+	MOD28(s1);
+	MOD28(s2);
 
-	return s2 << 16 | s1;
+	return (s2 << 16) | s1;
 }
 static char const rcsid_a32v6[] GCC_ATTR_USED_VAR = "$Id: $";
 #endif

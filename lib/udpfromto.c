@@ -429,7 +429,7 @@ ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags)
 	}
 #endif
 
-	return err >= 0 ? i : -((ssize_t)(i + 1));
+	return err >= 0 ? (ssize_t)i : -((ssize_t)(i + 1));
 }
 
 void recvmfromto_post(struct mfromto *info, size_t len)

@@ -43,10 +43,10 @@
 char GCC_ATTR_FASTCALL *cpy_rest(char *dst, const char *src, unsigned i)
 {
 // TODO: r4 is used on Darwin?
-	register size_t a asm ("r4"); /* inline asm syntax gone wrong... */
-	register size_t b asm ("r5"); /* we can not allocate these on the inline asm, */
-	register size_t c asm ("r6"); /* r5 is an alternative of r (every register) */
-	register size_t d asm ("r7"); /* and positional arg 5, not ppc gen.purp.reg r5 */
+	register size_t a asm ("r5"); /* inline asm syntax gone wrong... */
+	register size_t b asm ("r6"); /* we can not allocate these on the inline asm, */
+	register size_t c asm ("r7"); /* r5 is an alternative of r (every register) */
+	register size_t d asm ("r8"); /* and positional arg 5, not ppc gen.purp.reg r5 */
 
 	/*
 	 * these instructions work as advertised, if gcc is not
@@ -56,10 +56,10 @@ char GCC_ATTR_FASTCALL *cpy_rest(char *dst, const char *src, unsigned i)
 	asm volatile ("mtxer %0": : "r" (i));
 	asm(
 		"lswx	%0, %y4"
-	: /* %0 */ "=r" (a),
-	  /* %1 */ "=r" (b),
-	  /* %2 */ "=r" (c),
-	  /* %3 */ "=r" (d)
+	: /* %0 */ "=&r" (a),
+	  /* %1 */ "=&r" (b),
+	  /* %2 */ "=&r" (c),
+	  /* %3 */ "=&r" (d)
 	: /* %4 */ PPC_MEM_CONSTRAIN (*src));
 	asm volatile(
 		"stswx	%1, %y0"

@@ -43,12 +43,14 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
  * fast (even without fancy unrolling), only the data does not arrive
  * fast enough. In cases where the working set does not fit into cache
  * it simply cannot be delivered fast enough over the FSB/Mem).
+ * Still we have to prefetch, or we are slow as hell.
  */
 
 /* can be propably more, since we do not have the x86 psadbw 64 bit sum */
 #define VNMAX (6*NMAX)
 
-static inline vector unsigned int vector_reduce(vector unsigned int x)
+/* ========================================================================= */
+static inline vector unsigned int vector_chop(vector unsigned int x)
 {
 	vector unsigned int y;
 	vector unsigned int vsh;
@@ -65,6 +67,7 @@ static inline vector unsigned int vector_reduce(vector unsigned int x)
 	return x;
 }
 
+/* ========================================================================= */
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	uint32_t s1, s2;
@@ -74,16 +77,21 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 	if(likely(len >= 2*SOVUC))
 	{
-		vector unsigned int v0_32 = vec_splat_u32(0);
 		vector unsigned int   vsh = vec_splat_u32(4);
 		vector unsigned char   v1 = vec_splat_u8(1);
-		vector unsigned char vord = vec_ident_rev() + v1;
+		vector unsigned char vord;
 		vector unsigned char   v0 = vec_splat_u8(0);
 		vector unsigned int vs1, vs2;
 		vector unsigned char in16, vord_a, v1_a, vperm;
-		unsigned f, n;
-		unsigned k, block_num;
+		unsigned int f, n;
+		unsigned int k, block_num;
 
+		/*
+		 * if i understand the Altivec PEM right, little
+		 * endian impl. should have the data reversed on
+		 * load, so the big endian vorder works.
+		 */
+		vord = vec_ident_rev() + v1;
 		block_num = DIV_ROUNDUP(len, 512); /* 32 block size * 16 bytes */
 		f  = 512;
 		f |= block_num >= 256 ? 0 : block_num << 16;
@@ -107,16 +115,12 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		/* add n times s1 to s2 for start round */
 		s2 += s1 * n;
 
-		/* set sums 0 */
-		vs1 = v0_32;
-		vs2 = v0_32;
-
 		k = len < VNMAX ? (unsigned)len : VNMAX;
 		len -= k;
 
 		/* insert scalar start somewhere */
-		vs1 = vec_lde(0, &s1);
-		vs2 = vec_lde(0, &s2);
+		vs1 = vector_load_one_u32(s1);
+		vs2 = vector_load_one_u32(s2);
 
 		/* get input data */
 		in16 = vec_ldl(0, buf);
@@ -132,10 +136,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 		if(likely(k >= SOVUC)) do
 		{
-			vector unsigned int vs1_r = v0_32;
+			vector unsigned int vs1_r = vec_splat_u32(0);
 			f  = 512;
 			f |= block_num >= 256 ? 0 : block_num << 16;
 			vec_dst(buf, f, 2);
+
 			do
 			{
 				/* get input data */
@@ -151,22 +156,21 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 				buf += SOVUC;
 				k -= SOVUC;
-			} while (k >= SOVUC);
-			/* reduce vs1 round sum before multiplying by 16 */
-			vs1_r = vector_reduce(vs1_r);
+			} while(k >= SOVUC);
+			/* chop vs1 round sum before multiplying by 16 */
+			vs1_r = vector_chop(vs1_r);
 			/* add all vs1 for 16 times */
 			vs2 += vec_sl(vs1_r, vsh);
-			/* reduce the vectors to something in the range of BASE */
-			vs2 = vector_reduce(vs2);
-			vs1 = vector_reduce(vs1);
+			/* chop the vectors to something in the range of BASE */
+			vs2 = vector_chop(vs2);
+			vs1 = vector_chop(vs1);
 			len += k;
 			k = len < VNMAX ? (unsigned)len : VNMAX;
 			block_num = DIV_ROUNDUP(len, 512); /* 32 block size * 16 bytes */
 			len -= k;
 		} while(likely(k >= SOVUC));
 
-		if(likely(k))
-		{
+		if (likely(k)) {
 			vector unsigned int vk;
 			/*
 			 * handle trailer
@@ -178,7 +182,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			v1_a   = vec_perm(v1, v0, vperm);
 
 			/* add k times vs1 for this trailer */
-			vk = (vector unsigned int)vec_lvsl(0, (unsigned *)(uintptr_t)k);
+			vk = (vector unsigned int)vec_lvsl(0, (unsigned *)(intptr_t)k);
 			vk = (vector unsigned)vec_mergeh(v0, (vector unsigned char)vk);
 			vk = (vector unsigned)vec_mergeh((vector unsigned short)v0, (vector unsigned short)vk);
 			vk = vec_splat(vk, 0);
@@ -196,82 +200,28 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			k -= k;
 		}
 
-#if 0
-		/*
-		 * OBSOLETE:
-		 * We now have a "cheap" reduce to get the vectors in a range
-		 * around BASE, they still need the final proper mod, but we can
-		 * stay on the vector unit and do not overflow.
-		 * ----------------------------------------------------------
-		 * We could stay more than NMAX in the loops above and
-		 * fill the first uint32_t near overflow.
-		 * Then we have to make the modulus on all vector elements.
-		 * there is only one problem:
-		 * No divide.
-		 *
-		 * This is not really a problem, there is the trick to
-		 * multiply by the "magic reciprocal". GCC does the same even
-		 * in scalar code to prevent a divide (modern CPUs:
-		 * mul 8 cycles, div still 44 cycles).
-		 *
-		 * But there we bump into the next problem:
-		 * no 32 Bit mul and esp. no 64 Bit results...
-		 *
-		 * We can also work around this, but it is expensive.
-		 * So to be a win the input array better is really big,
-		 * and that transfers over the stack hurt more than all this:
-		 */
-		v15_32 = vec_splat_u32(15);
-		vbase_recp = 4 times 0x080078071; /* a mem load hides here */
-		vbase  = 4 times 0xFFF1; /* and propably here */
-		/* divide vectors by BASE */
-		/* multiply vectors by BASE reciprocal, get high 32 bit */
-		vres1 = vec_mullwh(vs1, vbase_recp); /* 9 operations */
-		vres2 = vec_mullwh(vs2, vbase_recp);
-		/* adjust */
-		vres1 = vec_sr(vres1, v15_32);
-		vres2 = vec_sr(vres2, v15_32);
-		/* multiply result again by BASE */
-		vres1 = vec_mullw(vbase, vres1); /* 7 oprations */
-		vres2 = vec_mullw(vbase, vres2);
-		/* substract result */
-		vs1 -= vres1;
-		vs2 -= vres2;
-		/*
-		 * Nearly 19 vector ops per vector ~ 40 in total
-		 *
-		 * Hint: after building the horizontal sum, you have to
-		 * do the mod dance again, then in scalar code.
-		 *
-		 * on x86, which is similar challanged (has 64 bit mul,
-		 * but you need to unpack, load constants, reshuffle)
-		 * but has faster simd <-> cpu transport, it's only a
-		 * whiff of a win, and a loss on medium lengths.
-		 *
-		 * Just noted down it doesn't get lost.
-		 */
-#endif
 		vec_dss(2);
 
 		/* add horizontal */
-		/* stuff should be reduced so no proplem with signed sature */
-		vs1 = (vector unsigned)vec_sums((vector int)vs1, (vector int)v0_32);
-		vs2 = (vector unsigned)vec_sums((vector int)vs2, (vector int)v0_32);
+		/* stuff should be choped so no proplem with signed saturate */
+		vs1 = (vector unsigned int)vec_sums((vector int)vs1, vec_splat_s32(0));
+		vs2 = (vector unsigned int)vec_sums((vector int)vs2, vec_splat_s32(0));
 		/* shake and roll */
 		vs1 = vec_splat(vs1, 3);
 		vs2 = vec_splat(vs2, 3);
 		vec_ste(vs1, 0, &s1);
 		vec_ste(vs2, 0, &s2);
+		/* after horizontal add, modulo again in scalar code */
 	}
 
 	if(unlikely(len)) do {
 		s1 += *buf++;
 		s2 += s1;
-	} while (--len);
-	reduce(s1);
-	reduce(s2);
+	} while(--len);
+	MOD28(s1);
+	MOD28(s2);
 
-	return s2 << 16 | s1;
+	return (s2 << 16) | s1;
 }
 
 static char const rcsid_a32ppc[] GCC_ATTR_USED_VAR = "$Id: $";

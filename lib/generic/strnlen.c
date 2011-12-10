@@ -65,7 +65,7 @@ size_t strnlen(const char *s, size_t maxlen)
 
 	maxlen -= SOST - f;
 	if(unlikely(!maxlen))
-		return p + SOUL - s;
+		return p + SOST - s;
 	do
 	{
 		p += SOST;

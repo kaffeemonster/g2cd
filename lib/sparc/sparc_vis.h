@@ -151,6 +151,8 @@ static GCC_ATTR_CONST inline unsigned long long fpmerge_hi(unsigned long long a,
 	asm ("fpmerge	%H1, %H2, %0" : "=e" (t) : "f" (a), "f" (b));
 	return t;
 }
+# define pextlbh(x) fpmerge_lo(fzero(), x)
+# define pexthbh(x) fpmerge_hi(fzero(), x)
 
 static inline unsigned fpack16(unsigned long long a)
 {
@@ -248,6 +250,20 @@ static GCC_ATTR_CONST inline unsigned long long fmuld8sux16_hi(unsigned long lon
 	unsigned long long t;
 	asm ("fmuld8sux16	%H1, %H2, %0" : "=e" (t) : "f" (a), "f" (b));
 	return t;
+}
+
+static GCC_ATTR_CONST inline unsigned long long fpmul16x16x32_lo(unsigned long long a, unsigned long long b)
+{
+	unsigned long long r_l = fmuld8ulx16_lo(a, b);
+	unsigned long long r_h = fmuld8sux16_lo(a, b);
+	return fpadd32(r_l, r_h);
+}
+
+static GCC_ATTR_CONST inline unsigned long long fpmul16x16x32_hi(unsigned long long a, unsigned long long b)
+{
+	unsigned long long r_l = fmuld8ulx16_hi(a, b);
+	unsigned long long r_h = fmuld8sux16_hi(a, b);
+	return fpadd32(r_l, r_h);
 }
 
 #define CMP_FUNC(x) \
