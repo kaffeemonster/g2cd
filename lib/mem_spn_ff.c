@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -46,6 +46,8 @@
 #  include "ppc/mem_spn_ff.c"
 # elif defined(__alpha__)
 #  include "alpha/mem_spn_ff.c"
+# elif defined(__tile__)
+#  include "tile/mem_spn_ff.c"
 # else
 #  include "generic/mem_spn_ff.c"
 # endif

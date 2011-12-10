@@ -2,7 +2,7 @@
  * to_base16.c
  * convert binary string to hex
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -50,6 +50,8 @@
 #  include "arm/to_base16.c"
 # elif defined(__ia64__)
 #  include "ia64/to_base16.c"
+# elif defined(__tile__)
+#  include "tile/to_base16.c"
 # else
 #  include "generic/to_base16.c"
 # endif

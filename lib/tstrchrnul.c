@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -55,6 +55,8 @@
 #  include "ia64/tstrchrnul.c"
 # elif defined(__hppa__) || defined(__hppa64__)
 #  include "parisc/tstrchrnul.c"
+# elif defined(__tile__)
+#  include "tile/tstrchrnul.c"
 # else
 #  include "generic/tstrchrnul.c"
 # endif

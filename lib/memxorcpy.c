@@ -99,6 +99,8 @@
 #  include "sparc/memxorcpy.c"
 # elif defined(__arm__)
 #  include "arm/memxorcpy.c"
+# elif defined(__tile__)
+#  include "tile/memxorcpy.c"
 # else
 #  include "generic/memxorcpy.c"
 # endif

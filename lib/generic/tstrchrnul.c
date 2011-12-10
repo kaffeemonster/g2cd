@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, generic implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -46,8 +46,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	if(!HOST_IS_BIGENDIAN)
 		x >>= shift;
 	r  = has_nul_word(x);
-	x ^= mask;
-	r |= has_nul_word(x);
+	r |= has_eq_word(x, mask);
 	r <<= shift;
 	if(HOST_IS_BIGENDIAN)
 		r >>= shift;
@@ -57,8 +56,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 		p += SOST;
 		x  = *(const size_t *)p;
 		r  = has_nul_word(x);
-		x ^= mask;
-		r |= has_nul_word(x);
+		r |= has_eq_word(x, mask);
 	}
 	r = nul_word_index(r);
 	return ((tchar_t *)(uintptr_t)p) + r;

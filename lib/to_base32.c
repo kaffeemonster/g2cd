@@ -2,7 +2,7 @@
  * to_base32.c
  * convert binary string to base 32
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,6 +53,8 @@
 #  include "arm/to_base32.c"
 # elif defined(__ia64__)
 #  include "ia64/to_base32.c"
+# elif defined(__tile__)
+#  include "tile/to_base32.c"
 # else
 #  include "generic/to_base32.c"
 # endif

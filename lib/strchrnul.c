@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platforms
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -61,6 +61,8 @@ char *strchrnul(const char *s, int c);
 #  include "ia64/strchrnul.c"
 # elif defined(__hppa__) || defined(__hppa64__)
 #  include "parisc/strchrnul.c"
+# elif defined(__tile__)
+#  include "tile/strchrnul.c"
 # else
 #  include "generic/strchrnul.c"
 # endif

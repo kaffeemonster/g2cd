@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -59,6 +59,8 @@
 #  include "arm/mempopcnt.c"
 # elif defined(__mips__)
 #  include "mips/mempopcnt.c"
+# elif defined(__tile__)
+#  include "tile/mempopcnt.c"
 # else
 #  include "generic/mempopcnt.c"
 # endif

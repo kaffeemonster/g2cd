@@ -45,6 +45,8 @@
 #  include "x86/strlpcpy.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strlpcpy.c"
+# elif defined(__tile__)
+#  include "tile/strlpcpy.c"
 # else
 #  include "generic/strlpcpy.c"
 # endif

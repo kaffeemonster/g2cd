@@ -129,7 +129,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			  /* %2  */ "=f" (vs2),
 			  /* %3  */ "=&f" (in_lo),
 			  /* %4  */ "=&f" (in_hi)
-			: /* %5  */ "f" (f * CHAR_BIT),
+			: /* %5  */ "f" (f * BITS_PER_CHAR),
 			  /* %6  */ "f" (v0),
 			  /* %7  */ "f" (vord_lo),
 			  /* %8  */ "f" (vord_hi),
@@ -268,7 +268,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 				  /* %2  */ "=f" (vs2),
 				  /* %3  */ "=&f" (in_lo),
 				  /* %4  */ "=&f" (in_hi)
-				: /* %5  */ "f" (f * CHAR_BIT),
+				: /* %5  */ "f" (f * BITS_PER_CHAR),
 				  /* %6  */ "f" (vk),
 				  /* %7  */ "f" (v0),
 				  /* %8  */ "f" (vord_lo),
@@ -361,11 +361,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		/* get input data */
 		srl = *(const unsigned int *)buf;
 		if(HOST_IS_BIGENDIAN) {
-			srl <<= f * CHAR_BIT;
-			srl >>= f * CHAR_BIT;
+			srl <<= f * BITS_PER_CHAR;
+			srl >>= f * BITS_PER_CHAR;
 		} else {
-			srl >>= f * CHAR_BIT;
-			srl <<= f * CHAR_BIT;
+			srl >>= f * BITS_PER_CHAR;
+			srl <<= f * BITS_PER_CHAR;
 		}
 		in4 = (v4i8)srl;
 
@@ -494,11 +494,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			/* get input data */
 			srl = *(const unsigned int *)buf;
 			if(HOST_IS_BIGENDIAN) {
-				srl >>= f * CHAR_BIT;
-				srl <<= f * CHAR_BIT;
+				srl >>= f * BITS_PER_CHAR;
+				srl <<= f * BITS_PER_CHAR;
 			} else {
-				srl <<= f * CHAR_BIT;
-				srl >>= f * CHAR_BIT;
+				srl <<= f * BITS_PER_CHAR;
+				srl >>= f * BITS_PER_CHAR;
 			}
 			in4 = (v4i8)srl;
 

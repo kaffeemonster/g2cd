@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,6 +53,8 @@
 #  include "alpha/popcountst.c"
 # elif defined(__arm__)
 #  include "arm/popcountst.c"
+# elif defined(__tile__)
+#  include "tile/popcountst.c"
 # else
 #  include "generic/popcountst.c"
 # endif

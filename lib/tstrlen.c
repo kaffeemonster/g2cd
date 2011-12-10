@@ -2,7 +2,7 @@
  * tstrlen.c
  * strlen for tchar
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,6 +53,8 @@
 #  include "ia64/tstrlen.c"
 # elif defined(__hppa__) || defined(__hppa64__)
 #  include "parisc/tstrlen.c"
+# elif defined(__tile__)
+#  include "tile/tstrlen.c"
 # else
 #  include "generic/tstrlen.c"
 # endif

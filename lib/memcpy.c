@@ -46,6 +46,8 @@
 # elif defined(__sparc) || defined(__sparc__)
 	/* works for both */
 #  include "sparc/memcpy.c"
+# elif defined(__tile__)
+#  include "tile/memcpy.c"
 # else
 #  include "generic/memcpy.c"
 # endif

@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient
  *
- * Copyright (c) 2006-2009 Jan Seiffert
+ * Copyright (c) 2006-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -95,6 +95,8 @@
 #  include "sparc/memand.c"
 # elif defined(__arm__)
 #  include "arm/memand.c"
+# elif defined(__tile__)
+#  include "tile/memand.c"
 # else
 #  include "generic/memand.c"
 # endif

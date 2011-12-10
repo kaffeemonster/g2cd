@@ -72,11 +72,11 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			if(f)
 			{
 				if(!HOST_IS_BIGENDIAN) {
-					in8 >>= f * CHAR_BIT;
-					in8 <<= f * CHAR_BIT;
+					in8 >>= f * BITS_PER_CHAR;
+					in8 <<= f * BITS_PER_CHAR;
 				} else {
-					in8 <<= f * CHAR_BIT;
-					in8 >>= f * CHAR_BIT;
+					in8 <<= f * BITS_PER_CHAR;
+					in8 >>= f * BITS_PER_CHAR;
 				}
 			}
 
@@ -594,9 +594,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 			/* swizzle data in place */
 			if(!HOST_IS_BIGENDIAN)
-				in8 <<= n * CHAR_BIT;
+				in8 <<= n * BITS_PER_CHAR;
 			else
-				in8 >>= n * CHAR_BIT;
+				in8 >>= n * BITS_PER_CHAR;
 
 			/* add k times vs1 for this trailer */
 			vs2 += vs1 * k;

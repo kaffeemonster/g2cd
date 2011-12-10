@@ -54,6 +54,8 @@ char *strrchr(const char *s, int c);
 #  include "ia64/strrchr.c"
 # elif defined(__powerpc__) || defined(__powerpc64__)
 #  include "ppc/strrchr.c"
+# elif defined(__tile__)
+#  include "tile/strrchr.c"
 # elif defined(__i386__) || defined(__x86_64__)
 	/* works for both */
 #  include "x86/strrchr.c"

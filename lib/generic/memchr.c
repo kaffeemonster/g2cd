@@ -2,7 +2,7 @@
  * memchr.c
  * memchr, generic implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -52,8 +52,7 @@ void *my_memchr(const void *s, int c, size_t n)
 	r  = *(const size_t *)p;
 	if(!HOST_IS_BIGENDIAN)
 		r >>= f * BITS_PER_CHAR;
-	r ^= mask;
-	r  = has_nul_byte(r);
+	r  = has_eq_byte(r, mask);
 	if(!HOST_IS_BIGENDIAN) {
 		r <<=  k      * BITS_PER_CHAR;
 		r >>= (k + f) * BITS_PER_CHAR;
@@ -71,8 +70,7 @@ void *my_memchr(const void *s, int c, size_t n)
 	{
 		p += SOST;
 		r  = *(const size_t *)p;
-		r ^= mask;
-		r  = has_nul_byte(r);
+		r  = has_eq_byte(r, mask);
 		if(n <= SOST)
 			break;
 		n -= SOST;

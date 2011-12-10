@@ -36,6 +36,7 @@ TARED_DIRS += \
 	$(MPL)/ppc \
 	$(MPL)/parisc \
 	$(MPL)/sparc \
+	$(MPL)/tile \
 	$(MPL)/ia64 \
 	$(MPL)/alpha \
 	$(MPL)/arm
@@ -83,6 +84,7 @@ LIBHEADS = \
 	$(MPL)/ppc/ppc.h \
 	$(MPL)/parisc/parisc.h \
 	$(MPL)/sparc/sparc_vis.h \
+	$(MPL)/tile/tile.h \
 	$(MPL)/ia64/ia64.h \
 	$(MPL)/generic/little_endian.h \
 	$(MPL)/generic/big_endian.h
@@ -96,6 +98,7 @@ UNALIGNEDSRC = \
 	$(MPL)/ppc/unaligned.h \
 	$(MPL)/parisc/unaligned.h \
 	$(MPL)/sparc/unaligned.h \
+	$(MPL)/tile/unaligned.h \
 	$(MPL)/x86/unaligned.h \
 	$(MPL)/generic/unaligned.h \
 	$(MPL)/unaligned/access_ok.h \
@@ -144,6 +147,7 @@ FLSSTSRC = \
 	$(MPL)/ppc/flsst.c \
 	$(MPL)/alpha/flsst.c \
 	$(MPL)/ia64/flsst.c \
+	$(MPL)/tile/flsst.c \
 	$(MPL)/arm/flsst.c
 POPCOUNTSTSRC = \
 	$(MPL)/generic/popcountst.c \
@@ -151,6 +155,7 @@ POPCOUNTSTSRC = \
 	$(MPL)/x86/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
 	$(MPL)/sparc/popcountst.c \
+	$(MPL)/tile/popcountst.c \
 	$(MPL)/ppc/popcountst.c \
 	$(MPL)/alpha/popcountst.c
 CPY_RESTSRC = \
@@ -164,6 +169,7 @@ MEMXORCPYSRC = \
 	$(MPL)/x86/memxorcpy.c \
 	$(MPL)/x86/memxorcpy_tmpl.c \
 	$(MPL)/ppc/memxorcpy.c \
+	$(MPL)/tile/memxorcpy.c \
 	$(MPL)/sparc/memxorcpy.c
 MEMANDSRC = \
 	$(MPL)/generic/memand.c \
@@ -171,6 +177,7 @@ MEMANDSRC = \
 	$(MPL)/x86/memand.c \
 	$(MPL)/x86/memand_tmpl.c \
 	$(MPL)/ppc/memand.c \
+	$(MPL)/tile/memand.c \
 	$(MPL)/sparc/memand.c
 MEMNEGSRC = \
 	$(MPL)/generic/memneg.c \
@@ -178,10 +185,12 @@ MEMNEGSRC = \
 	$(MPL)/x86/memneg.c \
 	$(MPL)/x86/memneg_tmpl.c \
 	$(MPL)/ppc/memneg.c \
+	$(MPL)/tile/memneg.c \
 	$(MPL)/sparc/memneg.c
 MEMCPYSRC = \
 	$(MPL)/generic/memcpy.c \
 	$(MPL)/sparc/memcpy.c \
+	$(MPL)/tile/memcpy.c \
 	$(MPL)/x86/memcpy_tmpl.c \
 	$(MPL)/x86/memcpy.c
 MEMPCPYSRC = \
@@ -196,6 +205,7 @@ MEMCHRSRC = \
 	$(MPL)/mips/memchr.c \
 	$(MPL)/ia64/memchr.c \
 	$(MPL)/parisc/memchr.c \
+	$(MPL)/tile/memchr.c \
 	$(MPL)/x86/memchr.c \
 	$(MPL)/ppc/memchr.c
 MEMPOPCNTSRC = \
@@ -204,6 +214,7 @@ MEMPOPCNTSRC = \
 	$(MPL)/arm/mempopcnt.c \
 	$(MPL)/mips/mempopcnt.c \
 	$(MPL)/sparc/mempopcnt.c \
+	$(MPL)/tile/mempopcnt.c \
 	$(MPL)/ia64/mempopcnt.c \
 	$(MPL)/ppc/mempopcnt.c \
 	$(MPL)/x86/mempopcnt.c
@@ -212,12 +223,14 @@ MEM_SEARCHRNSRC = \
 	$(MPL)/alpha/mem_searchrn.c \
 	$(MPL)/arm/mem_searchrn.c \
 	$(MPL)/ia64/mem_searchrn.c \
+	$(MPL)/tile/mem_searchrn.c \
 	$(MPL)/x86/mem_searchrn.c \
 	$(MPL)/ppc/mem_searchrn.c
 MEM_SPN_FF_SRC = \
 	$(MPL)/generic/mem_spn_ff.c \
 	$(MPL)/alpha/mem_spn_ff.c \
 	$(MPL)/ppc/mem_spn_ff.c \
+	$(MPL)/tile/mem_spn_ff.c \
 	$(MPL)/x86/mem_spn_ff.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
@@ -226,6 +239,7 @@ STRNLENSRC = \
 	$(MPL)/parisc/strnlen.c \
 	$(MPL)/ia64/strnlen.c \
 	$(MPL)/mips/strnlen.c \
+	$(MPL)/tile/strnlen.c \
 	$(MPL)/x86/strnlen.c \
 	$(MPL)/ppc/strnlen.c
 STRLENSRC = \
@@ -235,6 +249,7 @@ STRLENSRC = \
 	$(MPL)/mips/strlen.c \
 	$(MPL)/ia64/strlen.c \
 	$(MPL)/parisc/strlen.c \
+	$(MPL)/tile/strlen.c \
 	$(MPL)/x86/strlen.c \
 	$(MPL)/ppc/strlen.c
 STRCHRNULSRC = \
@@ -244,6 +259,7 @@ STRCHRNULSRC = \
 	$(MPL)/mips/strchrnul.c \
 	$(MPL)/ia64/strchrnul.c \
 	$(MPL)/parisc/strchrnul.c \
+	$(MPL)/tile/strchrnul.c \
 	$(MPL)/x86/strchrnul.c \
 	$(MPL)/ppc/strchrnul.c
 STRRCHRSRC = \
@@ -252,6 +268,7 @@ STRRCHRSRC = \
 	$(MPL)/arm/strrchr.c \
 	$(MPL)/parisc/strrchr.c \
 	$(MPL)/ia64/strrchr.c \
+	$(MPL)/tile/strrchr.c \
 	$(MPL)/ppc/strrchr.c \
 	$(MPL)/x86/strrchr.c
 STRNCASECMP_ASRC = \
@@ -259,10 +276,12 @@ STRNCASECMP_ASRC = \
 	$(MPL)/alpha/strncasecmp_a.c \
 	$(MPL)/ia64/strncasecmp_a.c \
 	$(MPL)/parisc/strncasecmp_a.c \
+	$(MPL)/tile/strncasecmp_a.c \
 	$(MPL)/x86/strncasecmp_a.c \
 	$(MPL)/ppc/strncasecmp_a.c
 STRLPCPYSRC = \
 	$(MPL)/generic/strlpcpy.c \
+	$(MPL)/tile/strlpcpy.c \
 	$(MPL)/x86/strlpcpy.c \
 	$(MPL)/ppc/strlpcpy.c
 STRREVERSE_LSRC = \
@@ -276,12 +295,14 @@ TO_BASE16SRC = \
 	$(MPL)/alpha/to_base16.c \
 	$(MPL)/ia64/to_base16.c \
 	$(MPL)/ppc/to_base16.c \
+	$(MPL)/tile/to_base16.c \
 	$(MPL)/x86/to_base16.c
 TO_BASE32SRC = \
 	$(MPL)/generic/to_base32.c \
 	$(MPL)/alpha/to_base32.c \
 	$(MPL)/arm/to_base32.c \
 	$(MPL)/ia64/to_base32.c \
+	$(MPL)/tile/to_base32.c \
 	$(MPL)/x86/to_base32.c
 TSTRLENSRC = \
 	$(MPL)/generic/tstrlen.c \
@@ -290,6 +311,7 @@ TSTRLENSRC = \
 	$(MPL)/mips/tstrlen.c \
 	$(MPL)/ia64/tstrlen.c \
 	$(MPL)/parisc/tstrlen.c \
+	$(MPL)/tile/tstrlen.c \
 	$(MPL)/x86/tstrlen.c \
 	$(MPL)/ppc/tstrlen.c
 TSTRCHRNULSRC = \
@@ -299,6 +321,7 @@ TSTRCHRNULSRC = \
 	$(MPL)/mips/tstrchrnul.c \
 	$(MPL)/ia64/tstrchrnul.c \
 	$(MPL)/parisc/tstrchrnul.c \
+	$(MPL)/tile/tstrchrnul.c \
 	$(MPL)/x86/tstrchrnul.c \
 	$(MPL)/ppc/tstrchrnul.c
 TSTRNCMPSRC = \
@@ -310,6 +333,7 @@ ADLER32SRC = \
 	$(MPL)/ia64/adler32.c \
 	$(MPL)/mips/adler32.c \
 	$(MPL)/sparc/adler32.c \
+	$(MPL)/tile/adler32.c \
 	$(MPL)/x86/adler32.c \
 	$(MPL)/ppc/adler32.c
 MY_BITOPSSRC = \

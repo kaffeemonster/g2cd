@@ -35,11 +35,27 @@ static inline size_t has_nul_byte(size_t a)
 	return res;
 }
 
+#  undef has_eq_byte
+static inline size_t has_eq_byte(size_t a, size_t b)
+{
+	size_t res;
+	asm("cmpb	%0, %1, %2" : "=r" (res) : "%rO" (a), "rO" (b));
+	return res;
+}
+
 #  undef has_nul_word
 static inline size_t has_nul_word(size_t a)
 {
 	size_t res;
 	asm("cmpb	%0, %1, %2" : "=r" (res) : "%rO" (a), "rO" (0));
+	return res & ((res & MK_C(0x00FF00FF)) << BITS_PER_CHAR);
+}
+
+#  undef has_eq_word
+static inline size_t has_eq_word(size_t a, size_t b)
+{
+	size_t res;
+	asm("cmpb	%0, %1, %2" : "=r" (res) : "%rO" (a), "rO" (b));
 	return res & ((res & MK_C(0x00FF00FF)) << BITS_PER_CHAR);
 }
 # endif

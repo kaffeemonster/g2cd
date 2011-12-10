@@ -2,7 +2,7 @@
  * my_bitopsm.h
  * bitbanging helber defines
  *
- * Copyright (c) 2006-2010 Jan Seiffert
+ * Copyright (c) 2006-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -109,6 +109,8 @@
 	 *	3210987654321098765432109876543210987654321098765432109876543210
 	 *	1000000010000000100000001000000010000000100000001000000010000000
 	 */
+# define has_eq_byte(x, y) has_nul_byte((x) ^ (y))
+
 # define has_nul_word32(x) \
 	(((x) -  0x00010001) & ~(x) &  0x80008000)
 # define has_nul_word(x) \
@@ -127,5 +129,7 @@
 	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F);
 # define packedmask_864(x) \
 	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28 | (x) >>  35| (x) >> 42 | (x) >> 49 | (x) >> 56) & 0xFF);
+
+# define has_eq_word(x, y) has_nul_word((x) ^ (y))
 
 #endif

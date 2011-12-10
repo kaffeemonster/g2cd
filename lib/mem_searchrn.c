@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -50,6 +50,8 @@
 #  include "arm/mem_searchrn.c"
 # elif defined(__ia64__)
 #  include "ia64/mem_searchrn.c"
+# elif defined(__tile__)
+#  include "tile/mem_searchrn.c"
 # else
 #  include "generic/mem_searchrn.c"
 # endif

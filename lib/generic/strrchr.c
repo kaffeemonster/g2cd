@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, generic implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -62,8 +62,7 @@ char *strrchr(const char *s, int c)
 	if(!HOST_IS_BIGENDIAN)
 		x >>= shift;
 	r  = has_nul_byte(x);
-	x ^= mask;
-	m  = has_nul_byte(x);
+	m  = has_eq_byte(x, mask);
 	r <<= shift;
 	m <<= shift;
 	if(HOST_IS_BIGENDIAN) {
@@ -82,8 +81,7 @@ char *strrchr(const char *s, int c)
 		p += SOST;
 		x  = *(const size_t *)p;
 		r  = has_nul_byte(x);
-		x ^= mask;
-		m  = has_nul_byte(x);
+		m  = has_eq_byte(x, mask);
 	}
 	if(m) {
 		r = nul_byte_index(r);

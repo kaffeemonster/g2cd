@@ -78,6 +78,8 @@ size_t strnlen(const char *s, size_t maxlen);
 #  include "ia64/strnlen.c"
 # elif defined(__hppa__) || defined(__hppa64__)
 #  include "parisc/strnlen.c"
+# elif defined(__tile__)
+#  include "tile/strnlen.c"
 # else
 #  include "generic/strnlen.c"
 # endif

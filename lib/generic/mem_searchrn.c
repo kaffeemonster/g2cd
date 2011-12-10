@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, generic implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,6 +27,8 @@ void *mem_searchrn(void *s, size_t len)
 {
 	char *p;
 	size_t rr, rn, last_rr = 0;
+	const size_t crr = MK_C(0x0D0D0D0D); /* \r\r\r\r */
+	const size_t crn = MK_C(0x0A0A0A0A); /* \n\n\n\n */
 	ssize_t f, k;
 	prefetch(s);
 
@@ -52,8 +54,7 @@ void *mem_searchrn(void *s, size_t len)
 
 	p  = (char *)ALIGN_DOWN(s, SOST);
 	rn = (*(size_t *)p);
-	rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
-	rr = has_nul_byte(rr);
+	rr = has_eq_byte(rn, crr);
 	if(!HOST_IS_BIGENDIAN) {
 		rr <<= k * BITS_PER_CHAR;
 		rr >>= k * BITS_PER_CHAR;
@@ -71,8 +72,7 @@ void *mem_searchrn(void *s, size_t len)
 			last_rr = rr >> SOSTM1 * BITS_PER_CHAR;
 		else
 			last_rr = rr << SOSTM1 * BITS_PER_CHAR;
-		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-		rn  = has_nul_byte(rn);
+		rn  = has_eq_byte(rn, crn);
 		if(!HOST_IS_BIGENDIAN)
 			rr &= rn >> BITS_PER_CHAR;
 		else
@@ -88,15 +88,13 @@ void *mem_searchrn(void *s, size_t len)
 	{
 		p += SOST;
 		rn = *(size_t *)p;
-		rr = rn ^ MK_C(0x0D0D0D0D); /* \r\r\r\r */
-		rr = has_nul_byte(rr);
+		rr = has_eq_byte(rn, crr);
 		if(unlikely(len <= SOST))
 			break;
 		len -= SOST;
 		if(rr || last_rr)
 		{
-			rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-			rn = has_nul_byte(rn);
+			rn = has_eq_byte(rn, crn);
 			last_rr &= rn;
 			if(last_rr)
 				return p - 1;
@@ -122,8 +120,7 @@ void *mem_searchrn(void *s, size_t len)
 	}
 	if(rr || last_rr)
 	{
-		rn ^= MK_C(0x0A0A0A0A); /* \n\n\n\n */
-		rn = has_nul_byte(rn);
+		rn = has_eq_byte(rn, crn);
 		last_rr &= rn;
 		if(last_rr)
 			return p - 1;

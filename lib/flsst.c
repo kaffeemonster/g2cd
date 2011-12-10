@@ -55,6 +55,8 @@
 	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
 	defined(__ARM_ARCH_7A__)
 #  include "arm/flsst.c"
+# elif defined(__tile__)
+#  include "tile/flsst.c"
 # else
 #  include "generic/flsst.c"
 # endif

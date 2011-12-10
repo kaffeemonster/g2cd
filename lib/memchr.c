@@ -55,6 +55,8 @@
 #  include "ia64/memchr.c"
 # elif defined(__hppa__) || defined(__hppa64__)
 #  include "parisc/memchr.c"
+# elif defined(__tile__)
+#  include "tile/memchr.c"
 # else
 #  include "generic/memchr.c"
 # endif

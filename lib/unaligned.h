@@ -28,6 +28,8 @@
 #  include "parisc/unaligned.h"
 # elif defined(__alpha__)
 #  include "alpha/unaligned.h"
+# elif defined(__tile__)
+#  include "tile/unaligned.h"
 # else
 #  include "generic/unaligned.h"
 # endif

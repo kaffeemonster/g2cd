@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platforms, generic implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2011 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,8 +49,7 @@ char *strchrnul(const char *s, int c)
 	if(!HOST_IS_BIGENDIAN)
 		x >>= shift;
 	r  = has_nul_byte(x);
-	x ^= mask;
-	r |= has_nul_byte(x);
+	r |= has_eq_byte(x, mask);
 	r <<= shift;
 	if(HOST_IS_BIGENDIAN)
 		r >>= shift;
@@ -60,8 +59,7 @@ char *strchrnul(const char *s, int c)
 		p += SOST;
 		x  = *(const size_t *)p;
 		r  = has_nul_byte(x);
-		x ^= mask;
-		r |= has_nul_byte(x);
+		r |= has_eq_byte(x, mask);
 	}
 	r = nul_byte_index(r);
 	return (char *)(uintptr_t)p + r;
