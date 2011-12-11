@@ -93,7 +93,7 @@ static char *strrchr_AVX2(const char *s, int c)
 		"vmovd	%k6, %%xmm0\n\t"
 #  endif
 		"mov	%1, %2\n\t"
-		"and	%7*$-1, %1\n\t"
+		"and	$(%c7*-1), %1\n\t"
 		"and	%7-1, %2\n\t"
 		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
 #  ifndef __i386__

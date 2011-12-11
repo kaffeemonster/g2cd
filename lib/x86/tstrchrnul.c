@@ -95,7 +95,7 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"vpbroadcastw	%%xmm0, %%ymm2\n\t"
 #  endif
 		"vmovdqa	(%1), %%ymm0\n\t"
-		"vpcmpeqw	%%ymm0, %%xmm2, %%xmm3\n\t"
+		"vpcmpeqw	%%ymm0, %%ymm2, %%ymm3\n\t"
 		"vpcmpeqw	%%ymm0, %%ymm1, %%ymm0\n\t"
 		"vpor	%%ymm0, %%ymm3, %%ymm0\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
@@ -112,7 +112,7 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"vpor	%%ymm0, %%ymm3, %%ymm0\n\t"
 		"vptest	%%ymm0, %%ymm1\n\t"
 		"jc	1b\n\t"
-		"vmovmskb	%%ymm0, %0\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
 		"2:"
 		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"

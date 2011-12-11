@@ -97,7 +97,7 @@ static char *strchrnul_AVX2(const char *s, int c)
 		"vmovdqa	(%1), %%ymm0\n\t"
 		"vpcmpeqb	%%ymm0, %%ymm2, %%ymm3\n\t"
 		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
-		"vpor	%%ymm0, %%xmm3, %%xmm0\n\t"
+		"vpor	%%ymm0, %%ymm3, %%ymm0\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"shr	%b2, %0\n\t"
 		"shl	%b2, %0\n\t"
