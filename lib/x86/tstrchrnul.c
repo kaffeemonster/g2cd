@@ -83,16 +83,16 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"mov	%3, %1\n\t"
 		"prefetcht0	(%1)\n\t"
 #  ifdef __i386__
-		"vbroadcastw	%4, %%ymm2\n\t"
+		"vpbroadcastw	%4, %%ymm2\n\t"
 #  else
-		"movd	%k4, %%ymm0\n\t"
+		"vmovd	%k4, %%xmm0\n\t"
 #  endif
 		"mov	%1, %2\n\t"
 		"and	$-32, %1\n\t"
 		"and	$0x1f, %2\n\t"
 		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
 #  ifndef __i386__
-		"vbroadcastw	%%xmm0, %%ymm2\n\t"
+		"vpbroadcastw	%%xmm0, %%ymm2\n\t"
 #  endif
 		"vmovdqa	(%1), %%ymm0\n\t"
 		"vpcmpeqw	%%ymm0, %%xmm2, %%xmm3\n\t"

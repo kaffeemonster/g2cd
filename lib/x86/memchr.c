@@ -76,13 +76,13 @@ static void *memchr_AVX2(const void *s, int c, size_t n)
 
 	asm (
 #  ifndef __x86_64__
-		"vbroadcastb	%5, %%ymm1\n\t"
+		"vpbroadcastb	%5, %%ymm1\n\t"
 #  else
-		"movd	%k5, %%ymm2\n\t"
+		"vmovd	%k5, %%xmm2\n\t"
 #  endif
 		"vpxor	%%ymm0, %%ymm0, %%ymm0\n\t"
 #  ifdef __x86_64__
-		"vbroadcastb	%%ymm2, %%ymm1\n\t"
+		"vpbroadcastb	%%xmm2, %%ymm1\n\t"
 #  endif
 		"mov	%7, %k2\n\t"
 		"vmovdqa	(%1), %%ymm0\n\t"

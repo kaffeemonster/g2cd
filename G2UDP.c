@@ -1853,7 +1853,7 @@ static ssize_t handle_udp_sock(struct epoll_event *udp_poll, struct norm_buff **
 	return result;
 }
 
-static void udp_setup_filter(some_fd udp_so, union combo_addr *our_addr)
+static void udp_setup_filter(some_fd udp_so GCC_ATTR_UNUSED_PARAM, union combo_addr *our_addr GCC_ATTR_UNUSED_PARAM)
 {
 #if defined(__linux__) && defined(HAVE_PCAP_BPF_H)
 	/*

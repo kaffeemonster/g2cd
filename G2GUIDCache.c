@@ -161,7 +161,7 @@ bool __init g2_guid_init(void)
 		e = (void *)buff;
 		name_len = read(cache.guid_dump, e, sizeof(*e));
 		if(sizeof(*e) == name_len)
-			g2_guid_add(e->guid, &e->na, e->when, e->type);
+			g2_guid_add(e->guid.g, &e->na, e->when, e->type);
 	} while(sizeof(*e) == name_len);
 
 out:
@@ -268,7 +268,7 @@ static struct guid_cache_entry *cache_ht_lookup(const union guid_fast *g, enum g
 
 	hlist_for_each_entry(e, n, &cache.ht[h & GUID_CACHE_HTMASK], node)
 	{
-		union guid_fast *x = (union guid_fast *)e->e.guid;
+		union guid_fast *x = &e->e.guid;
 
 		if(g->x[0] != x->x[0])
 			continue;
@@ -300,8 +300,8 @@ static long guid_entry_cmp(struct guid_cache_entry *a, struct guid_cache_entry *
 		return ret;
 	if((ret = (int)a->e.type - (int)b->e.type))
 		return ret;
-	ga = (union guid_fast *)a->e.guid;
-	gb = (union guid_fast *)b->e.guid;
+	ga = &a->e.guid;
+	gb = &b->e.guid;
 	if((ret = ga->x[0] - gb->x[0]))
 		return ret;
 	if((ret = ga->x[1] - gb->x[1]))
@@ -458,7 +458,7 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 		if(!e)
 			goto out_unlock;
 
-		memcpy(e->e.guid, guid, sizeof(e->e.guid));
+		memcpy(&e->e.guid, guid, sizeof(e->e.guid));
 		e->e.type = gt;
 		e->e.na = *addr;
 	}

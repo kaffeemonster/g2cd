@@ -59,8 +59,8 @@ enum guid_type
 struct guid_entry
 {
 	union combo_addr na;
+	union guid_fast guid;
 	time_t when;
-	uint8_t guid[GUID_SIZE];
 	enum guid_type type;
 };
 

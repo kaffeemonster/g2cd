@@ -1770,7 +1770,7 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 {
 	g2_connection_t *connec = parg->connec;
 	g2_packet_t *source = parg->source;
-	uint16_t akt_leaf = 0, max_leaf = 0;
+	uint16_t akt_leaf = 0/*, max_leaf = 0 */;
 	size_t rem = buffer_remaining(source->data_trunk);
 
 	/* we can not read any info in this case */
@@ -1779,8 +1779,10 @@ static bool handle_LNI_HS(struct ptype_action_args *parg)
 		/* sometimes Shareaza only sends 2 bytes, thats only the leaf count */
 		if(2 <= rem)
 			get_unaligned_endian(akt_leaf, (uint16_t *) buffer_start(source->data_trunk), source->big_endian);
+#if 0
 		if(4 <= rem)
 			get_unaligned_endian(max_leaf, (uint16_t *) (buffer_start(source->data_trunk)+2), source->big_endian);
+#endif
 
 		connec->u.handler.leaf_count = akt_leaf;
 		logg_packet_old("/LNI/HS:\told: %s leaf: %u max: %u\n",

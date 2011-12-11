@@ -739,7 +739,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 		{
 			struct gwc new_gwc;
 			datum key, value;
-			int since = 0;
+//			int since = 0;
 			char *next;
 
 			next = strstr(wptr, "http://");
@@ -751,10 +751,12 @@ static void gwc_handle_line(char *line, time_t lnow)
 			next = strchr(wptr, '|');
 			if(next) {
 				*next++ = '\0';
+#if 0
 				/* skip whitespace at timestamp start */
 				for(; *next && isblank_a((int)*next); next++);
 				if(*next && isdigit_a((int)*next))
 					since = atoi(next);
+#endif
 			}
 			/* trim trailing whitespace */
 			for(next = wptr + strlen(wptr) - 1; next >= wptr && isblank_a(*next); next--)

@@ -152,9 +152,11 @@ static GCC_ATTR_COLD void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 #  define BACKTRACE_DEPTH (sizeof(path) / sizeof(void *))
 	void **buffer = (void **) path;
 # endif
-	int stderrfd = fileno(stderr), ret_val = 0;
+	static int stderrfd;
+	int ret_val = 0;
 	unsigned i;
 
+	stderrfd = fileno(stderr);
 	if(-1 == stderrfd) {
 		/*
 		 * we crashed very late or something else is foo

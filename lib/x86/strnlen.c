@@ -71,6 +71,7 @@
 
 #include "x86_features.h"
 
+#define SOV32	32
 #define SOV16	16
 #define SOV8	8
 

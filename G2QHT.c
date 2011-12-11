@@ -1297,7 +1297,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 			for(s = my_memchr(w_ptr, '=', remain); s; s = my_memchr(w_ptr, '=', remain))
 			{
 				tchar_t *str_buf, *wptr, *str_buf_orig;
-				size_t len, o_len, tlen;
+				size_t len, /* o_len, */ tlen;
 				char *txt;
 
 				remain -= (s - w_ptr);
@@ -1323,7 +1323,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 					break; /* this should not happen... */
 
 				txt = txt_tbuf;
-				o_len = len;
+				/* o_len = len; */
 				len = decode_html_entities_utf8(txt, w_ptr, len);
 				while(*txt && isblank_a(*txt))
 					txt++, len--;

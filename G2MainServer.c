@@ -1099,7 +1099,11 @@ static __init void init_prng(void)
 	 * WARNING: even if the compiler cries and valgrind screems:
 	 * Do NOT memset/init rd!
 	 */
-	unsigned rd[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+	union {
+		unsigned u[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+		unsigned short s[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned short))];
+		unsigned char c[RAND_BLOCK_BYTE * 2];
+	} rd;
 	bool have_entropy = false;
 #ifndef WIN32
 	int fin;
@@ -1115,7 +1119,7 @@ static __init void init_prng(void)
 	if(0 > fin) {
 		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
 		            server.settings.entropy_source);
-	} else if(sizeof(rd) != read(fin, rd, sizeof(rd))) {
+	} else if(sizeof(rd.u) != read(fin, rd.u, sizeof(rd.u))) {
 		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
 		            server.settings.entropy_source);
 	} else
@@ -1124,7 +1128,7 @@ static __init void init_prng(void)
 #else
 	HCRYPTPROV cprovider_h = (HCRYPTPROV)INVALID_HANDLE_VALUE;
 	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-		CryptGenRandom(cprovider_h, sizeof(rd), (BYTE *)rd);
+		CryptGenRandom(cprovider_h, sizeof(rd.u), (BYTE *)rd.u);
 		CryptReleaseContext(cprovider_h, 0);
 		have_entropy = true;
 	}
@@ -1159,9 +1163,9 @@ static __init void init_prng(void)
 		t ^= get_unaligned((const unsigned *)sbox);
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
 		/* mix the uninitialized stack buffer with this seed */
-		for(i = 0; i < anum(rd); i++) {
-			unsigned o_rd = rd[i];
-			rd[i] ^= t;
+		for(i = 0; i < anum(rd.u); i++) {
+			unsigned o_rd = rd.u[i];
+			rd.u[i] ^= t;
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 			t ^= o_rd ^ get_unaligned((const unsigned *)(sbox + (t & 0xffff)));
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
@@ -1205,7 +1209,7 @@ static __init void init_prng(void)
 				if(av[0] == 25) /* AT_RANDOM */
 				{
 					unsigned char *ar = (unsigned char *)av[1];
-					uint16_t *rds = (uint16_t *)rd;
+					uint16_t *rds = (uint16_t *)rd.s;
 					for(sbox -= ar[0], i = 0; i < 15; i++, ar++)
 						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)ar)));
 					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *ar));
@@ -1223,11 +1227,11 @@ static __init void init_prng(void)
 	}
 #ifndef WIN32
 	else
-		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd),
+		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd.u),
 		     server.settings.entropy_source);
 #endif
 
-	random_bytes_init((char *)rd);
+	random_bytes_init((char *)rd.c);
 }
 
 static void read_uprofile(void)

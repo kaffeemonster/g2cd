@@ -473,6 +473,9 @@ if test x"$disable_warnings" = xno; then
 
 	CFLAGS="$WFLAGS $CFLAGS"
 fi
+PIE_OPTS=""
+AX_CHECK_COMPILER_FLAGS([-fpie],[PIE_OPTS="-fpie $PIE_OPTS"],[])
+AC_SUBST(PIE_OPTS)
 
 m4_include([m4/test_asm.m4])
 # use the compiler as as driver, since he may use some other as

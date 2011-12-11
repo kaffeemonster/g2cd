@@ -22,11 +22,19 @@ import sys
 ##############################################################################
 # Helper to get an enum
 #
-class Enum(set):
-	def __getattr__(self, name):
-		if name in self:
-			return name
-		raise AttributeError
+if sys.version_info < (2, 4):
+	from sets import Set
+	class Enum(Set):
+		def __getattr__(self, name):
+			if name in self:
+				return name
+			raise AttributeError
+else :
+	class Enum(set):
+		def __getattr__(self, name):
+			if name in self:
+				return name
+			raise AttributeError
 
 ##############################################################################
 # parser for different instruction forms
@@ -226,14 +234,14 @@ for line in in_file:
 		if line[1:].lstrip().startswith("define"):
 			x = line.partition("define")[2].split()
 			if x[0][0].isdigit():
-				print >> sys.stderr, "line {}: \"{}\" is not a legal preprocessor constant".format(line_num, x[0])
+				print >> sys.stderr, "line {0}: \"{1}\" is not a legal preprocessor constant".format(line_num, x[0])
 				continue
 			preprocs[x[0]] = x[1]
 		# check for undefines
 		if line[1:].lstrip().startswith("undefine"):
 			x = line.partition("undefine")[2].split()
 			if x[0][0].isdigit():
-				print >> sys.stderr, "line {}: \"{}\" is not a legal preprocessor constant".format(line_num, x[0])
+				print >> sys.stderr, "line {0}: \"{1}\" is not a legal preprocessor constant".format(line_num, x[0])
 				continue
 			del preprocs[x[0]]
 		# handle as comment
@@ -244,11 +252,11 @@ for line in in_file:
 	if not inst_txt in instructions:
 		t_end = tok[0].find(':')
 		if t_end < 1:
-			print >> sys.stderr, "line {}: \"{}\" is not a label and i don't know it".format(line_num, tok[0])
+			print >> sys.stderr, "line {0}: \"{1}\" is not a label and i don't know it".format(line_num, tok[0])
 			continue
 		label_str = tok[0][:t_end]
 		if len(label_str) < 1:
-			print >> sys.stderr, "line {}: empty label".format(line_num)
+			print >> sys.stderr, "line {0}: empty label".format(line_num)
 			continue
 		labels[label_str] = inst_num
 		continue
@@ -275,9 +283,9 @@ for line in in_file:
 	else :
 		# nothing matched, complain
 		if len(args) != forms[form][0]:
-			print >> sys.stderr, "line {}: instruction \"{}\" only takes {} operands".format(line_num, tok[0], forms[form][0])
+			print >> sys.stderr, "line {0}: instruction \"{1}\" only takes {2} operands".format(line_num, tok[0], forms[form][0])
 		else :
-			print >> sys.stderr, "line {}: operands do not match for instruction \"{}\"".format(line_num, tok[0])
+			print >> sys.stderr, "line {0}: operands do not match for instruction \"{1}\"".format(line_num, tok[0])
 		continue
 	inst_num += 1
 
@@ -288,7 +296,9 @@ for line in in_file:
 inst_num = 0
 
 # start output by header
-out_str = "/*\n * This file is generated automatically, do not edit\n *\n * for license information refer to the original file \"{}\"\n */\n\nstruct bpf_insn ".format(in_file_name)
+out_str  = "/*\n * This file is generated automatically, do not edit\n *\n * for license information refer to the original file \""
+out_str += in_file_name
+out_str += "\"\n */\n\nstruct bpf_insn "
 if in_file_name == "-":
 	out_str += "isns"
 else :
@@ -298,7 +308,7 @@ print out_str
 
 # for every instruction we collected
 for instr in inst_list:
-	out_str = "\t/* {0:3d} */ BPF_".format(inst_num)
+	out_str = "\t/* " + str(inst_num).rjust(3) + " */ BPF_"
 	if instr[0] != I_T.JMP:
 		out_str += "STMT"
 	else :
@@ -319,12 +329,12 @@ for instr in inst_list:
 					out_str += ", 0"
 				else :
 					if not instr[3] in labels:
-						print >> sys.stderr, "label \"{}\" is not known".format(instr[3])
+						print >> sys.stderr, "label \"{0}\" is not known".format(instr[3])
 						continue
 #					displ = labels[instr[3]] - inst_num + 1
 #					if displ < 0:
 #						print >> sys.stderr, "displacement of {} to large for jump".format(displ)
-					out_str += " {} - {}".format(labels[instr[3]], inst_num + 1)
+					out_str += str(labels[instr[3]]) + " - " + str(inst_num + 1)
 				out_str += ", 0, 0"
 			else :
 				out_str += str(instr[3]) + ", "
@@ -332,23 +342,23 @@ for instr in inst_list:
 					out_str += "0"
 				else :
 					if not instr[4] in labels:
-						print >> sys.stderr, "label \"{}\" is not known".format(instr[4])
+						print >> sys.stderr, "label \"{0}\" is not known".format(instr[4])
 						continue
 					displ = labels[instr[4]] - inst_num + 1
 					if displ > 256:
-						print >> sys.stderr, "displacement of {} to large for jump".format(displ)
-					out_str += "{} - {}".format(labels[instr[4]], inst_num + 1)
+						print >> sys.stderr, "displacement of {0} to large for jump".format(displ)
+					out_str += str(labels[instr[4]]) + " - " + str(inst_num + 1)
 				out_str += ", "
 				if instr[5] == "#next":
 					out_str += "0"
 				else :
 					if not instr[5] in labels:
-						print >> sys.stderr, "label \"{}\" is not known".format(instr[5])
+						print >> sys.stderr, "label \"{0}\" is not known".format(instr[5])
 						continue
 					displ = labels[instr[5]] - inst_num + 1
 					if displ > 256:
-						print sys.stderr, "displacement of {} to large for jump".format(displ)
-					out_str += "{} - {}".format(labels[instr[5]], inst_num + 1)
+						print sys.stderr, "displacement of {0} to large for jump".format(displ)
+					out_str += str(labels[instr[5]]) + " - " + str(inst_num + 1)
 		else :
 			out_str += str(instr[3])
 	else :
