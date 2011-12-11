@@ -525,7 +525,7 @@ static __init void identify_cpu(void)
 	 *    main crash)
 	 *  - those OS are OLD and IMHO broken
 	 */
-	cpu_feature_clear(CFEATURE_SSE4_2);
+//	cpu_feature_clear(CFEATURE_SSE4_2);
 
 	return;
 }

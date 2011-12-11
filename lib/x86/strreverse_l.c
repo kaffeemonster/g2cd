@@ -400,7 +400,7 @@ static __init_cdata const struct test_cpu_feature tfeat_strreverse_l[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
-	{.func = (void (*)(void))strreverse_l_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))strreverse_l_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))strreverse_l_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},

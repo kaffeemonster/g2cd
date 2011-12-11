@@ -681,7 +681,7 @@ static __init_cdata const struct test_cpu_feature tfeat_my_memchr[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
-	{.func = (void (*)(void))memchr_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)} .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))memchr_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 #if 0
