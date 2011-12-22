@@ -251,7 +251,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		"sub	%3, %4\n\t"		/* len -= k */
 		"cmp	$16, %3\n\t"
 		"jb	8f\n\t"			/* if(k < 16) goto OUT */
-#if defined(__ELF__) && !defined(__clang__)
+#if HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	7f\n\t"
@@ -271,7 +271,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		"pslld	$4, %%xmm0\n\t"		/* x <<= 4 */
 		"paddd	%%xmm1, %%xmm0\n\t"	/* x += y */
 		"ret\n\t"
-#if defined(__ELF__) && !defined(__clang__)
+#if HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"7:\n\t"
@@ -610,7 +610,7 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 		"movd	%2, %%mm3\n\t"
 		"pxor	%%mm2, %%mm2\n\t"
 		"pxor	%%mm5, %%mm5\n\t"
-# if defined(__ELF__) && !defined(__clang__)
+# if HAVE_SUBSECTION
 		".subsection 2\n\t"
 # else
 		"jmp	7f\n\t"
@@ -625,7 +625,7 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
 		"pslld	$4, %%mm0\n\t"
 		"paddd	%%mm1, %%mm0\n\t"
 		"ret\n\t"
-# if defined(__ELF__) && !defined(__clang__)
+# if HAVE_SUBSECTION
 		".previous\n\t"
 # else
 		"7:\n\t"

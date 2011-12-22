@@ -122,7 +122,7 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 		"6:\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	5f\n\t"
@@ -136,7 +136,7 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		"jmp	5f\n\t"
 		".previous\n"
 #endif
@@ -201,7 +201,7 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"6:\n\t"
 		"lea	(%3, %1), %0\n\t"
 		"sub	%5, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	5f\n\t"
@@ -215,7 +215,7 @@ static size_t strnlen_SSE42(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		"jmp	5f\n\t"
 		".previous\n"
 #endif
@@ -286,7 +286,7 @@ static size_t strnlen_SSE41(const char *s, size_t maxlen)
 		"6:\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	5f\n\t"
@@ -300,7 +300,7 @@ static size_t strnlen_SSE41(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		"jmp	5f\n\t"
 		".previous\n"
 #endif
@@ -373,7 +373,7 @@ static size_t strnlen_SSE2(const char *s, size_t maxlen)
 		"6:\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	5f\n\t"
@@ -387,7 +387,7 @@ static size_t strnlen_SSE2(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		"jmp	5f\n\t"
 		".previous\n"
 #endif
@@ -459,7 +459,7 @@ static size_t strnlen_SSE(const char *s, size_t maxlen)
 		"6:\n\t"
 		"add	%1, %0\n\t"
 		"sub	%5, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	5f\n\t"
@@ -473,7 +473,7 @@ static size_t strnlen_SSE(const char *s, size_t maxlen)
 		"shr	%b3, %0\n\t"
 		"bsf	%0, %0\n\t"
 		"cmovz	%4, %0\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		"jmp	5f\n\t"
 		".previous\n"
 #endif

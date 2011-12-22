@@ -64,13 +64,8 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 	 * pay their bill...
 	 */
 		"lea	1f-3f(,%4,8), %2\n\t"
-		"call	i686_add_pc\n"
+		"call	.Li686_add_pc\n"
 		"3:\n\t"
-		".subsection 2\n"
-		"i686_add_pc:\n\t"
-		"addl (%%esp), %2\n\t"
-		"ret\n\t"
-		".previous\n\t"
 # endif
 #else
 # define CLOB "&"
@@ -109,6 +104,11 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 		"lea	(%2,%q4,8), %2\n\t"
 #endif
 		"jmp	*%2\n\t" /* computet goto FTW */
+#if defined(__i386__) && defined(__PIC__)
+		".Li686_add_pc:\n\t"
+		"addl (%%esp), %2\n\t"
+		"ret\n\t"
+#endif
 		".p2align 4,,7\n\t"
 		".p2align 3\n"
 		"1:\n\t"

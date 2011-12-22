@@ -294,13 +294,13 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return true;
 		if(unlikely(IN6_IS_ADDR_BMWG(a6)))
-			return false;
+			return true;
 		if(unlikely(IN6_IS_ADDR_ORCHID(a6)))
-			return false;
+			return true;
 		/* the compat range (::0/96) is deprecated,
 		 * do not talk to it till it gets reassigned */
 		if(IN6_IS_ADDR_V4COMPAT(a6))
-			return false;
+			return true;
 		/* keep test for v4 last */
 		if(IN6_IS_ADDR_V4MAPPED(a6) ||
 		   IN6_IS_ADDR_V4BEHAVE(a6))

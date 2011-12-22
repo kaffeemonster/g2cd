@@ -123,15 +123,14 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		"mov	%1, %2\n\t" /* duplicate src */
 		"and	$31, %2\n\t" /* create align difference */
 		"and	$-32, %1\n\t" /* align down src */
-		"vmovdqa	(%1), %%ymm3\n\t" /* load data */
-		"vmovdqa	%%ymm3, %%ymm2\n\t"
+		"vmovdqa	(%1), %%ymm2\n\t" /* load data */
 		"sub	%2, %4\n\t" /* k -= align diff */
-		"vpcmpeqb	%%ymm3, %%ymm1, %%ymm3\n\t"
-		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm2\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm1, %%ymm2\n\t"
 		"vpsrldq	$1, %%ymm3, %%ymm3\n\t" /* shift '\n' one down */
 		"sub	%7, %4\n\t" /* k -= len */
-		"vpmovmskb	%%ymm3, %3\n\t"
 		"vpmovmskb	%%ymm2, %0\n\t"
+		"vpmovmskb	%%ymm3, %3\n\t"
 		"ja	6f\n\t" /* k > 0 ? -> we are done */
 		"shr	%b2, %0\n\t" /* mask out lower stuff */
 		"shl	%b2, %0\n\t"
@@ -148,9 +147,8 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		"3:\n\t"
 		"shr	$31, %k3\n\t" /* pull high bit down */
 		"vmovdqa	32(%1), %%ymm2\n\t" /* load next data */
-		"vmovdqa	%%ymm2, %%ymm3\n\t" /* load next data */
 		"add	$32, %1\n\t" /* p += SOV32 */
-		"vpcmpeqb	%%ymm3, %%ymm1, %%ymm3\n\t"
+		"vpcmpeqb	%%ymm2, %%ymm1, %%ymm3\n\t"
 		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm2\n\t"
 		"vpmovmskb	%%ymm3, %k2\n\t"
 		"and	%k2, %k3\n\t" /* match between rn and last_rr? */
@@ -173,7 +171,7 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		 * done!
 		 * out
 		 */
-#  ifdef __ELF__
+#  ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #  else
 		"jmp	9f\n\t"
@@ -192,7 +190,7 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		"shl	%b2, %k0\n\t" /* cut mask upper bits */
 		"shr	%b2, %k0\n\t"
 		"jmp 2b\n\t"/* back to generate result */
-#  ifdef __ELF__
+#  ifdef HAVE_SUBSECTION
 		".previous\n"
 #  endif
 		"9:"
@@ -389,7 +387,7 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 		 * done!
 		 * out
 		 */
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	9f\n\t"
@@ -408,7 +406,7 @@ static void *mem_searchrn_SSE2(void *s, size_t len)
 		"shl	%b2, %w0\n\t" /* cut mask upper bits */
 		"shr	%b2, %w0\n\t"
 		"jmp 2b\n\t"/* back to generate result */
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n"
 #endif
 		"9:"
@@ -504,7 +502,7 @@ static void *mem_searchrn_SSE(void *s, size_t len)
 		 * done!
 		 * out
 		 */
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	9f\n\t"
@@ -523,7 +521,7 @@ static void *mem_searchrn_SSE(void *s, size_t len)
 		"shl	%b2, %w0\n\t" /* cut mask upper bits */
 		"shr	%b2, %w0\n\t"
 		"jmp 2b\n\t"/* back to generate result */
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n"
 #endif
 		"9:"

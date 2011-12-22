@@ -90,6 +90,8 @@ case "$host" in
 	*mingw*)
 		disable_dbus=yes;
 		disable_backtraces=yes;;
+	*cygwin*)
+		disable_backtrace=yes;;
 	*)
 		;;
 esac
@@ -510,6 +512,7 @@ if test x"$as_tst_needed" != xno; then
 			fi
 		fi
 	fi
+	AS_CHECK_FEATURE(.subsection, as_cv_subsection_tst, [-c], [.subsection 2], [AC_DEFINE(HAVE_SUBSECTION, 1, we have the subsection directive)])
 fi
 AC_DEFINE_UNQUOTED([HAVE_BINUTILS], [$susp_binutils], [set to the version of you AS])
 
@@ -635,7 +638,7 @@ fi
 
 if test x"$have_db_h" = xno; then
 	AC_CHECK_HEADER([ndbm.h], [],[][AC_MSG_ERROR(can not find an ndbm provider!)])
-	AC_SEARCH_LIBS([dbm_open], [ndbm dbm], [], [AC_MSG_ERROR(can not find ndbm!)])
+	AC_SEARCH_LIBS([dbm_open], [ndbm dbm gdbm gdbm_compat], [], [AC_MSG_ERROR(can not find ndbm!)])
 fi
 
 # Checks for typedefs, structures, and compiler characteristics.

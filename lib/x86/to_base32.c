@@ -56,11 +56,11 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 };
 
 #ifdef HAVE_BINUTILS
-# if 0
-static unsigned char *do_40bit_bmi2(unsigned char *dst, uint64_t d1)
+# if HAVE_BINUTILS >= 222
+static unsigned char *do_40bit_BMI2(unsigned char *dst, uint64_t d1)
 {
 	uint64_t d2;
-#  if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ >= 8
+#  if __SIZEOF_POINTER__-0 >= 8
 	uint64_t m1;
 
 	asm ("pdep %2, %1, %0" : "=r" (d2) : "r" (d1), "r" (0x1F1F1F1F1F1F1F1FULL));
@@ -73,14 +73,14 @@ static unsigned char *do_40bit_bmi2(unsigned char *dst, uint64_t d1)
 	m1   = 0x49 * m1;
 	d1  -= m1;
 	/* write out */
-	put_unaligned_be64(d1, dst);
+	put_unaligned(d1, (uint64_t *)dst);
 # else
 	uint32_t a1, a2;
 	uint32_t b1, b2;
 	uint32_t m1, m2;
 
-	asm ("pdep %2, %k1, %0" : "=r" (a2) : "r" (d1), "r" (0x1F1F1F1FUL));
-	asm ("pdep %2, %k1, %0" : "=r" (a1) : "r" (d1 >> 20), "r" (0x1F1F1F1FUL));
+	asm ("pdep %2, %k1, %0" : "=r" (a1) : "r" (d1), "r" (0x1F1F1F1FUL));
+	asm ("pdep %2, %k1, %0" : "=r" (a2) : "r" (d1 >> 20), "r" (0x1F1F1F1FUL));
 
 	/* convert */
 	a1  += 0x61616161UL;          a2  += 0x61616161UL;
@@ -89,10 +89,24 @@ static unsigned char *do_40bit_bmi2(unsigned char *dst, uint64_t d1)
 	m1   = 0x49 * m1;             m2   = 0x49 * m2;
 	a1  -= m1;                    a2  -= m2;
 	/* write out */
-	put_unaligned_be32(a1, dst);
-	put_unaligned_be32(a2, dst+4);
+	put_unaligned(a1, (uint32_t *)dst);
+	put_unaligned(a2, (uint32_t *)(dst+4));
 #  endif
 	return dst + 8;
+}
+
+static unsigned char *to_base32_BMI2(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	while(len >= sizeof(uint64_t))
+	{
+		uint64_t d = get_unaligned((const uint64_t *)src);
+		src += 5;
+		len -= 5;
+		dst = do_40bit_BMI2(dst, d);
+	}
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
 }
 # endif
 
@@ -669,6 +683,9 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 static __init_cdata const struct test_cpu_feature tfeat_to_base32[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))to_base32_BMI2,    .features = {[4] = CFB(CFEATURE_BMI2)}},
+# endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))to_base32_SSE41,   .features = {[1] = CFB(CFEATURE_SSE4_1)}},
 # endif

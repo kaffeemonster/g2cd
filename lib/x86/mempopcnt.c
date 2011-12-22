@@ -227,7 +227,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"cmp	$8, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#   ifdef __ELF__
+#   ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #   else
 		"jmp	99f\n\t"
@@ -251,7 +251,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"vpaddb	%%xmm2, %%xmm5, %%xmm5\n\t"
 		"vpsadbw	%%xmm0, %%xmm5, %%xmm5\n\t"
 		"ret\n\t"
-#   ifdef __ELF__
+#   ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #   else
 		"99:\n\t"
@@ -566,7 +566,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"prefetchnta	(%3)\n\t"
 		"prefetchnta	0x20(%3)\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-#  ifdef __ELF__
+#  ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #  else
 		"jmp	88f\n\t"
@@ -587,7 +587,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"psadbw	%%xmm0, %%xmm2\n\t"
 		"paddq %%xmm2, %%xmm5\n\t"
 		"ret\n\t"
-#  ifdef __ELF__
+#  ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #  else
 		"88:\n\t"
@@ -716,7 +716,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"cmp	$4, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#   ifdef __ELF__
+#   ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #   else
 		"jmp	99f\n\t"
@@ -735,7 +735,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"psadbw	%%xmm0, %%xmm5\n\t"
 		"ret\n\t"
-#   ifdef __ELF__
+#   ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #   else
 		"99:\n\t"
@@ -877,7 +877,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"prefetchnta	(%2)\n\t"
 		"prefetchnta	0x20(%2)\n\t"
 		"prefetchnta	0x40(%2)\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	88f\n\t"
@@ -901,7 +901,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"psadbw	%%xmm2, %%xmm0\n\t"
 		"paddq %%xmm0, %%xmm3\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"88:\n\t"
@@ -1036,7 +1036,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"cmp	$4, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	99f\n\t"
@@ -1058,7 +1058,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"pand	%%xmm6, %%xmm5\n\t"
 		"psadbw	%%xmm2, %%xmm5\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"99:\n\t"
@@ -1198,7 +1198,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 	size_t ret, cnt, t;
 
 	asm(
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	88f\n\t"
@@ -1222,7 +1222,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"psadbw	%%mm2, %%mm0\n\t"
 		"paddd %%mm0, %%mm3\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"88:\n\t"
@@ -1354,7 +1354,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"cmp	$4, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	99f\n\t"
@@ -1376,7 +1376,7 @@ static size_t mempopcnt_SSE(const void *s, size_t len)
 		"pand	%%mm6, %%mm5\n\t"
 		"psadbw	%%mm2, %%mm5\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"99:\n\t"
@@ -1505,7 +1505,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 	size_t ret, cnt, t;
 
 	asm(
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	88f\n\t"
@@ -1535,7 +1535,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"pand	%%mm4, %%mm0\n\t" /* 0x000000ff */
 		"paddd %%mm0, %%mm3\n\t"
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"88:\n\t"
@@ -1676,7 +1676,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"cmp	$4, %1\n\t"
 		"jae	11b\n\t"
 /*************************/
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".subsection 2\n\t"
 #else
 		"jmp	99f\n\t"
@@ -1704,7 +1704,7 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 		"paddd	%%mm0, %%mm5\n\t"
 		"pand	48+%5, %%mm5\n\t" /* 0x000000ff */
 		"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 		".previous\n\t"
 #else
 		"99:\n\t"

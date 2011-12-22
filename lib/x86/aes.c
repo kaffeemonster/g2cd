@@ -37,7 +37,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 	size_t k;
 
 	asm(
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 			".subsection 2\n\t"
 #else
 			"jmp	1f\n\t"
@@ -56,7 +56,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	$0x10, %0\n\t"
 			"ret\n\t"
-#ifdef __ELF__
+#ifdef HAVE_SUBSECTION
 			".previous\n\t"
 #else
 			"1:\n\t"
