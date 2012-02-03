@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogerated
 #
-# Copyright (c) 2004 - 2011 Jan Seiffert
+# Copyright (c) 2004 - 2012 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -680,7 +680,7 @@ G2ConRegistry.h: G2Connection.h lib/combo_addr.h
 G2QueryKey.h: lib/combo_addr.h
 G2Packet.h: G2PacketSerializerStates.h lib/sec_buffer.h lib/list.h
 G2PacketSerializer.h: G2PacketSerializerStates.h G2Packet.h
-G2QHT.h: lib/hzp.h lib/atomic.h lib/tchar.h
+G2QHT.h: lib/hzp.h lib/atomic.h lib/tchar.h lib/palloc.h
 G2GUIDCache.h: lib/guid.h
 timeout.h: lib/list.h lib/hzp.h
 

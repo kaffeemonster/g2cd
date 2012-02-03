@@ -2,7 +2,7 @@
  * G2QHT.h
  * Header for the G2 QHT
  *
- * Copyright (c) 2006-2010 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -37,13 +37,11 @@
 
 # ifdef WANT_QHT_ZPAD
 #  include <zlib.h>
-struct zpad_heap;
+#  include "lib/palloc.h"
 struct zpad
 {
 	z_stream z;
-	struct zpad_heap *pad_free;                   /* pointer in the pad to free space */
-	unsigned char pad[1<<19] GCC_ATTR_ALIGNED(8); /* other allok space, 512k */
-	unsigned char window[1<<16];                  /* 16 Bit window size, should result in 64k */
+	struct d_heap d;
 };
 # else
 struct zpad;

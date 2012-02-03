@@ -54,6 +54,7 @@ LIBHEADS = \
 	$(MPL)/my_bitopsm.h \
 	$(MPL)/my_epoll.h \
 	$(MPL)/my_pthread.h \
+	$(MPL)/palloc.h \
 	$(MPL)/tchar.h \
 	$(MPL)/log_facility.h \
 	$(MPL)/sec_buffer.h \
@@ -406,6 +407,7 @@ LIBSRCS = \
 	$(MPL)/my_epoll.c \
 	$(MPL)/my_pthread.c \
 	$(MPL)/my_bitops.c \
+	$(MPL)/palloc.c \
 	$(MPL)/popcountst.c \
 	$(MPL)/recv_buff.c \
 	$(MPL)/rbtree.c \
@@ -485,6 +487,7 @@ LIBOBJS = \
 	$(MPL)/log_facility.o \
 	$(MPL)/my_epoll.o \
 	$(MPL)/my_pthread.o \
+	$(MPL)/palloc.o \
 	$(MPL)/recv_buff.o \
 	$(MPL)/rbtree.o \
 	$(MPL)/udpfromto.o \
@@ -585,7 +588,8 @@ $(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
 $(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h $(MPL)/my_bitopsm.h G2MainServer.h
-%(MPL)/print_ts.o: $(MPL)/itoa.h
+$(MPL)/print_ts.o: $(MPL)/itoa.h
+$(MPL)/palloc.o: $(MPL)/palloc.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h

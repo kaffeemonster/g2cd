@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2011 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -63,17 +63,6 @@
 // TODO: take less?
 #define QHT_RLE_MAXSIZE (1 << 14) /* 16k */
 
-struct zpad_heap
-{
-	struct zpad_heap *next;
-	/*
-	 * length should be aligned to sizeof(void *)
-	 * so at least the LSB cann be used as a flag
-	 */
-	size_t length;
-	char data[DYN_ARRAY_LEN];
-};
-
 struct scratch
 {
 	size_t length;
@@ -102,9 +91,8 @@ static pthread_key_t key2qht_scratch2;
 	/* do not remove this proto, our it won't work... */
 static void qht_init(void) GCC_ATTR_CONSTRUCT;
 static void qht_deinit(void) GCC_ATTR_DESTRUCT;
-static void *qht_zpad_alloc(void *, unsigned int, unsigned int) GCC_ATTR_MALLOC GCC_ATTR_ALLOC_SIZE2(2, 3);
-static void qht_zpad_free(void *, void *);
-static inline void qht_zpad_merge(struct zpad_heap *);
+static inline void *qht_zpad_alloc(struct zpad *, unsigned int, unsigned int) GCC_ATTR_MALLOC GCC_ATTR_ALLOC_SIZE2(2, 3);
+static inline void qht_zpad_free(struct zpad *, void *);
 static void g2_qht_free_hzp(void *);
 #ifdef QHT_DUMP
 static void qht_dump_init(void);
@@ -141,138 +129,14 @@ static void qht_deinit(void)
 }
 
 /* zpad helper */
-/*
- * Poor mans allocator for zlib
- *
- * normaly zlib makes two allocs, one seems to be the internal
- * state (+9k on 32bit *cough*) and the other is the window, norm
- * 32k for 15 bit.
- *
- * So this is a very stupid alloactor to serve these two allocs.
- * But, not to be too dependent on these internals (future zlib
- * versions) it is at least so intelligent it may also handle 3
- * allocs, and frees, maybe ;)
- *
- * And since a deflater is very memory hungry, one time 6k,
- * three (!!!) times 32k * 2 and one time 16k * 4, total over
- * 260k, with a little more space in the pad we also can handle
- * a deflater.
- *
- * !! THE heap for this zpad instance is NOT locked !!
- * Why: it should be thread local to this deflater/inflater!
- */
-static void *qht_zpad_alloc(void *opaque, unsigned int num, unsigned int size)
+static inline void *qht_zpad_alloc(struct zpad *z, unsigned int num, unsigned int size)
 {
-	struct zpad *z_pad = opaque;
-	struct zpad_heap *zheap, *tmp_zheap;
-	size_t bsize, org_len;
-
-	if(unlikely(!z_pad))
-		goto err_record;
-
-	/* mildly sanetiy check */
-	if(unlikely( num > sizeof(z_pad->pad) + sizeof(z_pad->window)) ||
-	   unlikely(size > sizeof(z_pad->pad) + sizeof(z_pad->window)) ||
-	   unlikely(size > UINT_MAX / num))
-		goto err_record;
-	bsize = num * size;
-
-//TODO: ALIGN_SIZE may overflow it...
-	/* bsize should afterwards have the LSB cleared */
-	bsize = ALIGN_SIZE(bsize, sizeof(void *));
-
-	if(unlikely(bsize + sizeof(struct zpad_heap) > sizeof(z_pad->pad) + sizeof(z_pad->window)))
-		goto err_record;
-
-	/* start lock */
-	zheap = z_pad->pad_free;
-	org_len = zheap->length & ~1; /* mask out the free flag */
-	/*
-	 * normaly we simply allocate at the end, and 'nuff said, but
-	 * to be complete...
-	 */
-	if(unlikely(!(zheap->length & 1) || bsize + sizeof(*zheap) > org_len))
-	{
-		tmp_zheap = (struct zpad_heap *)z_pad->pad;
-		/* walk the heap list */
-		do
-		{
-			size_t tmp_len = tmp_zheap->length & ~1;
-			/* if free and big enough */
-			if(likely(tmp_zheap->length & 1))
-			{
-				if(bsize + sizeof(*zheap) <= tmp_len) {
-					org_len = tmp_len;
-					zheap = tmp_zheap;
-					goto insert_in_heap;
-				}
-				if(tmp_zheap->next && (tmp_zheap->next->length & 1)) {
-					qht_zpad_merge(tmp_zheap);
-					continue;
-				}
-			}
-			tmp_zheap = tmp_zheap->next;
-		} while(tmp_zheap);
-		goto err_record;
-	}
-insert_in_heap:
-	zheap->length     = bsize;
-	/* Mind the parentheses... */
-	tmp_zheap         = (struct zpad_heap*)(zheap->data + bsize);
-	if(unlikely((unsigned char *)tmp_zheap < z_pad->pad))
-		die("zpad heap probably corrupted, underflow!\n");
-	if(unlikely((unsigned char *)tmp_zheap > (z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap))))
-	{
-		logg_posd(LOGF_EMERG, "zpad heap probably corrupted, overflow!\n%p > %p + %zu + %zu - %zu = %p\n",
-		          tmp_zheap, z_pad->pad, sizeof(z_pad->pad), sizeof(z_pad->window), sizeof(*zheap),
-		          z_pad->pad + sizeof(z_pad->pad) + sizeof(z_pad->window) - sizeof(*zheap));
-		exit(EXIT_FAILURE);
-	}
-	tmp_zheap->length = (org_len - bsize - sizeof(*zheap)) | 1;
-	tmp_zheap->next   = zheap->next;
-	zheap->next       = tmp_zheap;
-	z_pad->pad_free   = tmp_zheap;
-/* end lock */
-
-	logg_develd_old("zpad alloc: n: %u\ts: %u\tb: %zu\tp: %p\tzh: %p\tzhn: %p\n",
-	                num, size, bsize, z_pad->pad, zheap, tmp_zheap);
-	return zheap->data;
-
-err_record:
-	logg_develd("zpad alloc failed!! 0x%p\tn: %u\ts: %u\n", opaque, num, size);
-	return NULL;
+	return pa_alloc(&z->d, num, size);
 }
 
-static void qht_zpad_free(void *opaque, void *addr)
+static inline void qht_zpad_free(struct zpad *z, void *addr)
 {
-	struct zpad_heap *zheap;
-
-	if(!addr || !opaque)
-		return;
-
-	/*
-	 * watch the parentheses (/me cuddles his new vim 7), or you
-	 * have wrong pointer-arith, and a SIGSEV on 3rd. alloc...
-	 */
-	zheap = (struct zpad_heap *) ((char *)addr - offsetof(struct zpad_heap, data));
-	zheap->length |= 1; // mark free
-
-	logg_develd_old("zpad free: o: %p\ta: %p\tzh: %p\n", opaque, addr, zheap);
-
-	qht_zpad_merge(zheap);
-}
-
-static inline void qht_zpad_merge(struct zpad_heap *zheap)
-{
-	while(zheap->next)
-	{
-		if(zheap->next->length & 1) { /* if next block is free */
-			zheap->length += (zheap->next->length & ~1) + sizeof(struct zpad_heap);
-			zheap->next = zheap->next->next;
-		}
-		else
-			zheap = zheap->next;
-	}
+	pa_free(&z->d, addr);
 }
 
 struct zpad *qht_get_zpad(void)
@@ -293,13 +157,10 @@ struct zpad *qht_get_zpad(void)
 		}
 	}
 	memset(&z_pad->z, 0, sizeof(z_pad->z));
-	z_pad->pad_free         = (struct zpad_heap *)z_pad->pad;
-	z_pad->pad_free->next   = NULL;
-	z_pad->pad_free->length = (sizeof(z_pad->pad) + sizeof(z_pad->window)) | 1; /* set the free bit */
-	z_pad->z.zalloc         = qht_zpad_alloc;
-	z_pad->z.zfree          = qht_zpad_free;
-	z_pad->z.opaque         = z_pad;
-
+	pa_init(&z_pad->d);
+	z_pad->z.zalloc         = pa_alloc;
+	z_pad->z.zfree          = pa_free;
+	z_pad->z.opaque         = &z_pad->d;
 	return z_pad;
 }
 
@@ -1057,7 +918,7 @@ static noinline bool hash_word_list(struct search_hash_buffer *shb, struct list_
 				num_common++;
 			else
 				num_valid++;
-//		printf("found %c nc %u nv %u\n", found ? 't' : 'f', num_common, num_valid);
+			logg_develd_old("found %c nc %u nv %u\n", found ? 't' : 'f', num_common, num_valid);
 			shb->hashes[shb->num++] = g2_qht_search_number_word(lcursor->data, 0, w_len);
 			if(shb->num >= shb->size)
 				break;
@@ -1446,9 +1307,9 @@ check_dn:
 
 work_list:
 		valid = hash_word_list(shb, &word_list);
-//		printf("valid: %c had_urn: %c == %c\n",
-//		       valid ? 't' : 'f', had_urn ? 't': 'f',
-//		       (!valid && !had_urn) ? 't' : 'f');
+		logg_develd_old("valid: %c had_urn: %c == %c\n",
+		                valid ? 't' : 'f', had_urn ? 't': 'f',
+		              (!valid && !had_urn) ? 't' : 'f');
 		/* refuse query if no "valid" word and no urn */
 		if(!valid && !had_urn)
 			return false;

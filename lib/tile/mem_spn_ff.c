@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, Tile implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -76,7 +76,6 @@ size_t mem_spn_ff(const void *s, size_t len)
 	else
 		c |= (~0ul) << ((SOUL - f) * BITS_PER_CHAR);
 	if(unlikely(0 > k)) {
-		printf("ssize_t is not signed\n");
 		k += f + len;
 		goto K_SHIFT;
 	}

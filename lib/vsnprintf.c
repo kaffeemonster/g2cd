@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -2217,6 +2217,8 @@ static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
 	void *n = va_arg(spec->ap, void *);
+#if 0
+	/* we switch off the %n, we don't need it, so no need for the secuity hazard */
 	switch(spec->mod)
 	{
 	case MOD_LONG:       *(long *)     n =      (long)spec->len; break;
@@ -2234,6 +2236,15 @@ static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 	case MOD_DECIMAL128:
 	case MOD_MAX_NUM:    *(int  *)     n =       (int)spec->len; break;
 	}
+#else
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	if(likely(sav > 1)) {
+		*buf++ = '%';
+		*buf++ = 'n';
+	}
+	spec->len += 2;
+	n = n;
+#endif
 	return end_format(buf, fmt, spec);
 }
 
