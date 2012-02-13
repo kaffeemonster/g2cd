@@ -2,7 +2,7 @@
  * parisc.h
  * special parisc instructions
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -257,6 +257,11 @@ static inline unsigned long pcmp1gt(unsigned long a, unsigned long b)
 	 */
 	r = (r >> 5) & MK_C(0x01010101UL);
 	return r;
+}
+
+static inline unsigned long pcmp1eq(unsigned long a, unsigned long b)
+{
+	return pcmp1gt(a, b - MK_C(0x01010101UL)) ^ pcmp1gt(a, b);
 }
 
 #endif

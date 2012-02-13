@@ -49,6 +49,6 @@ struct aes_encrypt_ctx
 	uint32_t k[AES_MAX_KEY_LEN/4];
 } GCC_ATTR_ALIGNED(16);
 
-LIB_AES_EXTRN_I(void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *));
-LIB_AES_EXTRN_I(void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
+LIB_AES_EXTRN(void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *));
+LIB_AES_EXTRN(void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
 #endif

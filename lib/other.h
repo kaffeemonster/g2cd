@@ -299,9 +299,9 @@ typedef void (*sighandler_t)(int);
 # endif
 #endif
 
-static inline int isspace_a(int c)
+static inline int isspace_a(unsigned int c)
 {
-	if((unsigned)c > (unsigned)' ')
+	if(c > ' ')
 		return 0;
 	if(likely(c == ' '))
 		return 1;
@@ -310,28 +310,28 @@ static inline int isspace_a(int c)
 	return 0;
 }
 
-static inline int isblank_a(int c)
+static inline int isblank_a(unsigned int c)
 {
 	return ' ' == c || '\t' == c;
 }
 
-static inline int isdigit_a(int c)
+static inline int isdigit_a(unsigned int c)
 {
 	return c >= '0' && c <= '9';
 }
 
-static inline int isalpha_a(int c)
+static inline int isalpha_a(unsigned int c)
 {
 	return (c >= 'a' && c <= 'z') ||
 	       (c >= 'A' && c <= 'Z');
 }
 
-static inline int isalnum_a(int c)
+static inline int isalnum_a(unsigned int c)
 {
 	return isalpha_a(c) || isdigit_a(c);
 }
 
-static inline int isgraph_a(int c)
+static inline int isgraph_a(unsigned int c)
 {
 	return c > ' ' && c < 0x7f;
 }

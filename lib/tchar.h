@@ -57,9 +57,9 @@ extern const uint16_t tchar_tolower_base_data[0x1000] GCC_ATTR_VIS("hidden");
 extern const uint16_t tchar_c1table_base_data[0x1000] GCC_ATTR_VIS("hidden");
 extern const uint16_t tchar_c3table_base_data[0x1000] GCC_ATTR_VIS("hidden");
 
-LIB_TCHAR_EXTRN_I(size_t tstrlen(const tchar_t *s)) GCC_ATTR_PURE;
+LIB_TCHAR_EXTRN(size_t tstrlen(const tchar_t *s)) GCC_ATTR_PURE;
 LIB_TCHAR_EXTRN(int tstrncmp(const tchar_t *s1, const tchar_t *s2, size_t n));
-LIB_TCHAR_EXTRN_I(tchar_t *tstrchrnul(const tchar_t *s, tchar_t c));
+LIB_TCHAR_EXTRN(tchar_t *tstrchrnul(const tchar_t *s, tchar_t c));
 LIB_TCHAR_EXTRN(tchar_t *tstrptolower(tchar_t *s));
 LIB_TCHAR_EXTRN(size_t utf8totcs(tchar_t *dst, size_t dl, const char *src, size_t *sl));
 

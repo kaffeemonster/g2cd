@@ -2,7 +2,7 @@
  * tile.h
  * special tile instructions
  *
- * Copyright (c) 2011 Jan Seiffert
+ * Copyright (c) 2011-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,14 +30,15 @@
 # define SOULM1 (SOUL - 1)
 # include "../other.h"
 
-extern void no_such_instruction(void);
+extern unsigned long no_such_instruction3(unsigned long d, unsigned long a, unsigned long b);
+extern unsigned long no_such_instruction2(unsigned long a, unsigned long b);
 
 static inline unsigned long v1ddotpua(unsigned long d, unsigned long a, unsigned long b)
 {
 # ifdef __tilegx__
 	d = __insn_v1ddotpua(d, a, b);
 # else
-	no_such_instruction();
+	d = no_such_instruction3(d, a, b);
 # endif
 	return d;
 }
@@ -48,7 +49,7 @@ static inline unsigned long v4shl(unsigned long a, unsigned long b)
 # ifdef __tilegx__
 	r = __insn_v4shl(a, b);
 # else
-	no_such_instruction();
+	r = no_such_instruction2(a, b);
 # endif
 	return r;
 }
@@ -59,7 +60,7 @@ static inline unsigned long v4shru(unsigned long a, unsigned long b)
 # ifdef __tilegx__
 	r = __insn_v4shru(a, b);
 # else
-	no_such_instruction();
+	r = no_such_instruction2(a, b);
 # endif
 	return r;
 }
@@ -81,7 +82,7 @@ static inline unsigned long v4sub(unsigned long a, unsigned long b)
 # ifdef __tilegx__
 	r = __insn_v4sub(a, b);
 # else
-	no_such_instruction();
+	r = no_such_instruction2(a, b);
 # endif
 	return r;
 }
@@ -92,7 +93,7 @@ static inline unsigned long v4add(unsigned long a, unsigned long b)
 # ifdef __tilegx__
 	r = __insn_v4add(a, b);
 # else
-	no_such_instruction();
+	r = no_such_instruction2(a, b);
 # endif
 	return r;
 }
@@ -251,7 +252,7 @@ static inline unsigned long tile_shufflebytes(unsigned long d, unsigned long a, 
 # ifdef __tilegx__
 	d = __insn_shufflebytes(d, a, b);
 # else
-	no_such_instruction();
+	d = no_such_instruction3(d, a, b);
 # endif
 	return d;
 }
