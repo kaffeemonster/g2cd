@@ -2,7 +2,7 @@
  * my_neon.h
  * little arm neon helper
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,7 +26,24 @@
 #ifndef MY_NEON_H
 # define MY_NEON_H
 
-# if defined(__ARM_NEON__)
+# if defined(__ARM_NEON__) && defined(__ARMEL__)
+#  define ARM_NEON_SANE 1
+# elif defined(__IWMMXT__)
+#  define ARM_IWMMXT_SANE 1
+# elif defined(__GNUC__) && ( \
+        defined(__thumb2__)  && ( \
+            !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
+        ) || ( \
+        !defined(__thumb__) && ( \
+            defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
+            defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
+            defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
+        )) \
+    )
+#  define ARM_DSP_SANE 1
+# endif
+
+# if defined ARM_NEON_SANE
 #  include <arm_neon.h>
 #  define SOVUCQ sizeof(uint8x16_t)
 #  define SOVUC sizeof(uint8x8_t)
@@ -72,10 +89,11 @@ static inline uint8x8_t neon_simple_align(uint8x8_t a, uint8x8_t b, unsigned amo
 }
 # endif
 
-# define ACMP_MSK 0x000F0000
-# define ACMP_SHR 16
-# define ACMP_SHL 12
-# define ACMP_NRB 4
+# if defined(ARM_DSP_SANE)
+#  define ACMP_MSK 0x000F0000
+#  define ACMP_SHR 16
+#  define ACMP_SHL 12
+#  define ACMP_NRB 4
 
 static inline unsigned long alu_ucmp_gte_sel(unsigned long a, unsigned long b, unsigned long sel_a, unsigned long sel_b)
 {
@@ -97,7 +115,7 @@ static inline unsigned long alu_ucmp_gte_sel(unsigned long a, unsigned long b, u
 	return sel;
 }
 
-# define alu_ucmp_eqz_msk(a) alu_ucmp_gte_msk(0, a)
+#  define alu_ucmp_eqz_msk(a) alu_ucmp_gte_msk(0, a)
 static inline unsigned long alu_ucmp_gte_msk(unsigned long a, unsigned long b)
 {
 	unsigned long res;
@@ -115,7 +133,7 @@ static inline unsigned long alu_ucmp_gte_msk(unsigned long a, unsigned long b)
 	return res;
 }
 
-# define alu_ucmp16_eqz_msk(a) alu_ucmp16_gte_msk(0, a)
+#  define alu_ucmp16_eqz_msk(a) alu_ucmp16_gte_msk(0, a)
 static inline unsigned long alu_ucmp16_gte_msk(unsigned long a, unsigned long b)
 {
 	unsigned long res;
@@ -132,6 +150,7 @@ static inline unsigned long alu_ucmp16_gte_msk(unsigned long a, unsigned long b)
 	/* bit 16 to 19 */
 	return res;
 }
+# endif
 
 # if _GNUC_PREREQ (4,0)
 #  define ctlz(a) __builtin_clz(a)

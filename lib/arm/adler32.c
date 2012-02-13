@@ -14,21 +14,15 @@
  * original, please go to zlib.net.
  */
 
+#include "my_neon.h"
+
 #define NO_DIVIDE
-#if (defined(__ARM_NEON__) && defined(__ARMEL__)) || defined (__IWMMXT__) || \
-    (0 && defined(__GNUC__) && ( \
-        defined(__thumb2__)  && ( \
-            !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
-        ) || ( \
-        !defined(__thumb__) && ( \
-            defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
-            defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
-            defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
-        )) \
-    ))
+#if defined(ARM_NEON_SANE) || \
+    defined(ARM_IWMMXT_SANE) || \
+    defined(ARM_DSP_SANE)
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
-# if defined(__ARM_NEON__) || defined (__IWMMXT__)
+# if defined(ARM_NEON_SANE) || defined (ARM_IWMMXT_SANE)
 #  define MIN_WORK 32
 # else
 #  define MIN_WORK 16
@@ -37,7 +31,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 #include "../generic/adler32.c"
 
-#if defined(__ARM_NEON__) && defined(__ARMEL__)
+#if defined(ARM_NEON_SANE)
 /*
  * Big endian NEON qwords are kind of broken.
  * They are big endian within the dwords, but WRONG
@@ -48,7 +42,6 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
  * GCC wants to disable qword endian specific patterns.
  */
 # include <arm_neon.h>
-# include "my_neon.h"
 /* since we do not have the 64bit psadbw sum, we could prop. do a little more */
 # define VNMAX (6*NMAX)
 
@@ -229,7 +222,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 }
 static char const rcsid_a32n[] GCC_ATTR_USED_VAR = "$Id: $";
 
-#elif defined(__IWMMXT__)
+#elif defined(ARM_IWMMXT_SANE)
 # ifndef __GNUC__
 /* GCC doesn't take it's own intrinsic header and ICEs if forced to */
 #  include <mmintrin.h>
@@ -506,16 +499,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 static char const rcsid_a32iwmmxt[] GCC_ATTR_USED_VAR = "$Id: $";
 /* inline asm, so only on GCC (or compatible) && ARM v6 or better */
-#elif 0 && defined(__GNUC__) && ( \
-        defined(__thumb2__)  && ( \
-            !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
-        ) || ( \
-        !defined(__thumb__) && ( \
-            defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
-            defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
-            defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
-        )) \
-    )
+#elif 0 && defined(ARM_DSP_SANE)
 /* This code is disabled, since it is not faster, only for reference.
  * We are at speedup: 0.952830
  * Again counting instructions is futile, 5 instructions per 4 bytes

@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, arm implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,12 +24,8 @@
  */
 
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
-
-# include "my_neon.h"
-
+#include "my_neon.h"
+#if defined(ARM_DSP_SANE)
 tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 {
 	const char *p;

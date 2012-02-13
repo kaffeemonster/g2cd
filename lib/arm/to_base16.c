@@ -2,7 +2,7 @@
  * to_base16.c
  * convert binary string to hex, arm impl.
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,13 +23,74 @@
  * $Id: $
  */
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
-
+#include "my_neon.h"
+#if defined(ARM_NEON_SANE)
 # define ARCH_NAME_SUFFIX _generic
 # define ONLY_REMAINDER
-# include "my_neon.h"
+static unsigned char *to_base16_generic(unsigned char *dst, const unsigned char *src, unsigned len);
+
+unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	uint8x16_t v_0f, v_30, v_3a, v_27;
+
+	v_0f = (uint8x16_t){0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f,0x0f};
+	v_30 = (uint8x16_t){0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
+	v_3a = (uint8x16_t){0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a,0x3a};
+	v_27 = (uint8x16_t){0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27,0x27};
+
+	for(; len >= SOVUCQ; len -= SOVUCQ, src += SOVUCQ, dst += 2 * SOVUCQ)
+	{
+		register uint8x16_t in_l asm("q8");
+		register uint8x16_t in_h asm("q9");
+
+		in_l  = vld1q_u8(src);
+		in_h  = vshrq_n_u8(vbicq_u8(in_l, v_0f), 4);
+		in_l  = vandq_u8(in_l, v_0f);
+		in_h  = vaddq_u8(in_h, v_30);
+		in_l  = vaddq_u8(in_l, v_30);
+		in_h  = vaddq_u8(in_h, vandq_u8(vcgeq_u8(in_h, v_3a), v_27));
+		in_l  = vaddq_u8(in_l, vandq_u8(vcgeq_u8(in_l, v_3a), v_27));
+
+		asm (
+			"vst2.8 {%e1,%e2}, %0\n\t"
+			: "=Q" (*dst)
+			: "w" (in_l),
+			  "w" (in_h)
+		);
+		asm (
+			"vst2.8 {%f1,%f2}, %0\n\t"
+			: "=Q" (*(dst+SOVUCQ))
+			: "w" (in_l),
+			  "w" (in_h)
+		);
+	}
+	for(; len >= SOVUC; len -= SOVUC, src += SOVUC, dst += 2 * SOVUC)
+	{
+		uint8x8_t in_l;
+		uint8x16_t in;
+
+		in_l  = vld1_u8(src);
+		in  = vcombine_u8(vand_u8(in_l, vget_low_u8(v_0f)), vshr_n_u8(vbic_u8(in_l, vget_low_u8(v_0f)), 4));
+		in  = vaddq_u8(in, v_30);
+		in  = vaddq_u8(in, vandq_u8(vcgeq_u8(in, v_3a), v_27));
+
+		asm (
+			"vst2.8 {%e1,%f1}, %0\n\t"
+			: "=Q" (*dst)
+			: "w" (in)
+		);
+	}
+
+	if(unlikely(len))
+		return to_base16_generic(dst, src, len);
+	return dst;
+}
+
+static char const rcsid_tb16arn[] GCC_ATTR_USED_VAR = "$Id:$";
+
+#elif defined(ARM_DSP_SANE)
+# define ARCH_NAME_SUFFIX _generic
+# define ONLY_REMAINDER
 static unsigned char *to_base16_generic(unsigned char *dst, const unsigned char *src, unsigned len);
 # define SOUL (sizeof(unsigned long))
 
@@ -114,7 +175,7 @@ unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned 
 	return dst;
 }
 
-static char const rcsid_tb16ar[] GCC_ATTR_USED_VAR = "$Id:$";
+static char const rcsid_tb16ard[] GCC_ATTR_USED_VAR = "$Id:$";
 #endif
 #include "../generic/to_base16.c"
 /* EOF */

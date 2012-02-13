@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, arm implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,9 +23,9 @@
  * $Id:$
  */
 
-#if defined(__ARM_NEON__)
+#include "my_neon.h"
+#if defined(ARM_NEON_SANE)
 # include <arm_neon.h>
-# include "my_neon.h"
 
 size_t mempopcnt(const void *s, size_t len)
 {
@@ -100,10 +100,7 @@ size_t mempopcnt(const void *s, size_t len)
 
 static char const rcsid_mpa[] GCC_ATTR_USED_VAR = "$Id:$";
 #else
-# if defined(__ARM_ARCH_6__)  || defined(__ARM_ARCH_6J__)  || \
-     defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-     defined(__ARM_ARCH_7A__)
-
+# if defined(ARM_DSP_SANE)
 static inline size_t popcountst_int1(size_t n)
 {
 	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;

@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, arm implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,9 +31,9 @@
  * way round (only little endian is "normal")
  */
 
-#if defined(__ARM_NEON__) && defined(__ARMEL__)
+#include "my_neon.h"
+#if defined(ARM_NEON_SANE)
 # include <arm_neon.h>
-# include "my_neon.h"
 
 /*
  * original SSSE3 code by:

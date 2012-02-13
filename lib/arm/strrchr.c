@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, arm implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,11 +24,8 @@
  */
 
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
-
-# include "my_neon.h"
+#include "my_neon.h"
+#if defined(ARM_DSP_SANE)
 /*
  * We could first do a strlen to find the end of the string,
  * then search backwards. But since we have to walk the string

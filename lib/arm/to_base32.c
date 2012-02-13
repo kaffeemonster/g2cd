@@ -2,7 +2,7 @@
  * to_base32.c
  * convert binary string to base32, arm impl.
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -29,13 +29,177 @@
  */
 
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
+#include "my_neon.h"
+#if defined(ARM_NEON_SANE)
+static unsigned char *do_80bit(unsigned char *dst, const unsigned char *src)
+{
+	uint64x2_t a64, b64;
+	uint64x2_t v_ffffffff;
+	uint32x4_t a32, b32;
+	uint32x4_t v_ffff;
+	uint16x8_t a16, b16;
+	uint16x8_t v_ff;
+	uint8x16_t a1, b1;
+	uint8x16_t v_61, v_49, v_7b, v_1f;
 
-# define HAVE_DO_40BIT
-# include "my_neon.h"
+	v_61 = (uint8x16_t){0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61};
+	v_49 = (uint8x16_t){0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49};
+	v_7b = (uint8x16_t){0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b};
+	v_1f = (uint8x16_t){0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f};
+	v_ff = (uint16x8_t){0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
+	v_ffff = (uint32x4_t){0xffff,0xffff,0xffff,0xffff};
+	v_ffffffff = (uint64x2_t){0xffffffff,0xffffffff};
 
+	a1  = vrev64q_u8(vld1q_u8(src));
+	asm("vswp %e0, %f0" : "=w" (a1) : "0" (a1));
+	b1  = vextq_u8(a1, a1, 5);                                        /* shift copy */
+	a64 = (uint64x2_t)vcombine_u8(vget_high_u8(a1), vget_low_u8(b1)); /* eliminate & join */
+	b64 = vshrq_n_u64(a64, 12);                                       /* shift copy */
+	a32 = (uint32x4_t)vbslq_u64(v_ffffffff, b64, a64);                /* eliminate & join */
+	b32 = vshrq_n_u32(a32, 6);                                        /* shift copy */
+	a16 = (uint16x8_t)vbslq_u32(v_ffff, b32, a32);                    /* eliminate & join */
+	b16 = vshrq_n_u16(a16, 3);                                        /* shift copy */
+	a16 = vbslq_u16(v_ff, b16, a16);                                  /* eliminate && join */
+	a1  = (uint8x16_t)vshrq_n_u16(a16, 3);                            /* bring bits down */
+	a1  = vandq_u8(a1, v_1f);                                         /* eliminate */
+
+	/* convert */
+	a1 = vaddq_u8(a1, v_61);
+	a1 = vsubq_u8(a1, vandq_u8(v_49, vcgeq_u8(a1, v_7b)));
+	/* write out */
+	vst1q_u8(dst, a1);
+	return dst + SOVUCQ;
+}
+
+static unsigned char *do_40bit_int(unsigned char *dst, uint64x1_t a64)
+{
+	uint64x1_t b64;
+	uint64x1_t v_ffffffff;
+	uint32x2_t a32, b32;
+	uint32x2_t v_ffff;
+	uint16x4_t a16, b16;
+	uint16x4_t v_ff;
+	uint8x8_t a1;
+	uint8x8_t v_61, v_49, v_7b, v_1f;
+
+	v_61 = (uint8x8_t){0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61};
+	v_49 = (uint8x8_t){0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49};
+	v_7b = (uint8x8_t){0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b};
+	v_1f = (uint8x8_t){0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f};
+	v_ff = (uint16x4_t){0xff,0xff,0xff,0xff};
+	v_ffff = (uint32x2_t){0xffff,0xffff};
+	v_ffffffff = (uint64x1_t){0xffffffff};
+
+	b64 = vshr_n_u64(a64, 12);                        /* shift copy */
+	a32 = (uint32x2_t)vbsl_u64(v_ffffffff, b64, a64); /* eliminate & join */
+	b32 = vshr_n_u32(a32, 6);                         /* shift copy */
+	a16 = (uint16x4_t)vbsl_u32(v_ffff, b32, a32);     /* eliminate & join */
+	b16 = vshr_n_u16(a16, 3);                         /* shift copy */
+	a16 = vbsl_u16(v_ff, b16, a16);                   /* eliminate && join */
+	a1  = (uint8x8_t)vshr_n_u16(a16, 3);              /* bring bits down */
+	a1  = vand_u8(a1, v_1f);                          /* eliminate */
+
+	/* convert */
+	a1 = vadd_u8(a1, v_61);
+	a1 = vsub_u8(a1, vand_u8(v_49, vcge_u8(a1, v_7b)));
+	/* write out */
+	vst1_u8(dst, a1);
+	return dst + SOVUC;
+}
+
+static unsigned char *do_40bit(unsigned char *dst, const unsigned char *src)
+{
+	uint64x1_t a64, b64;
+	uint64x1_t v_ffffffff;
+	uint32x2_t a32, b32;
+	uint32x2_t v_ffff;
+	uint16x4_t a16, b16;
+	uint16x4_t v_ff;
+	uint8x8_t a1;
+	uint8x8_t v_61, v_49, v_7b, v_1f;
+
+	v_61 = (uint8x8_t){0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61};
+	v_49 = (uint8x8_t){0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49};
+	v_7b = (uint8x8_t){0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b,0x7b};
+	v_1f = (uint8x8_t){0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f};
+	v_ff = (uint16x4_t){0xff,0xff,0xff,0xff};
+	v_ffff = (uint32x2_t){0xffff,0xffff};
+	v_ffffffff = (uint64x1_t){0xffffffff};
+
+	a64 = (uint64x1_t)vrev64_u8(vld1_u8(src));
+	b64 = vshr_n_u64(a64, 12);                        /* shift copy */
+	a32 = (uint32x2_t)vbsl_u64(v_ffffffff, b64, a64); /* eliminate & join */
+	b32 = vshr_n_u32(a32, 6);                         /* shift copy */
+	a16 = (uint16x4_t)vbsl_u32(v_ffff, b32, a32);     /* eliminate & join */
+	b16 = vshr_n_u16(a16, 3);                         /* shift copy */
+	a16 = vbsl_u16(v_ff, b16, a16);                   /* eliminate && join */
+	a1  = (uint8x8_t)vshr_n_u16(a16, 3);              /* bring bits down */
+	a1  = vand_u8(a1, v_1f);                          /* eliminate */
+
+	/* convert */
+	a1 = vadd_u8(a1, v_61);
+	a1 = vsub_u8(a1, vand_u8(v_49, vcge_u8(a1, v_7b)));
+	/* write out */
+	vst1_u8(dst, a1);
+	return dst + 8;
+}
+
+static inline uint32_t rol32(uint32_t word, unsigned int shift)
+{
+	return (word << shift) | (word >> (32 - shift));
+}
+
+unsigned char *to_base32(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	while(len >= SOVUCQ)
+	{
+		dst = do_80bit(dst, src);
+		src += 10;
+		len -= 10;
+	}
+	while(len >= SOVUC)
+	{
+		dst = do_40bit(dst, src);
+		src += 5;
+		len -= 5;
+	}
+	while(len >= 5)
+	{
+		uint64_t d = ((uint64_t)get_unaligned_be32(src) << 32) |
+		             ((uint64_t)src[4] << 24);
+		dst = do_40bit_int(dst, d);
+		src += 5;
+		len -= 5;
+	}
+	/* less than 32 bit left */
+	if(len)
+	{
+		static const unsigned char base32c[] = "abcdefghijklmnopqrstuvwxyz234567=";
+		unsigned b32chars = B32_LEN(len);
+		uint32_t d;
+		unsigned i;
+
+		/* collect the bytes */
+		for(i = len, d = 0; i; i--)
+			d = (d << 8) | *src++;
+
+		/* bring to start position */
+		d = rol32(d, (sizeof(d) - len) * BITS_PER_CHAR + 5);
+		i = 0;
+		/* write out */
+		do
+		{
+			*dst++ = base32c[d & 0x1F];
+			d = rol32(d, 5);
+		} while(++i < b32chars);
+	}
+	return dst;
+}
+
+static char const rcsid_tb32arn[] GCC_ATTR_USED_VAR = "$Id:$";
+#else
+# if defined(ARM_DSP_SANE)
+#  define HAVE_DO_40BIT
 static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 {
 	uint64_t d2;
@@ -84,13 +248,14 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 }
 
 static char const rcsid_tb32ar[] GCC_ATTR_USED_VAR = "$Id:$";
-#endif
+# endif
 /*
  * since arm has trouble with unaligned access, we depend
  * on this switch to lower the unaligned work (only load
  * 5 byte and shuffle them instead of 8)
  */
-#define ONLY_REMAINDER
+# define ONLY_REMAINDER
 
-#include "../generic/to_base32.c"
+# include "../generic/to_base32.c"
+#endif
 /* EOF */

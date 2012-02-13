@@ -2,7 +2,7 @@
  * memand.c
  * and two memory region efficient, arm implementation
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -208,7 +208,7 @@ no_alignment_wanted:
 		register uint8x8_t *dst_vec = (uint8x8_t *) dst_char;
 		/* only src sucks */
 		register const uint8x8_t *src_vec;
-		size_t small_len = (len / SOVUC) - 1; /* make shure not to overread */
+		size_t small_len = (len / SOVUC) - 1; /* make sure not to overread */
 		register size_t smaller_len = small_len / 8;
 		unsigned a_fix;
 		small_len %= 8;

@@ -2,7 +2,7 @@
  * popcountst.c
  * calculate popcount in size_t, arm implementation
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,9 +23,8 @@
  * $Id:$
  */
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-    defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-    defined(__ARM_ARCH_7A__)
+#include "my_neon.h"
+#if defined(ARM_DSP_SANE)
 size_t popcountst(size_t n)
 {
 	n -= (n & MK_C(0xaaaaaaaaL)) >> 1;

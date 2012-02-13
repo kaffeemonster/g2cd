@@ -2,7 +2,7 @@
  * strreverse_l.c
  * strreverse_l, arm implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,16 +23,12 @@
  * $Id: $
  */
 
-#ifdef __ARM_NEON__
-# include <arm_neon.h>
-# include "my_neon.h"
-#endif
-
+#include "my_neon.h"
 void strreverse_l(char *begin, char *end)
 {
 	char tchar;
 
-#ifdef __ARM_NEON__
+#ifdef ARM_NEON_SANE
 	for(; end - ((2*SOVUCQ)-1) > begin; end -= SOVUCQ, begin += SOVUCQ)
 	{
 		uint8x16_t te, tb;

@@ -2,7 +2,7 @@
  * memchr.c
  * memchr, arm implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,12 +23,8 @@
  * $Id: $
  */
 
-#if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-      defined(__ARM_ARCH_7A__)
-
-# include "my_neon.h"
-
+#include "my_neon.h"
+#if defined(ARM_DSP_SANE)
 void *my_memchr(const void *s, int c, size_t n)
 {
 	const unsigned char *p;
