@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platforms, alpha implementation
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,8 +49,7 @@ char *strchrnul(const char *s, int c)
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x  = *(const unsigned long *)p;
 	r  = cmpbeqz(x);
-	x ^= mask;
-	r |= cmpbeqz(x);
+	r |= cmpbeqm(x, mask);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
 	else
@@ -63,8 +62,7 @@ char *strchrnul(const char *s, int c)
 		p += SOUL;
 		x  = *(const unsigned long *)p;
 		r  = cmpbeqz(x);
-		x ^= mask;
-		r |= cmpbeqz(x);
+		r |= cmpbeqm(x, mask);
 	} while(!r);
 	r = alpha_nul_byte_index_e(r);
 	return (char *)(uintptr_t)p + r;

@@ -2,7 +2,7 @@
  * memchr.c
  * memchr, alpha implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,10 +47,9 @@ void *my_memchr(const void *s, int c, size_t n)
 	k = k > 0 ? k  : 0;
 	mask = (c & 0xFF) * 0x0101010101010101UL;
 
-	p  = (const unsigned char *)ALIGN_DOWN(s, SOUL);
-	r  = *(const unsigned long *)p;
-	r ^= mask;
-	r  = cmpbeqz(r);
+	p = (const unsigned char *)ALIGN_DOWN(s, SOUL);
+	r = *(const unsigned long *)p;
+	r = cmpbeqm(r, mask);
 	if(!HOST_IS_BIGENDIAN) {
 		r <<= k     + SOULM1 * BITS_PER_CHAR;
 		r >>= k + f + SOULM1 * BITS_PER_CHAR;
@@ -68,8 +67,7 @@ void *my_memchr(const void *s, int c, size_t n)
 	{
 		p += SOST;
 		r  = *(const unsigned long *)p;
-		r ^= mask;
-		r  = cmpbeqz(r);
+		r  = cmpbeqm(r, mask);
 		if(n <= SOUL)
 			break;
 		n -= SOUL;

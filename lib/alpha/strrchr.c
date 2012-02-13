@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, alpha implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -58,8 +58,7 @@ char *strrchr(const char *s, int c)
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x  = *(const unsigned long *)p;
 	r  = cmpbeqz(x);
-	x ^= mask;
-	m  = cmpbeqz(x);
+	m  = cmpbeqm(x, mask);
 	if(!HOST_IS_BIGENDIAN) {
 		r >>= shift;
 		m >>= shift;
@@ -83,8 +82,7 @@ char *strrchr(const char *s, int c)
 		p += SOUL;
 		x  = *(const unsigned long *)p;
 		r  = cmpbeqz(x);
-		x ^= mask;
-		m  = cmpbeqz(x);
+		m  = cmpbeqm(x, mask);
 	}
 	if(m) {
 		r = alpha_nul_byte_index_e(r);

@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, alpha implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,8 +47,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	x  = *(const size_t *)p;
 	r  = cmpbeqz(x);
 	r  = r & ((r & 0xAA) >> 1);
-	x ^= mask;
-	x  = cmpbeqz(x);
+	x  = cmpbeqm(x, mask);
 	r |= x & ((x & 0xAA) >> 1);
 	if(!HOST_IS_BIGENDIAN)
 		r >>= shift;
@@ -63,8 +62,7 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 		x  = *(const size_t *)p;
 		r  = cmpbeqz(x);
 		r  = r & ((r & 0xAA) >> 1);
-		x ^= mask;
-		x  = cmpbeqz(x);
+		x  = cmpbeqm(x, mask);
 		r |= x & ((x & 0xAA) >> 1);
 	} while(!r);
 	r = alpha_nul_byte_index_e(r) / 2;

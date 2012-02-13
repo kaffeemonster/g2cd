@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, alpha implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,12 +74,10 @@ LOOP_AGAIN:
 				w2 = w2 >> shift21 | w2_x << shift22;
 			}
 
-			m1   = cmpbge(0x6060606060606060UL, w1);
-			m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
+			m1   = cmpb_between(w1, 0x60, 0x7b);
 			m1   = zapnot(0x2020202020202020UL, m1);
 			w1  -= m1;
-			m2   = cmpbge(0x6060606060606060UL, w2);
-			m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
+			m2   = cmpb_between(w2, 0x60, 0x7b);
 			m2   = zapnot(0x2020202020202020UL, m2);
 			w2  -= m2;
 			m1   = w1 ^ w2;
@@ -150,12 +148,10 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	w2   = *(const unsigned long *)s2;
 	s1  += SOUL;
 	s2  += SOUL;
-	m1   = cmpbge(0x6060606060606060UL, w1);
-	m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
+	m1   = cmpb_between(w1, 0x60, 0x7b);
 	m1   = zapnot(0x2020202020202020UL, m1);
 	w1  -= m1;
-	m2   = cmpbge(0x6060606060606060UL, w2);
-	m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
+	m2   = cmpb_between(w2, 0x60, 0x7b);
 	m2   = zapnot(0x2020202020202020UL, m2);
 	w2  -= m2;
 	m1   = w1 ^ w2;
@@ -194,12 +190,10 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 		w2   = *(const unsigned long *)s2;
 		s1  += SOUL;
 		s2  += SOUL;
-		m1   = cmpbge(0x6060606060606060UL, w1);
-		m1  |= cmpbge(w1, 0x7b7b7b7b7b7b7b7bUL);
+		m1   = cmpb_between(w1, 0x60, 0x7b);
 		m1   = zapnot(0x2020202020202020UL, m1);
 		w1  -= m1;
-		m2   = cmpbge(0x6060606060606060UL, w2);
-		m2  |= cmpbge(w2, 0x7b7b7b7b7b7b7b7bUL);
+		m2   = cmpb_between(w2, 0x60, 0x7b);
 		m2   = zapnot(0x2020202020202020UL, m2);
 		w2  -= m2;
 		m1   = w1 ^ w2;

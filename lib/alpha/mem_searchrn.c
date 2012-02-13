@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, alpha implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,9 +53,8 @@ void *mem_searchrn(void *s, size_t len)
 	k = k > 0 ? k : 0;
 
 	p  = (char *)ALIGN_DOWN(s, SOUL);
-	rn = (*(unsigned long *)p);
-	rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
-	rr = cmpbeqz(rr);
+	rn = *(unsigned long *)p;
+	rr = cmpbeqm(rn, 0x0D0D0D0D0D0D0D0DUL); /* \r\r\r\r */
 	if(!HOST_IS_BIGENDIAN) {
 		rr <<= k + SOULM1 * BITS_PER_CHAR;
 		rr >>= k + SOULM1 * BITS_PER_CHAR;
@@ -73,8 +72,7 @@ void *mem_searchrn(void *s, size_t len)
 			last_rr = rr >> SOULM1;
 		else
 			last_rr = rr << SOULM1;
-		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-		rn  = cmpbeqz(rn);
+		rn  = cmpbeqm(rn, 0x0A0A0A0A0A0A0A0AUL); /* \n\n\n\n */
 		if(!HOST_IS_BIGENDIAN)
 			rr &= rn >> 1;
 		else
@@ -90,15 +88,13 @@ void *mem_searchrn(void *s, size_t len)
 	{
 		p += SOUL;
 		rn = *(unsigned long *)p;
-		rr = rn ^ 0x0D0D0D0D0D0D0D0DUL; /* \r\r\r\r */
-		rr = cmpbeqz(rr);
+		rr = cmpbeqm(rn, 0x0D0D0D0D0D0D0D0DUL); /* \r\r\r\r */
 		if(unlikely(len <= SOUL))
 			break;
 		len -= SOUL;
 		if(rr || last_rr)
 		{
-			rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-			rn = cmpbeqz(rn);
+			rn = cmpbeqm(rn, 0x0A0A0A0A0A0A0A0AUL); /* \n\n\n\n */
 			last_rr &= rn;
 			if(last_rr)
 				return p - 1;
@@ -124,8 +120,7 @@ void *mem_searchrn(void *s, size_t len)
 	}
 	if(rr || last_rr)
 	{
-		rn ^= 0x0A0A0A0A0A0A0A0AUL; /* \n\n\n\n */
-		rn = cmpbeqz(rn);
+		rn = cmpbeqm(rn, 0x0A0A0A0A0A0A0A0AUL); /* \n\n\n\n */
 		last_rr &= rn;
 		if(last_rr)
 			return p - 1;

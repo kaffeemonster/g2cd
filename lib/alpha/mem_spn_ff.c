@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, alpha implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -92,7 +92,7 @@ K_SHIFT:
 	}
 
 OUT:
-	ft = cmpbeqz(c ^ 0xFFFFFFFFFFFFFFFFul);
+	ft = cmpbeqm(c, 0xFFFFFFFFFFFFFFFFul);
 	return (size_t)(p - (const unsigned char *)s) + alpha_nul_byte_index_e(ft);
 }
 

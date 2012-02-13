@@ -2,7 +2,7 @@
  * alpha.h
  * special alpha instructions
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -110,6 +110,11 @@ static inline size_t ctlz(unsigned long a)
 # define alpha_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (7u-cttz((x))) : (7u-ctlz((x) << SOULM1 * BITS_PER_CHAR)))
 
 # define cmpbeqz(a) (cmpbge(0, a))
+# define cmpbeqm(a, m) (cmpbeqz((a) ^ (m)))
+# define cmpbgt(a, c) (cmpbge(a, ((c) + 1) * 0x0101010101010101UL))
+# define cmpblt(a, c) (cmpbge(((c) - 1) * 0x0101010101010101UL, a))
+# define cmpb_between(a, b, c) (cmpbgt(a, b) & cmpblt(a, c))
+
 # if _GNUC_PREREQ(3, 3)
 #  define cmpbge	__builtin_alpha_cmpbge
 #  define zapnot	__builtin_alpha_zapnot
