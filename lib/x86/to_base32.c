@@ -2,7 +2,7 @@
  * to_base32.c
  * convert binary string to base 32, x86 implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -30,6 +30,9 @@
 #include "x86_features.h"
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src, unsigned len);
+# endif
 # if HAVE_BINUTILS >= 218
 static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
@@ -57,53 +60,198 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
+#  ifndef __i386__
 static unsigned char *do_40bit_BMI2(unsigned char *dst, uint64_t d1)
 {
-	uint64_t d2;
-#  if __SIZEOF_POINTER__-0 >= 8
-	uint64_t m1;
-
-	asm ("pdep %2, %1, %0" : "=r" (d2) : "r" (d1), "r" (0x1F1F1F1F1F1F1F1FULL));
-	d1 = d2;
+	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "m" (vals[4][0]));
+	d1 = __swab64(d1);
 
 	/* convert */
-	d1  += 0x6161616161616161ULL;
-	m1   = has_greater(d1, 0x7A);
-	m1 >>= 7;
-	m1   = 0x49 * m1;
-	d1  -= m1;
-	/* write out */
-	put_unaligned(d1, (uint64_t *)dst);
-# else
-	uint32_t a1, a2;
-	uint32_t b1, b2;
-	uint32_t m1, m2;
-
-	asm ("pdep %2, %k1, %0" : "=r" (a1) : "r" (d1), "r" (0x1F1F1F1FUL));
-	asm ("pdep %2, %k1, %0" : "=r" (a2) : "r" (d1 >> 20), "r" (0x1F1F1F1FUL));
-
-	/* convert */
-	a1  += 0x61616161UL;          a2  += 0x61616161UL;
-	m1   = has_greater(a1, 0x7A); m2   = has_greater(a2, 0x7A);
-	m1 >>= 7;                     m2 >>= 7;
-	m1   = 0x49 * m1;             m2   = 0x49 * m2;
-	a1  -= m1;                    a2  -= m2;
-	/* write out */
-	put_unaligned(a1, (uint32_t *)dst);
-	put_unaligned(a2, (uint32_t *)(dst+4));
+	asm (
+			"movq	%1, %%xmm0\n\t"
+			"paddb	%2, %%xmm0\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"pcmpgtb	%3, %%xmm1\n\t"
+			"pand	%4, %%xmm1\n\t"
+			"psubb	%%xmm1, %%xmm0\n\t"
+			"movq	%%xmm0, %0"
+		: /* %0 */ "=m" (*dst)
+		: /* %1 */ "r" (d1),
+		  /* %2 */ "m" (vals[5][0]),
+		  /* %3 */ "m" (vals[6][0]),
+		  /* %4 */ "m" (vals[7][0])
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
 #  endif
+	);
 	return dst + 8;
 }
+# else
+static unsigned char *do_40bit_BMI2(unsigned char *dst, uint32_t a1, uint32_t a2)
+{
+	asm ("pdep %2, %1, %0" : "=r" (a1) : "r" (a1), "m" (vals[4][0]));
+	asm ("pdep %2, %1, %0" : "=r" (a2) : "r" (a2), "m" (vals[4][0]));
+	a1 = __swab32(a1);
+	a2 = __swab32(a2);
+
+	/* convert */
+	asm (
+			"movd	%1, %%xmm0\n\t"
+			"pinsrd	$1, %2, %%xmm0\n\t"
+			"paddb	%3, %%xmm0\n\t"
+			"movdqa	%%xmm0, %%xmm1\n\t"
+			"pcmpgtb	%4, %%xmm1\n\t"
+			"pand	%5, %%xmm1\n\t"
+			"psubb	%%xmm1, %%xmm0\n\t"
+			"movq	%%xmm0, %0"
+		: /* %0 */ "=m" (*dst)
+		: /* %1 */ "r" (a1),
+		  /* %2 */ "r" (a2),
+		  /* %2 */ "m" (vals[5][0]),
+		  /* %3 */ "m" (vals[6][0]),
+		  /* %4 */ "m" (vals[7][0])
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return dst + 8;
+}
+#  endif
 
 static unsigned char *to_base32_BMI2(unsigned char *dst, const unsigned char *src, unsigned len)
 {
+#  ifndef __i386__
 	while(len >= sizeof(uint64_t))
 	{
-		uint64_t d = get_unaligned((const uint64_t *)src);
+		uint64_t d = get_unaligned_be64(src);
 		src += 5;
 		len -= 5;
-		dst = do_40bit_BMI2(dst, d);
+		dst = do_40bit_BMI2(dst, d >> (64-40));
 	}
+#  endif
+	while(len >= 5)
+	{
+#  ifndef __i386__
+		uint64_t d = ((uint64_t)get_unaligned_be32(src) << 8) |
+		              (uint64_t)src[4];
+		dst = do_40bit_BMI2(dst, d);
+#  else
+		uint32_t a1 = get_unaligned_be32(src);
+		uint32_t a2 = src[4];
+		dst = do_40bit_BMI2(dst, a1 >> (32 - 20), a2 | (a1 << 8));
+#  endif
+		src += 5;
+		len -= 5;
+	}
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	asm (
+			"cmp	$8, %2\n\t"
+			"jb	2f\n\t"
+			"vmovdqa	-64+%3, %%xmm3\n\t"
+			"vmovdqa	-16+%3, %%xmm0\n\t"
+			"vmovdqa	%3, %%xmm7\n\t"
+			"vmovdqa	16+%3, %%xmm6\n\t"
+			"vmovdqa	32+%3, %%xmm4\n\t"
+			"vmovdqa	48+%3, %%xmm5\n\t"
+			"cmp	$16, %2\n\t"
+			"jb	3f\n\t"
+			".p2align 2\n"
+			"1:\n\t"
+			"vlddqu	(%1), %%xmm1\n\t"            /* fetch input data */
+			"sub	$10, %2\n\t"
+			"add	$10, %1\n\t"
+			/* swab endianess */
+			"vpshufb	%%xmm1, %%xmm3, %%xmm1\n\t"
+			/* partionate */
+			"vpslldq	$5, %%xmm1, %%xmm2\n\t"               /* shift & copy */
+			"vpunpckhqdq	%%xmm1, %%xmm2, %%xmm1\n\t"     /* eliminate & join */
+			"vpsrlq	$0xc, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendw	$0x33, %%xmm1, %%xmm2, %%xmm1\n\t" /* eleminate & join */
+			"vpsrld	$0x6, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendw	$0x55, %%xmm2, %%xmm1, %%xmm1\n\t" /* eleminate & join */
+			"vpsrlw	$0x3, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendvb %%xmm0, %%xmm1, %%xmm2, %%xmm2\n\t" /* eliminate & join */
+			"vpsrlw	$0x3, %%xmm2, %%xmm2\n\t"             /* bring it down */
+			"vpand	%%xmm7, %%xmm2, %%xmm2\n\t"           /* eliminate */
+			/* convert */
+			"vpaddb	%%xmm6, %%xmm2, %%xmm2\n\t"
+			"vpcmpgtb	%%xmm2, %%xmm4, %%xmm1\n\t"
+			"vpand	%%xmm5, %%xmm1, %%xmm1\n\t"
+			"vpsubb	%%xmm2, %%xmm1, %%xmm1\n\t"
+			/* write out */
+			"cmp	$15, %2\n\t"
+			"vpshufb	%%xmm1, %%xmm3, %%xmm1\n\t"
+			"vmovdqu	%%xmm1,     (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"ja	1b\n\t"
+			"cmp	$8, %2\n\t"
+			"jb	2f\n"
+			"3:\n\t"
+			"vmovq	(%1), %%xmm1\n\t"       /* fetch input data */
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	4f\n\t"
+			"vpinsrw	$4, 3(%1), %%xmm1, %%xmm1\n\t"
+			"4:\n\t"
+			/* swab endianess */
+			"vpshufb	%%xmm1, %%xmm3, %%xmm1\n\t"
+			/* partionate */
+			"vpslldq	$5, %%xmm1, %%xmm2\n\t"               /* shift & copy */
+			"vpunpckhqdq	%%xmm1, %%xmm2, %%xmm1\n\t"     /* eliminate & join */
+			"vpsrlq	$0xc, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendw	$0x33, %%xmm1, %%xmm2, %%xmm1\n\t" /* eleminate & join */
+			"vpsrld	$0x6, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendw	$0x55, %%xmm2, %%xmm1, %%xmm1\n\t" /* eleminate & join */
+			"vpsrlw	$0x3, %%xmm1, %%xmm2\n\t"             /* shift & copy */
+			"vpblendvb %%xmm0, %%xmm1, %%xmm2, %%xmm2\n\t" /* eliminate & join */
+			"vpsrlw	$0x3, %%xmm2, %%xmm2\n\t"             /* bring it down */
+			"vpand	%%xmm7, %%xmm2, %%xmm2\n\t"           /* eliminate */
+			/* convert */
+			"vpaddb	%%xmm6, %%xmm2, %%xmm2\n\t"
+			"vpcmpgtb	%%xmm2, %%xmm4, %%xmm1\n\t"
+			"vpand	%%xmm5, %%xmm1, %%xmm1\n\t"
+			"vpsubb	%%xmm2, %%xmm1, %%xmm1\n\t"
+			/* write out */
+			"vpshufb	%%xmm1, %%xmm3, %%xmm1\n\t"
+			"cmp	$5, %2\n\t"
+			"jb	6f\n\t"
+			"sub	$5, %2\n\t"
+			"add	$5, %1\n\t"
+			"vmovdqu	%%xmm1, (%0)\n\t"
+			"lea	16(%0), %0\n\t"
+			"jmp	5f\n"
+			"6:\n\t"
+			"vmovq	%%xmm1, (%0)\n\t"
+			"lea	8(%0), %0\n\t"
+			"5:\n\t"
+			"cmp	$7, %2\n\t"
+			"ja	3b\n"
+			"2:"
+		: /* %0 */ "=r" (dst),
+		  /* %1 */ "=r" (src),
+		  /* %2 */ "=r" (len)
+		: /* %3 */ "m" (vals[4][0]),
+		  /*    */ "0" (dst),
+		  /*    */ "1" (src),
+		  /*    */ "2" (len)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#  endif
+	);
 	if(len)
 		return to_base32_generic(dst, src, len);
 	return dst;
@@ -684,7 +832,18 @@ static __init_cdata const struct test_cpu_feature tfeat_to_base32[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
-	{.func = (void (*)(void))to_base32_BMI2,    .features = {[4] = CFB(CFEATURE_BMI2)}},
+	{.func = (void (*)(void))to_base32_BMI2,    .features = {
+#  ifdef __i386__
+			[1] = CFB(CFEATURE_SSE4_1),
+#  else
+			[0] = CFB(CFEATURE_SSE2),
+#  endif
+			[4] = CFB(CFEATURE_BMI2)
+		}
+	},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))to_base32_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))to_base32_SSE41,   .features = {[1] = CFB(CFEATURE_SSE4_1)}},
