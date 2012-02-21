@@ -59,7 +59,7 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 # define SP "%%esp"
 #endif
 
-static const struct { uint32_t d[8][4]; } vals GCC_ATTR_ALIGNED(16) =
+static const struct { uint32_t d[9][4]; } vals GCC_ATTR_ALIGNED(32) =
 {
 	{
 	/*   0 */ {0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa},
@@ -68,8 +68,9 @@ static const struct { uint32_t d[8][4]; } vals GCC_ATTR_ALIGNED(16) =
 	/*  48 */ {0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff},
 	/*  64 */ {0x000001c0, 0x00000000, 0x000001c0, 0x00000000},
 	/*  80 */ {0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff},
-	/*  96 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302}, /* lut_st */
-	/* 112 */ {0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d}  /* reg_num_mask */
+	/*  96 */ {0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d},  /* reg_num_mask_lo */
+	/* 112 */ {0x14131211, 0x18171615, 0x1c1b1a19, 0x201f1e1d},  /* reg_num_mask_high */
+	/* 128 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302}   /* lut_st */
 	}
 };
 
@@ -87,38 +88,60 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"prefetchnta	(%3)\n\t"
 		"prefetchnta	0x20(%3)\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-		"movdqa	96+%5, %%xmm7\n\t" /* lut_st */
-		"movdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
-		"pxor	%%xmm5, %%xmm5\n\t"
-		"movdqa	112+%5, %%xmm1\n\t"
+#  ifdef HAVE_SUBSECTION
+		".subsection 2\n\t"
+#  else
+		"jmp	88f\n\t"
+#  endif
+		".p2align 2\n"
+		"avx_full_popcnt:\n\t"
+		"vpandn	%%xmm0, %%xmm6, %%xmm3\n\t"
+		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
+		"vpsrlw	$4, %%xmm3, %%xmm3\n\t"
+		"vpshufb	%%xmm7, %%xmm0, %%xmm1\n\t"
+		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"vpshufb	%%xmm7, %%xmm3, %%xmm2\n\t"
+		"vpaddb	%%xmm1, %%xmm2, %%xmm2\n\t"
+		"vpsadbw	%%xmm0, %%xmm2, %%xmm2\n\t"
+		"vpaddq %%xmm2, %%xmm5, %%xmm5\n\t"
+		"ret\n\t"
+#  ifdef HAVE_SUBSECTION
+		".previous\n\t"
+#  else
+		"88:\n\t"
+#  endif
+		"vmovdqa	128+%5, %%xmm7\n\t" /* lut_st */
+		"vmovdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
+		"vpxor	%%xmm5, %%xmm5, %%xmm5\n\t"
+		"vmovdqa	96+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%3, %1\n\t"
 		"and	$-16, %3\n\t"
-		"movdqa	(%3), %%xmm0\n\t"
+		"vmovdqa	(%3), %%xmm0\n\t"
 		"sub	%3, %1\n\t"
 		"sub	%1, %0\n\t"
 		"imul	$0x01010101, %1\n\t"
 		"movd	%1, %%xmm2\n\t"
 		"mov	%6, %1\n\t"
-		"pshufd	$0, %%xmm2, %%xmm2\n\t"
-		"pcmpgtb	%%xmm2, %%xmm1\n\t"
-		"pand	%%xmm1, %%xmm0\n\t"
+		"vpshufd	$0, %%xmm2, %%xmm2\n\t"
+		"vpcmpgtb	%%xmm2, %%xmm1, %%xmm1\n\t"
+		"vpand	%%xmm1, %%xmm0, %%xmm0\n\t"
 		"sub	%0, %1\n\t"
 		"mov	%1, %0\n\t"
 		"jbe	9f\n\t"
 		"shr	$5, %1\n"
 		"jz	7f\n\t"
 		"add	$16, %3\n\t"
-		"call	ssse3_full_popcnt\n\t"
+		"call	avx_full_popcnt\n\t"
 #  if CSA_SETUP == 1
 /*=======================*/
 		"test	$31, %3\n\t"
 		"jz	12f\n\t"
-		"movdqa	(%3), %%xmm0\n\t"
+		"vmovdqa	(%3), %%xmm0\n\t"
 		"add	$16, %3\n\t"
 		"sub	$16, %0\n\t"
 		"mov	%0, %1\n\t"
-		"call	ssse3_full_popcnt\n\t"
+		"call	avx_full_popcnt\n\t"
 		"shr	$5, %1\n\t"
 		"jz	7f\n"
 		"12:\n\t"
@@ -201,7 +224,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 
 		"dec	%2\n\t"
 
-		"vmovdqa	96+%5, %%xmm2\n\t" /* lut_st */
+		"vmovdqa	128+%5, %%xmm2\n\t" /* lut_st */
 
 		"vandpd	%%ymm4, %%ymm6, %%ymm0\n\t"
 		"vandnpd	%%ymm4, %%ymm6, %%ymm6\n\t"
@@ -293,37 +316,31 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"cmp	%2, %1\n\t"
 		"cmovb	%1, %2\n\t"
 		"sub	%2, %1\n\t"
-		"pxor	%%xmm4, %%xmm4\n\t"
+		"vpxor	%%xmm4, %%xmm4, %%xmm4\n\t"
 		"2:\n\t"
 		"prefetchnta	0x70(%3)\n\t"
-		"movdqa	(%3), %%xmm0\n"
-		"movdqa	%%xmm6, %%xmm1\n\t"
-		"pandn	%%xmm0, %%xmm1\n\t"
-		"pand	%%xmm6, %%xmm0\n\t"
-		"psrlw	$4, %%xmm1\n\t"
-		"movdqa	%%xmm7, %%xmm3\n\t"
-		"movdqa	%%xmm7, %%xmm2\n\t"
-		"pshufb	%%xmm0, %%xmm3\n\t"
-		"movdqa	16(%3), %%xmm0\n\t"
+		"vmovdqa	(%3), %%xmm0\n"
+		"vpandn	%%xmm0, %%xmm6, %%xmm1\n\t"
+		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
+		"vpsrlw	$4, %%xmm1, %%xmm1\n\t"
+		"vpshufb	%%xmm7, %%xmm0, %%xmm3\n\t"
+		"vmovdqa	16(%3), %%xmm0\n\t"
 		"add	$32, %3\n\t"
-		"pshufb	%%xmm1, %%xmm2\n\t"
-		"movdqa	%%xmm6, %%xmm1\n\t"
-		"paddb	%%xmm3, %%xmm4\n\t"
-		"pandn	%%xmm0, %%xmm1\n\t"
-		"movdqa	%%xmm7, %%xmm3\n\t"
-		"paddb	%%xmm2, %%xmm4\n\t"
-		"movdqa	%%xmm7, %%xmm2\n\t"
+		"vpshufb	%%xmm7, %%xmm1, %%xmm2\n\t"
+		"vpaddb	%%xmm3, %%xmm4, %%xmm4\n\t"
+		"vpandn	%%xmm0, %%xmm6, %%xmm1\n\t"
+		"vpaddb	%%xmm2, %%xmm4, %%xmm4\n\t"
 		"dec	%2\n\t"
-		"pand	%%xmm6, %%xmm0\n\t"
-		"psrlw	$4, %%xmm1\n\t"
-		"pshufb	%%xmm0, %%xmm3\n\t"
-		"pshufb	%%xmm1, %%xmm2\n\t"
-		"paddb	%%xmm3, %%xmm4\n\t"
-		"paddb	%%xmm2, %%xmm4\n\t"
+		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
+		"vpsrlw	$4, %%xmm1, %%xmm1\n\t"
+		"vpshufb	%%xmm7, %%xmm0, %%xmm3\n\t"
+		"vpshufb	%%xmm7, %%xmm1, %%xmm2\n\t"
+		"vpaddb	%%xmm3, %%xmm4, %%xmm4\n\t"
+		"vpaddb	%%xmm2, %%xmm4, %%xmm4\n\t"
 		"jnz	2b\n\t"
-		"pxor	%%xmm0, %%xmm0\n\t"
-		"psadbw	%%xmm0, %%xmm4\n\t"
-		"paddq %%xmm4, %%xmm5\n\t"
+		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"vpsadbw	%%xmm0, %%xmm4, %%xmm4\n\t"
+		"vpaddq %%xmm4, %%xmm5, %%xmm5\n\t"
 		"test	%1, %1\n\t"
 		"jnz	1b\n\t"
 		"jmp	5f\n"
@@ -339,28 +356,26 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"jz	4f\n\t"
 		"cmp	$16, %0\n\t"
 		"jb	6f\n\t"
-		"movdqa	(%3), %%xmm0\n"
+		"vmovdqa	(%3), %%xmm0\n"
 		"8:\n\t"
 		"add	$16, %3\n\t"
-		"call	ssse3_full_popcnt\n\t"
+		"call	avx_full_popcnt\n\t"
 		"6:\n\t"
 		"and	$15, %0\n\t"
 		"jz	4f\n\t"
 		"mov	%0, %1\n\t"
-		"movdqa	(%3), %%xmm0\n"
+		"vmovdqa	(%3), %%xmm0\n"
 		"3:\n\t"
-		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	112+%5, %%xmm0\n\t"
+		"vmovdqa	96+%5, %%xmm1\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
-		"pshufd	$0, %%xmm2, %%xmm2\n\t"
-		"pcmpgtb	%%xmm2, %%xmm0\n\t"
-		"pandn	%%xmm1, %%xmm0\n\t"
-		"call	ssse3_full_popcnt\n\t"
+		"vpshufd	$0, %%xmm2, %%xmm2\n\t"
+		"vpcmpgtb	%%xmm2, %%xmm1, %%xmm1\n\t"
+		"vpandn	%%xmm0, %%xmm1, %%xmm0\n\t"
+		"call	avx_full_popcnt\n\t"
 		"4:\n\t"
-		"movdqa	%%xmm5, %%xmm0\n\t"
-		"punpckhqdq	%%xmm0, %%xmm0\n\t"
-		"paddq	%%xmm5, %%xmm0\n\t"
+		"vpunpckhqdq	%%xmm5, %%xmm5, %%xmm0\n\t"
+		"vpaddq	%%xmm5, %%xmm0, %%xmm0\n\t"
 #  ifdef __x86_64__
 #   ifndef HAVE_MOVQ_XMM_GPR
 		".byte 0x66, 0x48, 0x0f, 0x7e, 0xc0\n\t"
@@ -592,10 +607,10 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 #  else
 		"88:\n\t"
 #  endif
-		"movdqa	96+%5, %%xmm7\n\t" /* lut_st */
+		"movdqa	128+%5, %%xmm7\n\t" /* lut_st */
 		"movdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
 		"pxor	%%xmm5, %%xmm5\n\t"
-		"movdqa	112+%5, %%xmm1\n\t"
+		"movdqa	96+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%3, %1\n\t"
 		"and	$-16, %3\n\t"
@@ -695,7 +710,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 
 		"dec	%2\n\t"
 
-		"movdqa	96+%5, %%xmm2\n\t" /* lut_st */
+		"movdqa	128+%5, %%xmm2\n\t" /* lut_st */
 
 		"movdqa	%%xmm6, %%xmm0\n\t"
 		"pand	%%xmm4, %%xmm0\n\t"
@@ -831,7 +846,7 @@ static size_t mempopcnt_SSSE3(const void *s, size_t len)
 		"movdqa	(%3), %%xmm0\n"
 		"3:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	112+%5, %%xmm0\n\t"
+		"movdqa	96+%5, %%xmm0\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
 		"pshufd	$0, %%xmm2, %%xmm2\n\t"
@@ -911,7 +926,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"movdqa	32+%5, %%xmm6\n\t"
 		"pxor	%%xmm3, %%xmm3\n\t"
 		"pxor	%%xmm2, %%xmm2\n\t"
-		"movdqa	112+%5, %%xmm1\n\t"
+		"movdqa	96+%5, %%xmm1\n\t"
 		"mov	$16, %0\n\t"
 		"mov	%2, %1\n\t"
 		"and	$-16, %2\n\t"
@@ -1156,7 +1171,7 @@ static size_t mempopcnt_SSE2(const void *s, size_t len)
 		"movdqa	(%2), %%xmm0\n\t"
 		"3:\n\t"
 		"movdqa	%%xmm0, %%xmm1\n\t"
-		"movdqa	112+%5, %%xmm0\n\t"
+		"movdqa	96+%5, %%xmm0\n\t"
 		"imul	$0x01010101, %0\n\t"
 		"movd	%0, %%xmm2\n\t"
 		"pshufd	$0, %%xmm2, %%xmm2\n\t"
