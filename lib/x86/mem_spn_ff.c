@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, x86 implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -171,7 +171,7 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 		"shr	%b3, %k0\n"
 		"jz	6b\n"
 		"4:\n\t"
-		"bsf	%k0, %k0\n\t"
+		"tzcnt	%k0, %k0\n\t"
 		"sub	%5, %1\n\t"
 		"add	%1, %0\n"
 		"5:\n\t"
@@ -195,6 +195,123 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 #  ifdef __AVX__
 	, "ymm0", "ymm1", "ymm2"
 #  elif defined(__SSE__)
+	, "xmm0", "xmm1", "xmm2"
+#  endif
+	);
+	return ret;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * They made the vptest wider, even beeing a integer instruction, but
+ * they prop. saw a the advantage to have an full width test instruction,
+ * even with floats....
+ */
+static size_t mem_spn_ff_AVX(const void *s, size_t len)
+{
+	const unsigned char *p;
+	size_t ret;
+	size_t f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"mov	%7, %k2\n\t"
+		"vpcmpeqb	%%xmm1, %%xmm1, %%xmm1\n\t"
+		"vmovdqa	(%1), %%xmm0\n\t"
+		"vperm2f128	$0, %%ymm1, %%ymm1, %%ymm1\n\t"
+		"sub	%k3, %k2\n\t"
+		"vpcmpeqb	%%xmm0, %%xmm1, %%xmm0\n\t"
+		"vpxor	%%xmm0, %%xmm1, %%xmm0\n\t" /* invert match */
+		"vpmovmskb	%%xmm0, %k0\n\t"
+		"shr	%b3, %k0\n\t"
+		"shl	%b3, %k0\n\t"
+		"sub	%4, %2\n\t"
+		"jg	7f\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
+		"neg	%2\n\t"
+		"add	%7, %1\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"test	(%7*2)-1, %1\n\t"
+		"jz	2f\n\t"
+		"vmovdqa	(%1), %%xmm0\n\t"
+		"vptest	%%xmm1, %%xmm0\n\t"
+		"jnc	10f\n\t"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"jmp	2f\n"
+		"7:\n\t"
+		"mov	%k2, %k3\n\t"
+		"jmp	3f\n"
+		"6:\n\t"
+		"mov	%4, %0\n\t"
+		"jmp	5f\n"
+		"8:\n\t"
+		"vptest	%%xmm1, %%xmm0\n\t"
+		"jnc	10f\n\t"
+		"vextractf128	$1, %%ymm0, %%xmm0\n\t"
+		"add	%7, %1\n"
+		"10:\n\t"
+		"vpcmpeqb	%%xmm0, %%xmm1, %%xmm0\n\t"
+		"vpxor	%%xmm0, %%xmm1, %%xmm0\n\t" /* invert match */
+		"vpmovmskb	%%xmm0, %k0\n\t"
+		"jmp	4f\n\t"
+		".p2align 2\n"
+		"1:\n\t"
+		"prefetcht0 96(%1)\n\t"
+		"vmovdqa	(%1), %%ymm0\n\t"
+		"vptest	%%ymm1, %%ymm0\n\t"
+		"jnc	8b\n\t"
+		"sub	%7*2, %2\n\t"
+		"add	%7*2, %1\n"
+		"2:\n\t"
+		"cmp	%7*2, %2\n\t"
+		"jae	1b\n\t"
+		"cmp	%7, %2\n\t"
+		"jnae	9f\n\t"
+		"vmovdqa	(%1), %%xmm0\n\t"
+		"vptest	%%xmm1, %%xmm0\n\t"
+		"jnc	10b\n\t"
+		"sub	%7, %2\n\t"
+		"add	%7, %1\n"
+		"9:\n\t"
+		"cmp	$0, %2\n\t"
+		"jle	6b\n\t"
+		"vmovdqa	(%1), %%xmm0\n\t"
+		"vpcmpeqb	%%xmm0, %%xmm1, %%xmm0\n\t"
+		"vpxor	%%xmm0, %%xmm1, %%xmm0\n\t" /* invert match */
+		"vpmovmskb	%%xmm0, %k0\n\t"
+		"mov	%7, %k3\n\t"
+		"sub	%k2, %k3\n"
+		"3:\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n"
+		"jz	6b\n"
+		"4:\n\t"
+		"bsf	%k0, %k0\n\t"
+		"sub	%5, %1\n\t"
+		"add	%1, %0\n"
+		"5:\n\t"
+	: /* %0 */ "=&a" (ret),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&r" (t),
+	  /* %3 */ "=&c" (f)
+	:
+#  ifndef __x86_64__
+	  /* %4 */ "m" (len),
+	  /* %5 */ "m" (s),
+#  else
+	/* amd64 has enough call clobbered regs not to spill */
+	  /* %4 */ "r" (len),
+	  /* %5 */ "r" (s),
+#  endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "i" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+	: "cc"
+#  ifdef __SSE2__
 	, "xmm0", "xmm1", "xmm2"
 #  endif
 	);
@@ -561,6 +678,9 @@ static __init_cdata const struct test_cpu_feature tfeat_mem_spn_ff[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))mem_spn_ff_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))mem_spn_ff_AVX,   .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))mem_spn_ff_SSE41, .features = {[1] = CFB(CFEATURE_SSE4_1)}},
