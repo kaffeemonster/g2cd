@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, x86 implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -114,7 +114,7 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"2:"
-		"bsf	%0, %0\n\t"
+		"tzcnt	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
 		  /* %1 */ "=&r" (p),
@@ -130,6 +130,74 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		: "ymm0", "ymm1", "ymm2", "ymm3"
 #  elif defined(__SSE__)
 		: "xmm0", "xmm1", "xmm2", "xmm3"
+#  endif
+	);
+	return ret;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static tchar_t *tstrchrnul_AVX(const tchar_t *s, tchar_t c)
+{
+	tchar_t *ret;
+	size_t t, z;
+	const tchar_t *p;
+
+	/*
+	 * even if nehalem can handle unaligned load much better
+	 * (so they promised), we still align hard to get in
+	 * swing with the page boundery.
+	 */
+	asm (
+		"mov	%4, %3\n\t"
+		"prefetcht0	(%3)\n\t"
+#ifdef __i386__
+		"vmovd	%k2, %%xmm1\n\t"
+#else
+		"vmovd	%k5, %%xmm1\n\t"
+#endif
+		"and	$-16, %3\n\t"
+		"mov	$8, %k0\n\t"
+		"mov	%0, %1\n\t"
+		/* ByteM,Norm,Any,Words */
+		/*             6543210 */
+		"vpcmpestrm	$0b1000001, (%3), %%xmm1\n\t"
+		"mov	%4, %2\n\t"
+		"and	$0x0f, %2\n\t"
+		"vpmovmskb	%%xmm0, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
+		"bsf	%0, %2\n\t"
+		"jnz	2f\n\t"
+		"mov	%1, %0\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"add	%1, %3\n\t"
+		"prefetcht0	64(%3)\n\t"
+		/* LSB,Norm,Any,Words */
+		/*             6543210 */
+		"vpcmpestri	$0b0000001, (%3), %%xmm1\n\t"
+		"ja	1b\n\t"
+		"2:"
+		"lea	(%3,%2),%0\n\t"
+		: /* %0 */ "=&a" (ret),
+		  /* %1 */ "=&d" (z),
+		  /* %2 */ "=&c" (t),
+		  /* %3 */ "=&r" (p)
+#  ifdef __i386__
+		: /* %4 */ "m" (s),
+		  /* %5 */ "2" (c)
+#  else
+		: /* %4 */ "r" (s),
+		  /* %5 */ "r" (c)
+#  endif
+#  ifdef __SSE2__
+		: "xmm0", "xmm1"
 #  endif
 	);
 	return ret;
@@ -429,6 +497,9 @@ static __init_cdata const struct test_cpu_feature tfeat_tstrchrnul[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))tstrchrnul_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))tstrchrnul_AVX,   .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))tstrchrnul_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
