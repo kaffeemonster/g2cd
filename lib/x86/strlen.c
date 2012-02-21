@@ -79,22 +79,23 @@ static size_t strlen_AVX2(const char *s)
 	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 	asm (
 		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
-		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpcmpeqb	(%1), %%ymm1, %%ymm0\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"shr	%b3, %0\n\t"
+		/* we need the flags, that tzcount and it's bsf fallback have
+		 * inverted flags meaning is typical Intel brain damage...
+		 */
 		"bsf	%0, %0\n\t"
 		"jnz	2f\n\t"
 		".p2align 1\n"
 		"1:\n\t"
-		"vmovdqa	32(%1), %%ymm0\n\t"
+		"vpcmpeqb	32(%1), %%ymm1, %%ymm0\n\t"
 		"add	$32, %1\n\t"
 		"prefetcht0	64(%1)\n\t"
-		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
 		"vptest	%%ymm0, %%ymm1\n\t"
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"tzcnt	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		"sub	%2, %0\n\t"
 		"2:"
@@ -110,6 +111,60 @@ static size_t strlen_AVX2(const char *s)
 #  ifdef __AVX__
 		: "ymm0", "ymm1"
 #  elif defined(__SSE__)
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return len;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static size_t strlen_AVX(const char *s)
+{
+	size_t len, t;
+	const char *p;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	/*
+	 * even if nehalem can handle unaligned load much better
+	 * (so they promised), we still align hard to get in
+	 * swing with the page boundery.
+	 */
+	asm (
+		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"vpcmpeqb	(%1), %%xmm0, %%xmm1\n\t"
+		"vpmovmskb	%%xmm1, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	2f\n\t"
+		"mov	$0xFF01, %k0\n\t"
+		"vmovd	%k0, %%xmm0\n\t"
+		".p2align 1\n"
+		"1:\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		/* LSB,Invert,Range,Bytes */
+		/*             6543210 */
+		"vpcmpistri	$0b0010100, (%1), %%xmm0\n\t"
+		"jnz	1b\n\t"
+		"lea	(%1,%2),%0\n\t"
+		"sub	%3, %0\n"
+		"2:"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#  ifdef __i386__
+		: /* %3 */ "m" (s),
+#  else
+		: /* %3 */ "r" (s),
+#  endif
+		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
+		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
+#  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
 	);
@@ -373,6 +428,9 @@ static __init_cdata const struct test_cpu_feature tfeat_strlen[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))strlen_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))strlen_AVX,   .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
