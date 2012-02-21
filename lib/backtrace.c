@@ -111,13 +111,13 @@ static char *my_crashdump(char *buf, unsigned char *addr, int lines)
 	{
 		int j;
 
-		buf = addrtoa(buf, addr);
+		buf = maddrtoa(buf, addr);
 		*buf++ = ':'; *buf++ = ' ';
 		for(j = 0; j < 2; j++)
 		{
 			int k = 0;
 			for(; k < 8; k++) {
-				buf = utoXa_0fix(buf, (unsigned int)addr[k] & 0xFF, 2);
+				buf = mutoXa_0fix(buf, (unsigned int)addr[k] & 0xFF, 2);
 				*buf++ = ' ';
 			}
 			*buf++ = ' ';
@@ -299,9 +299,9 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		pthread_mutex_unlock(&bt_mutex);
 		return;
 	}
-	wptr = utoa(strplitcpy(path, "\n\n["), (unsigned)getpid());
+	wptr = mutoa(strplitcpy(path, "\n\n["), (unsigned)getpid());
 	*wptr++ = ':';
-	wptr = utoa(wptr,
+	wptr = mutoa(wptr,
 # ifdef __linux__
 	            (unsigned) syscall(__NR_gettid)
 # else
