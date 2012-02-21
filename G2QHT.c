@@ -110,13 +110,13 @@ static void qht_dump(void *, void *, size_t);
 static __init void qht_init(void)
 {
 	qht_dump_init();
-	if(pthread_key_create(&key2qht_zpad, free))
+	if((errno = pthread_key_create(&key2qht_zpad, free)))
 		diedie("couldn't create TLS key for qht zpad");
 
-	if(pthread_key_create(&key2qht_scratch1, free))
+	if((errno = pthread_key_create(&key2qht_scratch1, free)))
 		diedie("couldn't create TLS key for qht scratch1");
 
-	if(pthread_key_create(&key2qht_scratch2, free))
+	if((errno = pthread_key_create(&key2qht_scratch2, free)))
 		diedie("couldn't create TLS key for qht scratch2");
 }
 
@@ -145,12 +145,14 @@ struct zpad *qht_get_zpad(void)
 
 	if(unlikely(!z_pad))
 	{
+		int res;
 		z_pad = malloc(sizeof(*z_pad));
 		if(!z_pad) {
 			logg_errno(LOGF_DEVEL, "no z_pad");
 			return NULL;
 		}
-		if(pthread_setspecific(key2qht_zpad, z_pad)) {
+		if((res = pthread_setspecific(key2qht_zpad, z_pad))) {
+			errno = res;
 			logg_errno(LOGF_CRIT, "qht-zpad key not initilised?");
 			free(z_pad);
 			return NULL;
@@ -168,6 +170,7 @@ struct zpad *qht_get_zpad(void)
 static noinline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
 {
 	struct scratch *scratch = pthread_getspecific(scratch_key);
+	int res;
 
 	/*
 	 * ompf, very unpleasant...
@@ -189,8 +192,10 @@ static noinline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t len
 		{
 			free(scratch);
 			scratch = NULL;
-			if(pthread_setspecific(scratch_key, NULL))
+			if((res = pthread_setspecific(scratch_key, NULL))) {
+				errno = res;
 				diedie("could not remove qht scratch!");
+			}
 		}
 	}
 
@@ -204,7 +209,8 @@ static noinline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t len
 	}
 	scratch->length = length;
 
-	if(pthread_setspecific(scratch_key, scratch)) {
+	if((res = pthread_setspecific(scratch_key, scratch))) {
+		errno = res;
 		logg_errno(LOGF_CRIT, "qht scratch key not initilised?");
 		free(scratch);
 		return NULL;
@@ -1186,9 +1192,9 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 				txt = txt_tbuf;
 				/* o_len = len; */
 				len = decode_html_entities_utf8(txt, w_ptr, len);
-				while(*txt && isblank_a(*txt))
+				while(*txt && isspace_a(*txt))
 					txt++, len--;
-				while(len && isblank_a(*(txt + len - 1)))
+				while(len && isspace_a(*(txt + len - 1)))
 					txt[--len] = '\0';
 
 				logg_develd_old("len: %zu\t\"%s\" \"%.*s\"\n", len, txt, (int)o_len, w_ptr);

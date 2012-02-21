@@ -2,7 +2,7 @@
  * G2Handler.c
  * code to handle G2-Protocol
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *

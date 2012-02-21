@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -160,14 +160,14 @@ static __init void udp_init(void)
 {
 	size_t i;
 #ifndef HAVE___THREAD
-	if(pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free))
+	if((errno = pthread_key_create(&key2udp_lsb, (void(*)(void *))recv_buff_free)))
 		diedie("couln't create TLS key for local UDP send buffer");
-	if(pthread_key_create(&key2udp_lub, (void(*)(void *))recv_buff_free))
+	if((errno = pthread_key_create(&key2udp_lub, (void(*)(void *))recv_buff_free)))
 		diedie("couln't create TLS key for local UDP uncompress buffer");
-	if(pthread_key_create(&key2udp_lcb, (void(*)(void *))free))
+	if((errno = pthread_key_create(&key2udp_lcb, (void(*)(void *))free)))
 		diedie("couln't create TLS key for local UDP compress buffer");
 #endif
-	if(pthread_mutex_init(&cache.lock, NULL))
+	if((errno = pthread_mutex_init(&cache.lock, NULL)))
 		diedie("initialising udp cache lock");
 	/* shuffle all entrys in the free list */
 	for(i = 0; i < UDP_CACHE_SIZE; i++)
@@ -497,6 +497,7 @@ void g2_udp_reas_timeout(void)
 {
 	struct udp_reas_cache_entry *e;
 	time_t to_time;
+	int res;
 
 	to_time = local_time_now - UDP_REAS_TIMEOUT;
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
@@ -511,8 +512,10 @@ void g2_udp_reas_timeout(void)
 		udp_reas_cache_entry_free_glob(t);
 	}
 
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(res = pthread_mutex_unlock(&cache.lock))) {
+		errno = res;
 		diedie("udp reassambly lock stuck, sh**!");
+	}
 }
 
 static g2_packet_t *packet_reasamble(struct udp_reas_cache_entry *e, g2_packet_t *st_pack, struct norm_buff **d_hold)
@@ -886,8 +889,10 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 	else
 		cache_ht_add(e, h);
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("ahhhh, udp reassembly cache lock stuck, bye!");
+	}
 
 	return ret_val;
 out_free_e:

@@ -2,7 +2,7 @@
  * G2ConRegistry.c
  * Central G2Connection registry
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -910,7 +910,7 @@ static pthread_mutex_t global_update_lock;
 
 GCC_ATTR_CONSTRUCT static void init_global_update_lock(void)
 {
-	if(pthread_mutex_init(&global_update_lock, NULL))
+	if((errno = pthread_mutex_init(&global_update_lock, NULL)))
 		diedie("couldn't init global update lock");
 }
 
@@ -946,8 +946,10 @@ void g2_qht_global_update(void)
 // TODO: When the QHT gets updated, push change activly to other hubs
 
 OUT_UNLOCK:
-	if(unlikely(pthread_mutex_unlock(&global_update_lock)))
+	if(unlikely(tdiff = pthread_mutex_unlock(&global_update_lock))) {
+		errno = tdiff;
 		diedie("Huuarg, ConReg update lock stuck, bye!");
+	}
 }
 
 size_t g2_qht_global_get_ent(void)

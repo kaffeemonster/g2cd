@@ -2,7 +2,7 @@
  * hzp.c
  * hzp internal voodoo
  *
- * Copyright (c) 2006-2011 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,7 +74,7 @@ GCC_ATTR_CONSTRUCT __init static void init_hzp_free_lock(void)
 	DRD_IGNORE_VAR(hzp_threads);
 	DRD_IGNORE_VAR(hzp_freelist);
 #endif
-	if(pthread_mutex_init(&hzp_free_lock, NULL))
+	if((errno = pthread_mutex_init(&hzp_free_lock, NULL)))
 		diedie("couldn't init hzp free lock");
 }
 
@@ -124,7 +124,7 @@ static struct hzp *hzp_alloc_intern(void);
  */
 static __init void hzp_init(void) 
 {
-	if(pthread_key_create(&key2hzp, hzp_free_int))
+	if((errno = pthread_key_create(&key2hzp, hzp_free_int)))
 		diedie("couldn't create TLS key for hzp");
 }
 
@@ -143,14 +143,17 @@ static void hzp_deinit(void)
 static noinline struct hzp *hzp_alloc_intern(void)
 {
 	struct hzp *new_hzp = calloc(1, sizeof(*new_hzp));
+	int res;
+
 	if(!new_hzp)
 		return NULL;
 
 	new_hzp->flags.used = true;
 	atomic_push(&hzp_threads.head, &new_hzp->lst);
 
-	if(pthread_setspecific(key2hzp, new_hzp))
+	if((res = pthread_setspecific(key2hzp, new_hzp)))
 	{
+		errno = res;
 		new_hzp->flags.used = false;
 		logg_errno(LOGF_CRIT, "hzp key not initilised?");
 		return NULL;

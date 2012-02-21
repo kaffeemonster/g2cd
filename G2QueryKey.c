@@ -2,7 +2,7 @@
  * G2QueryKey.c
  * Query Key syndication
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -51,13 +51,13 @@
  * most of the time, instead the searcher gets some "look there"
  * hints he has to itterate on it's own.
  * This should prevent the network from being flooded with "wandering"
- * search requests (they "die off" if the searches does not invest
+ * search requests (they "die off" if the searchers does not invest
  * energy in them).
  * Searches can be submited without a connection by UDP, which
  * makes the whole process somewhat "lightweight".
  *
  * But to prevent a traffic-amplification attacks due to UDPs
- * connectionless nature (easly spoofable), search querys need
+ * connectionless nature (easily spoofable), search querys need
  * a kind of association before hand (origin of sender proof).
  *
  * This is what query keys are used for.
@@ -72,7 +72,7 @@
  *
  * Query keys are only valid for a particular source. This is
  * typically achived by connecting it to the source address.
- * Query keys "dekay" after a timeout, which is "long" (which is
+ * Query keys "decay" after a timeout, which is "long" (which is
  * exactly how long?).
  *
  * One possability would be to hand out "uniqe" IDs, store them,
@@ -99,7 +99,7 @@
  * This is very elegant, because now we kill two birds with one stone.
  * We get fresh salts every now and then, plus we age the query keys
  * automagicly. When the orginal time slot a query key belongs to gets
- * new salt, he does not match any longer and is dekayed.
+ * new salt, he does not match any longer and is decayed.
  *
  * This is the basic concept.
  *
@@ -339,7 +339,7 @@ static __init void qk_init(void)
 {
 	size_t i;
 
-	if(pthread_mutex_init(&cache.lock, NULL))
+	if((errno = pthread_mutex_init(&cache.lock, NULL)))
 		diedie("initialising qk cache lock");
 
 	/* shuffle all entrys in the free list */
@@ -540,8 +540,10 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("ahhhh, QK cache lock stuck, bye!");
+	}
 }
 
 bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
@@ -570,8 +572,10 @@ bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
 			*qk = e->e.qk;
 		ret_val = true;
 	}
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("ahhhh, QK cache lock stuck, bye!");
+	}
 	return ret_val;
 }
 

@@ -2,7 +2,7 @@
  * G2GUIDCache.c
  * known GUID cache for routing
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -93,7 +93,7 @@ bool __init g2_guid_init(void)
 	char *name, *buff;
 	size_t name_len = 0, i;
 
-	if(pthread_mutex_init(&cache.lock, NULL)) {
+	if((errno = pthread_mutex_init(&cache.lock, NULL))) {
 		logg_errno(LOGF_ERR, "initialising GUID cache lock");
 		return false;
 	}
@@ -388,8 +388,10 @@ bool g2_guid_lookup(const uint8_t guid_a[GUID_SIZE], enum guid_type gt, union co
 	ret_val = true;
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("gnarf, GUID cache lock stuck, bye!");
+	}
 
 	return ret_val;
 }
@@ -473,8 +475,10 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("gnarf, GUID cache lock stuck, bye!");
+	}
 	return ret_val;
 }
 

@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004 - 2011 Jan Seiffert
+ * Copyright (c) 2004 - 2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -4258,7 +4258,7 @@ out_free:
 static pthread_mutex_t crawl_s_lock;
 static GCC_ATTR_CONSTRUCT __init void init_crawl_lock(void)
 {
-	if(pthread_mutex_init(&crawl_s_lock, NULL))
+	if((errno = pthread_mutex_init(&crawl_s_lock, NULL)))
 		diedie("could not init crawl lock");
 }
 
@@ -4269,6 +4269,7 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	g2_packet_t *source;
 	g2_packet_t *crawla, *self, *na, *hs, *hub;
 	bool ret_val = false;
+	int res;
 
 	if(unlikely(pthread_mutex_lock(&crawl_s_lock)))
 		return false;
@@ -4277,8 +4278,10 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 		goto out_unlock;
 	last_send = local_time_now;
 
-	if(unlikely(pthread_mutex_unlock(&crawl_s_lock)))
+	if(unlikely(res = pthread_mutex_unlock(&crawl_s_lock))) {
+		errno = res;
 		diedie("crawl_s_lock stuck, bye!");
+	}
 
 	memset(&rdata, 0, sizeof(rdata));
 	source = parg->source;
@@ -4422,8 +4425,10 @@ out_free:
 	return ret_val;
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&crawl_s_lock)))
+	if(unlikely(res = pthread_mutex_unlock(&crawl_s_lock))) {
+		errno = res;
 		diedie("crawl_s_lock stuck, bye!");
+	}
 	return ret_val;
 }
 
@@ -4461,7 +4466,7 @@ struct s_data
 	const int off;
 };
 
-static const struct s_data *get_s_data(bool timeout)
+static const struct s_data *get_s_data(bool timeout GCC_ATTR_UNUSED_PARAM)
 {
 	const struct s_data *ret_val = NULL;
 #if defined(HAVE_DLOPEN) && !defined(WIN32)
@@ -4469,6 +4474,7 @@ static const struct s_data *get_s_data(bool timeout)
 	static void *handle;
 	static const struct s_data *s_data;
 	static time_t last_send;
+	int res;
 
 	if(unlikely(pthread_mutex_lock(&s_lock)))
 		return NULL;
@@ -4493,8 +4499,10 @@ static const struct s_data *get_s_data(bool timeout)
 
 	ret_val = s_data;
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&s_lock)))
+	if(unlikely(res = pthread_mutex_unlock(&s_lock))) {
+		errno = res;
 		diedie("s_lock stuck, bye!");
+	}
 #endif
 	return ret_val;
 }
@@ -4632,7 +4640,7 @@ static __init void g2_packet_cinit(void)
 	size_t i;
 
 #ifndef HAVE___THREAD
-	if(pthread_key_create(&key2lpack, g2_packet_free_lorg))
+	if(errno = pthread_key_create(&key2lpack, g2_packet_free_lorg))
 		diedie("couldn't create TLS key for recv_buff\n");
 #endif
 

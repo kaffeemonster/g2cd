@@ -2,7 +2,7 @@
  * timeout.c
  * thread to handle the varios server timeouts needed
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -70,9 +70,9 @@ static struct
 
 GCC_ATTR_CONSTRUCT __init static void init_timeout_system(void)
 {
-	if(pthread_mutex_init(&wakeup.mutex, NULL))
+	if((errno = pthread_mutex_init(&wakeup.mutex, NULL)))
 		diedie("failed to setup timeout mutex");
-	if(pthread_cond_init(&wakeup.cond, NULL))
+	if((errno = pthread_cond_init(&wakeup.cond, NULL)))
 		diedie("failed to setup timeout conditional");
 }
 
