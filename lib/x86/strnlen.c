@@ -87,8 +87,7 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 		"sub	%3, %2\n\t"
 		"sub	%4, %2\n\t"
 		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
-		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
+		"vpcmpeqb	(%1), %%ymm1, %%ymm0\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"ja	1f\n\t"
 		"shr	%b3, %0\n\t"
@@ -99,10 +98,9 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 		"jz	6f\n\t"
 		".p2align 1\n"
 		"2:\n\t"
-		"vmovdqa	32(%1), %%ymm0\n\t"
+		"vpcmpeqb	32(%1), %%ymm1, %%ymm0\n\t"
 		"add	$32, %1\n\t"
 		"prefetcht0	64(%1)\n\t"
-		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
 		"cmp	$32, %2\n\t"
 		"jbe	3f\n\t"
 		"sub	$32, %2\n\t"
@@ -158,6 +156,89 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 #ifdef __SSE__
 	: "xmm0", "xmm1"
 #endif
+	);
+	return len;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static size_t strnlen_AVX(const char *s, size_t maxlen)
+{
+	const char *p;
+	size_t len, f, t;
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm (
+		"sub	%3, %2\n\t"
+		"sub	%4, %2\n\t"
+		"vpxor	%%xmm1, %%xmm1, %%xmm1\n\t"
+		"vpcmpeqb	(%1), %%xmm1, %%xmm0\n\t"
+		"vpmovmskb	%%xmm0, %0\n\t"
+		"ja	1f\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"mov	$16, %b3\n\t"
+		"neg	%2\n\t"
+		"jz	6f\n\t"
+		"mov	$0xFF01, %k0\n\t"
+		"vmovd	%k0, %%xmm1\n\t"
+		"mov	$2, %k0\n\t"
+		"add	%3, %2\n\t"
+		".p2align 1\n"
+		"2:\n\t"
+		"sub	$16, %2\n\t"
+		"add	$16, %1\n\t"
+		"prefetcht0	64(%1)\n\t"
+		/* LSB,Invert,Range,Bytes */
+		/*             6543210 */
+		"vpcmpestri	$0b0010100, (%1), %%xmm1\n\t"
+		"ja	2b\n\t"
+		"cmovnc	%2, %3\n"
+		"6:\n\t"
+		"lea	(%3, %1), %0\n\t"
+		"sub	%5, %0\n\t"
+#ifdef HAVE_SUBSECTION
+		".subsection 2\n\t"
+#else
+		"jmp	5f\n\t"
+#endif
+		".p2align 2\n"
+		"1:\n\t"
+		"xchg	%2, %3\n\t"
+		"shl	%b3, %w0\n\t"
+		"shr	%b3, %w0\n\t"
+		"mov	%2, %3\n\t"
+		"shr	%b3, %0\n\t"
+		"bsf	%0, %0\n\t"
+		"cmovz	%4, %0\n\t"
+#ifdef HAVE_SUBSECTION
+		"jmp	5f\n\t"
+		".previous\n"
+#endif
+		"5:"
+	: /* %0 */ "=&a" (len),
+	  /* %1 */ "=&r" (p),
+	  /* %2 */ "=&d" (t),
+	  /* %3 */ "=&c" (f)
+#  ifdef __i386__
+	: /* %4 */ "m" (maxlen),
+	  /* %5 */ "m" (s),
+#  else
+	: /* %4 */ "r" (maxlen),
+	  /* %5 */ "r" (s),
+#  endif
+	  /* %6 */ "3" (ALIGN_DOWN_DIFF(s, SOV16)),
+	  /* %7 */ "2" (SOV16),
+	  /* %8 */ "1" (ALIGN_DOWN(s, SOV16))
+#  ifdef __SSE__
+	: "xmm0", "xmm1"
+#  endif
 	);
 	return len;
 }
@@ -541,6 +622,9 @@ static __init_cdata const struct test_cpu_feature tfeat_strnlen[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))strnlen_AVX2 , .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))strnlen_AVX ,  .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))strnlen_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2),  [0] = CFB(CFEATURE_CMOV)}},
