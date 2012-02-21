@@ -660,8 +660,7 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 	union combo_addr where;
 	time_t when;
 	char *w_ptr = buffer_start(*to_con->recv);
-	char *x;
-	char c;
+	char *x = w_ptr;
 
 	/* we only accept foreign hub info after the second header */
 	if(!to_con->u.accept.flags.second_header)
@@ -673,14 +672,15 @@ static bool try_hub_what(g2_connection_t *to_con, size_t distance)
 	/* init stuff */
 	memset(&where, 0, sizeof(where));
 
-	for(c = 0xff; c; w_ptr = x)
+	for(; *x; w_ptr = x)
 	{
 		char *t_str;
 
 		x = strchrnul(w_ptr, ',');
+		/* terminate */
+		*x++ = '\0';
 		/* remove leading white-spaces in field-data */
-		for(c = *x, *x++ = '\0'; c && (c = *x) && isspace_a((unsigned)*x);)
-			*x++ = '\0';
+		x = str_skip_space(x);
 
 		t_str = strchrnul(w_ptr, ' ');
 		if(!*t_str)
