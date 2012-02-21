@@ -84,11 +84,12 @@ LOOP_AGAIN:
 			m2   = cmpbeqz(w1);
 			if(m1 || m2)
 			{
-				unsigned long r1, r2;
-				m1 = cmpbeqz(m1);
+				unsigned long r1;
+				/* Invert mask to make non matching byte stick out */
+				m1  = cmpbeqz(m1) ^ 0xff;
+				/* add Nul-byte mask on top */
+				m1 |= m2;
 				r1 = alpha_nul_byte_index_e(m1);
-				r2 = alpha_nul_byte_index_e(m2);
-				r1 = r1 < r2 ? r1 : r2;
 				cycles = ROUND_TO(cycles - i, SOUL);
 				n -= cycles;
 				r1 = r1 < n - 1 ? r1 : n - 1;
@@ -154,27 +155,24 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	m2   = cmpb_between(w2, 0x60, 0x7b);
 	m2   = zapnot(0x2020202020202020UL, m2);
 	w2  -= m2;
+	if(!HOST_IS_BIGENDIAN) {
+		w1 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+		w2 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+	} else {
+		w1 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+		w2 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+	}
 	m1   = w1 ^ w2;
 	m2   = cmpbeqz(w1);
-	if(!HOST_IS_BIGENDIAN) {
-		m1 >>= shift * BITS_PER_CHAR;
-		m2 >>= shift;
-	} else {
-		m1 <<= shift * BITS_PER_CHAR;
-		m2 <<= shift + SOULM1 * BITS_PER_CHAR;
-	}
 	if(m1 || m2)
 	{
-		unsigned long r1, r2;
-		m1 = cmpbeqz(m1);
-		if(!HOST_IS_BIGENDIAN)
-			m1 <<= shift + SOULM1 * BITS_PER_CHAR;
-		else
-			m1 >>= shift;
+		unsigned long r1;
+		/* Invert mask to make non matchin byte stick out */
+		m1  = cmpbeqz(m1) ^ 0xff;
+		/* add Nul-byte mask on top*/
+		m1 |= m2;
 		r1 = alpha_nul_byte_index_e(m1);
-		r2 = alpha_nul_byte_index_e(m2);
-		r1 = r1 < r2 ? r1 : r2;
-		r1 = r1 < n - 1 ? r1 : n - 1;
+		r1 = r1 < n - 1 + shift ? r1 : n - 1 + shift;
 		if(HOST_IS_BIGENDIAN)
 			r1 = SOULM1 - r1;
 		r1 *= BITS_PER_CHAR;
@@ -200,11 +198,12 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 		m2   = cmpbeqz(w1);
 		if(m1 || m2)
 		{
-			unsigned long r1, r2;
-			m1 = cmpbeqz(m1);
+			unsigned long r1;
+			/* Invert mask to make non matching byte stick out */
+			m1  = cmpbeqz(m1) ^ 0xff;
+			m1 |= m2;
+			/* add Nul-byte mask on top */
 			r1 = alpha_nul_byte_index_e(m1);
-			r2 = alpha_nul_byte_index_e(m2);
-			r1 = r1 < r2 ? r1 : r2;
 			cycles -= i;
 			n -= cycles;
 			r1 = r1 < n - 1 ? r1 : n - 1;
