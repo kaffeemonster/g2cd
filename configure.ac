@@ -637,8 +637,16 @@ if test x"$have_db_h" = xyes; then
 fi
 
 if test x"$have_db_h" = xno; then
-	AC_CHECK_HEADER([ndbm.h], [],[][AC_MSG_ERROR(can not find an ndbm provider!)])
-	AC_SEARCH_LIBS([dbm_open], [ndbm dbm gdbm gdbm_compat], [], [AC_MSG_ERROR(can not find ndbm!)])
+	have_ndbm_h=no
+	AC_CHECK_HEADER([ndbm.h], [have_ndbm_h=yes],[][have_ndbm_h=no])
+	if test x"$have_ndbm_h" = xno; then
+		AC_CHECK_HEADER([gdbm.h], [],[][AC_MSG_ERROR(can not find an ndbm provider!)])
+	fi
+	if test x"have_ndbm_h" = xyes; then
+		AC_SEARCH_LIBS([dbm_open], [ndbm dbm gdbm gdbm_compat], [], [AC_MSG_ERROR(can not find ndbm!)])
+	else
+		AC_SEARCH_LIBS([gdbm_open], [ndbm dbm gdbm gdbm_compat], [], [AC_MSG_ERROR(can not find gdbm!)])
+	fi
 fi
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -922,22 +930,30 @@ AC_FUNC_MMAP
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
+AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul strerror_s sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
 
 if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)
 fi
 
 m4_include([m4/ax_check_var.m4])
-AC_CHECK_VAR(__etext, [], [
-	AC_CHECK_VAR(_etext, [
-		AC_DEFINE(__etext, _etext, no __etext but _etext)][
-		AC_CHECK_VAR(etext, [
-			AC_DEFINE(__etext, etext, no __etext but etext)][
-		][
-			AC_DEFINE(HAVE_NO_ETEXT, 1, no __etext whatsoever)])
-	])
-])
+have___etext=no
+AC_CHECK_VAR(__etext,[have___etext=yes],[])
+if test x"$have___etext" = xno; then
+	have__etext=no
+	AC_CHECK_VAR(_etext,[have__etext=yes],[])
+	if test x"$have__etext" = xno; then
+		have_etext=no
+		AC_CHECK_VAR(etext, [have_etext=yes],[])
+		if test x"$have_etext" = xno; then
+			AC_DEFINE(HAVE_NO_ETEXT, 1, no __etext whatsoever)
+		else
+			AC_DEFINE(__etext, etext, no __etext but etext)
+		fi
+	else
+		AC_DEFINE(__etext, _etext, no __etext but _etext)
+	fi
+fi
 
 AC_MSG_CHECKING([wheter we can safely swap on /dev/fd0])
 AC_MSG_RESULT([yes])
