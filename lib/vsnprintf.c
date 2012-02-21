@@ -57,6 +57,9 @@
 #include "itoa.h"
 #include "log_facility.h"
 #include "combo_addr.h"
+#ifdef WIN32
+# include <winbase.h>
+#endif
 
 /*
  * When times get desperate...
@@ -1680,8 +1683,24 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 {
 	size_t err_str_len = 0;
 	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_DECL_STRERROR_S)
-# ifdef STRERROR_R_CHAR_P
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || WIN32 || !(defined HAVE_STRERROR_R || HAVE_DECL_STRERROR_R-0 > 0)
+# ifdef WIN32
+	const char *s = buf;
+	if(!(err_str_len = FormatMessage(
+		FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, /* flags */
+		0, /* pointer to other source */
+		errno, /* msg id */
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* language */
+		buf, /* buffer */
+		sav, /* size */
+		0 /* va_args */
+	))) {
+		s = "Unknown system error";
+		err_str_len = strlen(s) < sav ?
+		              strlen(s) : sav;
+	}
+# else
+#  ifdef STRERROR_R_CHAR_P
 	/*
 	 * the f***ing GNU-Version of strerror_r wich returns
 	 * a char * to the buffer....
@@ -1690,7 +1709,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	 * with this...
 	 */
 	const char *s = strerror_r(errno, buf, sav);
-# else
+#  else
 	/*
 	 * Ol Solaris seems to have a static msgtable, so
 	 * strerror is threadsafe and we don't have a
@@ -1703,7 +1722,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 	 * is a bsd extentions.
 	 */
 	const char *s = strerror(errno);
-# endif
+#  endif
 	if(s)
 		err_str_len = strnlen(s, sav);
 	else {
@@ -1711,15 +1730,13 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 		err_str_len = strlen(s) < sav ?
 		              strlen(s) : sav;
 	}
+#endif
 
 	if(s != buf)
 		my_memcpy(buf, s, err_str_len);
 #else
-# ifdef HAVE_STRERROR_R
 	if(!strerror_r(errno, buf, sav))
-# else
-	if(!strerror_s(buf, sav, errno))
-# endif
+//	if(!strerror_s(buf, sav, errno))
 		err_str_len += strnlen(buf, sav);
 	else
 	{
@@ -2015,7 +2032,7 @@ static noinline const char *f_p_p(char *buf, const char *fmt, struct format_spec
 	if((sizeof(void *) * 2) + 2 > sav)
 		len = (sizeof(void *) * 2) + 2;
 	else
-		len = ptoa(buf, ptr) - buf;
+		len = mptoa(buf, ptr) - buf;
 	buf += len;
 	spec->len += len;
 	return end_format(buf, fmt, spec);

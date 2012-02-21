@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -914,7 +914,7 @@ static __init void setup_resources(void)
 {
 	size_t i;
 
-	if(pthread_mutex_init(&sock_com_lock, NULL)) {
+	if((errno = pthread_mutex_init(&sock_com_lock, NULL))) {
 		logg_errno(LOGF_CRIT, "couldn't init sock_com lock");
 		exit(EXIT_FAILURE);
 	}
@@ -972,7 +972,7 @@ static __init void setup_resources(void)
 
 	server.settings.have_tcp_send_timeout = check_tcp_send_timeout();
 
-	if(pthread_attr_init(&server.settings.t_def_attr)) {
+	if((errno = pthread_attr_init(&server.settings.t_def_attr))) {
 		logg_errno(LOGF_CRIT, "initialising pthread_attr");
 		exit(EXIT_FAILURE);
 	}
@@ -1076,10 +1076,7 @@ static __init void setup_resources(void)
 
 static inline const char *get_etext(void)
 {
-#ifndef HAVE_NO_ETEXT
-	extern const char __etext;
-	return &__etext - 0x1fffe;
-#else
+#ifdef HAVE_NO_ETEXT
 	const char *rval;
 	/*
 	 * force the address of some func int the middle of the .text segment
@@ -1090,6 +1087,9 @@ static inline const char *get_etext(void)
 	 */
 	asm("" : "=r" (rval) : "0" (_g2_con_clear));
 	return rval; /* now we should have a pointer into the text segment */
+#else
+	extern const char __etext;
+	return &__etext - 0x1fffe;
 #endif
 }
 
@@ -1319,6 +1319,7 @@ static noinline __init bool startup(int argc, char **args)
 		WORD version_req = MAKEWORD(2, 2);
 		WSADATA wsa_data;
 		ULONG heap_info;
+		HMODULE hm;
 		int err;
 
 		/* enable fancy protection things */
@@ -1343,6 +1344,41 @@ static noinline __init bool startup(int argc, char **args)
 		heap_info = 2;
 		HeapSetInformation(NULL, HeapCompatibilityInformation, &heap_info, sizeof(heap_info));
 		/* NewsFlash: lfh seem to disable heap exploition mitigation, maybe a hotfix will come */
+
+		/*
+		 * Dirty deeds done ...
+		 * Force zlib to use our adler32
+		 */
+		if(GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)deflate, &hm))
+		{
+			FARPROC f = GetProcAddress(hm, "adler32");
+			if(f)
+			{
+				unsigned long (*my_a)(unsigned long, const unsigned char *, unsigned int) =
+					(unsigned long (*)(unsigned long, const unsigned char *, unsigned int))f;
+				DWORD o_prot;
+				/* make the pages present/commited by accessing it */
+				o_prot = my_a(0, (void *)&f, sizeof(f));
+				if(VirtualProtect(f, 5, PAGE_EXECUTE_READWRITE, &o_prot))
+				{
+					unsigned char *p = (unsigned char *)f;
+					ptrdiff_t displacement = (unsigned char *)adler32 - (p + 5);
+					if(!(displacement > INT32_MAX || displacement < INT32_MIN)) {
+						*p = 0xe9; /* jmp */
+						*(int32_t *)(p+1) = (int32_t)displacement;
+						VirtualProtect(f, 5, o_prot, &o_prot);
+					}
+					else
+						logg_develd("displacement of 0x%tx is to long for jmp\n", displacement);
+				}
+				else
+					logg_develd("Couldn't change memory protection  0x%x\n", GetLastError());
+			}
+			else
+				logg_develd("Couldn't get adler32 from zlib: 0x%x\n", GetLastError());
+		}
+		else
+			logg_develd("Couldn't get zlib handle: 0x%x\n", GetLastError());
 
 		err = WSAStartup(version_req, &wsa_data);
 		if(err)
@@ -1453,13 +1489,13 @@ static noinline __init bool startup(int argc, char **args)
 
 	server_running = true;
 	/* fire up threads */
-	if(pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN])) {
+	if((errno = pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN]))) {
 		logg_errno(LOGF_CRIT, "pthread_create gup");
 		clean_up_m();
 		return false;
 	}
 
-	if(pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL)) {
+	if((errno = pthread_create(&main_threads[THREAD_TIMER], &server.settings.t_def_attr, (void *(*)(void *))&timeout_timer_task, NULL))) {
 		logg_errno(LOGF_CRIT, "pthread_create timeout_timer");
 		/*
 		 * Critical Moment: we could not run further for normal

@@ -2,7 +2,7 @@
  * my_epoll_devpoll.c
  * wrapper to get epoll on solaris with /dev/poll
  *
- * Copyright (c) 2005-2010 Jan Seiffert
+ * Copyright (c) 2005-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -126,11 +126,11 @@ static __init void my_epoll_init(void)
 	epoll_data_t *e_ptr;
 
 	/* generate a lock for shared free_cons */
-	if(pthread_mutex_init(&my_epoll_wmutex, NULL))
+	if((errno = pthread_mutex_init(&my_epoll_wmutex, NULL)))
 		diedie("creating my_epoll writes mutex");
 
 	/* generate a lock to make oneshot fds atomic */
-	if(pthread_mutex_init(&my_epoll_pmutex, NULL))
+	if((errno = pthread_mutex_init(&my_epoll_pmutex, NULL)))
 		diedie("creating my_epoll poll mutex");
 
 	tmp_ptr = malloc(sizeof(*tmp_ptr) + sizeof(epoll_data_t) * ((size_t)EPOLL_QUEUES * 20 + 1));
@@ -157,7 +157,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
 	struct pollfd tmp_poll;
 	ssize_t w_val;
-	int ret_val = 0;
+	int ret_val = 0, res;
 
 	if(0 > epfd) {
 		errno = EBADF;
@@ -184,7 +184,8 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 		return -1;
 	}
 
-	if(pthread_mutex_lock(&my_epoll_wmutex)) {
+	if((res = pthread_mutex_lock(&my_epoll_wmutex))) {
+		errno = res;
 		logg_errno(LOGF_ERR, "locking my_epoll writers mutex");
 		return -1;
 	}
@@ -263,8 +264,10 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	}
 
 UNLOCK:
-	if(pthread_mutex_unlock(&my_epoll_wmutex))
+	if((res = pthread_mutex_unlock(&my_epoll_wmutex))) {
+		errno = res;
 		diedie("unlocking my_epoll writers mutex");
+	}
 
 	return ret_val;
 }
@@ -274,7 +277,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	struct pollfd *poll_buf, *back_buf;
 	struct epoll_event *wptr;
 	struct dvpoll do_poll;
-	int num_poll, ret_val = 0;
+	int num_poll, ret_val = 0, res;
 
 	if(0 > epfd) {
 		errno = EBADF;
@@ -296,8 +299,10 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 	do_poll.dp_nfds = maxevents;
 	do_poll.dp_timeout = timeout;
 
-	if(pthread_mutex_lock(&my_epoll_pmutex))
+	if((res = pthread_mutex_lock(&my_epoll_pmutex))) {
+		errno = res;
 		diedie("locking my_epoll poll mutex");
+	}
 
 	num_poll = ioctl(epfd, DP_POLL, &do_poll);
 	switch(num_poll)
@@ -357,15 +362,17 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		logg_errno(LOGF_DEBUG, "ioctl");
 		break;
 	}
-	if(pthread_mutex_unlock(&my_epoll_pmutex))
+	if((res = pthread_mutex_unlock(&my_epoll_pmutex))) {
+		errno = res;
 		diedie("unlocking my_epoll poll mutex");
+	}
 
 	return ret_val;
 }
 
 int my_epoll_create(int size)
 {
-	int dpfd;
+	int dpfd, res;
 
 	if(1 > size) {
 		errno = EINVAL;
@@ -385,8 +392,10 @@ int my_epoll_create(int size)
 			dpfd = -1;
 		}
 
-		if(pthread_mutex_unlock(&my_epoll_wmutex))
+		if((res = pthread_mutex_unlock(&my_epoll_wmutex))) {
+			errno = res;
 			diedie("unlocking my_epoll writes mutex");
+		}
 	}
 	else {
 		logg_errno(LOGF_ERR, "locking my_epoll writes mutex");

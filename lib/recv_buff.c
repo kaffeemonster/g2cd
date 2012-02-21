@@ -2,7 +2,7 @@
  * recv_buff.c
  * recvieve buffer allocator
  *
- * Copyright (c) 2007-2010 Jan Seiffert
+ * Copyright (c) 2007-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,7 +64,7 @@ static __init void recv_buff_init(void)
 {
 	size_t i;
 
-	if(pthread_key_create(&key2lrecv, recv_buff_free_lorg))
+	if((errno = pthread_key_create(&key2lrecv, recv_buff_free_lorg)))
 		diedie("couldn't create TLS key for recv_buff\n");
 
 	for(i = 0; i < anum(free_buffs); i++)
@@ -132,7 +132,8 @@ static noinline struct local_buffer_org *recv_buff_init_lorg(void)
 		return NULL;
 	
 	org->pos = anum(org->buffs);
-	if(unlikely(pthread_setspecific(key2lrecv, org))) {
+	if(unlikely(i = pthread_setspecific(key2lrecv, org))) {
+		errno = i;
 		logg_errno(LOGF_CRIT, "local recv_buff key not initialized?");
 		free(org);
 		return NULL;

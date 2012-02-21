@@ -2,7 +2,7 @@
  * gup.c
  * grand unified poller
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -475,7 +475,9 @@ void *gup(void *param)
 	worker.keep_going = true;
 	for(i = 0; i < num_helper; i++)
 	{
-		if(pthread_create(&helper[i], &server.settings.t_def_attr, gup_loop, (void *)(i + 1))) {
+		int res;
+		if((res = pthread_create(&helper[i], &server.settings.t_def_attr, gup_loop, (void *)(i + 1)))) {
+			errno = res;
 			logg_errnod(LOGF_WARN, "starting gup helper threads, will run with %zu", i);
 			num_helper = i;
 			break;
@@ -489,7 +491,9 @@ void *gup(void *param)
 
 	for(i = 0; i < num_helper; i++)
 	{
-		if(pthread_join(helper[i], NULL)) {
+		int res;
+		if((res = pthread_join(helper[i], NULL))) {
+			errno = res;
 			logg_errno(LOGF_WARN, "taking down gup helper threads");
 			break;
 		}

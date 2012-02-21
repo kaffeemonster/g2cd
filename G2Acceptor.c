@@ -611,13 +611,13 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 		goto out_fixup;
 
 	/* filter leading garbage */
-	for(f_key.txt = line; f_key.txt < ret_val && !isalnum_a((int)*f_key.txt);)
+	for(f_key.txt = line; f_key.txt < ret_val && !isalnum_a(*(const unsigned char *)f_key.txt);)
 		f_key.txt++;
 	if(unlikely(1 >= ret_val - f_key.txt)) /* nothing left? */
 		goto out_fixup;
 
 	/* filter trailing garbage */
-	for(f_end = ret_val - 1; f_end >= f_key.txt && !isgraph_a((int)*f_end);)
+	for(f_end = ret_val - 1; f_end >= f_key.txt && !isgraph_a(*(unsigned char *)f_end);)
 		f_end--;
 	f_dist = (f_end + 1) - f_key.txt;
 	if(unlikely(1 > f_dist)) /* something left? */
@@ -1006,7 +1006,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 
 				cp_ret = buffer_start(*to_con->send);
 				*cp_ret++ = ':';
-				cp_ret = ustoa_trunc(cp_ret, ntohs(combo_addr_port(&local_addr)));
+				cp_ret = mustoa_trunc(cp_ret, ntohs(combo_addr_port(&local_addr)));
 				*cp_ret++ = '\r'; *cp_ret++ = '\n';
 				to_con->send->pos += cp_ret - buffer_start(*to_con->send);
 			}

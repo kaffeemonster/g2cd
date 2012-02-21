@@ -2,7 +2,7 @@
  * log_facility.c
  * logging logic/magic/functions
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -40,6 +40,9 @@
 /* other */
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
+#endif
+#ifdef WIN32
+# include <winbase.h>
 #endif
 /* Own includes */
 #include "../G2MainServer.h"
@@ -81,7 +84,7 @@ static __init void logg_init(void)
 	/* set a default log level till config comes up */
 	server.settings.logging.act_loglevel = LOGF_ERR;
 
-	if(pthread_key_create(&key2logg, free))
+	if((errno = pthread_key_create(&key2logg, free)))
 		diedie("couln't create TLS key for logging");
 
 	/*
@@ -166,7 +169,9 @@ static void logg_ret_buf(struct big_buff *ret_buf)
 	/* for the rare case a constructor screams */
 	if(logg_tls_ready)
 	{
-		if(pthread_setspecific(key2logg, ret_buf)) {
+		int res;
+		if((res = pthread_setspecific(key2logg, ret_buf))) {
+			errno = res;
 			logg_int_pos(LOGF_EMERG, "adding logg buff back failed\n");
 			free(ret_buf);
 			exit(EXIT_FAILURE);
@@ -414,9 +419,25 @@ realloc:
 		*buffer_start(*logg_buff) = ':'; logg_buff->pos++;
 		*buffer_start(*logg_buff) = ' '; logg_buff->pos++;
 		{
-#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || !(defined HAVE_STRERROR_R || defined HAVE_DECL_STRERROR_S)
+#if defined STRERROR_R_CHAR_P || defined HAVE_MTSAFE_STRERROR || WIN32 || !(defined HAVE_STRERROR_R || HAVE_DECL_STRERROR_R-0 > 0)
 			size_t err_str_len;
-# ifdef STRERROR_R_CHAR_P
+# ifdef WIN32
+			const char *s = buffer_start(*logg_buff);
+			if(!(err_str_len = FormatMessage(
+				FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, /* flags */
+				0, /* pointer to other source */
+				old_errno, /* msg id */
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* language */
+				buffer_start(*logg_buff), /* buffer */
+				buffer_remaining(*logg_buff)-1, /* size */
+				0 /* va_args */
+			))) {
+				s = "Unknown system error";
+				err_str_len = strlen(s) < buffer_remaining(*logg_buff)-2 ?
+				              strlen(s) : buffer_remaining(*logg_buff)-2;
+			}
+# else
+#  ifdef STRERROR_R_CHAR_P
 			/*
 			 * the f***ing GNU-Version of strerror_r wich returns
 			 * a char * to the buffer....
@@ -425,7 +446,7 @@ realloc:
 			 * with this...
 			 */
 			const char *s = strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)-2);
-# else
+#  else
 			/*
 			 * Ol Solaris seems to have a static msgtable, so
 			 * strerror is threadsafe and we don't have a
@@ -438,7 +459,7 @@ realloc:
 			 * is a bsd extentions.
 			 */
 			const char *s = strerror(old_errno);
-# endif
+#  endif
 			if(s)
 				err_str_len = strnlen(s, buffer_remaining(*logg_buff)-2);
 			else {
@@ -446,16 +467,14 @@ realloc:
 				err_str_len = strlen(s) < (buffer_remaining(*logg_buff)-2) ?
 				              strlen(s) : buffer_remaining(*logg_buff)-2;
 			}
+# endif
 
 			if(s != buffer_start(*logg_buff))
 				my_memcpy(buffer_start(*logg_buff), s, err_str_len);
 			logg_buff->pos += err_str_len;
 #else
-# ifdef HAVE_STRERROR_R
 			if(!strerror_r(old_errno, buffer_start(*logg_buff), buffer_remaining(*logg_buff)))
-# else
-			if(!strerror_s(buffer_start(*logg_buff), buffer_remaining(*logg_buff), old_errno))
-# endif
+//			if(!strerror_s(buffer_start(*logg_buff), buffer_remaining(*logg_buff), old_errno))
 				logg_buff->pos += strnlen(buffer_start(*logg_buff), buffer_remaining(*logg_buff));
 			else
 			{

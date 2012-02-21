@@ -311,12 +311,12 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	*wptr++ = ']'; *wptr++ = '\n';
 	wptr = strpcpy(strplitcpy(strpcpy(wptr, osl), "\nWhy: "), isl);
 	*wptr++ = ' '; *wptr++ = '(';
-	wptr = itoa(wptr, si->si_code);
+	wptr = mitoa(wptr, si->si_code);
 	*wptr++ = ')'; *wptr++ = '\n';
 	write_panic(stderrfd, path, wptr - path);
 	/* errno set? */
 	if(si->si_errno) {
-		wptr = itoa(strplitcpy(path, "Errno: "), si->si_errno);
+		wptr = mitoa(strplitcpy(path, "Errno: "), si->si_errno);
 		*wptr++ = '\n';
 		write_panic(stderrfd, path, wptr - path);
 	}
@@ -359,19 +359,19 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	for(i = 0; i < NGREG; i++)
 	{
 		*wptr++ = '[';
-		wptr = strplitcpy(itoa_sfix(wptr, i, 3), "]: 0x");
-		wptr = ultoXa_0fix(wptr, greg_iter[i], 16);
+		wptr = strplitcpy(mitoa_sfix(wptr, i, 3), "]: 0x");
+		wptr = multoXa_0fix(wptr, greg_iter[i], 16);
 		*wptr++ = '\n';
 	}
 	write_panic(stderrfd, path, wptr - path);
 
 	/* Stackinfo */
 	wptr = strplitcpy(path, "Stack ref:\t0x");
-	wptr = ultoXa_0fix(wptr, (unsigned long) uc->uc_stack.ss_sp, 16);
+	wptr = multoXa_0fix(wptr, (unsigned long) uc->uc_stack.ss_sp, 16);
 	wptr = strplitcpy(wptr, "\tsize: ");
-	wptr = ultoa(wptr, (unsigned long)uc->uc_stack.ss_size);
+	wptr = multoa(wptr, (unsigned long)uc->uc_stack.ss_size);
 	wptr = strplitcpy(wptr, "\tflags: ");
-	wptr = itoa(wptr, uc->uc_stack.ss_flags);
+	wptr = mitoa(wptr, uc->uc_stack.ss_flags);
 	*wptr++ = '\n';
 	write_panic(stderrfd, path, wptr - path);
 
@@ -391,7 +391,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	write_panic(stderrfd, path, wptr - path);
 	
 	/* whats at the memref */
-	wptr = ultoXa_0fix(strplitcpy(path, "Memory ref:\t0x"), (unsigned long)si->si_addr, 16);
+	wptr = multoXa_0fix(strplitcpy(path, "Memory ref:\t0x"), (unsigned long)si->si_addr, 16);
 	*wptr++ = '\n';
 	write_panic(stderrfd, path, wptr - path);
 
@@ -423,7 +423,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 	{
 		wptr += ret_val;
 		*wptr++ = ' ';
-		wptr = itoa(wptr, (int)getpid());
+		wptr = mitoa(wptr, (int)getpid());
 # ifndef __sun__
 		*wptr++ = ' ';
 # else

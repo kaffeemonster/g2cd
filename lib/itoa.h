@@ -167,21 +167,21 @@
 	MAKE_LXFUNC_0FIX( prfx, type) \
 	MAKE_UXFUNC_0FIX( prfx, type)
 
-MAKE_SFUNC_SET(   c,   signed char)
-MAKE_UFUNC_SET(  uc, unsigned char)
-MAKE_SFUNC_SET(   s,   signed short)
-MAKE_UFUNC_SET(  us, unsigned short)
-MAKE_SFUNC_SET(   i,   signed int)
-MAKE_UFUNC_SET(   u, unsigned int)
-MAKE_SFUNC_SET(   l,   signed long)
-MAKE_UFUNC_SET(  ul, unsigned long)
-MAKE_SFUNC_SET(  ll,   signed long long)
-MAKE_UFUNC_SET( ull, unsigned long long)
-MAKE_SFUNC_SET(   z,          ssize_t)
-MAKE_UFUNC_SET(  uz,          size_t)
+MAKE_SFUNC_SET(  mc,   signed char)
+MAKE_UFUNC_SET( muc, unsigned char)
+MAKE_SFUNC_SET(  ms,   signed short)
+MAKE_UFUNC_SET( mus, unsigned short)
+MAKE_SFUNC_SET(  mi,   signed int)
+MAKE_UFUNC_SET(  mu, unsigned int)
+MAKE_SFUNC_SET(  ml,   signed long)
+MAKE_UFUNC_SET( mul, unsigned long)
+MAKE_SFUNC_SET( mll,   signed long long)
+MAKE_UFUNC_SET(mull, unsigned long long)
+MAKE_SFUNC_SET(  mz,          ssize_t)
+MAKE_UFUNC_SET( muz,          size_t)
 
 
-static inline char *addrtoa(char *buff, const void *ptr)
+static inline char *maddrtoa(char *buff, const void *ptr)
 {
 	static const char hexchar[] = HEXUC_STRING;
 	char *wptr = buff + (sizeof(ptr) * 2);
@@ -194,7 +194,7 @@ static inline char *addrtoa(char *buff, const void *ptr)
 	return buff + (sizeof(ptr) * 2);
 }
 
-static inline char *ptoa(char *buff, const void *ptr)
+static inline char *mptoa(char *buff, const void *ptr)
 {
 	static const char hexchar[] = HEXLC_STRING;
 	char *wptr;
@@ -212,7 +212,7 @@ static inline char *ptoa(char *buff, const void *ptr)
 
 GCC_ATTR_FASTCALL char *put_dec_trunc(char *buf, unsigned q) GCC_ATTR_VIS("hidden");
 
-static inline char *ustoa_trunc(char *buf, unsigned q)
+static inline char *mustoa_trunc(char *buf, unsigned q)
 {
 	char *ret_val = put_dec_trunc(buf, q); /* if this is really a short, this is enough */
 	strreverse(buf, ret_val - 1);
