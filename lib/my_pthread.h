@@ -2,7 +2,7 @@
  * my_pthread.h
  * header-file to redirect pthread.h inclusion
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,6 +64,8 @@ struct sigaction {
 
 typedef CRITICAL_SECTION pthread_mutex_t;
 
+typedef CRITICAL_SECTION pthread_spinlock_t;
+
 typedef struct {
 	/* we support no fancy attr */
 } pthread_mutexattr_t;
@@ -105,7 +107,14 @@ LIB_MY_PTHREAD_EXTRN(int pthread_mutex_lock(pthread_mutex_t *mutex));
 LIB_MY_PTHREAD_EXTRN(int pthread_mutex_trylock(pthread_mutex_t *mutex));
 LIB_MY_PTHREAD_EXTRN(int pthread_mutex_unlock(pthread_mutex_t *mutex));
 
-/* since WIN32 seems to miss user level spinlocks, no impl. */
+/* spin locks */
+#define PTHREAD_PROCESS_PRIVATE 0
+#define PTHREAD_PROCESS_SHARED 1
+LIB_MY_PTHREAD_EXTRN(int pthread_spin_init(pthread_spinlock_t *lock, int pshared));
+LIB_MY_PTHREAD_EXTRN(int pthread_spin_destroy(pthread_spinlock_t *lock));
+LIB_MY_PTHREAD_EXTRN(int pthread_spin_lock(pthread_spinlock_t *lock));
+LIB_MY_PTHREAD_EXTRN(int pthread_spin_trylock(pthread_spinlock_t *lock));
+LIB_MY_PTHREAD_EXTRN(int pthread_spin_unlock(pthread_spinlock_t *lock));
 
 /* rw locks */
 LIB_MY_PTHREAD_EXTRN(int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr));

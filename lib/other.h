@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2011 Jan Seiffert
+ * Copyright (c) 2004 - 2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -277,7 +277,7 @@
  * short locks, else a mutex, since our only Processor shouldn't
  * active spin-wait for itself
  */
-#if defined HAVE_SMP && defined HAVE_SPINLOCKS
+#if defined HAVE_SMP && (defined HAVE_SPINLOCKS || defined WIN32)
 # define shortlock_t	pthread_spinlock_t
 # define shortlock_t_init(da_lock)	pthread_spin_init (da_lock, PTHREAD_PROCESS_PRIVATE)
 # define shortlock_t_destroy(da_lock)	pthread_spin_destroy(da_lock)
@@ -389,17 +389,23 @@ static inline int isgraph_a(unsigned int c)
 
 # ifdef I_LIKE_ASM
 #  if defined(__i386__) || defined(__x86_64__)
-#   define cpu_relax() asm volatile("pause")
+#   define CPU_RELAX_CONTENT asm volatile("pause");
 #  elif defined(__powerpc64__)
-#   define cpu_relax() asm volatile("or 1,1,1\n\tor 2,2,2")
+#   define CPU_RELAX_CONTENT asm volatile("or 1,1,1\n\tor 2,2,2");
 #  elif defined(__ia64__)
-#   define cpu_relax() asm volatile ("hint @pause" ::: "memory")
+#   define CPU_RELAX_CONTENT asm volatile ("hint @pause" ::: "memory");
+#  elif defined(__sparc) || defined(__sparc__)
+#   define CPU_RELAX_CONTENT asm volatile ("rd %%ccr, %%g0" : : : "memory");
 #  else
-#   define cpu_relax() barrier();
+#   define CPU_RELAX_CONTENT barrier();
 #  endif
 # else
-#  define cpu_relax() barrier();
+#  define CPU_RELAX_CONTENT barrier();
 # endif
+static inline void cpu_relax(void)
+{
+	CPU_RELAX_CONTENT
+}
 
 #if !defined(HAVE_STRNLEN) || !defined(HAVE_MEMPCPY)
 /*

@@ -2,7 +2,7 @@
  * my_pthread.c
  * cheapo pthread emulation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -42,20 +42,16 @@
  */
 int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
-	if(!mutex) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!mutex)
+		return EINVAL;
 	InitializeCriticalSection(mutex);
 	return 0;
 }
 
 int pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
-	if(!mutex) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!mutex)
+		return EINVAL;
 	DeleteCriticalSection(mutex);
 	return 0;
 }
@@ -68,24 +64,60 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-	if(!TryEnterCriticalSection(mutex)) {
-		errno = EBUSY;
-		return -1;
-	}
+	if(!TryEnterCriticalSection(mutex))
+		return EBUSY;
 	return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
-	if(!mutex)
+/*	if(!mutex)
 		return 0;
 	if(mutex->OwningThread != (HANDLE)GetCurrentThreadId()) {
-		errno = EPERM;
-		return -1;
-	}
+		return EPERM;
+	}*/
 	LeaveCriticalSection(mutex);
 	return 0;
 }
+
+/*
+ * Spin locks
+ */
+int pthread_spin_init(pthread_spinlock_t *lock, int pshared GCC_ATTR_UNUSED_PARAM)
+{
+	if(!lock)
+		return EINVAL;
+	InitializeCriticalSectionAndSpinCount(lock, 0x7fffffff);
+	return 0;
+}
+
+int pthread_spin_destroy(pthread_spinlock_t *lock)
+{
+	if(!lock)
+		return EINVAL;
+	DeleteCriticalSection(lock);
+	return 0;
+}
+
+int pthread_spin_lock(pthread_spinlock_t *lock)
+{
+	EnterCriticalSection(lock);
+	return 0;
+}
+
+int pthread_spin_trylock(pthread_spinlock_t *lock)
+{
+	if(!TryEnterCriticalSection(lock))
+		return EBUSY;
+	return 0;
+}
+
+int pthread_spin_unlock(pthread_spinlock_t *lock)
+{
+	LeaveCriticalSection(mutex);
+	return 0;
+}
+
 
 /*
  * RW locks
@@ -93,22 +125,18 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
  */
 int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
-	if(!rwlock) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!rwlock)
+		return EINVAL;
 
 	rwlock->readers = 0;
 	rwlock->read_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if(!rwlock->read_event) {
-		errno = ENOMEM;
-		return -1;
-	}
+	if(!rwlock->read_event)
+		return ENOMEM;
+
 	rwlock->write_mutex = CreateMutex(NULL, FALSE, NULL);
 	if(!rwlock->write_mutex) {
 		CloseHandle(rwlock->read_event);
-		errno = ENOMEM;
-		return -1;
+		return ENOMEM;
 	}
 	return 0;
 }
@@ -116,16 +144,13 @@ int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlocka
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
 	BOOL res = TRUE;
-	if(!rwlock) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!rwlock)
+		return EINVAL;
 	res = res && CloseHandle(rwlock->read_event);
 	res = res && CloseHandle(rwlock->write_mutex);
 	if(res)
 		return 0;
-	errno = EACCES;
-	return -1;
+	return EACCES;
 }
 
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
@@ -135,22 +160,17 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
 	/* for a trylock, change the wait time to 0 */
 	res = WaitForSingleObject(rwlock->write_mutex, INFINITE);
 
-	if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
-		errno = EAGAIN;
-		return -1;
-	}
+	if(res == WAIT_FAILED || res == WAIT_TIMEOUT)
+		return EAGAIN;
 
 	InterlockedIncrement(&rwlock->readers);
 	if(!ResetEvent(rwlock->read_event)) {
 		ReleaseMutex(rwlock->write_mutex);
-		errno = EAGAIN;
-		return -1;
+		return EAGAIN;
 	}
 
-	if(!ReleaseMutex(rwlock->write_mutex)) {
-		errno = EACCES;
-		return -1;
-	}
+	if(!ReleaseMutex(rwlock->write_mutex))
+		return EACCES;
 
 	return 0;
 }
@@ -162,20 +182,17 @@ int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 	/* for a trylock, change the wait time  to 0 */
 	res = WaitForSingleObject(rwlock->write_mutex, INFINITE);
 
-	if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
-		errno = EAGAIN;
-		return -1;
-	}
+	if(res == WAIT_FAILED || res == WAIT_TIMEOUT)
+		return EAGAIN;
 
 	/* wait for the readers to leave the section */
-	if(rwlock->readers)
+	if(*(volatile LONG *)&rwlock->readers)
 	{
 		res = WaitForSingleObject(rwlock->read_event, INFINITE);
 
 		if(res == WAIT_FAILED || res == WAIT_TIMEOUT) {
 			ReleaseMutex(rwlock->write_mutex);
-			errno = EAGAIN;
-			return -1;
+			return EAGAIN;
 		}
 	}
 
@@ -193,12 +210,10 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
 	if(res == ERROR_NOT_OWNER)
 	{
 		/* Nope, we must have a read lock */
-		if(rwlock->readers &&
+		if(*(volatile LONG *)&rwlock->readers &&
 		   !InterlockedDecrement(&rwlock->readers) &&
-		   !SetEvent(rwlock->read_event)) {
-			errno = EAGAIN;
-			return -1;
-		}
+		   !SetEvent(rwlock->read_event))
+			return EAGAIN;
 	}
 	return 0;
 }
@@ -224,10 +239,9 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	HANDLE thread_h;
 	struct pthread_thread_init *idata = malloc(sizeof(struct pthread_thread_init));
 
-	if(!idata) {
-		errno = ENOMEM;
-		return -1;
-	}
+	if(!idata)
+		return ENOMEM;
+
 	idata->start_routine = start_routine;
 	idata->arg = arg;
 	thread_h = CreateThread(NULL, attr ? attr->stacksize : 0, pthread_thread_start, idata, 0, (LPDWORD)thread);
@@ -236,8 +250,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 		CloseHandle(thread_h);
 	else {
 		free(idata);
-		errno = EAGAIN;
-		return -1;
+		return EAGAIN;
 	}
 	return 0;
 }
@@ -253,10 +266,8 @@ int pthread_join(pthread_t thread, void **retval)
 	HANDLE thread_h = OpenThread(THREAD_ALL_ACCESS, FALSE, (DWORD)thread);
 
 	WaitForSingleObject(thread_h, INFINITE);
-	if(!GetExitCodeThread(thread_h, (LPDWORD)retval)) {
-		errno = EINVAL;
-		ret_st = -1;
-	}
+	if(!GetExitCodeThread(thread_h, (LPDWORD)retval))
+		ret_st = EINVAL;
 
 	CloseHandle(thread_h);
 	return ret_st;
@@ -267,39 +278,31 @@ int pthread_join(pthread_t thread, void **retval)
  */
 int pthread_attr_init(pthread_attr_t *attr)
 {
-	if(!attr) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!attr)
+		return EINVAL;
 	attr->stacksize = 0;
 	return 0;
 }
 
 int pthread_attr_destroy(pthread_attr_t *attr)
 {
-	if(!attr) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!attr)
+		return EINVAL;
 	return 0;
 }
 
 int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 {
-	if(!attr) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!attr)
+		return EINVAL;
 	attr->stacksize = stacksize;
 	return 0;
 }
 
 int pthread_attr_getstacksize(pthread_attr_t *attr, size_t *stacksize)
 {
-	if(!(attr && stacksize)) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!(attr && stacksize))
+		return EINVAL;
 	if(0 == attr->stacksize)
 	{
 		/*
@@ -325,10 +328,8 @@ int pthread_attr_getstacksize(pthread_attr_t *attr, size_t *stacksize)
  */
 int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *restrict attr GCC_ATTR_UNUSED_PARAM)
 {
-	if(!cond) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!cond)
+		return EINVAL;
 	cond->waiters_count         = 0;
 	cond->wait_generation_count = 0;
 	cond->release_count         = 0;
@@ -337,20 +338,16 @@ int pthread_cond_init(pthread_cond_t *restrict cond, const pthread_condattr_t *r
 	                          TRUE,  /* manual-reset */
 	                          FALSE, /* non-signaled initially */
 	                          NULL); /* unnamed */
-	if(!cond->event) {
-		errno = EACCES;
-		return -1;
-	}
+	if(!cond->event)
+		return EACCES;
 	InitializeCriticalSection(&cond->waiters_count_lock);
 	return 0;
 }
 
 int pthread_cond_destroy(pthread_cond_t *cond)
 {
-	if(!cond) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!cond)
+		return EINVAL;
 	CloseHandle(cond->event);
 	cond->event = NULL;
 	DeleteCriticalSection(&cond->waiters_count_lock);
@@ -524,15 +521,11 @@ int pthread_cond_wait(pthread_cond_t *restrict cond, pthread_mutex_t *restrict m
 int pthread_key_create(pthread_key_t *key, void (*destructor)(void*))
 {
 	DWORD i;
-	if(!key) {
-		errno = EINVAL;
-		return -1;
-	}
+	if(!key)
+		return EINVAL;
 	i = TlsAlloc();
-	if(TLS_OUT_OF_INDEXES == i) {
-		errno = GetLastError();
-		return -1;
-	}
+	if(TLS_OUT_OF_INDEXES == i)
+		return GetLastError();
 	*key = i;
 	if(destructor)
 	{

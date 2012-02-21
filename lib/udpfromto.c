@@ -31,7 +31,7 @@
  * sendfromto	added 18/08/2003, Jan Berkel <jan@sitadelle.com>
  *		Works on Linux and FreeBSD (5.x)
  *
- * IPv6 and changes etc. (C) 2009-2011 Jan Seiffert
+ * IPv6 and changes etc. (C) 2009-2012 Jan Seiffert
  *
  * Version: $Id: udpfromto.c,v 1.4.4.1 2006/03/15 15:37:58 nbk Exp $
  */
@@ -192,7 +192,7 @@ static void recvmmsg_deinit(void) GCC_ATTR_DESTRUCT;
 static __init void recvmmsg_init(void)
 {
 	size_t i;
-	if(pthread_key_create(&key2msg_space, free)) {
+	if((errno = pthread_key_create(&key2msg_space, free))) {
 		fprintf(stderr, __FILE__ ": couln't create TLS key for recvmmsg buffer");
 		exit(EXIT_FAILURE);
 	}
