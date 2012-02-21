@@ -28,12 +28,14 @@
 
 # if defined(__ARM_NEON__) && defined(__ARMEL__)
 #  define ARM_NEON_SANE 1
-# elif defined(__IWMMXT__)
+# endif
+# if defined(__IWMMXT__)
 #  define ARM_IWMMXT_SANE 1
-# elif defined(__GNUC__) && ( \
-        defined(__thumb2__)  && ( \
+# endif
+# if defined(__GNUC__) && ( \
+        (defined(__thumb2__)  && ( \
             !defined(__ARM_ARCH_7__) && !defined(__ARM_ARCH_7M__) \
-        ) || ( \
+        )) || ( \
         !defined(__thumb__) && ( \
             defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
             defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
@@ -95,6 +97,22 @@ static inline uint8x8_t neon_simple_align(uint8x8_t a, uint8x8_t b, unsigned amo
 #  define ACMP_SHL 12
 #  define ACMP_NRB 4
 
+static inline unsigned long alu_sel(unsigned long a, unsigned long sel_a, unsigned long sel_b)
+{
+	unsigned long sel;
+
+	asm(
+		"msr	APSR_g, %1\n\t"
+		/*   1 -> Rn  Rm <- 0 */
+		"sel	%0, %2, %3"
+		: /* %0 */ "=r" (sel)
+		: /* %1 */ "r" (a),
+		  /* %2 */ "r" (sel_a),
+		  /* %3 */ "r" (sel_b)
+	);
+	return sel;
+}
+
 static inline unsigned long alu_ucmp_gte_sel(unsigned long a, unsigned long b, unsigned long sel_a, unsigned long sel_b)
 {
 	unsigned long t, sel;
@@ -116,6 +134,7 @@ static inline unsigned long alu_ucmp_gte_sel(unsigned long a, unsigned long b, u
 }
 
 #  define alu_ucmp_eqz_msk(a) alu_ucmp_gte_msk(0, a)
+#  define alu_ucmp_eqm_msk(a, b) alu_ucmp_gte_msk(0, (a) ^ (b))
 static inline unsigned long alu_ucmp_gte_msk(unsigned long a, unsigned long b)
 {
 	unsigned long res;
@@ -130,6 +149,35 @@ static inline unsigned long alu_ucmp_gte_msk(unsigned long a, unsigned long b)
 		  /* %2 */ "r" (b)
 	);
 	/* bit 16 to 19 */
+	return res;
+}
+
+static inline unsigned long alu_ucmp_between(unsigned long d, unsigned long a, unsigned long b, unsigned long sel_a, unsigned long sel_b)
+{
+	unsigned long res, t;
+
+	/* a >= b ? sel_a : sel_b */
+	/*              Rn - Rm */
+	asm ("usub8	%0, %1, %2" : "=r" (d) : "r" (d), "r" (a));
+	asm (
+		/*          Rn >= Rm -> 1 */
+		"usub8	%1, %2, %3\n\t"
+		/*   1 -> Rn  Rm <- 0 */
+		"sel	%0, %4, %5\n\t"
+		: /* %0 */ "=&r" (res),
+		  /* %1 */ "=&r" (t)
+		: /* %2 */ "r" (d),
+		  /* %3 */ "r" (b),
+		  /* %4 */ "r" (sel_a),
+		  /* %5 */ "r" (sel_b)
+	);
+	return res;
+}
+
+static inline unsigned long alu_usub8(unsigned long a, unsigned long b)
+{
+	unsigned long res;
+	asm("usub8	%0, %1, %2" : "=r" (res) : "r" (a), "r" (b));
 	return res;
 }
 

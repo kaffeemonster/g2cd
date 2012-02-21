@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -67,6 +67,8 @@
 #  include "ppc/strncasecmp_a.c"
 # elif defined(__alpha__)
 #  include "alpha/strncasecmp_a.c"
+# elif defined(__arm__)
+#  include "arm/strncasecmp_a.c"
 # elif defined(__ia64__)
 #  include "ia64/strncasecmp_a.c"
 # elif defined(__hppa__) || defined(__hppa64__)
