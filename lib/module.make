@@ -233,6 +233,12 @@ MEM_SPN_FF_SRC = \
 	$(MPL)/ppc/mem_spn_ff.c \
 	$(MPL)/tile/mem_spn_ff.c \
 	$(MPL)/x86/mem_spn_ff.c
+STR_SPN_SPACE_SRC = \
+	$(MPL)/alpha/str_spn_space.c \
+	$(MPL)/generic/str_spn_space.c \
+	$(MPL)/parisc/str_spn_space.c \
+	$(MPL)/ppc/str_spn_space.c \
+	$(MPL)/tile/str_spn_space.c
 STRNLENSRC = \
 	$(MPL)/generic/strnlen.c \
 	$(MPL)/alpha/strnlen.c \
@@ -275,6 +281,7 @@ STRRCHRSRC = \
 STRNCASECMP_ASRC = \
 	$(MPL)/generic/strncasecmp_a.c \
 	$(MPL)/alpha/strncasecmp_a.c \
+	$(MPL)/arm/strncasecmp_a.c \
 	$(MPL)/ia64/strncasecmp_a.c \
 	$(MPL)/parisc/strncasecmp_a.c \
 	$(MPL)/tile/strncasecmp_a.c \
@@ -360,6 +367,7 @@ LIBASRCS = \
 	$(MEMPOPCNTSRC) \
 	$(MEM_SEARCHRNSRC) \
 	$(MEM_SPN_FF_SRC) \
+	$(STR_SPN_SPACE_SRC) \
 	$(STRNLENSRC) \
 	$(STRCHRNULSRC) \
 	$(STRRCHRSRC) \
@@ -413,6 +421,7 @@ LIBSRCS = \
 	$(MPL)/rbtree.c \
 	$(MPL)/udpfromto.c \
 	$(MPL)/print_ts.c \
+	$(MPL)/str_spn_space.c \
 	$(MPL)/strnlen.c \
 	$(MPL)/strlen.c \
 	$(MPL)/strchr.c \
@@ -449,6 +458,7 @@ BITOPOBJS = \
 	$(MPL)/mem_searchrn.o \
 	$(MPL)/mem_spn_ff.o \
 	$(MPL)/popcountst.o \
+	$(MPL)/str_spn_space.o \
 	$(MPL)/strnlen.o \
 	$(MPL)/strlen.o \
 	$(MPL)/strchr.o \
@@ -571,6 +581,7 @@ $(MPL)/memchr.o: $(MEMCHRSRC)
 $(MPL)/mempopcnt.o: $(MEMPOPCNTSRC)
 $(MPL)/mem_searchrn.o: $(MEM_SEARCHRNSRC)
 $(MPL)/mem_spn_ff.o: $(MEM_SPN_FF_SRC)
+$(MPL)/str_spn_space.o: $(STR_SPN_SPACE_SRC)
 $(MPL)/strnlen.o: $(STRNLENSRC)
 $(MPL)/strlen.o: $(STRLENSRC)
 $(MPL)/strchrnul.o: $(STRCHRNULSRC)

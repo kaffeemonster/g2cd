@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -48,9 +48,36 @@
 #include "lib/my_pthread.h"
 #ifdef HAVE_DB
 # define DB_DBM_HSEARCH 1
+# define DBM_TYPE DBM *
 # include <db.h>
-#else
+#elif defined(HAVE_NDBM_H)
 # include <ndbm.h>
+# define DBM_TYPE DBM *
+#else
+# include <gdbm.h>
+# define DBM_TYPE  GDBM_FILE
+static DBM_TYPE dbm_open(const char *f, int flags, int mode)
+{
+	int nflags, nmode;
+
+	flags &= O_RDONLY | O_RDWR | O_CREAT | O_TRUNC;
+	if(O_RDONLY == flags)
+		nflags = GDBM_READER, nmode = 0;
+	else if((O_RDWR|O_CREAT))
+		nflags = GDBM_WRCREAT, mode = mode;
+	else if(O_TRUNC == (flags & O_TRUNC))
+		nflags = GDBM_NEWDB, mode = mode;
+	else
+		nflags = GDBM_WRITER, mode = 0;
+	return gdbm_open((char *)(intptr_t)f, 0, nflags, nmode, NULL);
+}
+# define dbm_close      gdbm_close
+# define dbm_fetch      gdbm_fetch
+# define dbm_store      gdbm_store
+# define dbm_delete     gdbm_delete
+# define dbm_firstkey   gdbm_firstkey
+# define dbm_nextkey(a) gdbm_nextkey(a, gdbm_firstkey(a))
+# define DBM_REPLACE    GDBM_REPLACE
 #endif
 #ifndef WIN32
 # include <netdb.h>
@@ -136,7 +163,7 @@ struct khl_cache_entry
 };
 
 /* Vars */
-static DBM *gwc_db;
+static DBM_TYPE gwc_db;
 static struct {
 	struct gwc data;
 	struct addrinfo *addrinfo;
@@ -252,7 +279,7 @@ bool __init g2_khl_init(void)
 
 	put_boot_gwc_in_cache();
 
-	if(pthread_mutex_init(&cache.lock, NULL)) {
+	if((errno = pthread_mutex_init(&cache.lock, NULL))) {
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
 	}
@@ -669,7 +696,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 
 	logg_develd_old("gwc \"%s\" response: \"%s\"\n", act_gwc.data.url, line);
 	/* skip whitespace */
-	for(wptr = line; *wptr && isblank_a((int)*wptr); wptr++);
+	wptr = str_skip_space(line);
 
 	response = *wptr++;
 	/* make shure there is a field seperator */
@@ -687,10 +714,9 @@ static void gwc_handle_line(char *line, time_t lnow)
 			next = strstr(wptr, "access|period|");
 			if(!next)
 				break;
-			wptr = next + str_size("access|period|");
 			/* skip whitespace at period start */
-			for(; *wptr && isblank_a((int)*wptr); wptr++);
-			if(*wptr && isdigit_a((int)*wptr))
+			wptr = str_skip_space(next + str_size("access|period|"));
+			if(*wptr && isdigit_a(*(unsigned char *)wptr))
 				period = atoi(wptr);
 			else
 				break;
@@ -710,13 +736,13 @@ static void gwc_handle_line(char *line, time_t lnow)
 			if(next) {
 				*next++ = '\0';
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank_a((int)*next); next++);
-				if(*next && isdigit_a((int)*next))
+				next = str_skip_space(next);
+				if(*next && isdigit_a(*(unsigned char *)next))
 					since = atoi(next);
 			}
 
 			/* skip whitespace at addr start */
-			for(; *wptr && isblank_a((int)*wptr); wptr++);
+			wptr = str_skip_space(wptr);
 
 			memset(&a, 0, sizeof(a));
 			if(!combo_addr_read_wport(wptr, &a)) {
@@ -739,6 +765,7 @@ static void gwc_handle_line(char *line, time_t lnow)
 		{
 			struct gwc new_gwc;
 			datum key, value;
+			size_t len;
 //			int since = 0;
 			char *next;
 
@@ -750,23 +777,28 @@ static void gwc_handle_line(char *line, time_t lnow)
 			/* first try to find next seperator */
 			next = strchr(wptr, '|');
 			if(next) {
+				len = next - wptr;
 				*next++ = '\0';
 #if 0
 				/* skip whitespace at timestamp start */
-				for(; *next && isblank_a((int)*next); next++);
-				if(*next && isdigit_a((int)*next))
+				next = str_skip_space(next);
+				if(*next && isdigit_a(*(unsigned char *)next))
 					since = atoi(next);
 #endif
 			}
+			else
+				len = strlen(wptr);
 			/* trim trailing whitespace */
-			for(next = wptr + strlen(wptr) - 1; next >= wptr && isblank_a(*next); next--)
-				*next = '\0';
+			for(next = wptr + len; next--, next >= wptr && isspace_a(*(unsigned char *)next);)
+				/* nothing to do */;
 
-			if('\0' == *wptr)
+			if(next < wptr)
 				break;
+			len = next + 1 - wptr;
+			wptr[len] = '\0';
 
 			key.dptr  = (void *)wptr;
-			key.dsize = strlen(wptr) + 1;
+			key.dsize = len + 1;
 
 			value = dbm_fetch(gwc_db, key);
 			if(!value.dptr)
@@ -841,10 +873,10 @@ static int gwc_handle_response(void)
 		{
 			bool goto_to_next = false;
 			while(buffer_remaining(*buff)) {
-				char c = *buffer_start(*buff) & 0x7F;
-				if(isblank_a(c))
+				unsigned char c = *buffer_start(*buff);
+				if(isspace_a(c))
 					buff->pos++;
-				else if(isdigit_a((int)c)) {
+				else if(isdigit_a(c)) {
 					act_gwc.state++;
 					goto_to_next = true;
 					break;
@@ -1350,15 +1382,17 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+		errno = h;
 		diedie("gnarf, KHL cache lock stuck, bye!");
+	}
 }
 
 size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
 {
 	struct khl_cache_entry *e;
 	struct rb_node *n;
-	size_t res, wrap_arounds;
+	size_t res, res_t, wrap_arounds;
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return 0;
@@ -1380,8 +1414,10 @@ size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(res_t = pthread_mutex_unlock(&cache.lock))) {
+		errno = res_t;
 		diedie("gnarf, KHL cache lock stuck, bye!");
+	}
 
 	return res;
 }
@@ -1390,7 +1426,7 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 {
 	struct khl_cache_entry *e;
 	struct rb_node *n;
-	size_t res, wrap_arounds;
+	size_t res, res_tmp, wrap_arounds;
 
 	if(unlikely(pthread_mutex_lock(&cache.lock)))
 		return 0;
@@ -1410,8 +1446,10 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 
-	if(unlikely(pthread_mutex_unlock(&cache.lock)))
+	if(unlikely(res_tmp = pthread_mutex_unlock(&cache.lock))) {
+		errno = res_tmp;
 		diedie("gnarf, KHL cache lock stuck, bye!");
+	}
 
 	return res;
 }

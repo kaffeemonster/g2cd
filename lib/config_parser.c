@@ -552,9 +552,8 @@ static bool config_split_at_white(struct list_head *head)
 		w_ptr = t->d.t;
 		len   = t->d.len;
 
-		while(len && !isspace((unsigned)*w_ptr))
+		while(len && !isspace(*(unsigned char *)w_ptr))
 			len--, w_ptr++;
-
 		if(!len)
 			continue;
 
@@ -799,9 +798,9 @@ static void config_ptoken_debug(struct list_head *head GCC_ATTR_UNUSED_PARAM)
 {
 #ifdef DEBUG_CONFIG_PARSER
 	struct ptoken *t;
-	logg(LOGF_DEBUG, "       -------------------------- token ----------------------------");
+	logg(LOGF_DEBUG, "       -------------------------- token ----------------------------\n");
 	list_for_each_entry(t, head, list) {
-		logg(LOGF_DEBUG, "%4zu\tlen: %u,%u\tisq: %c\tisqc: %c\tisc: %c\ttoken: \"%s\"\n",
+		logg(LOGF_DEBUG, "\t%4zu\tlen: %zu,%zu\tisq: %c\tisqc: %c\tisc: %c\ttoken: \"%s\"\n",
 		     t->ctx->line_num, t->d.len, strlen(t->d.t),
 		     TF(t->is_quote), TF(t->is_quote_closed), TF(t->is_comment), t->d.t);
 	}
@@ -857,7 +856,7 @@ static int config_read_line(struct pctx *ctx)
 static size_t config_prune_white(struct str_buff *s)
 {
 	/* remove trailing whitespace */
-	while(s->len && isspace((unsigned)*(s->t + s->len - 1)))
+	while(s->len && isspace(*(unsigned char *)(s->t + s->len - 1)))
 		s->len--;
 
 	*(s->t + s->len) = '\0';
@@ -865,17 +864,22 @@ static size_t config_prune_white(struct str_buff *s)
 	return s->len;
 }
 
-static size_t config_skip_white(struct str_buff *s)
+static noinline size_t config_skip_white(struct str_buff *s)
 {
+	size_t len;
+
+#ifdef DEBUG_CONFIG_PARSER
 	/* sanity check */
-	if(s->freeable && s->len && isspace((unsigned)*s->t)) {
+	if(s->freeable && s->len && isspace(*(unsigned char *)s->t)) {
 		logg_develd("modified freeable pointer %p -> will try to leak", s->t);
 		s->freeable = false;
 	}
+#endif
 
 	/* skip whitespace at start */
-	while(s->len && isspace((unsigned)*s->t))
-		s->t++, s->len--;
+	len = str_spn_space(s->t);
+	s->t   += len;
+	s->len -= len;
 
 	/* no compacting, we modified s->t */
 	return s->len;
@@ -883,19 +887,29 @@ static size_t config_skip_white(struct str_buff *s)
 
 static size_t config_trim_white(struct str_buff *s)
 {
+	size_t len;
+#ifdef DEBUG_CONFIG_PARSER
 	/* sanity check */
-	if(s->freeable && s->len && isspace((unsigned)*s->t)) {
+	if(s->freeable && s->len && isspace(*(unsigned char *)s->t)) {
 		logg_develd("modified freeable pointer %p -> will try to leak", s->t);
 		s->freeable = false;
 	}
+#endif
 
 	/* skip whitespace at start */
-	while(s->len && isspace((unsigned)*s->t))
-		s->t++, s->len--;
+	len = str_spn_space(s->t);
+	logg_develd("spn_space: %zu\n", len);
+	s->t   += len;
+	s->len -= len;
 
 	/* remove trailing whitespace */
-	while(s->len && isspace((unsigned)*(s->t + s->len - 1)))
+	while(s->len && isspace(*(unsigned char *)(s->t + s->len - 1)))
 		s->len--;
+// TODO: this and similar operations could be done with strspn and strcspn
+	/*
+	 * only problem is, that general purpose string functions suck.
+	 * this needs special funcs, with the whitespace thingy hard coded.
+	 */
 
 	/* no compacting, we modified s->t */
 	*(s->t + s->len) = '\0';
