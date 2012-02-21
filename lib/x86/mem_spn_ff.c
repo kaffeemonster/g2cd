@@ -234,7 +234,7 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 		"add	%7, %1\n\t"
 		"cmp	%7, %2\n\t"
 		"jnae	9f\n\t"
-		"test	(%7*2)-1, %1\n\t"
+		"test	$((%c7*2)-1), %1\n\t"
 		"jz	2f\n\t"
 		"vmovdqa	(%1), %%xmm0\n\t"
 		"vptest	%%xmm1, %%xmm0\n\t"
