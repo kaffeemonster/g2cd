@@ -397,6 +397,7 @@ LIBSRCS = \
 	$(MPL)/entities.c \
 	$(MPL)/flsst.c \
 	$(MPL)/guid.c \
+	$(MPL)/hthash.c \
 	$(MPL)/hzp.c \
 	$(MPL)/inet_ntop.c \
 	$(MPL)/inet_pton.c \
@@ -491,6 +492,7 @@ LIBOBJS = \
 	$(MPL)/backtrace.lo \
 	$(MPL)/combo_addr.o \
 	$(MPL)/guid.o \
+	$(MPL)/hthash.o \
 	$(MPL)/hzp.o \
 	$(MPL)/inet_ntop.o \
 	$(MPL)/inet_pton.o \
@@ -602,6 +604,7 @@ $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h $
 $(MPL)/print_ts.o: $(MPL)/itoa.h
 $(MPL)/palloc.o: $(MPL)/palloc.h
 $(MPL)/vsnprintf.o: $(MPL)/log_facility.h $(MPL)/itoa.h
+$(MPL)/hthash.o: $(MPL)/hthash.h
 $(MPL)/hzp.o: $(MPL)/hzp.h $(MPL)/atomic.h
 $(MPL)/hzp.h: $(MPL)/atomic.h
 $(MPL)/guid.o: $(MPL)/guid.h $(MPL)/aes.h $(MPL)/ansi_prng.h $(MPL)/hthash.h
