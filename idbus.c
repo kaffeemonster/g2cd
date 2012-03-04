@@ -2,7 +2,7 @@
  * idbus.c
  * interface to dbus
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -135,11 +135,12 @@ static void remove_watch(DBusWatch *watch, void *data GCC_ATTR_UNUSED_PARAM)
 
 static int handle_timeout(void *data)
 {
-	DBusTimeout *timeout = data;
+	DBusTimeout *timeout;
 	int ret_val = 0;
 
 	if(!data)
 		return ret_val;
+	timeout = data;
 
 	if(!dbus_timeout_get_enabled(timeout))
 		return 0;
