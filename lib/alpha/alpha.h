@@ -31,12 +31,37 @@
 
 # include "../other.h"
 
+# if _GNUC_PREREQ(3, 3)
+#  define cmpbge	__builtin_alpha_cmpbge
+#  define zapnot	__builtin_alpha_zapnot
+#  define extbl	__builtin_alpha_extbl
+# else
+static inline unsigned long cmpbge(unsigned long a, unsigned long b)
+{
+	unsigned long r;
+	asm ("cmpbge	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (b));
+	return r;
+}
+static inline unsigned long zapnot(unsigned long a, unsigned long mask)
+{
+	unsigned long r;
+	asm ("zapnot	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
+	return r;
+}
+static inline unsigned long extbl(unsigned long a, unsigned long mask)
+{
+	unsigned long r;
+	asm("extbl	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
+	return r;
+}
+# endif
+
 # ifdef __alpha_cix__
-/*
- * we could use the __builtin_clzl function and the like,
- * but someone thought their result should be signed...
- * gcc cannot gain _that_ much info from them anyway
- */
+#  if _GNUC_PREREQ(3, 3)
+#   define ctlz(x) ((size_t)__builtin_alpha_ctlz(x))
+#   define cttz(x) ((size_t)__builtin_alpha_cttz(x))
+#   define ctpop(x) ((size_t)__builtin_alpha_ctpop(x))
+#  else
 static inline size_t ctlz(unsigned long a)
 {
 	size_t r;
@@ -57,21 +82,27 @@ static inline size_t cttz(unsigned long a)
 	asm ("cttz	%1, %0" : "=r" (r) : "r" (a));
 	return r;
 }
+#  endif
+#  define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz(x) : cttz(x))
+#  define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz(x) - (SOULM1 * BITS_PER_CHAR) : cttz(x))
+#  define alpha_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (7u-cttz(x)) : (7u-(ctlz(x)) - (SOULM1 * BITS_PER_CHAR)))
 # else
 /*
  * if CIX is not avail... we need a fallback
  *
  * WARNING: these generic functions have limited value range!
- * do not call with zero as argument
+ * do not call with zero as argument (the popcount version is fine)
  * do not use more than the low byte for cttz
- * do not use more than the highest byte for ctlz
+ * do not use more than the low byte for ctlz
  */
 static inline size_t cttz(unsigned long a)
 {
-	unsigned long r;
+#  if 0
 	/* misuse extbl for a table lookup */
-	asm("extbl	%1, %2, %0" : "=r" (r) : "r" (0x0506030704020100UL), "r" ((((a & -a) * 23) & 0xff) >> 5));
-	return r;
+	/* extbl inverts the mask on big endian targets, counter by
+	 * swapping the constant lookup table around
+	 */
+	return extbl(le64_to_cpu(0x0506030704020100L), (((a & -a) * 23) & 0xff) >> 5);
 	/*
 	 * This should compile to something like this:
 	 *
@@ -90,24 +121,60 @@ static inline size_t cttz(unsigned long a)
 	 * the evil zero byte, thanks to "cmpbge" already simplified)
 	 * better then a lot of other painful solutions.
 	 */
+#  else
+	/* turn the lowest 0 bit run into 1 bits */
+	a  = a & -a;
+	/* do a byte popcount */
+	a -= (a & 0xaa) >> 1;
+	a  = (a & 0x33) + ((a >> 2) & 0x33);
+	return ((a >> 4) + a) & 0x0f;
+	/*
+	 * This should compile to something like this
+	 *
+	 *   21 05 e2 43     negq    t1,t0
+	 *   02 00 22 44     and     t0,t1,t1
+	 *   01 50 55 44     and     t1,0xaa,t0
+	 *   81 36 20 48     srl     t0,0x1,t0
+	 *   22 05 41 40     subq    t1,t0,t1
+	 *   81 56 40 48     srl     t1,0x2,t0
+	 *   02 70 46 44     and     t1,0x33,t1
+	 *   01 70 26 44     and     t0,0x33,t0
+	 *   01 04 22 40     addq    t0,t1,t0
+	 *   80 96 20 48     srl     t0,0x4,v0
+	 *   01 04 01 40     addq    v0,t0,t0
+	 *   00 f0 21 44     and     t0,0xf,v0
+	 *
+	 * No condinional branches, no loops, 12 clean instructions.
+	 * The advantage is that we do not need a constant which has
+	 * to be loaded from mem, which would incour some big latency.
+	 */
+#  endif
 }
 
 static inline size_t ctlz(unsigned long a)
 {
-	unsigned long r;
-	a >>= 56;
+	/* propagate the most significant set bit */
 	a  |= (a >> 1);
 	a  |= (a >> 2);
 	a  |= (a >> 4);
+#  if 0
+	/* single it out */
 	a   = a & ~(a >> 1);
-	asm("extbl	%1, %2, %0" : "=r" (r) : "r" (0x0201040003050607UL), "r" (((a * 23) & 0xff) >> 5));
-	return r;
+	/* do a cttz by lookup, only with the lookup values in places
+	 * suitable for a ctlz
+	 */
+	return extbl(le64_to_cpu(0x0201040003050607L), ((a * 23) & 0xff) >> 5);
+#  else
+	/* do a byte popcount */
+	a -= (a & 0xaa) >> 1;
+	a  = (a & 0x33) + ((a >> 2) & 0x33);
+	return SOUL - (((a >> 4) + a) & 0x0f);
+#  endif
 }
+#  define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) >> SOULM1 * BITS_PER_CHAR) : cttz(x))
+#  define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz(x) : cttz(x))
+#  define alpha_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (7u-cttz(x)) : (7u-ctlz(x)))
 # endif
-
-# define alpha_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))
-# define alpha_nul_byte_index_e(x) ((HOST_IS_BIGENDIAN) ? ctlz((x) << SOULM1 * BITS_PER_CHAR) : cttz((x)))
-# define alpha_nul_byte_index_e_last(x) ((HOST_IS_BIGENDIAN) ? (7u-cttz((x))) : (7u-ctlz((x) << SOULM1 * BITS_PER_CHAR)))
 
 # define cmpbeqz(a) (cmpbge(0, a))
 # define cmpbeqm(a, m) (cmpbeqz((a) ^ (m)))
@@ -115,23 +182,6 @@ static inline size_t ctlz(unsigned long a)
 # define cmpblt(a, c) (cmpbge(((c) - 1) * 0x0101010101010101UL, a))
 # define cmpb_between(a, b, c) (cmpbgt(a, b) & cmpblt(a, c))
 
-# if _GNUC_PREREQ(3, 3)
-#  define cmpbge	__builtin_alpha_cmpbge
-#  define zapnot	__builtin_alpha_zapnot
-# else
-static inline unsigned long cmpbge(unsigned long a, unsigned long b)
-{
-	unsigned long r;
-	asm ("cmpbge	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (b));
-	return r;
-}
-static inline unsigned long zapnot(unsigned long a, unsigned long mask)
-{
-	unsigned long r;
-	asm ("zapnot	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
-	return r;
-}
-# endif
 # ifdef __alpha_max__
 #  if _GNUC_PREREQ(3, 3)
 #   define unpkbw	__builtin_alpha_unpkbw
