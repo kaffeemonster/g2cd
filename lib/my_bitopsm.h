@@ -2,7 +2,7 @@
  * my_bitopsm.h
  * bitbanging helber defines
  *
- * Copyright (c) 2006-2011 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -97,18 +97,51 @@
 	(((x) -  MK_C(0x01010101)) & ~(x) &  MK_C(0x80808080))
 # define has_nul_byte64(x) \
 	(((x) -  0x0101010101010101ULL) & ~(x) &  0x8080808080808080ULL)
-# define nul_byte_index_l32(x) \
-	((x) & 0x80U ? 0u : (((x) & 0x8000U) ? 1u : ((x) & 0x800000U ? 2u : ((x) & 0x80000000 ? 3u : 0u))))
-# define nul_byte_index_b32(x) \
-	((x) & 0x80000000U ? 0u : (((x) & 0x800000U) ? 1u : ((x) & 0x8000U ? 2u : ((x) & 0x80 ? 3u : 0u))))
-# define nul_byte_index_l64(x) \
-	(0x80808080U & (x) ? nul_byte_index_l32(x) : nul_byte_index_l32((x)>>32) + 4u)
-# define nul_byte_index_b64(x) \
-	(0x80808080U & ((x)>>32) ? nul_byte_index_b32((x)>>32) : nul_byte_index_b32(x) + 4u)
+
+static inline unsigned int nul_byte_index_l32(uint32_t mask)
+{
+	int32_t a;
+	mask   = (mask - 1) & ~mask;
+	mask >>= 7;
+	a      = 0x0ff4000+mask;
+	a    >>= 23;
+	return a & mask;
+}
+static inline unsigned int nul_byte_index_b32(uint32_t mask)
+{
+	int32_t a;
+	mask  |= mask >> 1;
+	mask  |= mask >> 2;
+	mask  |= mask >> 4;
+	mask  |= mask >> 8;
+	mask  |= mask >> 16;
+	mask >>= 8;
+	a   = 0x0ff4000+mask;
+	a >>= 23;
+	return 3 - (a & mask);
+}
+static inline unsigned long nul_byte_index_l64(uint64_t mask)
+{
+	mask   = (mask - 1) & ~mask;
+	mask >>= 7;
+	return mask * 0x0001020304050608 >> 56;
+}
+static inline unsigned long nul_byte_index_b64(uint64_t mask)
+{
+	mask  |= mask >> 1;
+	mask  |= mask >> 2;
+	mask  |= mask >> 4;
+	mask  |= mask >> 8;
+	mask  |= mask >> 16;
+	mask  |= mask >> 32;
+	mask >>= 8;
+	return 7 - (mask * 0x0001020304050608 >> 56);
+}
 	/*	666655555555554444444444333333333322222222221111111111
 	 *	3210987654321098765432109876543210987654321098765432109876543210
 	 *	1000000010000000100000001000000010000000100000001000000010000000
 	 */
+
 # define has_eq_byte(x, y) has_nul_byte((x) ^ (y))
 
 # define has_nul_word32(x) \
@@ -117,6 +150,7 @@
 	(((x) -  MK_C(0x00010001)) & ~(x) &  MK_C(0x80008000))
 # define has_nul_word64(x) \
 	(((x) -  0x0001000100010001ULL) & ~(x) &  0x8000800080008000ULL)
+
 # define nul_word_index_l32(x) \
 	((x) & 0x8000U ? 0u : ((x) & 0x80000000U ? 1u : 0u))
 # define nul_word_index_b32(x) \
@@ -125,6 +159,7 @@
 	(0x80008000U & (x) ? nul_word_index_l32(x) : nul_word_index_l32((x)>>32) + 2u)
 # define nul_word_index_b64(x) \
 	(0x80008000U & ((x)>>32) ? nul_word_index_b32((x)>>32) : nul_word_index_b32(x) + 2u)
+
 # define packedmask_832(x) \
 	(((x) >> 7 | (x) >> 14 | (x) >> 21 | (x) >> 28) & 0x0F);
 # define packedmask_864(x) \
