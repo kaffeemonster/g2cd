@@ -2,7 +2,7 @@
  * x86_features.h
  * x86 feature bits
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -147,11 +147,12 @@
 	FEATURE4( RES_4_14  , 14, "Reserved"                          ), \
 	FEATURE4( LWP       , 15, "Lightweight Profiling"             ), \
 	FEATURE4( FMA4      , 16, "FMA AMD-Style"                     ), \
-	FEATURE4( RES_4_17  , 17, "Reserved"                          ), \
+	FEATURE4( TCE       , 17, "Translation Cache Extention"       ), \
 	FEATURE4( CVT16     , 18, "Half Float extention (obsolete?)"  ), \
 	FEATURE4( NODEID_MSR, 19, "NodeID MSR"                        ), \
 	FEATURE4( TBM       , 21, "Trailing bit manipulation"         ), \
 	FEATURE4( TOPOEXT   , 22, "Topology ext. CPUID leafs"         ), \
+	FEATURE4( PERFCTRC  , 23, "Core performance counter ext."     ), \
 	FEATURE5( FGSBASE   ,  0, "User Baseregister manipulation"    ), \
 	FEATURE5( BMI       ,  3, "Bit manipulation inst." /*tzcnt*/  ), \
 	FEATURE5( AVX2      ,  5, "AVX2"                              ), \
