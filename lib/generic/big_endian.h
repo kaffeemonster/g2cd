@@ -4,7 +4,7 @@
 # include "../swab.h"
 
 # define HOST_IS_BIGENDIAN 1
-# if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (4,0)
+# if defined(HAVE_BIT_INSTR) && _GNUC_PREREQ (3,4)
 #  define nul_byte_index32(x) ((unsigned)__builtin_clz(x)/BITS_PER_CHAR)
 #  define nul_byte_index(x) ((unsigned)__builtin_clzl(x)/BITS_PER_CHAR)
 #  define nul_byte_index64(x) ((unsigned)__builtin_clzll(x)/BITS_PER_CHAR)

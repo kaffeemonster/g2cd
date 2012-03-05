@@ -2,7 +2,7 @@
  * ppc.h
  * little ppc helper
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,7 +26,8 @@
 #ifndef PPC_H
 # define PPC_H
 
-# ifdef _ARCH_PWR6
+/* make sure gcc can deliver bitops */
+# if defined(_ARCH_PWR6) && _GNUC_PREREQ (3,4)
 #  undef has_nul_byte
 static inline size_t has_nul_byte(size_t a)
 {
