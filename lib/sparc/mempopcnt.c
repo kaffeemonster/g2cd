@@ -169,18 +169,21 @@ size_t mempopcnt(const void *s, size_t len)
  * for reference. Generic is 50 times faster (and now +33%).
  * =================================================================
  *
- * Really, no kidding, the problem is NOT that they are NOT in
- * hardware, they seem to use the most DUMB way to popcnt (it's sooo
- * slow, that's the only way to explain it, it must be some word size
- * times [shift + test bit -> inc popcnt]).
+ * Really, no kidding, the problem is NOT that they are not in
+ * hardware, the problem IS they are not in hardware AND they seem
+ * to use the most DUMB way to do popcnt (it's sooo slow, that's the only
+ * way to explain it, it must be some word size times
+ * [shift + test bit -> inc popcnt]).
  * Since they are in microcode, they would be fixable (at least in my book),
- * but there is no indication of that, (not that i know of, maybe it's
+ * but there is no indication of that (not that i know of, maybe it's
  * like "it has an instruction, don't bother, it MUST be fast", and
  * none ever mesured it (maybe there is some new microcode in the
  * package for the NSA...)).
  *
  * Fujitsu promised for the new UltraSPARC IIIfx that popcount will
- * be in hardware, we will see...
+ * be in hardware, which brings us back to the problem that most RISC
+ * inherited the "CPU version is in processor status word, reading it
+ * is a privilidged instruction" problem...
  */
 
 #  define popcountst_b(x) popcountst_int1(x)
