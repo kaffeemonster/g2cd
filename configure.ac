@@ -2,7 +2,7 @@
 # configure.ac
 # autoconf input for our foo
 #
-# Copyright (c) 2010-2011 Jan Seiffert
+# Copyright (c) 2010-2012 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -73,6 +73,9 @@ case "$host" in
 # ia64 has a popcnt, gcc can build a cntlz or something like
 # that. If it's fast...
 		default_disable_bit_instr=no;;
+	*tile*)
+# TilePro and GX have ctz and clz, other tile -> don't care
+		default_disbale_bit_instr=no;;
 	*)
 		;;
 esac
