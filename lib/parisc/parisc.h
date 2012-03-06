@@ -176,14 +176,14 @@ static inline int pa_find_zw_last(unsigned long x)
 	return r;
 }
 
-static inline int pa_is_z(unsigned long x)
+static GCC_ATTR_CONST inline int pa_is_z(unsigned long x)
 {
 # if _GNUC_PREREQ (4,5)
 	asm goto (
-		"uxor,"PA_NBZ"	%0, %%r0, %%r0\n\t"
-		"b,n	%l[some_z]\n\t"
+		"uxor,"PA_NBZ"	%r0, %%r0, %%r0\n\t"
+		"b%*	%l[some_z]\n\t"
 		: /* we can not have outputs */
-		: /* %0 */ "r" (x)
+		: /* %0 */ "rM" (x)
 		: /* clobber */ "cc"
 		: some_z
 	);
@@ -193,26 +193,25 @@ some_z:
 # else
 	int r;
 	asm(
-		"uxor,"PA_SBZ"	%1, %%r0, %%r0\n\t"
-		"b,n	1f\n\t"
+		"uxor,"PA_NBZ"	%r1, %%r0, %%r0\n\t"
 		"ldi	-1, %0\n"
-		"1:"
 		: /* %0 */ "=r" (r)
-		: /* %1 */ "r" (x),
+		: /* %1 */ "rM" (x),
 		  /* %2 */ "0" (0)
+		: /* clobber */ "cc"
 	);
 	return r;
 # endif
 }
 
-static inline int pa_is_zw(unsigned long x)
+static GCC_ATTR_CONST inline int pa_is_zw(unsigned long x)
 {
 # if _GNUC_PREREQ (4,5)
 	asm goto (
-		"uxor,"PA_NHZ"	%0, %%r0, %%r0\n\t"
-		"b,n	%l[some_z]\n\t"
+		"uxor,"PA_NHZ"	%r0, %%r0, %%r0\n\t"
+		"b%*	%l[some_z]\n\t"
 		: /* we can not have outputs */
-		: /* %0 */ "r" (x)
+		: /* %0 */ "rM" (x)
 		: /* clobber */ "cc"
 		: some_z
 	);
@@ -222,19 +221,18 @@ some_z:
 # else
 	int r;
 	asm(
-		"uxor,"PA_SHZ"	%1, %%r0, %%r0\n\t"
-		"b,n	1f\n\t"
+		"uxor,"PA_NHZ"	%r1, %%r0, %%r0\n\t"
 		"ldi	-1, %0\n"
-		"1:"
 		: /* %0 */ "=r" (r)
-		: /* %1 */ "r" (x),
+		: /* %1 */ "rM" (x),
 		  /* %2 */ "0" (0)
+		: /* clobber */ "cc"
 	);
 	return r;
 # endif
 }
 
-static inline unsigned long pcmp1gt(unsigned long a, unsigned long b)
+static GCC_ATTR_CONST inline unsigned long pcmp1gt(unsigned long a, unsigned long b)
 {
 	unsigned long r;
 	asm(
@@ -243,6 +241,7 @@ static inline unsigned long pcmp1gt(unsigned long a, unsigned long b)
 		: /* %0 */ "=&r" (r)
 		: /* %1 */ "r" (a),
 		  /* %2 */ "r" (b)
+		: /* clobber */ "cc"
 	);
 	/*
 	 * Sigh, parisc has 8/16 nibble carrys, for BCD arith.

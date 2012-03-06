@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, parisc implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -50,12 +50,19 @@ size_t strnlen(const char *s, size_t maxlen)
 
 	p = (const char *)ALIGN_DOWN(s, SOUL);
 	r = *(const unsigned long *)p;
-	if(!HOST_IS_BIGENDIAN) {
-		r |= (~0ULL) >> ((SOUL - f) * BITS_PER_CHAR);
-		r |= (~0ULL) << ((SOUL - k) * BITS_PER_CHAR);
-	} else {
-		r |= (~0ULL) << ((SOUL - f) * BITS_PER_CHAR);
-		r |= (~0ULL) >> ((SOUL - k) * BITS_PER_CHAR);
+	if(f)
+	{
+		if(!HOST_IS_BIGENDIAN)
+			r |= (~0ULL) >> ((SOUL - f) * BITS_PER_CHAR);
+		else
+			r |= (~0ULL) << ((SOUL - f) * BITS_PER_CHAR);
+	}
+	if(k)
+	{
+		if(!HOST_IS_BIGENDIAN)
+			r |= (~0ULL) << ((SOUL - k) * BITS_PER_CHAR);
+		else
+			r |= (~0ULL) >> ((SOUL - k) * BITS_PER_CHAR);
 	}
 	t = pa_is_z(r);
 	if(t) {

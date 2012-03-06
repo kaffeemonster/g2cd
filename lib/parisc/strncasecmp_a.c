@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, parisc implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,11 +25,198 @@
 
 #include "parisc.h"
 
-static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n)
+static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n);
+
+static noinline int strncasecmp_a_u1(const char *s1, const char *s2, size_t n)
 {
 	size_t i, j, cycles;
 
-LOOP_AGAIN:
+	i = ALIGN_DIFF(s2, 4096);
+	j = ROUND_ALIGN(n, 2 * SOUL);
+	i = i < j ? i : j;
+
+	cycles = i;
+	if(likely(i >= 2 * SOUL))
+	{
+		const unsigned long *s1_l, *s2_l;
+		unsigned long w1, w2, w2_x;
+		unsigned long m1, m2;
+		unsigned shift21, shift22;
+		int t1, t2;
+
+		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOUL);
+		shift22  = SOUL - shift21;
+		shift21 *= BITS_PER_CHAR;
+		shift22 *= BITS_PER_CHAR;
+
+		s1_l = (const unsigned long *)s1;
+		s2_l = (const unsigned long *)ALIGN_DOWN(s2, SOUL);
+
+		w2_x = *s2_l++;
+		for(; likely(i >= 2 * SOUL); i -= SOUL)
+		{
+			w1   = *s1_l++;
+			w2   = w2_x;
+			w2_x = *s2_l++;
+			if(HOST_IS_BIGENDIAN)
+				w2 = w2 << shift21 | w2_x >> shift22;
+			else
+				w2 = w2 >> shift21 | w2_x << shift22;
+
+			m1   = pcmp1gt(w1, MK_C(0x60606060UL));
+			m1  ^= pcmp1gt(w1, MK_C(0x7a7a7a7aUL));
+			m1   = m1 << 5; /* create 0x20 out of 0x01 */
+			w1  -= m1;
+			m2   = pcmp1gt(w2, MK_C(0x60606060UL));
+			m2  ^= pcmp1gt(w2, MK_C(0x7a7a7a7aUL));
+			m2   = m2 << 5; /* create 0x20 out of 0x01 */
+			w2  -= m2;
+			t1   = pa_is_z(w1);
+			m1   = w1 ^ w2;
+			if(t1 || m1)
+			{
+				t1 = t1 ? pa_find_z(w1) : (int)SOUL;
+				t2 = m1 ? pa_find_nz(m1) : (int)SOUL;
+				t1 = t1 < t2 ? t1 : t2;
+
+				cycles = ROUND_TO(cycles - i, SOUL);
+				cycles -= i;
+				n -= cycles;
+				m1 = (unsigned)t1 < n - 1 ? (unsigned)t1 : n - 1;
+				if(HOST_IS_BIGENDIAN)
+					m1 = SOULM1 - m1;
+				m1 *= BITS_PER_CHAR;
+				return (int)((w1 >> m1) & 0xFF) - (int)((w2 >> m1) & 0xFF);
+			}
+		}
+	}
+	cycles = ROUND_TO(cycles - i, SOUL);
+	if(cycles >= n)
+		return 0;
+	n  -= cycles;
+	s1 += cycles;
+	s2 += cycles;
+
+	i  = ALIGN_DIFF(s2, 4096);
+	i  = i < n ? i : n;
+	n -= i;
+
+	for(; i; i--, s1++, s2++)
+	{
+		unsigned c1 = *(const unsigned char *)s1, c2 = *(const unsigned char *)s2;
+		/*
+		 * GCC can turn these compares into cmov (annuling FTW).
+		 * So spare parisc from the mem access into a lookup table
+		 */
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
+			return (int)c1 - (int)c2;
+	}
+
+	if(n)
+		return strncasecmp_a_u(s1, s2, n);
+
+	return 0;
+}
+
+static noinline int strncasecmp_a_u2(const char *s1, const char *s2, size_t n)
+{
+	size_t i, j, cycles;
+
+	i = ALIGN_DIFF(s1, 4096);
+	j = ROUND_ALIGN(n, 2 * SOUL);
+	i = i < j ? i : j;
+
+	cycles = i;
+	if(likely(i >= 2 * SOUL))
+	{
+		const unsigned long *s1_l, *s2_l;
+		unsigned long w1, w2, w1_x;
+		unsigned long m1, m2;
+		unsigned shift11, shift12;
+		int t1, t2;
+
+		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOUL);
+		shift12  = SOUL - shift11;
+		shift11 *= BITS_PER_CHAR;
+		shift12 *= BITS_PER_CHAR;
+
+		s1_l = (const unsigned long *)ALIGN_DOWN(s1, SOUL);
+		s2_l = (const unsigned long *)s2;
+
+		w1_x = *s1_l++;
+		for(; likely(i >= 2 * SOUL); i -= SOUL)
+		{
+			w1   = w1_x;
+			w2   = *s2_l++;
+			w1_x = *s1_l++;
+			if(HOST_IS_BIGENDIAN)
+				w1 = w1 << shift11 | w1_x >> shift12;
+			else
+				w1 = w1 >> shift11 | w1_x << shift12;
+
+			m1   = pcmp1gt(w1, MK_C(0x60606060UL));
+			m1  ^= pcmp1gt(w1, MK_C(0x7a7a7a7aUL));
+			m1   = m1 << 5; /* create 0x20 out of 0x01 */
+			w1  -= m1;
+			m2   = pcmp1gt(w2, MK_C(0x60606060UL));
+			m2  ^= pcmp1gt(w2, MK_C(0x7a7a7a7aUL));
+			m2   = m2 << 5; /* create 0x20 out of 0x01 */
+			w2  -= m2;
+			t1   = pa_is_z(w1);
+			m1   = w1 ^ w2;
+			if(t1 || m1)
+			{
+				t1 = t1 ? pa_find_z(w1) : (int)SOUL;
+				t2 = m1 ? pa_find_nz(m1) : (int)SOUL;
+				t1 = t1 < t2 ? t1 : t2;
+
+				cycles = ROUND_TO(cycles - i, SOUL);
+				cycles -= i;
+				n -= cycles;
+				m1 = (unsigned)t1 < n - 1 ? (unsigned)t1 : n - 1;
+				if(HOST_IS_BIGENDIAN)
+					m1 = SOULM1 - m1;
+				m1 *= BITS_PER_CHAR;
+				return (int)((w1 >> m1) & 0xFF) - (int)((w2 >> m1) & 0xFF);
+			}
+		}
+	}
+	cycles = ROUND_TO(cycles - i, SOUL);
+	if(cycles >= n)
+		return 0;
+	n  -= cycles;
+	s1 += cycles;
+	s2 += cycles;
+
+	i  = ALIGN_DIFF(s1, 4096);
+	i  = i < n ? i : n;
+	n -= i;
+
+	for(; i; i--, s1++, s2++)
+	{
+		unsigned c1 = *(const unsigned char *)s1, c2 = *(const unsigned char *)s2;
+		/*
+		 * GCC can turn these compares into cmov (annuling FTW).
+		 * So spare parisc from the mem access into a lookup table
+		 */
+		c1 -= c1 >= 'a' && c1 <= 'z' ? 0x20 : 0;
+		c2 -= c2 >= 'a' && c2 <= 'z' ? 0x20 : 0;
+		if(!(c1 && c1 == c2))
+			return (int)c1 - (int)c2;
+	}
+
+	if(n)
+		return strncasecmp_a_u(s1, s2, n);
+
+	return 0;
+}
+
+static noinline int strncasecmp_a_u3(const char *s1, const char *s2, size_t n)
+{
+	size_t i, j, cycles;
+
 	i = ALIGN_DIFF(s1, 4096);
 	i = i ? i : 4096;
 	j = ALIGN_DIFF(s2, 4096);
@@ -131,9 +318,18 @@ LOOP_AGAIN:
 	}
 
 	if(n)
-		goto LOOP_AGAIN;
+		return strncasecmp_a_u(s1, s2, n);
 
 	return 0;
+}
+
+static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n)
+{
+	if(IS_ALIGN(s1, SOUL))
+		return strncasecmp_a_u1(s1, s2, n);
+	if(IS_ALIGN(s2, SOUL))
+		return strncasecmp_a_u2(s1, s2, n);
+	return strncasecmp_a_u3(s1, s2, n);
 }
 
 static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
@@ -160,12 +356,15 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	m2  ^= pcmp1gt(w2, MK_C(0x7a7a7a7aUL));
 	m2   = m2 << 5; /* create 0x20 out of 0x01 */
 	w2  -= m2;
-	if(!HOST_IS_BIGENDIAN) {
-		w1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		w2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-	} else {
-		w1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
-		w2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			w1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+			w2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		} else {
+			w1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+			w2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+		}
 	}
 	t1   = pa_is_z(w1);
 	m1   = w1 ^ w2;

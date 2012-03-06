@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul for non-GNU platforms, parisc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,12 +47,15 @@ tchar_t *tstrchrnul(const tchar_t *s, tchar_t c)
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x1 = *(const unsigned long *)p;
 	x2 = x1 ^ mask;
-	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-	} else {
-		x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+			x2 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		} else {
+			x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+			x2 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+		}
 	}
 	t1 = pa_is_zw(x1);
 	t2 = pa_is_zw(x2);

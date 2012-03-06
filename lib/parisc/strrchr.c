@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, parisc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -35,7 +35,7 @@ char *strrchr(const char *s, int c)
 	const char *p, *l_match;
 	unsigned long mask, x1, x2;
 	unsigned shift;
-	int t1, l_m;
+	int l_m;
 	prefetch(s);
 
 	if(unlikely(!c)) /* make sure we do not compare with 0 */
@@ -55,22 +55,24 @@ char *strrchr(const char *s, int c)
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	x1 = *(const unsigned long *)p;
 	x2 = x1;
-	if(!HOST_IS_BIGENDIAN) {
-		x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-		x2 &= (~0UL) << (shift * BITS_PER_CHAR);
-	} else {
-		x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
-		x2 &= (~0UL) >> (shift * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			x1 |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+			x2 &= (~0UL) << (shift * BITS_PER_CHAR);
+		} else {
+			x1 |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+			x2 &= (~0UL) >> (shift * BITS_PER_CHAR);
+		}
 	}
-	t1  = pa_is_z(x1);
 	x2 ^= mask;
 	l_match = p;
 	l_m = ~0UL;
 
-	if(!t1)
+	if(!pa_is_z(x1))
 	{
 		asm(
-			PA_LD"	0(%0), %1\n"
+			PA_LD",ma	"PA_TZ"(%0), %1\n\t"
 			"1:\n\t"
 			"uxor,"PA_SBZ"	%2, %%r0, %%r0\n\t"
 			"b,n	3f\n\t"
@@ -88,7 +90,7 @@ char *strrchr(const char *s, int c)
 			  /* %2 */ "=&r" (x2),
 			  /* %3 */ "=&r" (l_m),
 			  /* %4 */ "=&r" (l_match)
-			: /* %5 */ "0" (p + SOUL),
+			: /* %5 */ "0" (p),
 			  /* %6 */ "r" (mask),
 			  /* %7 */ "3" (l_m),
 			  /* %8 */ "4" (l_match),
@@ -97,7 +99,7 @@ char *strrchr(const char *s, int c)
 	}
 	if(pa_is_z(x2))
 	{
-		t1 = pa_find_z(x1);
+		int t1 = pa_find_z(x1);
 		if(!HOST_IS_BIGENDIAN) {
 			t1  = 1u << ((t1 * BITS_PER_CHAR)+BITS_PER_CHAR-1u);
 			t1 |= t1 - 1u;

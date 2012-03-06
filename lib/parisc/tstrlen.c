@@ -2,7 +2,7 @@
  * tstrlen.c
  * tstrlen, parisc implementation
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -45,10 +45,13 @@ size_t tstrlen(const tchar_t *s)
 	p = (const char *)ALIGN_DOWN(s, SOUL);
 	shift = ALIGN_DOWN_DIFF(s, SOUL);
 	r = *(const unsigned long *)p;
-	if(!HOST_IS_BIGENDIAN)
-		r |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
-	else
-		r |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN)
+			r |= (~0UL) >> ((SOUL - shift) * BITS_PER_CHAR);
+		else
+			r |= (~0UL) << ((SOUL - shift) * BITS_PER_CHAR);
+	}
 	t = pa_is_zw(r);
 	if(t)
 		goto OUT;
