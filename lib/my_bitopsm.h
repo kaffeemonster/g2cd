@@ -98,7 +98,7 @@
 # define has_nul_byte64(x) \
 	(((x) -  0x0101010101010101ULL) & ~(x) &  0x8080808080808080ULL)
 
-static inline unsigned int nul_byte_index_l32(uint32_t mask)
+static inline unsigned int nul_byte_index_l32(unsigned int mask)
 {
 	int32_t a;
 	mask   = (mask - 1) & ~mask;
@@ -107,7 +107,7 @@ static inline unsigned int nul_byte_index_l32(uint32_t mask)
 	a    >>= 23;
 	return a & mask;
 }
-static inline unsigned int nul_byte_index_b32(uint32_t mask)
+static inline unsigned int nul_byte_index_b32(unsigned int mask)
 {
 	int32_t a;
 	mask  |= mask >> 1;
@@ -120,13 +120,13 @@ static inline unsigned int nul_byte_index_b32(uint32_t mask)
 	a >>= 23;
 	return 3 - (a & mask);
 }
-static inline unsigned long nul_byte_index_l64(uint64_t mask)
+static inline unsigned long nul_byte_index_l64(unsigned long long mask)
 {
 	mask   = (mask - 1) & ~mask;
 	mask >>= 7;
-	return mask * 0x0001020304050608 >> 56;
+	return mask * 0x0001020304050608ull >> 56;
 }
-static inline unsigned long nul_byte_index_b64(uint64_t mask)
+static inline unsigned long nul_byte_index_b64(unsigned long long mask)
 {
 	mask  |= mask >> 1;
 	mask  |= mask >> 2;
@@ -135,7 +135,7 @@ static inline unsigned long nul_byte_index_b64(uint64_t mask)
 	mask  |= mask >> 16;
 	mask  |= mask >> 32;
 	mask >>= 8;
-	return 7 - (mask * 0x0001020304050608 >> 56);
+	return 7 - (mask * 0x0001020304050608ull >> 56);
 }
 	/*	666655555555554444444444333333333322222222221111111111
 	 *	3210987654321098765432109876543210987654321098765432109876543210
