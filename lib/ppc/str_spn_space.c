@@ -34,7 +34,7 @@ static noinline size_t str_spn_space_slow(const char *str)
 	vector unsigned char v_space, v_bs, v_so;
 	vector unsigned char v_perm;
 	vector unsigned char x;
-	vector bool char n, r;
+	vector bool char r;
 	const unsigned char *p;
 
 	/* only prefetch the first block of 512 byte */
@@ -50,26 +50,21 @@ static noinline size_t str_spn_space_slow(const char *str)
 	p = (const unsigned char *)ALIGN_DOWN(str, SOVUC);
 	x = vec_ldl(0, p);
 
-	/* find Nul-bytes */
-	n = vec_cmpeq(x, v0);
 	/* find space */
 	r = vec_cmpeq(x, v_space);
 	/* add everything between backspace and shift out */
 	r = vec_or(r, vec_and(vec_cmpgt(x, v_bs), vec_cmplt(x, v_so)));
 	/* mask out exes bytes from alignment */
 	v_perm = vec_lvsl(0, (unsigned char *)(uintptr_t)str);
-	n = (vector bool char)vec_perm((vector unsigned char)n, v0, v_perm);
 	r = (vector bool char)vec_perm((vector unsigned char)r, v0, v_perm);
 	v_perm = vec_lvsr(0, (unsigned char *)(uintptr_t)str);
-	n = (vector bool char)vec_perm(v0, (vector unsigned char)n, v_perm);
-	r = (vector bool char)vec_perm(vec_splat_u8(-1), (vector unsigned char)n, v_perm);
+	r = (vector bool char)vec_perm(vec_splat_u8(-1), (vector unsigned char)r, v_perm);
 
-	/* as long as we didn't hit a Nul-byte and all bytes are whitespace */
-	while(vec_all_eq(n, v0) && vec_all_ne(r, v0))
+	/* as long as all bytes are whitespace */
+	while(vec_all_ne(r, v0))
 	{
 		p += SOVUC;
 		x  = vec_ldl(0, p);
-		n = vec_cmpeq(x, v0);
 		r = vec_cmpeq(x, v_space);
 		r = vec_or(r, vec_and(vec_cmpgt(x, v_bs), vec_cmplt(x, v_so)));
 	}
@@ -77,8 +72,6 @@ static noinline size_t str_spn_space_slow(const char *str)
 
 	/* invert whitespace match to single out first non white space */
 	r = vec_nor(r, r);
-	/* add Nul-byte mask on top */
-	r = vec_or(r, n);
 	return (p + vec_zpos(r)) - (const unsigned char *)str;
 }
 

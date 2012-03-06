@@ -25,7 +25,7 @@
 
 #include "alpha.h"
 /*
- * alpha without bwx does not gain anything with the pretest execpt pain
+ * alpha without bwx does not gain anything with the pretest except pain
  * and has the cmpbge, everythings good
  */
 #define STR_SPN_NO_PRETEST
@@ -41,26 +41,20 @@ static inline size_t str_spn_space_slow(const char *str)
 	shift = ALIGN_DOWN_DIFF(str, SOUL);
 	x = *(const unsigned long *)p;
 
-	/* find Nul-bytes */
-	n  = cmpbeqz(x);
 	/* find space */
 	r  = cmpbeqm(x, 0x2020202020202020UL);
 	/* add everything between backspace and shift out */
 	r |= cmpb_between(x, 0x08ul, 0x0eul);
 	if(!HOST_IS_BIGENDIAN) {
-		n >>= shift;
 		r >>= shift;
 		mask = 0xfful >> shift;
 	} else {
-		n <<= shift + SOULM1 * BITS_PER_CHAR;
 		r <<= shift + SOULM1 * BITS_PER_CHAR;
 		mask = 0xfful << (shift + SOULM1 * BITS_PER_CHAR);
 	}
-	if(likely(n || mask != r)) {
+	if(likely(mask != r)) {
 		/* invert whitespace match to single out first non white space */
 		r ^= mask;
-		/* add Nul-byte mask on top */
-		r |= n;
 		return alpha_nul_byte_index_b(r);
 	}
 
@@ -68,15 +62,12 @@ static inline size_t str_spn_space_slow(const char *str)
 	{
 		p += SOUL;
 		x  = *(const unsigned long *)p;
-		n  = cmpbeqz(x);
 		r  = cmpbeqm(x, 0x2020202020202020UL);
 		r |= cmpb_between(x, 0x08, 0x0e);
-		/* as long as we didn't hit a Nul-byte and all bytes are whitespace */
-	} while(!n && 0xfful == r);
+		/* as long as all bytes are whitespace */
+	} while(0xfful == r);
 	/* invert whitespace match to single out first non white space */
 	r ^= 0xfful;
-	/* add Nul-byte mask on top */
-	r |= n;
 	return (p + alpha_nul_byte_index_e(r)) - str;
 }
 

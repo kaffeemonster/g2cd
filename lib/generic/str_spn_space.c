@@ -31,7 +31,7 @@
 static noinline size_t str_spn_space_slow(const char *str)
 {
 	const char *p;
-	size_t n, r, x;
+	size_t r, x;
 	const size_t mask = MK_C(0x80808080ul);
 	unsigned shift;
 
@@ -41,35 +41,30 @@ static noinline size_t str_spn_space_slow(const char *str)
 	x = *(const size_t *)p;
 	if(!HOST_IS_BIGENDIAN)
 		x >>= shift;
-	/* find Nul-bytes */
-	n  = has_nul_byte(x);
 	/* find space */
 	r  = has_eq_byte(x, MK_C(0x20202020ul));
 	/* add everything between backspace and shift out */
 	r |= has_between(x, 0x08, 0x0e);
-	/* mask out exes bytes from alignment  */
-	n <<= shift;
-	if(HOST_IS_BIGENDIAN) {
-		r <<= shift;
-		n >>= shift;
-		r = (r >> shift) | (mask << (SIZE_T_BITS - shift));
-	} else
-		r = (r << shift) | (mask >> (SIZE_T_BITS - shift));
+	if(shift)
+	{
+		if(HOST_IS_BIGENDIAN) {
+			r <<= shift;
+			r = (r >> shift) | (mask << (SIZE_T_BITS - shift));
+		} else
+			r = (r << shift) | (mask >> (SIZE_T_BITS - shift));
+	}
 
 
 	/* as long as we didn't hit a Nul-byte and all bytes are whitespace */
-	while(!n && mask == (r & mask))
+	while(mask == (r & mask))
 	{
 		p += SOST;
 		x = *(const size_t *)p;
-		n  = has_nul_byte(x);
 		r  = has_eq_byte(x, MK_C(0x20202020ul));
 		r |= has_between(x, 0x08, 0x0e);
 	}
 	/* invert whitespace match to single out first non white space */
 	r  = (r & mask) ^ mask;
-	/* add Nul-byte mask on top */
-	r |= n;
 	return (p + nul_byte_index(r)) - str;
 }
 
