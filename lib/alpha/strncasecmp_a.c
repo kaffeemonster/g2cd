@@ -44,34 +44,24 @@ LOOP_AGAIN:
 		const unsigned long *s1_l, *s2_l;
 		unsigned long w1, w2, w1_x, w2_x;
 		unsigned long m1, m2;
-		unsigned shift11, shift12, shift21, shift22;
 
-		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOUL);
-		shift12  = SOUL - shift11;
-		shift11 *= BITS_PER_CHAR;
-		shift12 *= BITS_PER_CHAR;
-		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOUL);
-		shift22  = SOUL - shift21;
-		shift21 *= BITS_PER_CHAR;
-		shift22 *= BITS_PER_CHAR;
+		s1_l = (const unsigned long *)s1;
+		s2_l = (const unsigned long *)s2;
 
-		s1_l = (const unsigned long *)ALIGN_DOWN(s1, SOUL);
-		s2_l = (const unsigned long *)ALIGN_DOWN(s2, SOUL);
-
-		w1_x = *s1_l++;
-		w2_x = *s2_l++;
+		w1_x = ldq_u(s1_l++);
+		w2_x = ldq_u(s2_l++);
 		for(; likely(i >= 2 * SOUL); i -= SOUL)
 		{
 			w1   = w1_x;
 			w2   = w2_x;
-			w1_x = *s1_l++;
-			w2_x = *s2_l++;
+			w1_x = ldq_u(s1_l++);
+			w2_x = ldq_u(s2_l++);
 			if(HOST_IS_BIGENDIAN) {
-				w1 = w1 << shift11 | w1_x >> shift12;
-				w2 = w2 << shift21 | w2_x >> shift22;
+				w1 = extqh(w1, (intptr_t)s1_l) | extql(w1_x, (intptr_t)s1_l);
+				w2 = extqh(w2, (intptr_t)s2_l) | extql(w2_x, (intptr_t)s2_l);
 			} else {
-				w1 = w1 >> shift11 | w1_x << shift12;
-				w2 = w2 >> shift21 | w2_x << shift22;
+				w1 = extql(w1, (intptr_t)s1_l) | extqh(w1_x, (intptr_t)s1_l);
+				w2 = extql(w2, (intptr_t)s2_l) | extqh(w2_x, (intptr_t)s2_l);
 			}
 
 			m1   = cmpb_between(w1, 0x60, 0x7b);
@@ -155,12 +145,15 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	m2   = cmpb_between(w2, 0x60, 0x7b);
 	m2   = zapnot(0x2020202020202020UL, m2);
 	w2  -= m2;
-	if(!HOST_IS_BIGENDIAN) {
-		w1 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
-		w2 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
-	} else {
-		w1 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
-		w2 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			w1 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+			w2 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+		} else {
+			w1 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+			w2 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+		}
 	}
 	m1   = w1 ^ w2;
 	m2   = cmpbeqz(w1);

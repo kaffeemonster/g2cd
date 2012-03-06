@@ -35,6 +35,8 @@
 #  define cmpbge	__builtin_alpha_cmpbge
 #  define zapnot	__builtin_alpha_zapnot
 #  define extbl	__builtin_alpha_extbl
+#  define extqh	__builtin_alpha_extqh
+#  define extql	__builtin_alpha_extql
 # else
 static inline unsigned long cmpbge(unsigned long a, unsigned long b)
 {
@@ -54,7 +56,25 @@ static inline unsigned long extbl(unsigned long a, unsigned long mask)
 	asm("extbl	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
 	return r;
 }
+static inline unsigned long extqh(unsigned long a, unsigned long mask)
+{
+	unsigned long r;
+	asm("extqh	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
+	return r;
+}
+static inline unsigned long extql(unsigned long a, unsigned long mask)
+{
+	unsigned long r;
+	asm("extql	%r1, %2, %0" : "=r" (r) : "rJ" (a), "rI" (mask));
+	return r;
+}
 # endif
+static inline unsigned long ldq_u(const unsigned long *a)
+{
+	unsigned long r;
+	asm("ldq_u	%0, %1" : "=r" (r) : "m" (*a));
+	return r;
+}
 
 # ifdef __alpha_cix__
 #  if _GNUC_PREREQ(3, 3)

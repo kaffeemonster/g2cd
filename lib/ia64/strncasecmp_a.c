@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, ia64 implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,6 +25,10 @@
 
 #include "ia64.h"
 
+#ifdef HAVE_TIMODE
+typedef unsigned __uint128 __attribute__((mode(TI)));
+#endif
+
 static noinline int strncasecmp_a_u(const char *s1, const char *s2, size_t n)
 {
 	size_t i, j, cycles;
@@ -44,16 +48,27 @@ LOOP_AGAIN:
 		const unsigned long long *s1_l, *s2_l;
 		unsigned long long w1, w2, w1_x, w2_x;
 		unsigned long long m1, m2;
-		unsigned shift11, shift12, shift21, shift22;
+		unsigned shift11, shift21;
+#ifndef HAVE_TIMODE
+		unsigned shift12, shift22;
+#endif
 
 		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOULL);
-		shift12  = SOULL - shift11;
 		shift11 *= BITS_PER_CHAR;
-		shift12 *= BITS_PER_CHAR;
+#ifndef HAVE_TIMODE
+		shift12  = SOULL * BITS_PER_CHAR - shift11;
+#else
+		if(HOST_IS_BIGENDIAN)
+			shift11  = SOULL * BITS_PER_CHAR - shift11;
+#endif
 		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOULL);
-		shift22  = SOULL - shift21;
 		shift21 *= BITS_PER_CHAR;
-		shift22 *= BITS_PER_CHAR;
+#ifndef HAVE_TIMODE
+		shift22  = SOULL * BITS_PER_CHAR - shift21;
+#else
+		if(HOST_IS_BIGENDIAN)
+			shift21  = SOULL * BITS_PER_CHAR - shift21;
+#endif
 
 		s1_l = (const unsigned long long *)ALIGN_DOWN(s1, SOULL);
 		s2_l = (const unsigned long long *)ALIGN_DOWN(s2, SOULL);
@@ -67,11 +82,21 @@ LOOP_AGAIN:
 			w1_x = *s1_l++;
 			w2_x = *s2_l++;
 			if(HOST_IS_BIGENDIAN) {
+#ifdef HAVE_TIMODE
+				w1 = ((((__uint128_t)w1) << 64) | w1_x) >> shift11;
+				w2 = ((((__uint128_t)w2) << 64) | w2_x) >> shift21;
+#else
 				w1 = w1 << shift11 | w1_x >> shift12;
 				w2 = w2 << shift21 | w2_x >> shift22;
+#endif
 			} else {
+#ifdef HAVE_TIMODE
+				w1 = (w1 | (((__uint128_t)w1_x) << 64)) >> shift11;
+				w2 = (w2 | (((__uint128_t)w2_x) << 64)) >> shift21;
+#else
 				w1 = w1 >> shift11 | w1_x << shift12;
 				w2 = w2 >> shift21 | w2_x << shift22;
+#endif
 			}
 
 			m1   = pcmp1gt(w1, 0x6060606060606060ULL);
@@ -157,12 +182,15 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	m2  ^= pcmp1gt(w2, 0x7a7a7a7a7a7a7a7aULL);
 	m2   = 0x2020202020202020ULL & m2;
 	w2  -= m2;
-	if(!HOST_IS_BIGENDIAN) {
-		w1 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
-		w2 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
-	} else {
-		w1 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
-		w2 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			w1 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
+			w2 |= (~0ULL) >> ((SOULL - shift) * BITS_PER_CHAR);
+		} else {
+			w1 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+			w2 |= (~0ULL) << ((SOULL - shift) * BITS_PER_CHAR);
+		}
 	}
 	m2   = czx1(w1);
 	m1   = w1 ^ w2;

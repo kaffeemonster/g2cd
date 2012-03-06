@@ -2,7 +2,7 @@
  * strncasecmp_a.c
  * strncasecmp ascii only, Tile implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -44,49 +44,19 @@ LOOP_AGAIN:
 		const unsigned long *s1_l, *s2_l;
 		unsigned long w1, w2, w1_x, w2_x;
 		unsigned long m1, m2;
-#if !(defined(__tilegx__) || defined(__tilepro__))
-		unsigned shift11, shift12, shift21, shift22;
-
-		shift11  = (unsigned)ALIGN_DOWN_DIFF(s1, SOUL);
-		shift12  = SOUL - shift11;
-		shift11 *= BITS_PER_CHAR;
-		shift12 *= BITS_PER_CHAR;
-		shift21  = (unsigned)ALIGN_DOWN_DIFF(s2, SOUL);
-		shift22  = SOUL - shift21;
-		shift21 *= BITS_PER_CHAR;
-		shift22 *= BITS_PER_CHAR;
-
-		s1_l = (const unsigned long *)ALIGN_DOWN(s1, SOUL);
-		s2_l = (const unsigned long *)ALIGN_DOWN(s2, SOUL);
-		w1_x = *s1_l++;
-		w2_x = *s2_l++;
-#else
 		s1_l = (const unsigned long *)s1;
 		s2_l = (const unsigned long *)s2;
 		w1_x = tile_ldna(s1_l++);
 		w2_x = tile_ldna(s2_l++);
-#endif
 
 		for(; likely(i >= 2 * SOUL); i -= SOUL)
 		{
 			w1   = w1_x;
 			w2   = w2_x;
-#if !(defined(__tilegx__) || defined(__tilepro__))
-			w1_x = *s1_l++;
-			w2_x = *s2_l++;
-			if(HOST_IS_BIGENDIAN) {
-				w1 = w1 << shift11 | w1_x >> shift12;
-				w2 = w2 << shift21 | w2_x >> shift22;
-			} else {
-				w1 = w1 >> shift11 | w1_x << shift12;
-				w2 = w2 >> shift21 | w2_x << shift22;
-			}
-#else
 			w1_x = tile_ldna(s1_l++);
 			w2_x = tile_ldna(s2_l++);
 			w1   = tile_align(w1, w1_x, s1_l);
 			w2   = tile_align(w2, w2_x, s2_l);
-#endif
 
 			m1   = tile_has_between(w1, 0x60, 0x7B);
 			m1 <<= 5;

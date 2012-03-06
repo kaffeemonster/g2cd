@@ -35,7 +35,7 @@ LOOP_AGAIN:
 	/*
 	 * ARM has to few register for all this aligment correction stuff and
 	 * the magic compares.
-	 * If we have some kind of CAN_UNALIGNED this code couls be used
+	 * If we have some kind of CAN_UNALIGNED this code could be used
 	 * (without the shifting magic).
 	 */
 	, j, cycles;
@@ -159,12 +159,15 @@ static noinline int strncasecmp_a_a(const char *s1, const char *s2, size_t n)
 	w1   = alu_ucmp_between(w1, MK_C(0x60606060), MK_C(0x7b7b7b7b), w1, m1);
 	m2   = alu_usub8(w2, MK_C(0x20202020UL));
 	w2   = alu_ucmp_between(w2, MK_C(0x60606060), MK_C(0x7b7b7b7b), w2, m2);
-	if(!HOST_IS_BIGENDIAN) {
-		w1 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
-		w2 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
-	} else {
-		w1 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
-		w2 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+	if(shift)
+	{
+		if(!HOST_IS_BIGENDIAN) {
+			w1 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+			w2 |= (~0ul) >> ((SOST - shift) * BITS_PER_CHAR);
+		} else {
+			w1 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+			w2 |= (~0ul) << ((SOST - shift) * BITS_PER_CHAR);
+		}
 	}
 	m1   = w1 ^ w2;
 	m2   = alu_ucmp_eqz_msk(w1) & ACMP_MSK;
