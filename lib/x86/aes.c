@@ -177,6 +177,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #  define SB1LO	 -32
 #  define SB1HI	 -16
 #  define SB2LO	   0
+#  define AES_CONSTS_0MEMBER aes_consts.sb2lo
 #  define SB2HI	  16
 #  define MCF	  32
 #  define MCB	  96
@@ -186,6 +187,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #  define RCON	256
 #  define OPTLO	272
 #  define OPTHI	288
+
 
 static const struct
 {
@@ -382,7 +384,7 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 		  /* %1 */ "=&r" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (ctx->k[0])
-		: /* %4 */ "r" (aes_consts.sb1lo),
+		: /* %4 */ "r" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10),
 		  /* %7 */ "1" (16),
@@ -543,7 +545,7 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 		  /* %1 */ "=&r" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (ctx->k[0])
-		: /* %4 */ "r" (aes_consts.sb1lo),
+		: /* %4 */ "r" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10),
 		  /* %7 */ "1" (16),
@@ -867,7 +869,7 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 		  /* %1 */ "=&R" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (*(int *)out)
-		: /* %4 */ "R" (aes_consts.sb1lo),
+		: /* %4 */ "R" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10 - 1),
 		  /* %7 */ "1" (16),
@@ -994,7 +996,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 		  /* %1 */ "=&R" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (*(int *)out)
-		: /* %4 */ "R" (aes_consts.sb1lo),
+		: /* %4 */ "R" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10 - 1),
 		  /* %7 */ "1" (16),
