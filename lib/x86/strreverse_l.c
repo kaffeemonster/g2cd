@@ -2,7 +2,7 @@
  * strreverse_l.c
  * strreverse_l, x86 implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -32,6 +32,9 @@
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 static void strreverse_l_AVX2(char *begin, char *end);
+# endif
+# if HAVE_BINUTILS >= 219
+static void strreverse_l_AVX(char *begin, char *end);
 # endif
 # if HAVE_BINUTILS >= 217
 static void strreverse_l_SSSE3(char *begin, char *end);
@@ -79,8 +82,8 @@ static void strreverse_l_AVX2(char *begin, char *end)
 			"vlddqu	-31(%1), %%ymm0\n\t"       /* fetch input data */
 			"vlddqu	(%0), %%ymm2\n\t"
 			/* swab endianess */
-			"vpshufb	%%ymm4, %%ymm0, %%ymm0\n\t"
-			"vpshufb	%%ymm4, %%ymm2, %%ymm2\n\t"
+			"vpshufb	%%ymm0, %%ymm4, %%ymm0\n\t"
+			"vpshufb	%%ymm2, %%ymm4, %%ymm2\n\t"
 			"vperm2i128	$1, %%ymm0, %%ymm0, %%ymm0\n\t"
 			"vperm2i128	$1, %%ymm2, %%ymm2, %%ymm2\n\t"
 			"vmovdqu	%%ymm0, (%0)\n\t"
@@ -97,8 +100,8 @@ static void strreverse_l_AVX2(char *begin, char *end)
 			"vlddqu	-15(%1), %%xmm0\n\t"       /* fetch input data */
 			"vlddqu	(%0), %%xmm2\n\t"
 			/* swab endianess */
-			"vpshufb	%%ymm4, %%ymm0, %%ymm0\n\t"
-			"vpshufb	%%ymm4, %%ymm2, %%ymm2\n\t"
+			"vpshufb	%%xmm0, %%xmm4, %%xmm0\n\t"
+			"vpshufb	%%xmm2, %%xmm4, %%xmm2\n\t"
 			"vmovdqu	%%xmm0, (%0)\n\t"
 			"add	$16, %0\n\t"
 			"vmovdqu	%%xmm2, -15(%1)\n\t"
@@ -116,8 +119,8 @@ static void strreverse_l_AVX2(char *begin, char *end)
 			/* swab mask */
 			"vpshufd	$0x4E, %%xmm4, %%xmm4\n\t"
 			/* swab endianess */
-			"vpshufb	%%xmm4, %%xmm0, %%xmm0\n\t"
-			"vpshufb	%%xmm4, %%xmm2, %%xmm2\n\t"
+			"vpshufb	%%xmm0, %%xmm4, %%xmm0\n\t"
+			"vpshufb	%%xmm2, %%xmm4, %%xmm2\n\t"
 			"vmovq	%%xmm0, (%0)\n\t"
 			"add	$8, %0\n\t"
 			"vmovq	%%xmm2, -7(%1)\n\t"
@@ -133,6 +136,77 @@ static void strreverse_l_AVX2(char *begin, char *end)
 #  ifdef __AVX__
 		: "ymm0", "ymm1", "ymm2", "ymm3", "ymm4"
 #  elif defined(__SSE__)
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
+#  endif
+	);
+	strreverse_l_generic(begin, end);
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void strreverse_l_AVX(char *begin, char *end)
+{
+	char *t;
+
+	asm (
+#  ifndef __x86_64__
+			"lea	-15(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	4f\n"
+			"vmovdqa	%3, %%xmm4\n\t"
+#  endif
+			"lea	-31(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	2f\n\t"
+#  ifdef __x86_64__
+			"vmovdqa	%3, %%xmm4\n\t"
+#  endif
+			".p2align 2\n"
+			"1:\n\t"
+			"vlddqu	-15(%1), %%xmm0\n\t"       /* fetch input data */
+			"vlddqu	(%0), %%xmm2\n\t"
+			/* swab endianess */
+			"vpshufb	%%ymm0, %%ymm4, %%ymm0\n\t"
+			"vpshufb	%%ymm2, %%ymm4, %%ymm2\n\t"
+			"vmovdqu	%%xmm0, (%0)\n\t"
+			"add	$16, %0\n\t"
+			"vmovdqu	%%xmm2, -15(%1)\n\t"
+			"sub	$16, %1\n\t"
+			"lea	-31(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jb	1b\n"
+#  ifndef __x86_64__
+			"lea	-15(%1), %2\n\t"
+			"cmp	%2, %0\n\t"
+			"jae	4f\n"
+#  endif
+			"2:\n\t"
+#  ifndef __x86_64__
+			"vmovq	-7(%1), %%xmm0\n\t"       /* fetch input data */
+			"vmovq	(%0), %%xmm2\n\t"
+			/* swab mask */
+			"vpshufd	$0x4E, %%xmm4, %%xmm4\n\t"
+			/* swab endianess */
+			"vpshufb	%%xmm0, %%xmm4, %%xmm0\n\t"
+			"vpshufb	%%xmm2, %%xmm4, %%xmm2\n\t"
+			"vmovq	%%xmm0, (%0)\n\t"
+			"add	$8, %0\n\t"
+			"vmovq	%%xmm2, -7(%1)\n\t"
+			"sub	$8, %1\n\t"
+			"4:"
+#  endif
+		: /* %0 */ "=r" (begin),
+		  /* %1 */ "=r" (end),
+		  /* %2 */ "=r" (t)
+		: /* %3 */ "m" (vals),
+		  /*    */ "0" (begin),
+		  /*    */ "1" (end)
+#  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
 #  endif
 	);
@@ -401,6 +475,9 @@ static __init_cdata const struct test_cpu_feature tfeat_strreverse_l[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))strreverse_l_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))strreverse_l_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))strreverse_l_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},
