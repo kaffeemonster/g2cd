@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, x86 implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,6 +31,74 @@ static void aes_ecb_encrypt_generic(const struct aes_encrypt_ctx *, void *, cons
 static void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *, void *, const void *);
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void aes_encrypt_key128_AVXAES(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t k;
+
+	asm(
+#ifdef HAVE_SUBSECTION
+			".subsection 2\n\t"
+#else
+			"jmp	1f\n\t"
+#endif
+			".align 16\n"
+			"_key_expansion_128_avx:\n\t"
+			"vpshufd	$0xff, %%xmm1, %%xmm1\n\t"
+			"vshufps	$0x10, %%xmm0, %%xmm4, %%xmm4\n\t"
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"
+			"vshufps	$0x8c, %%xmm0, %%xmm4, %%xmm4\n\t"
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, (%0)\n\t"
+			"add	$0x10, %0\n\t"
+			"ret\n\t"
+#ifdef HAVE_SUBSECTION
+			".previous\n\t"
+#else
+			"1:\n\t"
+#endif
+			"vlddqu	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
+			"vmovdqa	%%xmm0, (%0)\n\t"
+			"add	0x10, %0\n\t"	/* key addr */
+			"vpxor	%%xmm4, %%xmm4, %%xmm4\n\t" /* init xmm4 */
+			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
+			"vaeskeygenassist $0x1, %%xmm0, %%xmm1\n\t" /* round 1 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x2, %%xmm0, %%xmm1\n\t" /* round 2 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x4, %%xmm0, %%xmm1\n\t" /* round 3 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x8, %%xmm0, %%xmm1\n\t" /* round 4 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x10, %%xmm0, %%xmm1\n\t" /* round 5 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x20, %%xmm0, %%xmm1\n\t" /* round 6 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x40, %%xmm0, %%xmm1\n\t" /* round 7 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x80, %%xmm0, %%xmm1\n\t" /* round 8 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x1b, %%xmm0, %%xmm1\n\t" /* round 9 */
+			"call	_key_expansion_128_avx\n\t"
+			"vaeskeygenassist $0x36, %%xmm0, %%xmm1\n\t" /* round 10 */
+			"call	_key_expansion_128_avx"
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*ctx->k)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm4"
+#  endif
+	);
+}
+# endif
+
 # if HAVE_BINUTILS >= 217
 static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *in)
 {
@@ -43,15 +111,12 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 			"jmp	1f\n\t"
 #endif
 			".align 16\n"
-			"key_expansion_128:\n\t"
-			"movaps	%%xmm1, %%xmm4\n\t"
-			"psrldq	$12, %%xmm1\n\t"
-			"pxor	%%xmm0, %%xmm1\n\t"
-			"palignr	$12, %%xmm4, %%xmm1\n\t"
-			"pxor	%%xmm0, %%xmm1\n\t"
-			"palignr	$12, %%xmm4, %%xmm1\n\t"
-			"pxor	%%xmm0, %%xmm1\n\t"
-			"palignr	$12, %%xmm4, %%xmm1\n\t"
+			"_key_expansion_128:\n\t"
+			"pshufd	$0xff, %%xmm1, %%xmm1\n\t"
+			"shufps	$0x10, %%xmm0, %%xmm4\n\t"
+			"pxor	%%xmm4, %%xmm0\n\t"
+			"shufps	$0b10001100, %%xmm0, %%xmm4\n\t"
+			"pxor	%%xmm4, %%xmm0\n\t"
 			"pxor	%%xmm1, %%xmm0\n\t"
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	$0x10, %0\n\t"
@@ -64,27 +129,28 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 			"movups	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
 			"movaps	%%xmm0, (%0)\n\t"
 			"add	0x10, %0\n\t"	/* key addr */
+			"pxor	%%xmm4, %%xmm4\n\t" /* init xmm4 */
 			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x01\n\t" /* round 1 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x02\n\t" /* round 2 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x04\n\t" /* round 3 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x08\n\t" /* round 4 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x10\n\t" /* round 5 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x20\n\t" /* round 6 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x40\n\t" /* round 7 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x80\n\t" /* round 8 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x1b\n\t" /* round 9 */
-			"call	key_expansion_128\n\t"
+			"call	_key_expansion_128\n\t"
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x36\n\t" /* round 10 */
-			"call	key_expansion_128"
+			"call	_key_expansion_128"
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*ctx->k)
 		: /* %2 */ "m" (*(const char *)in),
@@ -102,24 +168,24 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
  *
  * adapted by me
  */
-#  define S0F	  0
-#  define S63	 16
-#  define IPTLO	 32
-#  define IPTHI	 48
-#  define SBOLO	 64
-#  define SBOHI	 80
-#  define INVLO	 96
-#  define INVHI	112
-#  define SB1LO	128
-#  define SB1HI	144
-#  define SB2LO	160
-#  define SB2HI	176
-#  define MCF	192
-#  define MCB	256
-#  define SR	320
-#  define RCON	384
-#  define OPTLO	400
-#  define OPTHI	416
+#  define S0F	-128
+#  define S63	-112
+#  define SBOLO	 -96
+#  define SBOHI	 -80
+#  define INVLO	 -64
+#  define INVHI	 -48
+#  define SB1LO	 -32
+#  define SB1HI	 -16
+#  define SB2LO	   0
+#  define SB2HI	  16
+#  define MCF	  32
+#  define MCB	  96
+#  define SR	160
+#  define IPTLO	224
+#  define IPTHI	240
+#  define RCON	256
+#  define OPTLO	272
+#  define OPTHI	288
 
 static const struct
 {
@@ -145,8 +211,6 @@ static const struct
 {
 	.s0f   = { 0x0F0F0F0F0F0F0F0FULL, 0x0F0F0F0F0F0F0F0FULL },
 	.s63   = { 0x5B5B5B5B5B5B5B5BULL, 0x5B5B5B5B5B5B5B5BULL },
-	.iptlo = { 0xC2B2E8985A2A7000ULL, 0xCABAE09052227808ULL },
-	.ipthi = { 0x4C01307D317C4D00ULL, 0xCD80B1FCB0FDCC81ULL },
 	.sbolo = { 0xD0D26D176FBDC700ULL, 0x15AABF7AC502A878ULL },
 	.sbohi = { 0xCFE474A55FBB6A00ULL, 0x8E1E90D1412B35FAULL },
 	.invlo = { 0x0E05060F0D080180ULL, 0x040703090A0B0C02ULL },
@@ -167,21 +231,184 @@ static const struct
 	           0x030E09040F0A0500ULL, 0x0B06010C07020D08ULL,
 	           0x0F060D040B020900ULL, 0x070E050C030A0108ULL,
 	           0x0B0E0104070A0D00ULL, 0x0306090C0F020508ULL },
+	.iptlo = { 0xC2B2E8985A2A7000ULL, 0xCABAE09052227808ULL },
+	.ipthi = { 0x4C01307D317C4D00ULL, 0xCD80B1FCB0FDCC81ULL },
 	.rcon  = { 0x1F8391B9AF9DEEB6ULL, 0x702A98084D7C7D81ULL },
 	.optlo = { 0xFF9F4929D6B66000ULL, 0xF7974121DEBE6808ULL },
 	.opthi = { 0x01EDBD5150BCEC00ULL, 0xE10D5DB1B05C0CE0ULL },
 };
+
+#  if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t rounds, n;
+	void *k;
+
+	prefetch(in);
+	prefetchw(ctx->k);
+	prefetch(&aes_consts);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	asm volatile (
+			"vlddqu	    %5, %%xmm0\n\t"	/* load key */
+			"vmovdqa	"str_it(INVLO)"(%4), %%xmm5\n\t"	/* inv */
+#   ifndef __i386__
+			"vmovdqa	"str_it(S0F)"(%4), %%xmm9\n\t"	/* 0F */
+			"vmovdqa	"str_it(INVHI)"(%4), %%xmm11\n\t"	/* inva */
+#   endif
+			"vmovdqa	"str_it(RCON)"(%4), %%xmm6\n\t"
+			/* input transform */
+			"vmovdqa	%%xmm0, %%xmm3\n\t"
+			/* shedule transform */
+#   ifndef __i386__
+			"vpandn	%%xmm0, %%xmm9, %%xmm1\n\t"
+#   else
+			"vmovdqa	"str_it(S0F)"(%4), %%xmm1\n\t"
+			"vpandn	%%xmm0, %%xmm1, %%xmm1\n\t"
+#   endif
+			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
+#   ifndef __i386__
+			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"
+#   else
+			"vpand	"str_it(S0F)"(%4), %%xmm0, %%xmm0\n\t"
+#   endif
+			"vmovdqa	"str_it(IPTLO)"(%4), %%xmm2\n\t"	/* iptlo */
+			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
+			"vmovdqa	"str_it(IPTHI)"(%4), %%xmm0\n\t"	/* ipthi */
+			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm2, %%xmm0, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, %%xmm7\n\t"
+			/* output zeroth round key */
+			"vmovdqa	%%xmm0, (%2)\n\t"
+			"jmp	1f\n\t"
+			".p2align 3\n"
+			"1:\n\t"
+			/* extract rcon from xmm8 */
+			"vpxor	%%xmm1, %%xmm1, %%xmm1\n\t"
+			"vpalignr	$15, %%xmm6, %%xmm1, %%xmm1\n\t"
+			"vpalignr	$15, %%xmm6, %%xmm6, %%xmm6\n\t"
+			"vpxor	%%xmm1, %%xmm7, %%xmm1\n\t"
+			/* rotate */
+			"vpshufd	$0xFF, %%xmm0, %%xmm0\n\t"
+			"vpalignr	$1, %%xmm0, %%xmm0, %%xmm0\n\t"
+			/* smear xmm7 */
+			"vpslldq	     $4, %%xmm1, %%xmm7\n\t"
+			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
+			"vpslldq	     $8, %%xmm7, %%xmm1\n\t"
+			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
+			"vpxor	"str_it(S63)"(%4), %%xmm7, %%xmm7\n\t"
+			/* subbytes */
+#   ifndef __i386__
+			"vpandn	 %%xmm0, %%xmm9, %%xmm1\n\t"
+#   else
+			"vmovdqa	"str_it(S0F)"(%4), %%xmm1\n\t"
+			"vpandn	 %%xmm0, %%xmm1, %%xmm1\n\t"
+#   endif
+			"vpsrld	     $4, %%xmm1, %%xmm1\n\t"	/* 1 = i */
+#   ifndef __i386__
+			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"	/* 0 = k */
+#   else
+			"vpand	"str_it(S0F)"(%4), %%xmm0, %%xmm0\n\t"	/* 0 = k */
+#   endif
+#   ifndef __i386__
+			"vpshufb	 %%xmm0, %%xmm11, %%xmm2\n\t"	/* 2 = a/k */
+#   else
+			"vmovdqa	"str_it(INVHI)"(%4), %%xmm2\n\t"	/* 2 : a/k */
+			"vpshufb	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = a/k */
+#   endif
+			"vpxor	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = j */
+			"vpshufb	 %%xmm1, %%xmm5, %%xmm3\n\t"	/* 3 = 1/i */
+			"vpxor	 %%xmm2, %%xmm3, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
+			"vpshufb	 %%xmm0, %%xmm5, %%xmm4\n\t"	/* 4 = 1/j */
+			"vpxor	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = jak = 1/j + a/k */
+			"vpshufb	 %%xmm3, %%xmm5, %%xmm2\n\t"	/* 2 = 1/iak */
+			"vpxor	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = io */
+			"vpshufb	 %%xmm4, %%xmm5, %%xmm3\n\t"	/* 3 = 1/jak */
+			"vpxor	 %%xmm1, %%xmm3, %%xmm3\n\t"	/* 3 = jo */
+			"vmovdqa	"str_it(SB1LO)"(%4), %%xmm4\n\t"	/* 4 : sbou */
+			"vpshufb  %%xmm2, %%xmm4, %%xmm4\n\t"		/* 4 = sbou */
+			"vmovdqa	"str_it(SB1HI)"(%4), %%xmm0\n\t"	/* 0 : sbot */
+			"vpshufb  %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = sb1t */
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"	/* 0 = sbox output */
+			/* add in smeared stuff */
+			"vpxor	%%xmm7, %%xmm0, %%xmm0\n\t"
+			"dec	%0\n\t"
+			"jz 	2f\n\t"
+			"vmovdqa	%%xmm0, %%xmm7\n\t"
+			/* write output */
+			"vmovdqa	"str_it(MCF)"(%4),%%xmm1\n\t"
+			"add	$16, %2\n\t"
+			"vpxor	"str_it(S63)"(%4), %%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
+			"vpshufb	%%xmm1, %%xmm2, %%xmm3\n\t"
+			"vpshufb	%%xmm1, %%xmm3, %%xmm2\n\t"
+			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
+			"vpshufb	%%xmm1, %%xmm2, %%xmm2\n\t"
+			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
+			"vpshufb	"str_it(SR)"(%1,%4), %%xmm3, %%xmm3\n\t"
+			"add	  $-16, %1\n\t"
+			"and	   $48, %1\n\t"
+			"vmovdqa	%%xmm3, (%2)\n\t"
+			"jmp 	1b\n"
+			"2:\n\t"
+			/* schedule last round key from xmm0 */
+			"vpshufb	"str_it(SR)"(%1,%4), %%xmm0, %%xmm0\n\t"	/* output permute */
+			"add	$16, %2\n\t"
+			"vpxor	"str_it(S63)"(%4), %%xmm0, %%xmm0\n\t"
+#   ifndef __i386__
+			"vpandn	%%xmm0, %%xmm9, %%xmm1\n\t"
+#   else
+			"vmovdqa	"str_it(S0F)"(%4), %%xmm1\n\t"
+			"vpandn	%%xmm0, %%xmm1, %%xmm1\n\t"
+#   endif
+			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
+#   ifndef __i386__
+			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"	/* 0 = k */
+#   else
+			"vpand	"str_it(S0F)"(%4), %%xmm0, %%xmm0\n\t"	/* 0 = k */
+#   endif
+			"vmovdqa	"str_it(OPTLO)"(%4), %%xmm2\n\t"	/* optlo */
+			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
+			"vmovdqa	"str_it(OPTHI)"(%4), %%xmm0\n\t"	/* opthi */
+			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm0, %%xmm2, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, (%2)\n\t"	/* save last key */
+		: /* %0 */ "=&r" (rounds),
+		  /* %1 */ "=&r" (n),
+		  /* %2 */ "=&r" (k),
+		  /* %3 */ "=m" (ctx->k[0])
+		: /* %4 */ "r" (aes_consts.sb1lo),
+		  /* %5 */ "m" (*(const int *)in),
+		  /* %6 */ "0" (10),
+		  /* %7 */ "1" (16),
+		  /* %8 */ "2" (&ctx->k[0])
+#   ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#    ifndef __i386__
+		  , "xmm9", "xmm11"
+#    endif
+#   endif
+	);
+}
+#  endif
 
 static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	size_t rounds, n;
 	void *k;
 
+	prefetch(in);
 	prefetchw(ctx->k);
 	prefetch(&aes_consts);
 	prefetch(aes_consts.mcf);
 	prefetch(aes_consts.sr);
-	asm(
+
+	asm volatile (
 			"lddqu	    %5, %%xmm0\n\t"	/* load key */
 			"movdqa	"str_it(INVLO)"(%4), %%xmm5\n\t"	/* inv */
 #  ifndef __i386__
@@ -270,9 +497,9 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			"pxor	%%xmm4, %%xmm0\n\t"	/* 0 = sbox output */
 			/* add in smeared stuff */
 			"pxor	%%xmm7, %%xmm0\n\t"
-			"movdqa	%%xmm0, %%xmm7\n\t"
 			"dec	%0\n\t"
 			"jz 	2f\n\t"
+			"movdqa	%%xmm0, %%xmm7\n\t"
 			/* write output */
 			"movdqa	%%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
 			"movdqa	"str_it(MCF)"(%4),%%xmm1\n\t"
@@ -316,7 +543,7 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 		  /* %1 */ "=&r" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (ctx->k[0])
-		: /* %4 */ "r" (&aes_consts),
+		: /* %4 */ "r" (aes_consts.sb1lo),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10),
 		  /* %7 */ "1" (16),
@@ -368,8 +595,11 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
  */
 static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
-	static const uint32_t control_word[4] GCC_ATTR_ALIGNED(16) =
-		{PL_R128 | PL_KEYGN | PL_K128, 0, 0, 0};
+	static const struct {
+		uint32_t x[4];
+	} control_word GCC_ATTR_ALIGNED(16) = {
+		{PL_R128 | PL_KEYGN | PL_K128, 0, 0, 0}
+	};
 #if _GNUC_PREREQ (4,4) || defined(__OPTIMIZE__)
 	size_t c, S, D;
 
@@ -385,7 +615,7 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 		  /* %1 */ "=D" (D),
 		  /* %2 */ "=c" (c),
 		  /* %4 */ "=m" (*(char *)out)
-		: /* %4 */ "d" (control_word),
+		: /* %4 */ "d" (&control_word),
 #if defined(__i386__) && defined(__PIC__)
 		  /* %5 */ "a" (&ctx->k),
 #else
@@ -421,7 +651,8 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 			"mov	%4, "REG_D"\n\t"
 			"mov	%1, "REG_d"\n\t"
 			"mov	%2, "REG_b"\n\t"
-			"mov	$1, "REG_c"\n\t"
+			"xor	"REG_c", "REG_c"\n\t"
+			"add	$1, "REG_c"\n\t"
 			"rep xcryptecb\n\t"
 			"pop	"REG_b"\n\t"
 			"pop	"REG_d"\n\t"
@@ -429,7 +660,7 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 			"pop	"REG_D"\n\t"
 			"pop	"REG_S"\n\t"
 		: /* %0 */ "=m" (*(char *)out)
-		: /* %1 */ "m" (*control_word),
+		: /* %1 */ "m" (control_word),
 		  /* %2 */ "m" (ptr),
 		  /* %4 */ "m" (in),
 		  /* %4 */ "m" (out),
@@ -439,6 +670,43 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
 }
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void aes_ecb_encrypt_AVXAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	size_t k;
+
+	asm(
+			"prefetch	(%0)\n\t"
+			"add	$0x30, %0\n\t"	/* prime key address */
+			"vlddqu	%2, %%xmm0\n\t"	/* input */
+			"vpxor	-0x30(%0), %%xmm0, %%xmm0\n\t"	/* key round 0 */
+			"vaesenc	-0x20(%0), %%xmm0, %%xmm0\n\t"	/* key key */
+			"vaesenc	-0x10(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	     (%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x10(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x20(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x30(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x40(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x50(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x60(%0), %%xmm0, %%xmm0\n\t"
+			"vaesenclast	0x70(%0), %%xmm0, %%xmm0\n\t"	/* last round */
+			"vmovdqu	%%xmm0, %1"	/* output */
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*(char *)out)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
+#  ifdef __SSE__
+		: "xmm0"
+#  endif
+	);
+}
+# endif
+
 # if HAVE_BINUTILS >= 217
 static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
@@ -448,7 +716,7 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
 			"movups	%2, %%xmm0\n\t"	/* input */
 			"movaps	(%0), %%xmm1\n\t"	/* key */
 			"pxor	%%xmm1, %%xmm0\n\t"	/* round 0 */
-			"lea	0x30(%0), %0\n\t"	/* prime key address */
+			"add	$0x30, %0\n\t"	/* prime key address */
 			"movaps	-0x20(%0), %%xmm1\n\t"	/* key key */
 			/* aesenc %xmm1, %xmm0 */	/* round */
 			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
@@ -489,17 +757,144 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
  *
  * adapted by me
  */
-static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+#  if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	size_t rounds, n;
 	void *k;
 
+	prefetch(in);
 	prefetchw(out);
 	prefetch(ctx->k);
 	prefetch(&aes_consts);
 	prefetch(aes_consts.mcf);
 	prefetch(aes_consts.sr);
-	asm(
+
+	asm volatile (
+			"vlddqu	%5, %%xmm0\n\t"
+			"vmovdqa	"str_it(S0F)"(%4), %%xmm6\n\t"	/* 0F */
+			"vmovdqa	"str_it(INVLO)"(%4), %%xmm5\n\t"	/* inv */
+			"vmovdqa	"str_it(INVHI)"(%4), %%xmm7\n\t"	/* inva */
+#   ifndef __i386__
+			"vmovdqa	"str_it(SB1LO)"(%4), %%xmm13\n\t"	/* sb1u */
+			"vmovdqa	"str_it(SB1HI)"(%4), %%xmm12\n\t"	/* sb1t */
+			"vmovdqa	"str_it(SB2LO)"(%4), %%xmm15\n\t"	/* sb2u */
+			"vmovdqa	"str_it(SB2HI)"(%4), %%xmm14\n\t"	/* sb2t */
+#   endif
+			"vmovdqa	"str_it(IPTLO)"(%4), %%xmm2\n\t"	/* iptlo */
+			"vpandn	 %%xmm0, %%xmm6, %%xmm1\n\t"
+			"vpsrld	     $4, %%xmm1, %%xmm1\n\t"
+			"vpand	 %%xmm6, %%xmm0, %%xmm0\n\t"
+			"vpshufb	 %%xmm0, %%xmm2, %%xmm2\n\t"
+			"vmovdqa	"str_it(IPTHI)"(%4), %%xmm0\n\t"	/* ipthi */
+			"vpshufb	 %%xmm1, %%xmm0, %%xmm0\n\t"
+			"vpxor	 16(%2), %%xmm2, %%xmm2\n\t"
+			"vpxor	 %%xmm2, %%xmm0, %%xmm0\n\t"
+			"add	    $32, %2\n\t"
+			"jmp	     2f\n\t"
+			".p2align 4\n"
+			"1:\n\t"
+		/* middle of middle round */
+			"vmovdqa	"str_it(MCF)"(%1,%4), %%xmm1\n\t"
+#   ifndef __i386__
+			"vpshufb	 %%xmm2, %%xmm13, %%xmm4\n\t"	/* 4 = sb1u */
+#   else
+			"vmovdqa	"str_it(SB1LO)"(%4), %%xmm4\n\t"	/* 4 : sb1u */
+			"vpshufb	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = sb1u */
+#   endif
+			"vpxor	   (%2), %%xmm4, %%xmm4\n\t"	/* 4 = sb1u + k */
+#   ifndef __i386__
+			"vpshufb	 %%xmm3, %%xmm12, %%xmm0\n\t"	/* 0 = sb1t */
+#   else
+			"vmovdqa	"str_it(SB1HI)"(%4), %%xmm0\n\t"	/* 0: sb1t */
+			"vpshufb	 %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = sb1t */
+#   endif
+			"vpxor	 %%xmm4, %%xmm0, %%xmm0\n\t"	/* 0 = A */
+#   ifndef __i386__
+			"vpshufb	 %%xmm2, %%xmm15, %%xmm4\n\t"	/* 4 = sb2u */
+#   else
+			"vmovdqa	"str_it(SB2LO)"(%4), %%xmm4\n\t"	/* 4 : sb2u */
+			"vpshufb	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = sb2u */
+#   endif
+#   ifndef __i386__
+			"vpshufb	 %%xmm3, %%xmm14, %%xmm2\n\t"	/* 2 = sb2t */
+#   else
+			"vmovdqa	"str_it(SB2HI)"(%4), %%xmm2\n\t"	/* 2 : sb2t */
+			"vpshufb	 %%xmm3, %%xmm2, %%xmm2\n\t"	/* 2 = sb2t */
+#   endif
+			"vpxor	 %%xmm4, %%xmm2, %%xmm2\n\t"	/* 2 = 2A */
+			"vpshufb	"str_it(MCB)"(%1,%4), %%xmm0, %%xmm3\n\t"	/* 3 = D */
+			"vpshufb	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = B */
+			"vpxor	 %%xmm2, %%xmm0, %%xmm0\n\t"	/* 0 = 2A+B */
+			"vpxor	 %%xmm0, %%xmm3, %%xmm3\n\t"	/* 3 = 2A+B+D */
+			"add	    $16, %2\n\t"	/* next key */
+			"vpshufb	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = 2B+C */
+			"vpxor	 %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = 2A+3B+C+D */
+			"add	    $16, %1\n\t"	/* next mc */
+			"and	    $48, %1\n\t"	/* ... mod 4 */
+			"dec	     %0\n"	/* rounds-- */
+			"2:\n\t"
+			/* top of round */
+			"vpandn	 %%xmm0, %%xmm6, %%xmm1\n\t"	/* 1 = i<<4 */
+			"vpsrld	     $4, %%xmm1, %%xmm1\n\t"	/* 1 = i */
+			"vpand	 %%xmm6, %%xmm0, %%xmm0\n\t"	/* 0 = k */
+			"vpshufb	 %%xmm0, %%xmm7, %%xmm2\n\t"	/* 2 = a/k */
+			"vpxor	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = j */
+			"vpshufb	 %%xmm1, %%xmm5, %%xmm3\n\t"	/* 3 = 1/i */
+			"vpxor	 %%xmm2, %%xmm3, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
+			"vpshufb	 %%xmm0, %%xmm5, %%xmm4\n\t"	/* 4 = 1/j */
+			"vpxor	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = jak = 1/j + a/k */
+			"vpshufb	 %%xmm3, %%xmm5, %%xmm2\n\t"	/* 2 = 1/iak */
+			"vpxor	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = io */
+			"vpshufb	 %%xmm4, %%xmm5, %%xmm3\n\t"	/* 3 = 1/jak */
+			"vpxor	 %%xmm1, %%xmm3, %%xmm3\n\t"	/* # 3 = jo */
+			"jnz	1b\n\t"
+			/* middle of last round */
+			"vmovdqa	"str_it(SBOLO)"(%4), %%xmm4\n\t"	/* 3 : sbou */
+			"vmovdqa	"str_it(SBOHI)"(%4), %%xmm0\n\t"	/* 0 : sbot */
+			"vpshufb	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = sbou */
+			"vpshufb	 %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = sb1t */
+			"vpxor	   (%2), %%xmm4, %%xmm4\n\t"	/* 4 = sb1u + k */
+			"vpxor	%%xmm0, %%xmm4, %%xmm0\n\t"	/* 0 = A */
+			"vpshufb	"str_it(SR)"(%1,%4), %%xmm0, %%xmm0\n\t"
+			"vmovdqu	%%xmm0, %3\n\t"
+		: /* %0 */ "=&r" (rounds),
+		  /* %1 */ "=&R" (n),
+		  /* %2 */ "=&r" (k),
+		  /* %3 */ "=m" (*(int *)out)
+		: /* %4 */ "R" (aes_consts.sb1lo),
+		  /* %5 */ "m" (*(const int *)in),
+		  /* %6 */ "0" (10 - 1),
+		  /* %7 */ "1" (16),
+		  /* %8 */ "2" (&ctx->k[0])
+#   ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#    ifndef __i386__
+		  , "xmm12", "xmm13", "xmm14", "xmm15"
+#    endif
+#   endif
+	);
+}
+#  endif
+
+static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	size_t rounds, n;
+	void *k;
+
+	prefetch(in);
+	prefetchw(out);
+	prefetch(ctx->k);
+	prefetch(&aes_consts);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	asm volatile (
 			"lddqu	%5, %%xmm0\n\t"
 			"movdqa	"str_it(S0F)"(%4), %%xmm6\n\t"	/* 0F */
 			"movdqa	"str_it(INVLO)"(%4), %%xmm5\n\t"	/* inv */
@@ -525,6 +920,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 			".p2align 4\n"
 			"1:\n\t"
 		/* middle of middle round */
+			"movdqa	"str_it(MCF)"(%1,%4), %%xmm1\n\t"
 #  ifndef __i386__
 			"movdqa	%%xmm13, %%xmm4\n\t"	/* 4 : sb1u */
 #  else
@@ -545,7 +941,6 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 			"movdqa	"str_it(SB2LO)"(%4), %%xmm4\n\t"	/* 4 : sb2u */
 #  endif
 			"pshufb	 %%xmm2, %%xmm4\n\t"	/* 4 = sb2u */
-			"movdqa	"str_it(MCF)"(%1,%4), %%xmm1\n\t"
 #  ifndef __i386__
 			"movdqa	%%xmm14, %%xmm2\n\t"	/* 2 : sb2t */
 #  else
@@ -588,18 +983,18 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 			"jnz	1b\n\t"
 			/* middle of last round */
 			"movdqa	"str_it(SBOLO)"(%4), %%xmm4\n\t"	/* 3 : sbou */
-			"pshufb	 %%xmm2, %%xmm4\n\t"	/* 4 = sbou */
-			"pxor	   (%2), %%xmm4\n\t"	/* 4 = sb1u + k */
 			"movdqa	"str_it(SBOHI)"(%4), %%xmm0\n\t"	/* 0 : sbot */
+			"pshufb	 %%xmm2, %%xmm4\n\t"	/* 4 = sbou */
 			"pshufb	 %%xmm3, %%xmm0\n\t"	/* 0 = sb1t */
+			"pxor	   (%2), %%xmm4\n\t"	/* 4 = sb1u + k */
 			"pxor	 %%xmm4, %%xmm0\n\t"	/* 0 = A */
 			"pshufb	"str_it(SR)"(%1,%4), %%xmm0\n\t"
 			"movdqu	%%xmm0, %3\n\t"
 		: /* %0 */ "=&r" (rounds),
-		  /* %1 */ "=&r" (n),
+		  /* %1 */ "=&R" (n),
 		  /* %2 */ "=&r" (k),
 		  /* %3 */ "=m" (*(int *)out)
-		: /* %4 */ "r" (&aes_consts),
+		: /* %4 */ "R" (aes_consts.sb1lo),
 		  /* %5 */ "m" (*(const int *)in),
 		  /* %6 */ "0" (10 - 1),
 		  /* %7 */ "1" (16),
@@ -620,7 +1015,12 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 
 static __init_cdata const struct test_cpu_feature tfeat_aes_encrypt_key128[] =
 {
+	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))aes_encrypt_key128_AVXAES,  .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_encrypt_key128_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))aes_encrypt_key128_SSEAES,  .features = {[1] = CFB(CFEATURE_AES)}},
 	{.func = (void (*)(void))aes_encrypt_key128_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},
@@ -633,6 +1033,10 @@ static __init_cdata const struct test_cpu_feature tfeat_aes_ecb_encrypt[] =
 {
 	{.func = (void (*)(void))aes_ecb_encrypt_padlock,  .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))aes_ecb_encrypt_AVXAES,   .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_ecb_encrypt_AVX,      .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
 # if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))aes_ecb_encrypt_SSEAES,   .features = {[1] = CFB(CFEATURE_AES)}},
 	{.func = (void (*)(void))aes_ecb_encrypt_SSSE3,    .features = {[1] = CFB(CFEATURE_SSSE3)}},
