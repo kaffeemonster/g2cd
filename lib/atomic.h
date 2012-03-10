@@ -2,7 +2,7 @@
  * atomic.h
  * atomic primitves
  *
- * Copyright (c) 2006-2011 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -131,8 +131,13 @@ typedef union xxxxxx5
 #  elif defined(__alpha__)
 #   include "alpha/atomic.h"
 #  elif defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-        defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-        defined(__ARM_ARCH_7A__)
+        defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || \
+        defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) || \
+        defined(__ARM_ARCH_6M__) || \
+        defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || \
+        defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) || \
+        defined(__ARM_ARCH_7EM__)
+	/* that arm has no clear generation define is a PITA */
 #   include "arm/atomic.h"
 #  else
 #   if _GNUC_PREREQ(4, 1)

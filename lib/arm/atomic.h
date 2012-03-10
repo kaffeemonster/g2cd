@@ -2,7 +2,7 @@
  * atomic.h
  * atomic primitves for arm
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -68,9 +68,13 @@
 
 # ifdef HAVE_SMP
 #  if defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
-      defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__)
+      defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || \
+      defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6T2__) || \
+      defined(__ARM_ARCH_6M__)
 #   define dmb()	asm volatile("mcr p15, 0, %0, c7, c10, 5" :: "r" (0) : "memory")
-#  elif defined(__ARM_ARCH_7A__)
+#  elif defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) || \
+        defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) || \
+        defined(__ARM_ARCH_7EM__)
 #   define dmb()	asm volatile("dmb" ::: "memory")
 #  else
 #   define dmb()	mbarrier()
