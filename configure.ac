@@ -395,10 +395,22 @@ AC_SUBST(BIN2O_OPTS)
 m4_include([m4/ax_check_linker_flags.m4])
 # get some more symbols in the executable, so backtraces
 # look better
+case "$host" in
+	*win32*)
+		;;
+	*mingw*)
+		;;
+	*cygwin*)
+		;;
+	*)
 AX_CHECK_LINKER_FLAGS([-rdynamic],
                       [LDFLAGS="-rdynamic $LDFLAGS"],
                       [AX_CHECK_LINKER_FLAGS([-Bdynamic],
                                              [LDFLAGS="-Bdynamic $LDFLAGS"], [])])
+		;;
+esac
+
+
 # the solaris linker can optimize the link some more...
 AX_CHECK_LINKER_FLAGS([-Wl,-B,direct],
                       [LDFLAGS="-Wl,-B,direct $LDFLAGS"],

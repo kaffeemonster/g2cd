@@ -2,7 +2,7 @@
  * timeout.h
  * header-file for timeout.c
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,17 +27,30 @@
 # define _TIMEOUT_H
 
 # include <sys/time.h>
-# include "lib/my_pthread.h"
-# include "lib/rbtree.h"
+# ifndef WIN32
+#  include "lib/my_pthread.h"
+#  include "lib/rbtree.h"
+# else
+#  ifndef _WIN32_WINNT
+#   define _WIN32_WINNT 0x0501
+#  endif
+#  include <winbase.h>
+# endif
 
 struct timeout
 {
+# ifndef WIN32
 	struct rb_node rb;
 	struct timespec t;
 	pthread_mutex_t lock;
+# else
+	HANDLE t_handle;
+# endif
 	void *data;
 	int (*fun)(void *);
+# ifndef WIN32
 	int rearm_in_progress;
+# endif
 };
 
 # ifndef _TIMEOUT_C
@@ -46,6 +59,7 @@ struct timeout
 #  define TOUT_EXTRN(x) x GCC_ATTR_VIS("hidden")
 # endif
 
+# ifndef WIN32
 static inline void INIT_TIMEOUT(struct timeout *t)
 {
 	RB_CLEAR_NODE(&t->rb);
@@ -57,6 +71,16 @@ static inline void DESTROY_TIMEOUT(struct timeout *t GCC_ATTR_UNUSED_PARAM)
 {
 //	pthread_mutex_destroy(&t->lock);
 }
+# else
+static inline void INIT_TIMEOUT(struct timeout *t)
+{
+	t->t_handle = INVALID_HANDLE_VALUE;
+}
+static inline void DESTROY_TIMEOUT(struct timeout *t)
+{
+	t->t_handle = INVALID_HANDLE_VALUE;
+}
+# endif
 
 TOUT_EXTRN(bool timeout_add(struct timeout *, unsigned int));
 TOUT_EXTRN(bool timeout_advance(struct timeout *, unsigned int));

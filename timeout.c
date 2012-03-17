@@ -58,6 +58,7 @@
 /*
  * vars
  */
+#ifndef WIN32
 static struct
 {
 	pthread_cond_t  cond;
@@ -66,8 +67,14 @@ static struct
 	struct timespec time;
 	bool	abort;
 } wakeup;
+#else
+static HANDLE tq_handle;
+static HANDLE t1_handle;
+static LONG refill_count;
+#endif
 
 
+#ifndef WIN32
 GCC_ATTR_CONSTRUCT __init static void init_timeout_system(void)
 {
 	if((errno = pthread_mutex_init(&wakeup.mutex, NULL)))
@@ -546,6 +553,157 @@ void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
 	pthread_exit(NULL);
 	return(NULL);
 }
+
+#else
+static always_inline unsigned int to2msec(unsigned int timeout)
+{
+	return timeout * 100;
+}
+
+static VOID CALLBACK timeout_general_callback(PVOID param, BOOLEAN timer_or_wait_fired GCC_ATTR_UNUSED_PARAM)
+{
+	struct timeout *t = param;
+	HANDLE l_handle;
+	int res;
+
+	hzp_ref(HZP_EPOLL, t->data);
+#if _WINVER > VISTA
+	if(sizeof(l_handle) > 4)
+		l_handle = (HANDLE)InterlockedExchange64((LONGLONG *)&t->t_handle, (LONGLONG)INVALID_HANDLE_VALUE);
+	else
+#endif
+		l_handle = (HANDLE)InterlockedExchange((LONG *)&t->t_handle, (LONG)INVALID_HANDLE_VALUE);
+	if(l_handle != INVALID_HANDLE_VALUE)
+		DeleteTimerQueueTimer(tq_handle, l_handle, NULL);
+	update_local_time();
+	res = t->fun(t->data);
+	if(res)
+		timeout_add(t, res);
+	hzp_unref(HZP_EPOLL);
+	InterlockedDecrement(&refill_count);
+}
+
+bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
+{
+	if(!CreateTimerQueueTimer(
+		&new_timeout->t_handle, /* timer handle */
+		tq_handle, /* timer queue */
+		timeout_general_callback, /* callback */
+		new_timeout, /* callback param */
+		to2msec(timeout), /* due time */
+		0, /* period */
+		WT_EXECUTEINTIMERTHREAD /* flags */
+	)) {
+		errno = GetLastError();
+		return false;
+	}
+	return true;
+}
+
+bool timeout_advance(struct timeout *timeout, unsigned int advancement)
+{
+	if(likely(timeout->t_handle != INVALID_HANDLE_VALUE)) {
+		if(!ChangeTimerQueueTimer(tq_handle, timeout->t_handle, advancement, 0)) {
+			errno = GetLastError();
+			return false;
+		}
+		return true;
+	}
+	return timeout_add(timeout, advancement);
+}
+
+bool timeout_cancel(struct timeout *who_to_cancel)
+{
+	HANDLE l_handle;
+
+#if _WINVER > VISTA
+	if(sizeof(l_handle) > 4)
+		l_handle = (HANDLE)InterlockedExchange64((LONGLONG *)&who_to_cancel->t_handle, (LONGLONG)INVALID_HANDLE_VALUE);
+	else
+#endif
+		l_handle = (HANDLE)InterlockedExchange((LONG *)&who_to_cancel->t_handle, (LONG)INVALID_HANDLE_VALUE);
+	if(l_handle != INVALID_HANDLE_VALUE)
+	{
+		if(!DeleteTimerQueueTimer(tq_handle, l_handle, INVALID_HANDLE_VALUE)) {
+			errno = GetLastError();
+			return false;
+		}
+	}
+	return true;
+}
+
+void timeout_timer_task_abort(void)
+{
+	DeleteTimerQueueEx(tq_handle, INVALID_HANDLE_VALUE);
+}
+
+static VOID CALLBACK timeout_1sec(PVOID param GCC_ATTR_UNUSED_PARAM, BOOLEAN timer_or_wait_fired GCC_ATTR_UNUSED_PARAM)
+{
+	time_t now = time(NULL);
+	set_master_time(now);
+	if(InterlockedDecrement(&refill_count) < 0) {
+		refill_count = EVENT_SPACE / 2;
+		g2_packet_local_refill();
+	} else
+		InterlockedIncrement(&refill_count);
+}
+
+static VOID CALLBACK timeout_thread_setup(PVOID param GCC_ATTR_UNUSED_PARAM, BOOLEAN timer_or_wait_fired GCC_ATTR_UNUSED_PARAM)
+{
+	/* make our hzp ready */
+	hzp_alloc();
+	g2_packet_local_alloc_init();
+}
+
+void *timeout_timer_task(void *param GCC_ATTR_UNUSED_PARAM)
+{
+	time_t now;
+	HANDLE ts_handle;
+
+	now = time(NULL);
+	set_master_time(now);
+	refill_count = EVENT_SPACE / 2;
+
+	tq_handle = CreateTimerQueue();
+	if(!tq_handle) {
+		errno = GetLastError();
+		logg_errno(LOGF_ERR, "couldn't create timer queue");
+		return NULL;
+	}
+
+	if(!CreateTimerQueueTimer(
+		&t1_handle, /* timer handle */
+		tq_handle, /* timer queue */
+		timeout_1sec, /* callback */
+		NULL, /* callback param */
+		1000, /* due time */
+		1000, /* period */
+		WT_EXECUTEINTIMERTHREAD /* flags */
+	)) {
+		errno = GetLastError();
+		logg_errno(LOGF_ERR, "couldn't create timer");
+		return NULL;
+	}
+
+
+	if(!CreateTimerQueueTimer(
+		&ts_handle, /* timer handle */
+		tq_handle, /* timer queue */
+		timeout_thread_setup, /* callback */
+		NULL, /* callback param */
+		0, /* due time */
+		0, /* period */
+		WT_EXECUTEINTIMERTHREAD|WT_EXECUTEONLYONCE /* flags */
+	)) {
+		errno = GetLastError();
+		logg_errno(LOGF_ERR, "couldn't create timer");
+		return NULL;
+	}
+
+	server.status.all_abord[THREAD_TIMER] = true;
+	return NULL;
+}
+#endif
 
 /*@unused@*/
 static char const rcsid_t[] GCC_ATTR_USED_VAR = "$Id: timeout.c,v 1.14 2005/11/05 09:57:22 redbully Exp redbully $";
