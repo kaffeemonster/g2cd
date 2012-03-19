@@ -2,7 +2,7 @@
  * my_epoll_win.c
  * wrapper to get epoll AND poll on windows systems
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,6 +24,7 @@
  */
 
 #include <windows.h>
+#include <ws2tcpip.h>
 #include <stdarg.h>
 
 /*
@@ -88,6 +89,29 @@ typedef BOOL (WINAPI *connect_ex_ptr_t)(SOCKET, const struct sockaddr *, int, PV
 # define WSAID_WSARECVMSG {0xf689d7c8,0x6f1f,0x436b,{0x8a,0x53,0xe5,0x4f,0xe3,0x51,0xc3,0x22}}
 #endif
 
+#if defined(HAVE_IP6_PKTINFO)
+# define STRUCT_SIZE (sizeof(struct in6_pktinfo))
+#elif defined(HAVE_IP_PKTINFO)
+# define STRUCT_SIZE (sizeof(struct in_pktinfo))
+#elif HAVE_DECL_IP_RECVDSTADDR == 1
+# ifdef HAVE_IPV6
+#  define STRUCT_SIZE (sizeof(struct in6_addr))
+# else
+#  define STRUCT_SIZE (sizeof(struct in_addr))
+# endif
+#else
+# define STRUCT_SIZE (256)
+#endif
+
+/* broken mingw header... */
+#ifdef WSA_CMSG_SPACE
+# define CMSG_SPACE(x) WSA_CMSG_SPACE(x)
+#endif
+#ifndef CMSG_SPACE
+# define __CMSG_ALIGN(p) (((unsigned)(p) + sizeof(int) - 1) & (~(sizeof(int) - 1)))
+# define CMSG_SPACE(len) (__CMSG_ALIGN(sizeof(my_cmsghdr)) + __CMSG_ALIGN(len))
+#endif
+
 /*
  *
  */
@@ -125,7 +149,9 @@ struct some_fd_data
 		int all;
 	} u;
 	enum sock_type st;
+	struct sockaddr addr;
 	struct win_buff r_buf, w_buf;
+	char cbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
 };
 
 /*
@@ -216,11 +242,15 @@ out:
 static int start_read_tcp(struct some_fd_data *d)
 {
 	int res;
+	DWORD flags = 0;
+
+	d->r_b.buf = buffer_start(d->r_buf);
+	d->r_b.len = buffer_remaining(d->r_buf);
 	/*
 	 * init r_b,
 	 * (re)init r_o
 	 */
-	res = WSARecv(d->fd, &d->r_b, 1, NULL, 0, &d->r_o, NULL /* comp routine?? */);
+	res = WSARecv(d->fd, &d->r_b, 1, NULL, &flags, &d->r_o, NULL /* comp routine?? */);
 	if(SOCKET_ERROR == res)
 	{
 		if(WSA_IO_PENDING == s_errno)
@@ -261,8 +291,17 @@ static int start_read_udp(struct some_fd_data *d)
 {
 	int res;
 
+	d->r_m.lpBuffers = &d->r_b;
+	d->r_b.buf = buffer_start(d->r_buf);
+	d->r_b.len = buffer_remaining(d->r_buf);
+	d->r_m.dwBufferCount = 1;
+	d->r_m.name = &d->addr;
+	d->r_m.namelen = sizeof(d->addr);
+	d->r_m.Control.buf = d->cbuf;
+	d->r_m.Control.len = sizeof(d->cbuf);
+	/* these flags are only OK because we never use them... */
+	d->r_m.dwFlags = 0;
 	/*
-	 * init r_m
 	 * init r_buf,
 	 * (re)init r_o
 	 */
@@ -461,11 +500,30 @@ int my_epoll_wait(some_fd epfd, struct epoll_event *events, int maxevents GCC_AT
 	if(timeout < 0)
 		timeout = INFINITE;
 
-	if(!GetQueuedCompletionStatus(ep, &res_bytes, &ckey, &ovl, timeout)) {
+	if(!GetQueuedCompletionStatus(ep, &res_bytes, &ckey, &ovl, timeout))
+	{
+		DWORD err = GetLastError();
 		if(!ovl)
-			return 0; /* timeout */
-		errno = GetLastError();
-		return -1;
+		{
+			/* process failes comleted i/o request */
+			errno = err;
+			return -1;
+		}
+		else
+		{
+			if(WAIT_TIMEOUT == err)
+				return 0; /* timeout */
+			else
+			{
+				/* bad call to GetQueuedCompletionStatus */
+				errno = err;
+				return -1;
+			}
+		}
+	}
+	else
+	{
+		/* OK, success, what now... */
 	}
 
 	return -1;
@@ -520,7 +578,7 @@ some_fd my_epoll_socket(int domain, int type, int protocol)
 		set_s_errno(ENOMEM);
 		return -1;
 	}
-	memset(d, 0, offsetof(struct some_fd_data, r_buf));
+	memset(d, 0, offsetof(struct some_fd_data, addr));
 
 	d->fd = socket(domain, type, protocol);
 	if(INVALID_SOCKET == d->fd) {
