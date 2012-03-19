@@ -42,7 +42,7 @@
 # define DEFAULT_CONFIG_FILE	CONFIGURED_CONF_DIR/g2cd.conf
 #else
 # define DEFAULT_PORT		5000
-# define DEFAULT_DATA_ROOT_DIR	./
+# define DEFAULT_DATA_ROOT_DIR	.
 # define DEFAULT_CONFIG_FILE	g2cd.conf
 #endif
 #define DEFAULT_ADDR6	in6addr_any

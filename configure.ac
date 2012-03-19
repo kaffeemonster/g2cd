@@ -539,9 +539,9 @@ AC_SEARCH_LIBS([getaddrinfo], [resolv])
 AC_SEARCH_LIBS([sched_yield], [rt])
 case "$host" in
 	*win32*)
-		LIBS="-lws2_32 $LIBS";;
+		LIBS="-lws2_32 -lodbc32 $LIBS";;
 	*mingw*)
-		LIBS="-lws2_32 $LIBS";;
+		LIBS="-lws2_32 -lodbc32 $LIBS";;
 esac
 
 # Checks for header files.
@@ -604,6 +604,12 @@ if test x"$disable_dbus" = xno; then
 	fi
 fi
 
+case "$host" in
+	*win32*)
+		;;
+	*mingw*)
+		;;
+	*)
 # do you have db.h or ndbm.h?
 AC_CHECK_HEADER([db.h], [have_db_h=yes],[have_db_h=no][])
 if test x"$have_db_h" = xyes; then
@@ -663,6 +669,8 @@ if test x"$have_db_h" = xno; then
 		AC_SEARCH_LIBS([gdbm_open], [ndbm dbm gdbm gdbm_compat], [], [AC_MSG_ERROR(can not find gdbm!)])
 	fi
 fi
+	;;
+esac
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL

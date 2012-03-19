@@ -24,10 +24,12 @@
  */
 
 #ifdef WIN32
+# define W32_NEED_DB
 # define _WIN32_WINNT 0x0501
 # include <windows.h>
 # include <signal.h>
 # include <errno.h>
+# include <fcntl.h>
 # include "other.h"
 # include "my_pthread.h"
 # include "combo_addr.h"
@@ -729,6 +731,608 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 	if(oldact)
 		oldact->sa_handler = o_hand;
 	return 0;
+}
+
+#define FSUF_ACCDB ".accdb"
+#define FSUF_MDB ".mdb"
+#define FSUF_MAX FSUF_ACCDB
+#define FSUF_NUM 2
+// "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DSN='';DBQ=C:\\Northwind 2007.accdb;"
+#define CHUNK1 "Driver={Microsoft Access Driver ("
+#define CHUNK2 ")};DSN='';DBQ="
+#define DBREADONLY "READONLY=false"
+#define mempcpy(dst, src, len) ((void *)((char *)memcpy(dst, src, len) + len))
+
+static SQLHENV our_odbc_env;
+
+#define odbc_error(x, y, z) odbc_error_int(x, y, z, __func__, __LINE__)
+#define odbc_error_dbc(y, z) odbc_error(SQL_HANDLE_DBC, y, z)
+#define odbc_error_stmt(y, z) odbc_error(SQL_HANDLE_STMT, y, z)
+static noinline void odbc_error_int(SQLSMALLINT type, SQLHANDLE h, const char *t, const char *func, const unsigned int line)
+{
+	static char error_buf[1024 + 1];
+	char sql_state[8];
+	SQLINTEGER native_error;
+	SQLSMALLINT rt_len;
+	SQLRETURN res;
+
+	res = SQLGetDiagRec(
+		type,
+		h,
+		1,
+		(SQLCHAR *)sql_state,
+		&native_error, /* native error ptr */
+		(SQLCHAR *)error_buf, /**/
+		sizeof(error_buf),
+		&rt_len
+	);
+	if(SQL_SUCCEEDED(res))
+		logg_more(LOGF_WARN, __FILE__, func, line, 0, "%s Error (%s,%#010x): %s\n", t, sql_state, native_error, error_buf);
+	else
+		logg_more(LOGF_WARN, __FILE__, func, line, 0, "Error SQLGetDiagRec failed (%#06hx)\n", res);
+}
+
+static BOOLEAN try_one_connect(DBM *ret, const char *f, const char *try_suf, BOOLEAN driver_n, BOOLEAN new_db)
+{
+	char *con_str, *wptr;
+	SQLSMALLINT cl_t;
+	SQLRETURN res;
+	size_t o_len, fnlen;
+
+	o_len  = fnlen = strlen(f);
+	o_len += (FSUF_NUM + 1) * (sizeof(FSUF_MAX) + 3) + str_size(CHUNK1) + str_size(CHUNK2) + +str_size(DBREADONLY) + 12;
+	con_str = malloc(o_len);
+
+	if(new_db && 0)
+	{
+		wptr = mempcpy(con_str, f, fnlen);
+		strcpy(wptr, try_suf);
+		logg_develd_old("d_str: \"%s\"\n", con_str);
+		DeleteFile(con_str);
+	}
+
+	wptr = mempcpy(con_str, CHUNK1, str_size(CHUNK1));
+	*wptr++ = '*';
+	wptr = mempcpy(wptr, FSUF_MDB, str_size(FSUF_MDB));
+	if(driver_n) {
+		*wptr++ = ','; *wptr++ = ' '; *wptr++ = '*';
+		wptr = mempcpy(wptr, FSUF_ACCDB, str_size(FSUF_ACCDB));
+	}
+	wptr = mempcpy(wptr, CHUNK2, str_size(CHUNK2));
+	wptr = mempcpy(wptr, f, fnlen);
+	wptr = mempcpy(wptr, try_suf, strlen(try_suf));
+	*wptr++ = ';';
+//	wptr = mempcpy(wptr, DBREADONLY, str_size(DBREADONLY));
+//	*wptr++ = ';';
+	*wptr++ = '\0';
+	logg_develd_old("c_str: \"%s\"\n", con_str);
+
+	res = SQLDriverConnect(
+		ret->dbc, /* connection handle */
+		NULL, /* window handle */
+		(SQLCHAR *)con_str, /* in connection string */
+		SQL_NTS, /* connection string length */
+		NULL, /* out connection string buffer */
+		0, /* size of the out connection string buffer */
+		&cl_t, /* length of the out connection string */
+		SQL_DRIVER_NOPROMPT
+	);
+	free(con_str);
+
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_dbc(ret->dbc, "SQLDriverConnect");
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static noinline BOOLEAN init_db_environ(void)
+{
+	/* Allocate an enviroment handle */
+	if(SQL_NULL_HANDLE == our_odbc_env)
+	{
+		SQLRETURN res = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &our_odbc_env);
+		if(!SQL_SUCCEEDED(res))
+			return FALSE;
+		res = SQLSetEnvAttr(our_odbc_env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
+		if(!SQL_SUCCEEDED(res))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+#define QUERY_CREAT "CREATE TABLE g2cd_data (mkey VARCHAR("str_it(MAX_KEY_LEN)") PRIMARY KEY, mvalue VARCHAR("str_it(MAX_VALUE_LEN)"));"
+DBM *dbm_open(const char *f, int flags, int mode GCC_ATTR_UNUSED_PARAM)
+{
+	char *rptr, *wptr;
+	DBM *ret;
+	SQLHSTMT stmt;
+	SQLLEN len;
+	SQLRETURN res;
+	BOOLEAN new_db = O_TRUNC == (flags & O_TRUNC), is_f_orig = TRUE;
+
+	if(!init_db_environ())
+		return NULL;
+
+	if('.' == f[0])
+	{
+		size_t t_len = 128, fnlen = strlen(f) + 1;
+		wptr = NULL;
+
+		do
+		{
+			free(wptr);
+			wptr = malloc(t_len + fnlen);
+			if(!wptr)
+				return NULL;
+			rptr = _getcwd(wptr, t_len);
+			t_len *= 2;
+		} while(!rptr);
+		f = strcat(strcat(rptr, "\\"), f);
+		is_f_orig = FALSE;
+	}
+	if((wptr = strchr(f, '/')))
+	{
+		size_t fnlen = strlen(f) + 1;
+		rptr = malloc(fnlen);
+		if(!rptr)
+			return NULL;
+		memcpy(rptr, f, fnlen);
+		wptr = &rptr[wptr - f];
+		if(!is_f_orig)
+			free((void *)(intptr_t)f);
+		f = rptr;
+		is_f_orig = FALSE;
+		do {
+			*wptr++ = '\\';
+		} while((wptr = strchr(wptr, '/')));
+	}
+
+	ret = calloc(1, sizeof(*ret));
+	if(!ret)
+		return NULL;
+
+	/* Allocate a connection handle */
+	res = SQLAllocHandle(SQL_HANDLE_DBC, our_odbc_env, &ret->dbc);
+	if(!SQL_SUCCEEDED(res))
+		goto out_free;
+
+	if(!try_one_connect(ret, f, FSUF_ACCDB, TRUE, new_db)) {
+		if(!try_one_connect(ret, f, FSUF_MDB, TRUE, new_db)) {
+			if(!try_one_connect(ret, f, FSUF_MDB, FALSE, new_db))
+				goto out_freeh;
+		}
+	}
+
+	res = SQLSetConnectAttr(ret->dbc, SQL_ATTR_ACCESS_MODE, (SQLPOINTER)SQL_MODE_READ_WRITE, 0);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLSetConnectAttr failed\n");
+		goto out_freed;
+	}
+
+	res = SQLAllocHandle(SQL_HANDLE_STMT, ret->dbc, &stmt);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLAllocHandle failed\n");
+		goto out_freed;
+	}
+
+	res = SQLTables(stmt,
+		NULL, /* Catalog */
+		SQL_NTS,
+		NULL, /* schema */
+		SQL_NTS,
+		(SQLCHAR *)(intptr_t)"g2cd_data", /* table name */
+		SQL_NTS,
+		(SQLCHAR *)(intptr_t)"TABLE", /* table type */
+		SQL_NTS
+	);
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLTables\n");
+		goto out_frees;
+	}
+
+	res = SQLRowCount(stmt, &len);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLRowCount failed\n");
+		goto out_frees;
+	}
+
+	if(-1 == len)
+	{
+		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+
+		res = SQLAllocHandle(SQL_HANDLE_STMT, ret->dbc, &stmt);
+		if(!SQL_SUCCEEDED(res)) {
+			logg_devel("SQLAllocHandle failed\n");
+			goto out_frees;
+		}
+
+		res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_CREAT, str_size(QUERY_CREAT));
+		if(!SQL_SUCCEEDED(res)) {
+			char sql_state[8];
+			SQLINTEGER native_error;
+			SQLSMALLINT rt_len;
+
+			res = SQLGetDiagRec(
+				SQL_HANDLE_STMT,
+				stmt,
+				1,
+				(SQLCHAR *)sql_state,
+				&native_error, /* native error ptr */
+				(SQLCHAR *)ret->error_buf, /**/
+				sizeof(ret->error_buf),
+				&rt_len
+			);
+			if(SQL_SUCCEEDED(res)) {
+				if(strcmp("42S01", sql_state) != 0) {
+						logg_posd(LOGF_WARN, "Error in SQLExecDirect (%s,%#010x): %s\n", sql_state, native_error, ret->error_buf);
+					goto out_frees;
+				}
+			} else
+				goto out_frees;
+		}
+	}
+	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+
+	if(O_RDONLY == (flags & (O_RDONLY|O_WRONLY|O_RDWR)))
+		res = SQLSetConnectAttr(ret->dbc, SQL_ATTR_ACCESS_MODE, (SQLPOINTER)SQL_MODE_READ_ONLY, 0);
+
+	if(!is_f_orig)
+		free((void *)(intptr_t)f);
+
+	return ret;
+out_frees:
+	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+out_freed:
+	SQLDisconnect(ret->dbc);
+out_freeh:
+	SQLFreeHandle(SQL_HANDLE_DBC, ret->dbc);
+out_free:
+	free(ret);
+	if(!is_f_orig)
+		free((void *)(intptr_t)f);
+	return NULL;
+}
+
+void dbm_close(DBM *db)
+{
+	if(db->stmt != SQL_NULL_HSTMT)
+		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
+	SQLDisconnect(db->dbc);
+	SQLFreeHandle(SQL_HANDLE_DBC, db->dbc);
+	db->dbc = SQL_NULL_HDBC;
+	free(db);
+}
+
+#define QUERY_SELV "SELECT mvalue FROM g2cd_data WHERE mkey = ?;"
+datum dbm_fetch(DBM *db, datum key)
+{
+	signed char receive_buf[MAX_VALUE_LEN * 2 + 1];
+	datum value = {NULL, 0};
+	char *wptr;
+	SQLHSTMT stmt;
+	SQLRETURN res;
+	SQLLEN len;
+	SQLLEN rlen;
+	size_t i;
+
+	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out;
+
+//HACK: we know the key are strings
+	len = key.dsize-1;
+	res = SQLBindParameter(
+		stmt, /* statement handle */
+		1, /* parameter number */
+		SQL_PARAM_INPUT, /* param in/out type */
+		SQL_C_CHAR, /* C data type */
+		SQL_VARCHAR, /* SQL data type */
+		MAX_KEY_LEN, /* column size */
+		0, /* decimal digits */
+		key.dptr, /* parameter value ptr */
+		key.dsize-1, /* buffer len */
+		&len /* strlen or indp */
+	);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLBindCol(stmt, 1, SQL_C_CHAR, receive_buf, sizeof(receive_buf), &rlen);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_SELV, str_size(QUERY_SELV));
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLFetch(stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	if(SQL_NULL_DATA == rlen)
+		goto out_freeh;
+
+	value.dptr  = &db->val_store;
+	value.dsize = (size_t)rlen / 2;
+	for(i = 0, wptr = value.dptr; i < (size_t)rlen; i += 2)
+	{
+		signed char c, b;
+		b  = receive_buf[i] - ('a' - 10);
+		b  = b >= 0 ? b : b + 39;
+		c  = b << 4;
+		b  = receive_buf[i+1] - ('a' - 10);
+		b  = b >= 0 ? b : b + 39;
+		c |= b;
+		wptr[i/2] = c;
+	}
+
+out_freeh:
+	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+out:
+	return value;
+}
+
+#define QUERY_KEY "SELECT mkey FROM g2cd_data ORDER BY mkey;"
+datum dbm_firstkey(DBM *db)
+{
+	datum value = {NULL, 0};
+	SQLRETURN res;
+
+	if(db->stmt != SQL_NULL_HSTMT)
+		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
+
+	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &db->stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out;
+
+	res = SQLBindCol(db->stmt, 1, SQL_C_CHAR, db->key_store, sizeof(db->key_store), &db->rlen);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLExecDirect(db->stmt, (SQLCHAR *)(intptr_t)QUERY_KEY, str_size(QUERY_KEY));
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLFetch(db->stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	if(SQL_NULL_DATA == db->rlen || -1 == db->rlen)
+		goto out_freeh;
+
+	value.dptr  = db->key_store;
+	value.dsize = db->rlen;
+
+out:
+	return value;
+out_freeh:
+	free(db->stmt);
+	db->stmt = SQL_NULL_HSTMT;
+	goto out;
+}
+
+datum dbm_nextkey(DBM *db)
+{
+	datum value = {NULL, 0};
+	SQLRETURN res;
+
+	if(db->stmt == SQL_NULL_HSTMT)
+		return dbm_firstkey(db);
+
+	res = SQLFetch(db->stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	if(SQL_NULL_DATA == db->rlen || -1 == db->rlen)
+		goto out_freeh;
+
+	value.dptr  = db->key_store;
+	value.dsize = db->rlen;
+
+out:
+	return value;
+out_freeh:
+	free(db->stmt);
+	db->stmt = SQL_NULL_HSTMT;
+	goto out;
+}
+
+#define QUERY_UPD "UPDATE g2cd_data SET mvalue= ? WHERE mkey = ?;"
+#define QUERY_INS "INSERT INTO g2cd_data VALUES(?, ?);"
+int dbm_store(DBM *db, datum key, datum content, int store_mode)
+{
+	unsigned char send_buf[MAX_VALUE_LEN * 2 + 1];
+	SQLHSTMT stmt;
+	SQLRETURN res;
+	SQLLEN klen, clen, len;
+	int ret = -1;
+
+	if(store_mode & ~(DBM_INSERT|DBM_REPLACE)) {
+		errno = EINVAL;
+		return ret;
+	}
+	if((store_mode & (DBM_INSERT|DBM_REPLACE)) == (DBM_INSERT|DBM_REPLACE)) {
+		errno = EINVAL;
+		return ret;
+	}
+	if(content.dsize > MAX_VALUE_LEN || key.dsize-1  > MAX_KEY_LEN) {
+		errno = EINVAL;
+		return ret;
+	}
+
+	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out;
+
+	*to_base16(send_buf, content.dptr, content.dsize) = '\0';
+
+	if(store_mode & DBM_REPLACE)
+	{
+		clen = content.dsize * 2;
+		res = SQLBindParameter(
+			stmt, /* statement handle */
+			1, /* parameter number */
+			SQL_PARAM_INPUT, /* param in/out type */
+			SQL_C_CHAR, /* C data type */
+			SQL_VARCHAR, /* SQL data type */
+			MAX_VALUE_LEN, /* column size */
+			0, /* decimal digits */
+			send_buf, /* parameter value ptr */
+			content.dsize * 2, /* buffer len */
+			&clen /* strlen or indp */
+		);
+		if(!SQL_SUCCEEDED(res)) {
+			logg_devel("SQLBindParameter failed\n");
+			goto out_freeh;
+		}
+
+//HACK: we know the key are strings
+		klen = key.dsize-1;
+		res = SQLBindParameter(
+			stmt, /* statement handle */
+			2, /* parameter number */
+			SQL_PARAM_INPUT, /* param in/out type */
+			SQL_C_CHAR, /* C data type */
+			SQL_VARCHAR, /* SQL data type */
+			MAX_KEY_LEN, /* column size */
+			0, /* decimal digits */
+			key.dptr, /* parameter value ptr */
+			key.dsize-1, /* buffer len */
+			&klen /* strlen or indp */
+		);
+		if(!SQL_SUCCEEDED(res)) {
+			logg_devel("SQLBindParameter failed\n");
+			goto out_freeh;
+		}
+
+		res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_UPD, str_size(QUERY_UPD));
+		/* when a update/insert/delete affected no data, we get SQL_NO_DATA */
+		if(SQL_NO_DATA != res)
+		{
+			if(!SQL_SUCCEEDED(res)) {
+				odbc_error_stmt(stmt, "SQLDriverConnect");
+				goto out_freeh;
+			}
+
+			res = SQLRowCount(stmt, &len);
+			if(!SQL_SUCCEEDED(res)) {
+				logg_devel("SQLRowCount failed\n");
+				goto out_freeh;
+			}
+
+			if(len != -1) {
+				ret = 0;
+				goto out_freeh;
+			}
+		}
+		res = SQLFreeStmt(stmt, SQL_CLOSE);
+		res = SQLFreeStmt(stmt, SQL_UNBIND);
+		res = SQLFreeStmt(stmt, SQL_RESET_PARAMS);
+	}
+
+//HACK: we know the key are strings
+	klen = key.dsize-1;
+	res = SQLBindParameter(
+		stmt, /* statement handle */
+		1, /* parameter number */
+		SQL_PARAM_INPUT, /* param in/out type */
+		SQL_C_CHAR, /* C data type */
+		SQL_VARCHAR, /* SQL data type */
+		MAX_KEY_LEN, /* column size */
+		0, /* decimal digits */
+		key.dptr, /* parameter value ptr */
+		key.dsize-1, /* buffer len */
+		&klen /* strlen or indp */
+	);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLBindParameter failed\n");
+		goto out_freeh;
+	}
+
+	clen = content.dsize * 2;
+	res = SQLBindParameter(
+		stmt, /* statement handle */
+		2, /* parameter number */
+		SQL_PARAM_INPUT, /* param in/out type */
+		SQL_C_CHAR, /* C data type */
+		SQL_VARCHAR, /* SQL data type */
+		MAX_VALUE_LEN, /* column size */
+		0, /* decimal digits */
+		send_buf, /* parameter value ptr */
+		content.dsize * 2, /* buffer len */
+		&clen /* strlen or indp */
+	);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLBindParameter failed\n");
+		goto out_freeh;
+	}
+
+	res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_INS, str_size(QUERY_INS));
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLDriverConnect");
+		goto out_freeh;
+	}
+
+	res = SQLRowCount(stmt, &len);
+	if(!SQL_SUCCEEDED(res)) {
+		logg_devel("SQLRowCount failed\n");
+		goto out_freeh;
+	}
+
+	if(len != -1)
+		ret = 0;
+
+out_freeh:
+	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+out:
+	return ret;
+}
+
+#define QUERY_DEL "DELETE FROM g2cd_data WHERE mkey = ?;"
+int dbm_delete(DBM *db, datum key)
+{
+	SQLHSTMT stmt;
+	SQLRETURN res;
+	SQLLEN len;
+	int ret = -1;
+
+	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
+	if(!SQL_SUCCEEDED(res))
+		goto out;
+
+//HACK: we know the key are strings
+	len = key.dsize-1;
+	res = SQLBindParameter(
+		stmt, /* statement handle */
+		1, /* parameter number */
+		SQL_PARAM_INPUT, /* param in/out type */
+		SQL_C_CHAR, /* C data type */
+		SQL_VARCHAR, /* SQL data type */
+		MAX_KEY_LEN, /* column size */
+		0, /* decimal digits */
+		key.dptr, /* parameter value ptr */
+		key.dsize-1, /* buffer len */
+		&len /* strlen or indp */
+	);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_DEL, str_size(QUERY_DEL));
+	/* when a update/insert/delete affected no data, we get SQL_NO_DATA */
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	res = SQLRowCount(stmt, &len);
+	if(!SQL_SUCCEEDED(res))
+		goto out_freeh;
+
+	if(len != -1)
+		ret = 0;
+
+out_freeh:
+	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+out:
+	return ret;
 }
 
 /*@unused@*/

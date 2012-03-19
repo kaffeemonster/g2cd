@@ -45,17 +45,20 @@
 #ifdef DRD_ME
 # include <valgrind/drd.h>
 #endif
+#define W32_NEED_DB
 #include "lib/my_pthread.h"
-#ifdef HAVE_DB
-# define DB_DBM_HSEARCH 1
-# define DBM_TYPE DBM *
-# include <db.h>
-#elif defined(HAVE_NDBM_H)
-# include <ndbm.h>
-# define DBM_TYPE DBM *
-#else
-# include <gdbm.h>
-# define DBM_TYPE  GDBM_FILE
+#ifndef WIN32
+# include <netdb.h>
+# ifdef HAVE_DB
+#  define DB_DBM_HSEARCH 1
+#  define DBM_TYPE DBM *
+#  include <db.h>
+# elif defined(HAVE_NDBM_H)
+#  include <ndbm.h>
+#  define DBM_TYPE DBM *
+# else
+#  include <gdbm.h>
+#  define DBM_TYPE  GDBM_FILE
 static DBM_TYPE dbm_open(const char *f, int flags, int mode)
 {
 	int nflags, nmode;
@@ -71,21 +74,20 @@ static DBM_TYPE dbm_open(const char *f, int flags, int mode)
 		nflags = GDBM_WRITER, mode = 0;
 	return gdbm_open((char *)(intptr_t)f, 0, nflags, nmode, NULL);
 }
-# define dbm_close      gdbm_close
-# define dbm_fetch      gdbm_fetch
-# define dbm_store      gdbm_store
-# define dbm_delete     gdbm_delete
-# define dbm_firstkey   gdbm_firstkey
-# define dbm_nextkey(a) gdbm_nextkey(a, gdbm_firstkey(a))
-# define DBM_REPLACE    GDBM_REPLACE
-#endif
-#ifndef WIN32
-# include <netdb.h>
+#  define dbm_close      gdbm_close
+#  define dbm_fetch      gdbm_fetch
+#  define dbm_store      gdbm_store
+#  define dbm_delete     gdbm_delete
+#  define dbm_firstkey   gdbm_firstkey
+#  define dbm_nextkey(a) gdbm_nextkey(a, gdbm_firstkey(a))
+#  define DBM_REPLACE    GDBM_REPLACE
+# endif
 #else
 # ifndef _WIN32_WINNT
 #  define _WIN32_WINNT 0x0501
 # endif
 # include <ws2tcpip.h>
+# define DBM_TYPE DBM *
 #endif
 /* Own */
 #define _G2KHL_C
@@ -146,12 +148,12 @@ enum gwc_res_states
 
 struct gwc
 {
+	const char *url;
 	unsigned int q_count;
 	unsigned int m_count;
 	time_t seen_last;
 	time_t access_last;
 	unsigned int access_period;
-	const char *url;
 };
 
 struct khl_cache_entry
@@ -250,8 +252,10 @@ bool __init g2_khl_init(void)
 	/* open the gwc cache db */
 	if(server.settings.data_root_dir)
 		data_root_dir = server.settings.data_root_dir;
-	else
-		data_root_dir = "./";
+	else {
+		logg_devel("setting datarootdir hard\n");
+		data_root_dir = ".";
+	}
 	if(server.settings.khl.gwc_cache_fname)
 		gwc_cache_fname = server.settings.khl.gwc_cache_fname;
 	else
@@ -1136,13 +1140,14 @@ void g2_khl_end(void)
 		if(server.settings.data_root_dir)
 			data_root_dir = server.settings.data_root_dir;
 		else
-			data_root_dir = "./";
+			data_root_dir = ".";
 
 		name_len  = strlen(data_root_dir);
 		name_len += strlen(server.settings.khl.dump_fname);
-		name = alloca(name_len + 1);
+		name = alloca(name_len + 2);
 
 		wptr = strpcpy(name, data_root_dir);
+		*wptr++ = '/';
 		strcpy(wptr, server.settings.khl.dump_fname);
 
 		cache.khl_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);

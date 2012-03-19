@@ -166,7 +166,7 @@ LIB_MY_PTHREAD_EXTRN(int pthread_key_delete(pthread_key_t key));
 #  define SHUT_RDWR SD_BOTH
 /* wrapper */
 LIB_MY_PTHREAD_EXTRN(int getpagesize(void));
-#define PRIO_PROCESS 0
+#  define PRIO_PROCESS 0
 LIB_MY_PTHREAD_EXTRN(int getpriority(int which, int who));
 LIB_MY_PTHREAD_EXTRN(int setpriority(int which, int who, int prio));
 LIB_MY_PTHREAD_EXTRN(struct tm *localtime_r(const time_t *timep, struct tm *result));
@@ -178,6 +178,33 @@ LIB_MY_PTHREAD_EXTRN(int sigaction(int signum, const struct sigaction *act, stru
 #  define ETIMEDOUT 7954
 #  define ENOBUFS 7956
 #  define EWOULDBLOCK WSAEWOULDBLOCK
+
+#  ifdef W32_NEED_DB
+#   include <sqlext.h>
+#   define MAX_KEY_LEN 255
+#   define MAX_VALUE_LEN 80
+typedef struct {
+	void *dptr;
+	size_t dsize;
+} datum;
+typedef struct {
+	SQLHDBC dbc;
+	SQLHSTMT stmt;
+	SQLLEN rlen;
+	char key_store[MAX_KEY_LEN+1];
+	char val_store[MAX_VALUE_LEN];
+	char error_buf[1024+1];
+} DBM;
+LIB_MY_PTHREAD_EXTRN(DBM *dbm_open(const char *f, int flags, int mode));
+LIB_MY_PTHREAD_EXTRN(void dbm_close(DBM *));
+LIB_MY_PTHREAD_EXTRN(datum dbm_fetch(DBM *, datum));
+LIB_MY_PTHREAD_EXTRN(datum dbm_firstkey(DBM *));
+LIB_MY_PTHREAD_EXTRN(datum dbm_nextkey(DBM *));
+#   define DBM_INSERT 1
+#   define DBM_REPLACE 2
+LIB_MY_PTHREAD_EXTRN(int dbm_store(DBM *, datum, datum, int));
+LIB_MY_PTHREAD_EXTRN(int dbm_delete(DBM *, datum));
+#  endif
 
 # endif
 #endif

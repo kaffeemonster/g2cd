@@ -109,7 +109,7 @@ bool __init g2_guid_init(void)
 	if(server.settings.data_root_dir)
 		data_root_dir = server.settings.data_root_dir;
 	else
-		data_root_dir = "./";
+		data_root_dir = ".";
 
 	name_len  = strlen(data_root_dir);
 	name_len += strlen(server.settings.guid.dump_fname);
@@ -184,13 +184,14 @@ void g2_guid_end(void)
 		if(server.settings.data_root_dir)
 			data_root_dir = server.settings.data_root_dir;
 		else
-			data_root_dir = "./";
+			data_root_dir = ".";
 
 		name_len  = strlen(data_root_dir);
 		name_len += strlen(server.settings.guid.dump_fname);
-		name = alloca(name_len + 1);
+		name = alloca(name_len + 2);
 
 		wptr = strpcpy(name, data_root_dir);
+		*wptr++ = '/';
 		strcpy(wptr, server.settings.guid.dump_fname);
 
 		cache.guid_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);

@@ -600,6 +600,7 @@ $(MPL)/adler32.o: $(ADLER32SRC)
 $(MPL)/ansi_prng.o: $(MPL)/ansi_prng.h $(MPL)/aes.h
 $(MPL)/aes.o: $(AESSRC) $(MPL)/aes.h
 $(MPL)/my_epoll.o: $(MPL)/my_epoll.h $(EPOLLSRS)
+$(MPL)/my_pthread.o: $(MPL)/my_pthread.h $(MPL)/other.h config.h
 $(MPL)/log_facility.o: $(MPL)/log_facility.h $(MPL)/sec_buffer.h $(MPL)/itoa.h $(MPL)/my_bitopsm.h G2MainServer.h
 $(MPL)/print_ts.o: $(MPL)/itoa.h
 $(MPL)/palloc.o: $(MPL)/palloc.h
