@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address, large funcs
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -232,6 +232,31 @@ bool combo_addr_is_public(const union combo_addr *addr)
 	/* according to RFC 3330 & RFC 5735 */
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return false;
+	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments */
+		return false;
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+		return false;
+	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
+		return false; /* only sinks, not source */
+	/* APNIC provided documentation prefixes */
+	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
+		return false;
+	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
+		return false;
+	/* 223.255.255.0/24 highest class C
+	   subject to allocation to RIRs  -> RFC 5735 */
+	/* 128.0.0.0/16 lowest class B net
+	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
+		return false;
+	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private */
+		return false;
+	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
+		return false;
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
+		return false;
+	/* 191.255.0.0/16 highest class B
+	   subject to allocation to RIRs  -> RFC 5735 */
 	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
 		return false;
 	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private */
@@ -244,31 +269,6 @@ bool combo_addr_is_public(const union combo_addr *addr)
 	   subject to allocation to RIRs  -> RFC 5735 */
 	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
 		return false;
-	/* 128.0.0.0/16 lowest class B net
-	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
-		return false;
-	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private */
-		return false;
-	/* 191.255.0.0/16 highest class B
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 192.0.0.0/24 lowest class C
-	   Future protocol assignments */
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
-		return false;
-	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
-		return false; /* only sinks, not source */
-	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
-		return false;
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
-		return false;
-	/* APNIC provided documentation prefixes */
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
-		return false;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
-		return false;
-	/* 223.255.255.0/24 highest class C
-	   subject to allocation to RIRs  -> RFC 5735 */
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return false;
 	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
@@ -314,7 +314,24 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 	/* according to RFC 3330 & RFC 5735 */
 	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
 		return true;
-	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
+	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments */
+		return true;
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+		return true;
+	/* APNIC provided documentation prefixes */
+	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
+		return true;
+	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
+		return true;
+	/* 223.255.255.0/24 highest class C
+	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
+		return true; /* only sinks, not source */
+	/* 128.0.0.0/16 lowest class B net
+	   subject to allocation to RIRs  -> RFC 5735 */
+	/* 191.255.0.0/16 highest class B
+	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
 		return true;
 	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
 	   subject to allocation to RIRs? -> RFC 5735 */
@@ -324,25 +341,8 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 	   subject to allocation to RIRs  -> RFC 5735 */
 	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
 		return true;
-	/* 128.0.0.0/16 lowest class B net
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 191.255.0.0/16 highest class B
-	   subject to allocation to RIRs  -> RFC 5735 */
-	/* 192.0.0.0/24 lowest class C
-	   Future protocol assignments */
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
 		return true;
-	if(IP_CMP(a, 0xC0586300, SLASH16)) /* 192.088.099.000/24  6to4 relays anycast */
-		return true; /* only sinks, not source */
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
-		return true;
-	/* APNIC provided documentation prefixes */
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
-		return true;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
-		return true;
-	/* 223.255.255.0/24 highest class C
-	   subject to allocation to RIRs  -> RFC 5735 */
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return true;
 	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
