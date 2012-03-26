@@ -1,7 +1,7 @@
 /* bin2o.c
  * little helper to make a .o from (data)files
  *
- * Copytight (c) 2006 - 2011 Jan Seiffert
+ * Copytight (c) 2006 - 2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -309,11 +309,12 @@ char *to_base16(char *dst, const unsigned char *src, unsigned int len)
 		{
 			t1 = in_h;
 			t2 = in_l;
-			for(i = SOST; i; i--, dst += 2) {
+			for(i = SOST; i; i--) {
 				dst[(i * 2) - 2] = (t1 & 0x000000ff);
 				dst[(i * 2) - 1] = (t2 & 0x000000ff);
 				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
 			}
+			dst += SOST * 2;
 		}
 	}
 

@@ -2,7 +2,7 @@
  * to_base16.c
  * convert binary string to hex, generic impl.
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,11 +74,12 @@ F_NAME(unsigned char *, to_base16, _generic)(unsigned char *dst, const unsigned 
 		{
 			t1 = in_h;
 			t2 = in_l;
-			for(i = CINST; i; i--, dst += 2) {
+			for(i = CINST; i; i--) {
 				dst[(i * 2) - 2] = (t1 & 0x000000ff);
 				dst[(i * 2) - 1] = (t2 & 0x000000ff);
 				t1 >>= BITS_PER_CHAR; t2 >>= BITS_PER_CHAR;
 			}
+			dst += CINST * 2;
 		}
 	}
 #endif
