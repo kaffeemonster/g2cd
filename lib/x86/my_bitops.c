@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -49,6 +49,7 @@ enum cpu_vendor
 	X86_VENDOR_CYRIX,   /* bought by Centauer? */
 	X86_VENDOR_NEXGEN,
 	X86_VENDOR_UMC,
+	X86_VENDOR_RISE,
 };
 
 struct cpuinfo
@@ -483,7 +484,21 @@ static __init void identify_cpu(void)
 				cpu_feature_set(CFEATURE_3DNOW);
 		}
 	}
-	/* Rise mP6 -> TSC, CX8, MMX */
+	if(our_cpu.vendor == X86_VENDOR_RISE)
+	{
+		if(our_cpu.family == 5 &&
+		   (strcmp(our_cpu.model_str.s, "mP6 (Kirin)") == 0 ||
+		    strcmp(our_cpu.model_str.s, "mP6 (Lynx)") == 0))
+		{
+			/*
+			 * Rise mP6 -> TSC, CX8, MMX
+			 * Force CX8 on, the cpu always has it, but it is
+			 * disabled in the feature flags to prevent the
+			 * old NT4 bug. Maybe a BIOS setting, but...
+			 */
+			cpu_feature_set(CFEATURE_CX8);
+		}
+	}
 	/* Transmeta -> MMX, CMOV, later SEP */
 
 	/* AMD performance hints */
@@ -525,7 +540,7 @@ static __init void identify_cpu(void)
 	 *    main crash)
 	 *  - those OS are OLD and IMHO broken
 	 */
-//	cpu_feature_clear(CFEATURE_SSE4_2);
+	cpu_feature_clear(CFEATURE_SSE4_2);
 
 	return;
 }
@@ -561,10 +576,12 @@ __init void cpu_detect_finish(void)
 	}
 
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
+//	puts("before deadly print");
 	logg_posd(LOGF_DEBUG,
 		"Vendor: \"%s\" Family: %d Model: %d Stepping: %d Name: \"%s\"\n",
 		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
 		our_cpu.stepping, our_cpu.model_str.s);
+//	puts("after deadly print");
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
@@ -723,6 +740,8 @@ static __init void identify_vendor(struct cpuinfo *cpu)
 		cpu->vendor = X86_VENDOR_NEXGEN;
 	else if(cmp_vendor(s, "UMC UMC UMC"))
 		cpu->vendor = X86_VENDOR_UMC;
+	else if(cmp_vendor(s, "RiseRiseRise"))
+		cpu->vendor = X86_VENDOR_RISE;
 	else
 		cpu->vendor = X86_VENDOR_OTHER;
 }
@@ -826,9 +845,9 @@ void emit_emms(void)
  * So it has to be big enough, everywhere, kernel, syscall, lib{c|s},
  * apps, and better be consistent (no, it will /not/ blend!).
  * Think of obscure API-funcs (sigstack, swapcontext etc.) used by
- * VMs (python, perl, ruby, java), l33t apps, staticaly linked and
- * finaly binary-only. So changing your libc by installing a patched
- * libc package will not solve it.
+ * VMs (python, perl, ruby, java, javascript), l33t apps, staticaly
+ * linked and finaly binary-only. So changing your libc by installing
+ * a patched libc package will not solve it.
  * While in the browser case, all those 32bit stuff can go to different
  * directories, now we may need new directories with an ABI bump.
  * Programs compiled against the old ABI need also all libs and foo
@@ -1057,7 +1076,7 @@ __init void patch_instruction(void *where, const struct test_cpu_feature *t, siz
 # endif
 }
 #else
-__init void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l)
+__init void patch_instruction(void *where GCC_ATTR_UNUSED_PARAM, const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM, size_t l GCC_ATTR_UNUSED_PARAM)
 {
 }
 #endif
