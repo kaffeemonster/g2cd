@@ -2,7 +2,7 @@
  * config_parser.c
  * config file parser
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -898,7 +898,7 @@ static size_t config_trim_white(struct str_buff *s)
 
 	/* skip whitespace at start */
 	len = str_spn_space(s->t);
-	logg_develd("spn_space: %zu\n", len);
+	logg_develd_old("spn_space: %zu\n", len);
 	s->t   += len;
 	s->len -= len;
 
