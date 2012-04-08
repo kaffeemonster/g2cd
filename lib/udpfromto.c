@@ -58,9 +58,9 @@
 # include <valgrind/drd.h>
 #endif
 /* own */
-#include "udpfromto.h"
 #include "combo_addr.h"
 #include "my_epoll.h"
+#include "udpfromto.h"
 
 /*
  * First we will have to redefine everything and the kitchen sink.
@@ -247,21 +247,21 @@ static struct msg_thread_space *mts_get(void)
  *
  * Now to the init funcs, to hide runtime foo
  */
-static int init_v4(int s, int fam GCC_ATTR_UNUSED_PARAM)
+static int init_v4(some_fd s, int fam GCC_ATTR_UNUSED_PARAM)
 {
 	int err = -1, opt = 1;
 
 #ifdef HAVE_IP_PKTINFO
 	/* Set the IP_PKTINFO option (Linux). */
-	err = setsockopt(s, SOL_IP, IP_PKTINFO, (void *)&opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, SOL_IP, IP_PKTINFO, (void *)&opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
 	 * Set the IP_RECVDSTADDR option (BSD).
 	 * Note: IP_RECVDSTADDR == IP_SENDSRCADDR
 	 */
-	err = setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVIF == 1
-	err = setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, IPPROTO_IP, IP_RECVIF, &opt, sizeof(opt));
 #else
 	opt = opt;
 	s = s;
@@ -270,7 +270,7 @@ static int init_v4(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	return err;
 }
 
-static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
+static int init_v6(some_fd s, int fam GCC_ATTR_UNUSED_PARAM)
 {
 	int err = -1, opt = 1;
 
@@ -287,16 +287,16 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	DRD_IGNORE_VAR(v6pktinfo);
 # endif
 	v6pktinfo = IPV6_RECVPKTINFO;
-	err = setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, SOL_IPV6, IPV6_RECVPKTINFO, &opt, sizeof(opt));
 #  ifdef IPV6_2292PKTINFO
 	if(-1 == err && ENOPROTOOPT == s_errno) {
-		if(-1 != (err = setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
+		if(-1 != (err = my_epoll_setsockopt(s, SOL_IPV6, IPV6_2292PKTINFO, &opt, sizeof(opt))))
 			v6pktinfo = IPV6_2292PKTINFO;
 	}
 #  endif
 # else
 	v6pktinfo = IPV6_PKTINFO;
-	err = setsockopt(s, SOL_IPV6, IPV6_PKTINFO, (void *)&opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, SOL_IPV6, IPV6_PKTINFO, (void *)&opt, sizeof(opt));
 # endif
 #elif HAVE_DECL_IP_RECVDSTADDR == 1
 	/*
@@ -308,7 +308,7 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	 * They don't have IP_PKTINFO vor v4, but IPV6_PKTINFO.
 	 * Give me a break...
 	 */
-	err = setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
+	err = my_epoll_setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
 #elif HAVE_DECL_IP_RECVIF == 1
 // TODO: does this also work with IPv6?
 	/* since in6_pktinfo is rfc ... */
@@ -320,7 +320,7 @@ static int init_v6(int s, int fam GCC_ATTR_UNUSED_PARAM)
 	return err;
 }
 
-int udpfromto_init(int s, int fam)
+int udpfromto_init(some_fd s, int fam)
 {
 	set_s_errno(ENOSYS);
 
@@ -337,7 +337,7 @@ int udpfromto_init(int s, int fam)
  *
  *
  */
-ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags)
+ssize_t recvmfromto_pre(some_fd s, struct mfromto *info, size_t len, int flags)
 {
 	struct msg_thread_space *mts;
 	ssize_t err;
@@ -538,7 +538,7 @@ void recvmfromto_post(struct mfromto *info, size_t len)
 #endif
 }
 
-ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
+ssize_t recvmfromto(some_fd s, struct mfromto *info, size_t len, int flags)
 {
 	ssize_t ret, err = 0;
 
@@ -551,7 +551,7 @@ ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags)
 	return ret;
 }
 
-ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
+ssize_t sendtofrom(some_fd s, void *buf, size_t len, int flags,
                    struct sockaddr *to, socklen_t tolen,
                    struct sockaddr *from, socklen_t fromlen)
 {

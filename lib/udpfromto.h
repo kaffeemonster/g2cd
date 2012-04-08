@@ -31,7 +31,7 @@
  * sendfromto	added 18/08/2003, Jan Berkel <jan@sitadelle.com>
  *		Works on Linux and FreeBSD (5.x)
  *
- * IPv6 and changes etc. Copyright (C) 2009-2011 Jan Seiffert
+ * IPv6 and changes etc. Copyright (C) 2009-2012 Jan Seiffert
  */
 #ifndef UDPFROMTO_H
 # define UDPFROMTO_H
@@ -39,8 +39,8 @@
 # include "combo_addr.h"
 # include "other.h"
 
-int udpfromto_init(int s, int fam) GCC_ATTR_VIS("hidden");
-ssize_t sendtofrom(int s, void *buf, size_t len, int flags,
+int udpfromto_init(some_fd s, int fam) GCC_ATTR_VIS("hidden");
+ssize_t sendtofrom(some_fd s, void *buf, size_t len, int flags,
                    struct sockaddr *from, socklen_t fromlen,
                    struct sockaddr *to, socklen_t tolen) GCC_ATTR_VIS("hidden");
 
@@ -68,8 +68,8 @@ struct mfromto
 	struct sockaddr *from, *to;
 	socklen_t from_len, to_len;
 };
-ssize_t recvmfromto_pre(int s, struct mfromto *info, size_t len, int flags) GCC_ATTR_VIS("hidden");
+ssize_t recvmfromto_pre(some_fd s, struct mfromto *info, size_t len, int flags) GCC_ATTR_VIS("hidden");
 void recvmfromto_post(struct mfromto *info, size_t len) GCC_ATTR_VIS("hidden");
-ssize_t recvmfromto(int s, struct mfromto *info, size_t len, int flags) GCC_ATTR_VIS("hidden");
+ssize_t recvmfromto(some_fd s, struct mfromto *info, size_t len, int flags) GCC_ATTR_VIS("hidden");
 
 #endif
