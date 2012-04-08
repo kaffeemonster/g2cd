@@ -322,13 +322,11 @@ void pa_free(void *opaque, void *addr)
  */
 void pa_init(struct d_heap *d)
 {
-	pa_address dummy;
-
 	d->s = 1; /* may be increased by bldouble */
 	d->st[1] = PA_W;
 	d->pa[0] = 0;
 	d->v[0] = PA_W; /* one large free block v [1 ... PA_W - 1] */
 	d->wordsperseg = (PA_W / PA_SMAX) + 1;
-	dummy = blnew(d, 0); /* create dummy block as sentinel */
+	blnew(d, 0); /* create dummy block as sentinel */
 }
 
