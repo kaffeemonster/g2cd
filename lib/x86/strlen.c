@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, x86 implementation
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,44 +74,73 @@
 # if HAVE_BINUTILS >= 222
 static size_t strlen_AVX2(const char *s)
 {
-	size_t len;
+	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
 	asm (
-		"vpxor	%%ymm1, %%ymm1, %%ymm1\n\t"
-		"vpcmpeqb	(%1), %%ymm1, %%ymm0\n\t"
-		"vpmovmskb	%%ymm0, %0\n\t"
-		"shr	%b3, %0\n\t"
-		/* we need the flags, that tzcount and it's bsf fallback have
-		 * inverted flags meaning is typical Intel brain damage...
-		 */
-		"bsf	%0, %0\n\t"
-		"jnz	2f\n\t"
-		".p2align 1\n"
-		"1:\n\t"
-		"vpcmpeqb	32(%1), %%ymm1, %%ymm0\n\t"
-		"add	$32, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"vptest	%%ymm0, %%ymm1\n\t"
-		"jc	1b\n\t"
-		"vpmovmskb	%%ymm0, %0\n\t"
-		"tzcnt	%0, %0\n\t"
-		"add	%1, %0\n\t"
-		"sub	%2, %0\n\t"
-		"2:"
-		: /* %0 */ "=&r" (len),
-		  /* %1 */ "=&r" (p)
 #  ifdef __i386__
-		: /* %2 */ "m" (s),
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
 #  else
-		: /* %2 */ "r" (s),
+		"prefetcht0	(%3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%k3, %k2\n\t"
 #  endif
-		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV32)),
-		  /* %4 */ "1" (ALIGN_DOWN(s, SOV32))
+		"and	$-16, %1\n\t"
+		"vpxor	%%ymm4, %%ymm4, %%ymm4\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	6f\n\t"
+		"vpcmpeqb	(%1), %%ymm4, %%ymm1\n\t"
+		"vpmovmskb	%%ymm1, %k0\n\t"
+		"shr	%b2, %k0\n\t"
+		"shl	%b2, %k0\n\t"
+		"jnz	2f\n\t"
+		".p2align 2\n"
+		"1:\t"
+		"lea	128(%1), %1\n\t"
+		"vpcmpeqb	-96(%1), %%ymm4, %%ymm0\n\t"
+		"vptest	%%ymm0, %%ymm4\n\t"
+		"jnc	5f\n\t"
+		"vpcmpeqb	-64(%1), %%ymm4, %%ymm1\n\t"
+		"vptest	%%ymm1, %%ymm4\n\t"
+		"jnc	4f\n\t"
+		"vpcmpeqb	-32(%1), %%ymm4, %%ymm2\n\t"
+		"vptest	%%ymm2, %%ymm4\n\t"
+		"jnc	3f\n"
+		"6:\n\t"
+		"vpcmpeqb	(%1), %%ymm4, %%ymm3\n\t"
+		"vptest	%%ymm3, %%ymm4\n\t"
+		"jc	1b\n\t"
+		"vpmovmskb	%%ymm3, %k0\n\t"
+		"jmp	2f\n\t"
+		"5:\t"
+		"vpmovmskb	%%ymm0, %k0\n\t"
+		"sub	$96, %1\n"
+		"jmp	2f\n\t"
+		"4:\t"
+		"vpmovmskb	%%ymm1, %k0\n\t"
+		"sub	$64, %1\n"
+		"jmp	2f\n\t"
+		"3:\t"
+		"vpmovmskb	%%ymm2, %k0\n\t"
+		"sub	$32, %1\n"
+		"2:\t"
+		"tzcnt	%k0, %k0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%3, %0\n\t"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#  ifdef __i386__
+		: /* %3 */ "m" (s)
+#  else
+		: /* %3 */ "r" (s)
+#  endif
 #  ifdef __AVX__
-		: "ymm0", "ymm1"
+		: "ymm1", "ymm2", "ymm3", "ymm4"
 #  elif defined(__SSE__)
-		: "xmm0", "xmm1"
+		: "xmm1", "xmm2", "xmm3", "xmm4"
 #  endif
 	);
 	return len;
@@ -128,42 +157,73 @@ static size_t strlen_AVX(const char *s)
 {
 	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 	/*
 	 * even if nehalem can handle unaligned load much better
 	 * (so they promised), we still align hard to get in
 	 * swing with the page boundery.
 	 */
 	asm (
+#ifdef __i386__
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
+#else
+		"prefetcht0	(%3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%k3, %k2\n\t"
+#endif
+		"and	$-16, %1\n\t"
 		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	7f\n\t"
 		"vpcmpeqb	(%1), %%xmm0, %%xmm1\n\t"
-		"vpmovmskb	%%xmm1, %0\n\t"
-		"shr	%b2, %0\n\t"
-		"bsf	%0, %0\n\t"
-		"jnz	2f\n\t"
-		"mov	$0xFF01, %k0\n\t"
-		"vmovd	%k0, %%xmm0\n\t"
-		".p2align 1\n"
+		"vpmovmskb	%%xmm1, %k0\n\t"
+		"shr	%b2, %k0\n\t"
+		"jz	1f\n\t"
+		"shl	%b2, %k0\n\t"
+		/*
+		 * make the bsf a tzcount
+		 * 0xf3 is a rep prefix byte, which is ignored on older CPU,
+		 * so it will execute bsf. Both instructions are compatible,
+		 * except when arg is 0 (here not possible) and in flags.
+		 * CPU with BMI will execute tzcount, which is, funniely, faster.
+		 * hardcoded to not need any assembler support
+		 */
+		".byte	0xf3\n\t"
+		"bsf	%k0, %k2\n\t"
+		"jmp	3f\n\t"
+		".p2align 2\n"
 		"1:\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		/* LSB,Invert,Range,Bytes */
+		"add	$64, %1\n\t"
+		/* LSB,Norm,EqEach,Bytes */
 		/*             6543210 */
-		"vpcmpistri	$0b0010100, (%1), %%xmm0\n\t"
+		"vpcmpistri	$0b0001000, -48(%1), %%xmm0\n\t"
+		"jz	6f\n\t"
+		"vpcmpistri	$0b0001000, -32(%1), %%xmm0\n\t"
+		"jz	5f\n\t"
+		"vpcmpistri	$0b0001000, -16(%1), %%xmm0\n\t"
+		"jz	4f\n"
+		"7:\n\t"
+		"vpcmpistri	$0b0001000, (%1), %%xmm0\n\t"
 		"jnz	1b\n\t"
+		"jmp	3f\n\t"
+		"6:\n"
+		"sub	$16, %k2\n"
+		"5:\n"
+		"sub	$16, %k2\n"
+		"4:\n"
+		"sub	$16, %k2\n"
+		"3:\n\t"
 		"lea	(%1,%2),%0\n\t"
 		"sub	%3, %0\n"
-		"2:"
 		: /* %0 */ "=&r" (len),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t)
 #  ifdef __i386__
-		: /* %3 */ "m" (s),
+		: /* %3 */ "m" (s)
 #  else
-		: /* %3 */ "r" (s),
+		: /* %3 */ "r" (s)
 #  endif
-		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
-		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
@@ -177,43 +237,74 @@ static size_t strlen_SSE42(const char *s)
 {
 	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
 	/*
 	 * even if nehalem can handle unaligned load much better
 	 * (so they promised), we still align hard to get in
 	 * swing with the page boundery.
 	 */
 	asm (
+#ifdef __i386__
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
+#else
+		"prefetcht0	(%3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%k3, %k2\n\t"
+#endif
+		"and	$-16, %1\n\t"
 		"pxor	%%xmm0, %%xmm0\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	7f\n\t"
 		"movdqa	(%1), %%xmm1\n\t"
 		"pcmpeqb	%%xmm0, %%xmm1\n\t"
-		"pmovmskb	%%xmm1, %0\n\t"
-		"shr	%b2, %0\n\t"
-		"bsf	%0, %0\n\t"
-		"jnz	2f\n\t"
-		"mov	$0xFF01, %k0\n\t"
-		"movd	%k0, %%xmm0\n\t"
-		".p2align 1\n"
+		"pmovmskb	%%xmm1, %k0\n\t"
+		"shr	%b2, %k0\n\t"
+		"jz	1f\n\t"
+		"shl	%b2, %k0\n\t"
+		/*
+		 * make the bsf a tzcount
+		 * 0xf3 is a rep prefix byte, which is ignored on older CPU,
+		 * so it will execute bsf. Both instructions are compatible,
+		 * except when arg is 0 (here not possible) and in flags.
+		 * CPU with BMI will execute tzcount, which is, funniely, faster.
+		 * hardcoded to not need any assembler support
+		 */
+		".byte	0xf3\n\t"
+		"bsf	%k0, %k2\n\t"
+		"jmp	3f\n\t"
+		".p2align 2\n"
 		"1:\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		/* LSB,Invert,Range,Bytes */
+		"add	$64, %1\n\t"
+		/* LSB,Norm,EqEach,Bytes */
 		/*             6543210 */
-		"pcmpistri	$0b0010100, (%1), %%xmm0\n\t"
+		"pcmpistri	$0b0001000, -48(%1), %%xmm0\n\t"
+		"jz	6f\n\t"
+		"pcmpistri	$0b0001000, -32(%1), %%xmm0\n\t"
+		"jz	5f\n\t"
+		"pcmpistri	$0b0001000, -16(%1), %%xmm0\n\t"
+		"jz	4f\n"
+		"7:\n\t"
+		"pcmpistri	$0b0001000, (%1), %%xmm0\n\t"
 		"jnz	1b\n\t"
+		"jmp	3f\n"
+		"6:\n"
+		"sub	$16, %k2\n"
+		"5:\n"
+		"sub	$16, %k2\n"
+		"4:\n"
+		"sub	$16, %k2\n"
+		"3:\n\t"
 		"lea	(%1,%2),%0\n\t"
 		"sub	%3, %0\n"
-		"2:"
 		: /* %0 */ "=&r" (len),
 		  /* %1 */ "=&r" (p),
 		  /* %2 */ "=&c" (t)
 #  ifdef __i386__
-		: /* %3 */ "m" (s),
+		: /* %3 */ "m" (s)
 #  else
-		: /* %3 */ "r" (s),
+		: /* %3 */ "r" (s)
 #  endif
-		  /* %4 */ "2" (ALIGN_DOWN_DIFF(s, SOV16)),
-		  /* %5 */ "1" (ALIGN_DOWN(s, SOV16))
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
@@ -223,42 +314,85 @@ static size_t strlen_SSE42(const char *s)
 
 static size_t strlen_SSE41(const char *s)
 {
-	size_t len;
+	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
 	asm (
+#ifdef __i386__
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
+#else
+		"prefetcht0	(%3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%k3, %k2\n\t"
+#endif
+		"and	$-16, %1\n\t"
+		"pxor	%%xmm0, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm1\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"shr	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"pxor	%%xmm2, %%xmm2\n\t"
+		"pxor	%%xmm3, %%xmm3\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	6f\n\t"
+		"movdqa	(%1), %%xmm1\n\t"
+		"pcmpeqb	%%xmm0, %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %k0\n\t"
+		"shr	%b2, %k0\n\t"
+		"shl	%b2, %k0\n\t"
 		"jnz	2f\n\t"
-		".p2align 1\n"
-		"1:\n\t"
-		"movdqa	16(%1), %%xmm0\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
+		".p2align 2\n"
+		"1:\t"
+		"add	$64, %1\n\t"
+		"pcmpeqb	-48(%1), %%xmm0\n\t"
 		"ptest	%%xmm0, %%xmm1\n\t"
+		"jnc	5f\n\t"
+		"pcmpeqb	-32(%1), %%xmm1\n\t"
+		"ptest	%%xmm1, %%xmm2\n\t"
+		"jnc	4f\n\t"
+		"pcmpeqb	-16(%1), %%xmm2\n\t"
+		"ptest	%%xmm2, %%xmm3\n\t"
+		"jnc	3f\n"
+		"6:\n\t"
+		"pcmpeqb	(%1), %%xmm3\n\t"
+		"ptest	%%xmm3, %%xmm0\n\t"
 		"jc	1b\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"pmovmskb	%%xmm3, %k0\n\t"
+		"jmp	2f\n\t"
+		"5:\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
+		"sub	$48, %1\n"
+		"jmp	2f\n\t"
+		"4:\t"
+		"pmovmskb	%%xmm1, %k0\n\t"
+		"sub	$32, %1\n"
+		"jmp	2f\n\t"
+		"3:\t"
+		"pmovmskb	%%xmm2, %k0\n\t"
+		"sub	$16, %1\n"
+		"2:\t"
+		/*
+		 * make the bsf a tzcount
+		 * 0xf3 is a rep prefix byte, which is ignored on older CPU,
+		 * so it will execute bsf. Both instructions are compatible,
+		 * except when arg is 0 (here not possible) and in flags.
+		 * CPU with BMI will execute tzcount, which is, funniely, faster.
+		 * hardcoded to not need any assembler support
+		 */
+		".byte 0xf3\n\t"
+		"bsf	%k0, %k0\n\t"
 		"add	%1, %0\n\t"
-		"sub	%2, %0\n\t"
-		"2:"
+		"sub	%3, %0\n\t"
 		: /* %0 */ "=&r" (len),
-		  /* %1 */ "=&r" (p)
-#  ifdef __i386__
-		: /* %2 */ "m" (s),
-#  else
-		: /* %2 */ "r" (s),
-#  endif
-		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
-		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
-#  ifdef __SSE__
-		: "xmm0", "xmm1"
-#  endif
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#ifdef __i386__
+		: /* %3 */ "m" (s)
+#else
+		: /* %3 */ "r" (s)
+#endif
+#ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3"
+#endif
 	);
 	return len;
 }
@@ -267,82 +401,141 @@ static size_t strlen_SSE41(const char *s)
 
 static size_t strlen_SSE2(const char *s)
 {
-	size_t len;
+	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
 	asm (
-		"pxor	%%xmm1, %%xmm1\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"shr	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
-		"jnz	2f\n\t"
-		".p2align 1\n"
-		"1:\n\t"
-		"movdqa	16(%1), %%xmm0\n\t"
-		"add	$16, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%xmm1, %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
-		"test	%0, %0\n\t"
-		"jz	1b\n\t"
-		"bsf	%0, %0\n\t"
-		"add	%1, %0\n\t"
-		"sub	%2, %0\n\t"
-		"2:"
-		: /* %0 */ "=&r" (len),
-		  /* %1 */ "=&r" (p)
 #ifdef __i386__
-		: /* %2 */ "m" (s),
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
 #else
-		: /* %2 */ "r" (s),
+		"prefetcht0	(%3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%k3, %k2\n\t"
 #endif
-		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV16)),
-		  /* %4 */ "1" (ALIGN_DOWN(s, SOV16))
+		"and	$-16, %1\n\t"
+		"pxor	%%xmm0, %%xmm0\n\t"
+		"pxor	%%xmm1, %%xmm1\n\t"
+		"pxor	%%xmm2, %%xmm2\n\t"
+		"pxor	%%xmm3, %%xmm3\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	6f\n\t"
+		"movdqa	(%1), %%xmm1\n\t"
+		"pcmpeqb	%%xmm0, %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %k0\n\t"
+		"shr	%b2, %k0\n\t"
+		"shl	%b2, %k0\n\t"
+		"jnz	2f\n\t"
+		".p2align 2\n"
+		"1:\t"
+		"add	$64, %1\n\t"
+		"pcmpeqb	-48(%1), %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	5f\n\t"
+		"pcmpeqb	-32(%1), %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	4f\n\t"
+		"pcmpeqb	-16(%1), %%xmm2\n\t"
+		"pmovmskb	%%xmm2, %0\n\t"
+		"test	%k0, %k0\n\t"
+		"jnz	3f\n"
+		"6:\n\t"
+		"pcmpeqb	(%1), %%xmm3\n\t"
+		"pmovmskb	%%xmm3, %0\n\t"
+		"test	%k0, %k0\n\t"
+		"jz	1b\n\t"
+		"jmp	2f\n\t"
+		"5:\t"
+		"sub	$16, %1\n"
+		"4:\t"
+		"sub	$16, %1\n"
+		"3:\t"
+		"sub	$16, %1\n"
+		"2:\t"
+		"bsf	%k0, %k0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%3, %0\n\t"
+		: /* %0 */ "=&r" (len),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+#ifdef __i386__
+		: /* %3 */ "m" (s)
+#else
+		: /* %3 */ "r" (s)
+#endif
 #ifdef __SSE__
-		: "xmm0", "xmm1"
+		: "xmm0", "xmm1", "xmm2", "xmm3"
 #endif
 	);
 	return len;
 }
 
-#ifndef __x86_64__
+#ifdef __i386__
 static size_t strlen_SSE(const char *s)
 {
-	size_t len;
+	size_t len, t;
 	const char *p;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
 	asm (
+		"mov	%3, %1\n\t"
+		"prefetcht0	(%1)\n\t"
+		"mov	%1, %2\n\t"
+		"and	$-8, %1\n\t"
+		"pxor	%%mm0, %%mm0\n\t"
 		"pxor	%%mm1, %%mm1\n\t"
-		"movq	(%1), %%mm0\n\t"
-		"pcmpeqb	%%mm1, %%mm0\n\t"
-		"pmovmskb	%%mm0, %0\n\t"
-		"shr	%b3, %0\n\t"
-		"bsf	%0, %0\n\t"
+		"pxor	%%mm2, %%mm2\n\t"
+		"pxor	%%mm3, %%mm3\n\t"
+		"xor	%k1, %k2\n\t"
+		"jz	6f\n\t"
+		"movq	(%1), %%mm1\n\t"
+		"pcmpeqb	%%mm0, %%mm1\n\t"
+		"pmovmskb	%%mm1, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
 		"jnz	2f\n\t"
-		".p2align 1\n"
-		"1:\n\t"
-		"movq	8(%1), %%mm0\n\t"
-		"add	$8, %1\n\t"
-		"prefetcht0	64(%1)\n\t"
-		"pcmpeqb	%%mm1, %%mm0\n\t"
+		".p2align 2\n"
+		"1:\t"
+		"add	$32, %1\n\t"
+		"pcmpeqb	-24(%1), %%mm0\n\t"
 		"pmovmskb	%%mm0, %0\n\t"
 		"test	%0, %0\n\t"
+		"jnz	5f\n\t"
+		"pcmpeqb	-16(%1), %%mm1\n\t"
+		"pmovmskb	%%mm1, %0\n\t"
+		"test	%0, %0\n\t"
+		"jnz	4f\n\t"
+		"pcmpeqb	-8(%1), %%mm2\n\t"
+		"pmovmskb	%%mm2, %0\n\t"
+		"test	%0, %0\n\t"
+		"jnz	3f\n"
+		"6:\n\t"
+		"pcmpeqb	(%1), %%mm3\n\t"
+		"pmovmskb	%%mm3, %0\n\t"
+		"test	%0, %0\n\t"
 		"jz	1b\n\t"
+		"jmp	2f\n\t"
+		"5:\t"
+		"sub	$8, %1\n"
+		"4:\t"
+		"sub	$8, %1\n"
+		"3:\t"
+		"sub	$8, %1\n"
+		"2:\t"
 		"bsf	%0, %0\n\t"
 		"add	%1, %0\n\t"
-		"sub	%2, %0\n\t"
-		"2:\n\t"
+		"sub	%3, %0\n\t"
 		: /* %0 */ "=&r" (len),
-		  /* %1 */ "=r" (p)
-		: /* %2 */ "m" (s),
-		  /* %3 */ "c" (ALIGN_DOWN_DIFF(s, SOV8)),
-		  /* %4 */ "1" (ALIGN_DOWN(s, SOV8))
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+		: /* %3 */ "m" (s)
 #ifdef __MMX__
-		: "mm0", "mm1"
+		: "mm0", "mm1", "mm2", "mm3"
 #endif
 	);
+
 	return len;
 }
 #endif
@@ -352,71 +545,72 @@ static size_t strlen_x86(const char *s)
 	const char *p;
 	size_t t, len;
 	asm (
-#ifndef __x86_64__
-		"push	%2\n\t"
-#endif
 		"mov	(%1), %2\n\t"
-#ifndef __x86_64__
-		"lea	-0x1010101(%2),%0\n\t"
+#ifdef __i386__
+		"lea	-0x1010101(%2), %0\n\t"
 #else
-		"mov	%2, %0\n\t"
-		"add	%8, %0\n\t"
+		"lea	(%2, %7), %0\n\t"
 #endif
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
-#ifndef __x86_64__
-		"pop	%2\n\t"
-#endif
-		"and	%7, %0\n\t"
-		"shr	%b5, %0\n\t"
-		"shl	%b5, %0\n\t"
+		"mov	%5, %2\n\t"
+		"xor	%1, %2\n\t"
+		"shl	$3, %2\n\t"
+		"and	%6, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
 		"test	%0, %0\n\t"
 		"jnz	2f\n\t"
-		".p2align 1\n"
+		".p2align 2\n"
 		"1:\n\t"
 		"add	%4, %1\n\t"
 		"mov	(%1), %2\n\t"
-#ifndef __x86_64__
-		"lea	-0x1010101(%2),%0\n\t"
+#ifdef __i386__
+		"lea	-0x1010101(%2), %0\n\t"
 #else
-		"mov	%2, %0\n\t"
-		"add	%8, %0\n\t"
+		"lea	(%2, %7), %0\n\t"
 #endif
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
-		"and	%7, %0\n\t"
+		"and	%6, %0\n\t"
 		"jz	1b\n"
 		"2:\n\t"
-		"bsf	%0, %0\n\t"
-		"shr	$3, %0\n\t"
+		"lea	-1(%0), %2\n\t"
+		"not	%0\n\t"
+		"and	%0, %2\n\t"
+		"shr	$7, %2\n\t"
+#ifdef __i386__
+		"lea	0xff4000(%2), %0\n\t"
+		"sar	$23, %0\n\t"
+		"and	%2, %0\n\t"
+#else
+		"mov	$0x0001020304050608, %0\n\t"
+		"imul	%2, %0\n\t"
+		"shr	$56, %0\n\t"
+#endif
 		"add	%1, %0\n\t"
-		"sub	%6, %0"
+		"sub	%5, %0"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=&r" (p),
-#ifndef __x86_64__
-	  /* %2 */ "=c" (t)
-#else
-	  /* %2 */ "=&r" (t)
-#endif
+	  /* %2 */ "=&c" (t)
 	: /* %3 */ "1" (ALIGN_DOWN(s, SOST)),
 	  /* %4 */ "K" (SOST),
-#ifndef __x86_64__
-	  /* %5 */ "2" (ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR),
+#ifdef __i386__
 	  /*
 	   * 386 should keep it on stack to prevent
 	   * register spill and a frame
 	   */
-	  /* %6 */ "m" (s),
-	  /* %7 */ "e" (0x80808080)
+	  /* %5 */ "m" (s),
+	  /* %6 */ "e" (0x80808080)
 #else
 	  /*
 	   * amd64 has more register and a regcall abi
 	   * so keep in reg.
 	   */
-	  /* %5 */ "c" (ALIGN_DOWN_DIFF(s, SOST) * BITS_PER_CHAR),
-	  /* %6 */ "r" (s),
-	  /* %7 */ "r" ( 0x8080808080808080LL),
-	  /* %8 */ "r" (-0x0101010101010101LL)
+	  /* %5 */ "r" (s),
+	  /* we can't encode very long constants so put in reg */
+	  /* %6 */ "r" ( 0x8080808080808080LL),
+	  /* %7 */ "r" (-0x0101010101010101LL)
 #endif
 	);
 	return len;
@@ -438,7 +632,7 @@ static __init_cdata const struct test_cpu_feature tfeat_strlen[] =
 # endif
 #endif
 	{.func = (void (*)(void))strlen_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)}},
-#ifndef __x86_64__
+#ifdef __i386__
 	{.func = (void (*)(void))strlen_SSE,   .features = {[0] = CFB(CFEATURE_SSE)}},
 	{.func = (void (*)(void))strlen_SSE,   .features = {[2] = CFB(CFEATURE_MMXEXT)}},
 #endif
