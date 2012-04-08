@@ -133,7 +133,7 @@ struct win_buff
 
 struct some_fd_data
 {
-	SOCKET fd;
+	SOCKET fd, tfd;
 	OVERLAPPED r_o, w_o;
 	WSABUF r_b, w_b;
 	WSAMSG r_m, w_m;
@@ -149,6 +149,7 @@ struct some_fd_data
 		int all;
 	} u;
 	enum sock_type st;
+	sa_family_t fam;
 	struct sockaddr addr;
 	struct win_buff r_buf, w_buf;
 	char cbuf[CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
@@ -200,6 +201,9 @@ static bool get_extra_funcs(void)
 
 	if(extra_funcs_ready)
 		return true;
+
+	if(poll_ptr == poll_emul)
+		logg_devel("Will use poll emulation\n");
 
 	s = socket(AF_INET, SOCK_STREAM, 0);
 	if(INVALID_SOCKET == s)
@@ -266,17 +270,32 @@ static int start_read_accept(struct some_fd_data *d)
 	SOCKET newsocket;
 	DWORD res_byte;
 	BOOL res;
+
+	newsocket = socket(d->fam, SOCK_STREAM, 0);
+	if(INVALID_SOCKET == newsocket)
+		return -1;
+
+	d->tfd = newsocket;
 	/*
-	 * init newsocket
 	 * init r_buf,
 	 * (re)init r_o
 	 */
-	res = accept_ex_ptr(d->fd, newsocket, buffer_start(d->r_buf), 0, sizeof(union combo_addr) + 16, sizeof(union combo_addr) + 16, &res_byte, &d->r_o);
+	res = accept_ex_ptr(
+		d->fd,
+		newsocket,
+		buffer_start(d->r_buf),
+		0,
+		sizeof(union combo_addr) + 16,
+		sizeof(union combo_addr) + 16,
+		&res_byte,
+		&d->r_o
+	);
 	if(!res)
 	{
-		if(ERROR_IO_PENDING == s_errno)
+		DWORD serr = s_errno;
+		if(ERROR_IO_PENDING == serr)
 			return 0;
-		if(WSAECONNRESET == s_errno)
+		if(WSAECONNRESET == serr)
 			return 0; /* try again */
 		return -1;
 	}
@@ -412,6 +431,7 @@ int my_epoll_ctl(some_fd epfd, int op, some_fd fd, struct epoll_event *event)
 		{
 			t = start_read(d);
 			if(t) {
+				logg_develd("start_read failed %#010x\n", s_errno);
 				errno = s_errno;
 				ret_val = -1;
 				break;
@@ -421,6 +441,7 @@ int my_epoll_ctl(some_fd epfd, int op, some_fd fd, struct epoll_event *event)
 		{
 			t = start_write(d);
 			if(t) {
+				logg_develd("start_write failed %#010x\n", s_errno);
 				errno = s_errno;
 				ret_val = -1;
 				break;
@@ -430,10 +451,12 @@ int my_epoll_ctl(some_fd epfd, int op, some_fd fd, struct epoll_event *event)
 		res = CreateIoCompletionPort((HANDLE)d->fd, ep, fd, 1);
 		if(!res) {
 			errno = GetLastError();
+			logg_develd("CreateIoCompletionPort failed %#010x\n", errno);
 			ret_val = -1;
 			break;
 		}
 		d->u.flags.added = true;
+		break;
 	case EPOLL_CTL_MOD:
 		d->u.flags.oneshot = !!(event->events & EPOLLONESHOT);
 		nmask = (d->e.events ^ event->events) & event->events;
@@ -503,26 +526,25 @@ int my_epoll_wait(some_fd epfd, struct epoll_event *events, int maxevents GCC_AT
 	if(!GetQueuedCompletionStatus(ep, &res_bytes, &ckey, &ovl, timeout))
 	{
 		DWORD err = GetLastError();
+		if(WAIT_TIMEOUT == err)
+			return 0; /* timeout */
+		logg_develd("error %u, %p, %p, %u\n", res_bytes, (void *)ckey, ovl, err);
 		if(!ovl)
 		{
-			/* process failes comleted i/o request */
+			/* process failed comleted i/o request */
 			errno = err;
 			return -1;
 		}
 		else
 		{
-			if(WAIT_TIMEOUT == err)
-				return 0; /* timeout */
-			else
-			{
-				/* bad call to GetQueuedCompletionStatus */
-				errno = err;
-				return -1;
-			}
+			/* bad call to GetQueuedCompletionStatus */
+			errno = err;
+			return -1;
 		}
 	}
 	else
 	{
+		logg_develd("success %u, %p, %p\n", res_bytes, (void *)ckey, ovl);
 		/* OK, success, what now... */
 	}
 
@@ -586,6 +608,7 @@ some_fd my_epoll_socket(int domain, int type, int protocol)
 		return -1;
 	}
 	d->st = st;
+	d->fam = domain;
 	InitializeCriticalSection(&d->lock);
 	d->r_buf.capacity = sizeof(d->r_buf.data);
 	buffer_clear(d->r_buf);
@@ -894,10 +917,8 @@ static int PASCAL poll_emul(my_pollfd *fds, unsigned long nfds, int timeout)
 	}
 
 	res_b = res = select(max_fd + 1, &rfd, &wfd, NULL, timeout >= 0 ? &t : NULL);
-	if(SOCKET_ERROR == res) {
-		errno = WSAGetLastError();
+	if(SOCKET_ERROR == res)
 		return -1;
-	}
 	for(i = 0; i < nfds && res; i++)
 	{
 		if(FD_ISSET(fds[i].fd, &rfd))
