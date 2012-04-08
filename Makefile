@@ -622,10 +622,10 @@ G2PacketTyper.h: G2PacketTyperGenerator ccdrv
 	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator $@
 
 G2HeaderFields.h: G2HeaderFieldsSort ccdrv
-	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./G2HeaderFieldsSort $@"
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2HeaderFieldsSort $@
 
 G2UDPPValid.h: G2UDPPValid.bpf bpfasm.py ccdrv
-	@./ccdrv -s$(VERBOSE) "GEN[$@]" sh -c "./bpfasm.py G2UDPPValid.bpf > $@"
+	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./bpfasm.py -sc -o "$@" G2UDPPValid.bpf
 
 #	Batch-creation of version-info
 version.h: Makefile
