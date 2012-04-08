@@ -90,6 +90,9 @@ static const struct {
 # if HAVE_BINUTILS >= 222
 static void *mem_searchrn_AVX2(void *src, size_t len);
 # endif
+# if HAVE_BINUTILS >= 219
+static void *mem_searchrn_AVX(void *src, size_t len);
+# endif
 # if HAVE_BINUTILS >= 218
 static void *mem_searchrn_SSE42(void *src, size_t len);
 # endif
@@ -217,6 +220,106 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 	);
 
 	return p;
+}
+# endif
+
+# if HAVE_BINUTILS >= 219
+/*
+ * This code does not use any AVX feature, it only uses the new
+ * v* opcodes, so the upper half of the register gets 0-ed,
+ * and the CPU is not caught with lower/upper half merges
+ */
+static void *mem_searchrn_AVX(void *s, size_t len)
+{
+	char *p, *f;
+	ssize_t k;
+	size_t rr;
+	static const size_t t = 0;
+
+	asm (
+		"prefetcht0	(%1)\n\t"
+		"test	%1, %1\n\t" /* src NULL? */
+		"jz	9f\n\t" /* outa here */
+		"test	%3, %3\n\t" /* len NULL? */
+		"jz	9f\n\t" /* outa here */
+		"add	$2, %0\n\t" /* create a 2 */
+		"vmovd	%k2, %%xmm1\n\t"
+		"mov	%1, %2\n\t" /* duplicate src */
+		"and	$15, %2\n\t" /* create align difference */
+		"and	$-16, %1\n\t" /* align down src */
+		"add	%2, %3\n\t" /* len += align diff */
+		/* ByteM,Masked+,EqualO,Bytes */
+		/*             6543210 */
+		"vpcmpestrm	$0b1101100, (%1), %%xmm1\n\t"
+		"vpmovmskb	%%xmm0, %0\n\t"
+		"shr	%b2, %0\n\t" /* mask out lower stuff */
+		"shl	%b2, %0\n\t"
+		"mov	%3, %2\n\t" /* get len */
+		"neg	%2\n\t" /* negate */
+		"add	$16, %2\n\t" /* add SOV16 */
+		"cmovs	%8, %2\n" /* create a 0 if k < 0 */
+		"inc	%b2\n\t" /* shift out last rr bit */
+		"shl	%b2, %0\n\t"
+		"shr	%b2, %w0\n\t"
+		"bsf	%w0, %w2\n\t" /* create index */
+		"jnz	7f\n\t" /* match -> out */
+		"cmp	$16, %3\n\t" /* len left? */
+		"jbe	9f\n\t" /* no -> done */
+		"shr	$17, %0\n\t" /* put eax.17 in carry */
+		"lea	2(%0), %0\n\t" /* create a two without changing flags */
+		"jnc	3f\n\t" /* eax.17 == 0 ? -> start normal */
+		".p2align 2\n"
+		"4:\n\t"
+		"cmpb	$0x0A, 16(%1)\n\t" /* is first byte in str a '\n'? */
+		"je	7f\n\t"
+		".p2align 1\n"
+		"3:\n\t"
+		"sub	$16, %3\n" /* len -= SOV16 */
+		"add	$16, %1\n\t" /* p += SOV16 */
+		/* LSB,Norm,EqualO,Bytes */
+		/*             6543210 */
+		"vpcmpestri	$0b0001100, (%1), %%xmm1\n\t"
+		"ja	3b\n\t" /* no match(C) or end(Z)? -> continue */
+		"jz	2f\n\t" /* end? -> don't check match position */
+		"cmp	$15, %2\n\t" /* index of last char? */
+		"je	4b\n" /* last char matched? - > continue */
+		"jmp	7f\n\t"
+		"2:\n\t"
+# ifndef __x86_64__
+		"setc	%b0\n\t" /* create a 0 if no match was generated */
+		"cmovnc	%0, %2\n\t" /* no match, set rr to zero */
+		"cmovnc	%0, %1\n" /* no match, set p to zero */
+# else
+		"cmovnc	%8, %2\n\t" /* no match, set rr to zero */
+		"cmovnc	%8, %1\n" /* no match, set p to zero */
+# endif
+		"7:\n\t"
+		"movzx	%w2, %2\n\t" /* clear upper half, result is small */
+		"lea	(%1, %2), %0\n" /* add match index to p */
+		"9:\n\t"
+		/*
+		 * done!
+		 * out
+		 */
+	: /*  %0 */ "=a" (f),
+	  /*  %1 */ "=r" (p),
+	  /*  %2 */ "=c" (rr),
+	  /*  %3 */ "=d" (k)
+	: /*  %4 */ "0" (0),
+	  /*  %5 */ "1" (s),
+	  /*  %6 */ "3" (len),
+	  /*  %7 */ "2" (0x0A0D),
+#  ifndef __x86_64__
+	  /*  %8 */ "m" (t)
+#  else
+	  /* amd64 has enough call clobbered regs not to spill */
+	  /*  %8 */ "r" (t)
+#  endif
+#  ifdef __SSE__
+	: "xmm0", "xmm1", "xmm2"
+#  endif
+	);
+	return f;
 }
 # endif
 
@@ -624,6 +727,9 @@ static __init_cdata const struct test_cpu_feature tfeat_mem_searchrn[] =
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))mem_searchrn_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))mem_searchrn_AVX,   .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 218
 	{.func = (void (*)(void))mem_searchrn_SSE42, .features = {[1] = CFB(CFEATURE_SSE4_2)}},
