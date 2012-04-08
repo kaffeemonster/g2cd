@@ -1693,7 +1693,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* language */
 		buf, /* buffer */
 		sav, /* size */
-		0 /* va_args */
+		NULL /* va_args */
 	))) {
 		s = "Unknown system error";
 		err_str_len = strlen(s) < sav ?
@@ -1730,7 +1730,7 @@ static const char *f_serr(char *buf, const char *fmt, struct format_spec *spec)
 		err_str_len = strlen(s) < sav ?
 		              strlen(s) : sav;
 	}
-#endif
+# endif
 
 	if(s != buf)
 		my_memcpy(buf, s, err_str_len);
