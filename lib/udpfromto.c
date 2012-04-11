@@ -181,7 +181,10 @@ struct msg_thread_space
 #  else
 	my_msghdr msghv[MAX_RECVMMSG];
 #  endif
-	char cbuf[MAX_RECVMMSG][CMSG_SPACE(STRUCT_SIZE)] GCC_ATTR_ALIGNED(sizeof(size_t));
+	union {
+		my_cmsghdr align; /* only to put the field on the right alignment */
+		char cbuf[MAX_RECVMMSG][CMSG_SPACE(STRUCT_SIZE)];
+	} u;
 };
 
 # ifndef HAVE___THREAD
@@ -303,9 +306,9 @@ static int init_v6(some_fd s, int fam GCC_ATTR_UNUSED_PARAM)
 	 * Set the IP_RECVDSTADDR option (BSD).
 	 * Note: IP_RECVDSTADDR == IP_SENDSRCADDR
 	 *
-	 * they say it is deprecated, since in6_pktinfo is now 
+	 * they say it is deprecated, since in6_pktinfo is now
 	 * an RFC. So KAME nuked it...
-	 * They don't have IP_PKTINFO vor v4, but IPV6_PKTINFO.
+	 * They don't have IP_PKTINFO for v4, but IPV6_PKTINFO.
 	 * Give me a break...
 	 */
 	err = my_epoll_setsockopt(s, IPPROTO_IPV6, IPV6_RECVDSTADDR, &opt, sizeof(opt));
@@ -367,8 +370,8 @@ ssize_t recvmfromto_pre(some_fd s, struct mfromto *info, size_t len, int flags)
 // TODO: move part of this at post end
 	for(i = 0; i < len; i++)
 	{
-		mts->msghv[i].msg_hdr.msg_control    = mts->cbuf[i];
-		mts->msghv[i].msg_hdr.msg_controllen = sizeof(mts->cbuf[0]);
+		mts->msghv[i].msg_hdr.msg_control    = mts->u.cbuf[i];
+		mts->msghv[i].msg_hdr.msg_controllen = sizeof(mts->u.cbuf[0]);
 		mts->msghv[i].msg_hdr.msg_name       =  info[i].from;
 		mts->msghv[i].msg_hdr.msg_namelen    =  info[i].from_len;
 		mts->msghv[i].msg_hdr.msg_iov        = &info[i].iov;
@@ -387,8 +390,8 @@ ssize_t recvmfromto_pre(some_fd s, struct mfromto *info, size_t len, int flags)
 	for(i = 0; i < len; i++)
 	{
 		memset(&mts->msghv[i], 0, sizeof(mts->msghv[0]));
-		mts->msghv[i].msg_control    = mts->cbuf[i];
-		mts->msghv[i].msg_controllen = sizeof(mts->cbuf[0]);
+		mts->msghv[i].msg_control    = mts->u.cbuf[i];
+		mts->msghv[i].msg_controllen = sizeof(mts->u.cbuf[0]);
 		mts->msghv[i].msg_name       =  info[i].from;
 		mts->msghv[i].msg_namelen    =  info[i].from_len;
 		mts->msghv[i].msg_iov        = &info[i].iov;
