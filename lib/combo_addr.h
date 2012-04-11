@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -58,7 +58,11 @@
  */
 
 # ifndef HAVE_SA_FAMILY_T
+#  ifndef HAVE_SA_LEN
 typedef unsigned short sa_family_t;
+#  else
+typedef unsigned char sa_family_t;
+#  endif
 # endif
 # ifndef HAVE_IN_PORT_T
 typedef uint16_t in_port_t;
@@ -88,6 +92,9 @@ struct in6_addr
 #  endif
 struct sockaddr_in6
 {
+#  ifdef HAVE_SA_LEN
+	unsigned char sin6_len;
+#  endif
 	sa_family_t sin6_family;
 	in_port_t sin6_port;       /* Transport layer port # */
 	uint32_t sin6_flowinfo;    /* IPv6 flow information */
@@ -203,6 +210,13 @@ char *inet_ntop_c_rev(int af, const void *src, char *dst) GCC_ATTR_VIS("hidden")
 
 /*
  * Comboaddress to represent IPv4 & IPv6
+ *
+ * some "new" RFC (2553) defines struct sockaddr_storage
+ * for this, but as it is "new", not all systems have it.
+ * Esp. some systems have given it the size to store all
+ * possible sockaddr_, like AF_UNIX, which is heavy on the
+ * memusage...
+ * So roll our own.
  */
 union combo_addr
 {
@@ -243,6 +257,8 @@ union combo_addr
 	 * Unfortunatly they decided that struct sockaddr should
 	 * be able to represent every implementation, "physically"/
 	 * memorywise, even if not usable (only after a cast).
+	 * At least on glibc/linux. Other systems define just the
+	 * bare minimum?
 	 * struct sockaddr is as large as the largest sockaddr_*
 	 * which is round about 140 byte for AF_UNIX, which contain
 	 * a large char array (path to the socket).
