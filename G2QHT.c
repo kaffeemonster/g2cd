@@ -887,10 +887,7 @@ static int comw_compar(const void *av, const void *bv)
 	res = (int)at[1] - bt->t[1];
 	if(res)
 		return res;
-	res = (int)at[2] - bt->t[2];
-	if(res)
-		return res;
-	return tstrncmp(at+3, bt->t+3, COM_WLEN_MAX_FIELD-3);
+	return tstrncmp(at+2, bt->t+2, COM_WLEN_MAX_FIELD-2);
 }
 
 static noinline bool hash_word_list(struct search_hash_buffer *shb, struct list_head *word_list)
