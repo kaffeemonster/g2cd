@@ -855,28 +855,46 @@ static void fill_word_list(struct list_head *word_list, const tchar_t *in, struc
 	}
 }
 
+#define COM_WLEN_MAX_FIELD      (8)
+#define COM_WLEN_MAX    (7)
+#define COM_WLEN_MIN    (2)
+static const union comw_cmp {
+	tchar_t  t[COM_WLEN_MAX_FIELD];
+	uint32_t u[COM_WLEN_MAX_FIELD/sizeof(tchar_t)];
+} common_word_list[] = {
+	/* keep this sorted! */
+	{{'7', 'z', '\0'}}, {{'a', 'c', '3', '\0'}}, {{'a', 'c', 'e', '\0'}}, {{'a', 'r', 'j', '\0'}}, {{'a', 'v', 'i', '\0'}},
+	{{'b', 'i', 'n', '\0'}}, {{'b', 'm', 'p', '\0'}}, {{'b', 'z', '2', '\0'}}, {{'c', 'u', 'e', '\0'}},
+	{{'d', 'e', 'b', '\0'}}, {{'d', 'i', 'v', 'x', '\0'}}, {{'d', 'v', 'd', '\0'}}, {{'e', 'x', 'e', '\0'}},
+	{{'f', 'u', 'c', 'k', '\0'}}, {{'g', 'i', 'f', '\0'}}, {{'i', 'm', 'g', '\0'}}, {{'i', 's', 'o', '\0'}},
+	{{'j', 'p', 'g', '\0'}}, {{'l', 'z', 'h', '\0'}}, {{'l', 'z', 'm', 'a', '\0'}}, {{'m', '2', 'v', '\0'}},
+	{{'m', 'k', 'v', '\0'}}, {{'m', 'o', 'v', '\0'}}, {{'m', 'p', '2', '\0'}}, {{'m', 'p', '3', '\0'}},
+	{{'m', 'p', '4', '\0'}}, {{'m', 'p', 'a', '\0'}}, {{'m', 'p', 'e', 'g', '\0'}}, {{'m', 'p', 'g', '\0'}},
+	{{'m', 'p', 'v', '\0'}}, {{'o', 'g', 'g', '\0'}}, {{'o', 'g', 'm', '\0'}}, {{'p', 'n', 'g', '\0'}},
+	{{'r', 'a', 'r', '\0'}}, {{'r', 'p', 'm', '\0'}}, {{'s', 'e', 'x', '\0'}}, {{'t', 'o', 'r', 'r', 'e', 'n', 't', '\0'}},
+	{{'w', 'm', 'v', '\0'}}, {{'x', 'v', 'i', 'd', '\0'}}, {{'x', 'x', 'x', '\0'}}, {{'z', 'i', 'p', '\0'}},
+};
+
+static int comw_compar(const void *av, const void *bv)
+{
+	const union comw_cmp *bt = bv;
+	const tchar_t *at = av;
+	int res;
+
+	res = (int)at[0] - bt->t[0];
+	if(likely(res))
+		return res;
+	res = (int)at[1] - bt->t[1];
+	if(res)
+		return res;
+	res = (int)at[2] - bt->t[2];
+	if(res)
+		return res;
+	return tstrncmp(at+3, bt->t+3, COM_WLEN_MAX_FIELD-3);
+}
+
 static noinline bool hash_word_list(struct search_hash_buffer *shb, struct list_head *word_list)
 {
-	static const tchar_t common_words[][8] =
-	{
-		/* audio */
-		{'m', 'p', '3', '\0'}, {'o', 'g', 'g', '\0'}, {'a', 'c', '3', '\0'},
-		/* picture */
-		{'j', 'p', 'g', '\0'}, {'g', 'i', 'f', '\0'}, {'p', 'n', 'g', '\0'}, {'b', 'm', 'p', '\0'},
-		/* video */
-		{'a', 'v', 'i', '\0'}, {'m', 'p', 'g', '\0'}, {'m', 'k', 'v', '\0'}, {'w', 'm', 'v', '\0'},
-		{'m', 'o', 'v', '\0'}, {'o', 'g', 'm', '\0'}, {'m', 'p', 'a', '\0'}, {'m', 'p', 'v', '\0'},
-		{'m', '2', 'v', '\0'}, {'m', 'p', '2', '\0'}, {'m', 'p', '4', '\0'}, {'d', 'v', 'd', '\0'},
-		{'m', 'p', 'e', 'g', '\0'}, {'d', 'i', 'v', 'x', '\0'}, {'x', 'v', 'i', 'd', '\0'},
-		/* archive */
-		{'e', 'x', 'e', '\0'}, {'z', 'i', 'p', '\0'}, {'r', 'a', 'r', '\0'}, {'i', 's', 'o', '\0'},
-		{'b', 'i', 'n', '\0'}, {'c', 'u', 'e', '\0'}, {'i', 'm', 'g', '\0'}, {'l', 'z', 'h', '\0'},
-		{'b', 'z', '2', '\0'}, {'r', 'p', 'm', '\0'}, {'d', 'e', 'b', '\0'}, {'7', 'z', '\0'},
-		{'a', 'c', 'e', '\0'}, {'a', 'r', 'j', '\0'}, {'l', 'z', 'm', 'a', '\0'},
-		/* profanity */
-		{'x', 'x', 'x', '\0'}, {'s', 'e', 'x', '\0'}, {'f', 'u', 'c', 'k', '\0'},
-		{'t', 'o', 'r', 'r', 'e', 'n', 't', '\0'},
-	};
 	struct skeyword *lcursor;
 	unsigned num_common = 0, num_valid = 0;
 
@@ -910,15 +928,17 @@ static noinline bool hash_word_list(struct search_hash_buffer *shb, struct list_
 
 		if(valid_chars > 2) /* if more than 3 utf-8 chars, everything is fine */
 		{
-			size_t i;
 			bool found = false;
-			for(i = 0; i < anum(common_words); i++)
+			if(w_len >= COM_WLEN_MIN && w_len <= COM_WLEN_MAX)
 			{
-				if(common_words[i][0] == lcursor->data[0] &&
-				   0 == tstrncmp(common_words[i], lcursor->data, w_len)) {
-					found = true;
-					break;
-				}
+				/*
+				 * there are some nice str search algos, but all are for the case
+				 * where you search a needle anywhere in a haystack. We only want
+				 * to compare the beginning, against several needles.
+				 * So a bsearch is at least better than bruteforce.
+				 */
+				found = bsearch(lcursor->data, common_word_list, anum(common_word_list),
+				                sizeof(common_word_list[0]), comw_compar) != NULL;
 			}
 			if(found)
 				num_common++;
