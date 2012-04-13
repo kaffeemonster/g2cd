@@ -2,7 +2,7 @@
  * G2MainServer.h
  * header-file for G2MainServer.c and global informations
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -189,15 +189,15 @@ struct sock_com
 	struct list_head l;
 	void (*handler)(struct sock_com *, short);
 	void *data;
-	int fd;
+	some_fd fd;
 	short events;
 	bool enabled;
 };
 
 _G2MAIN_EXTRN(void g2_set_thread_name(const char *));
-_G2MAIN_EXTRN(struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void *data, int fd, short events, bool enabled));
+_G2MAIN_EXTRN(struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void *data, some_fd fd, short events, bool enabled));
 _G2MAIN_EXTRN(void sock_com_delete(struct sock_com *s));
-_G2MAIN_EXTRN(struct sock_com *sock_com_fd_find(int fd));
+_G2MAIN_EXTRN(struct sock_com *sock_com_fd_find(some_fd fd));
 
 #if 0
 #include <syscall.h>

@@ -224,7 +224,8 @@ int main(int argc, char **args)
 			break;
 		/* Something bad happened */
 		case -1:
-			if(EINTR == errno) break;
+			if(EINTR == s_errno)
+				break;
 			/* Print what happened */
 			logg_errno(LOGF_ERR, "poll");
 			/* and get out here (at the moment) */
@@ -1527,9 +1528,9 @@ static noinline void clean_up_m(void)
 
 	for(i = 0; i < THREAD_SUM_COM; i++)
 	{
-		closesocket(sock_com[i][0]);
+		closesocket(sock_com[i][DIR_OUT]);
 			/* output? */
-		closesocket(sock_com[i][1]);
+		my_epoll_closesocket(sock_com[i][DIR_IN]);
 			/* output? */
 	}
 
@@ -1562,7 +1563,7 @@ void g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
 }
 #endif
 
-struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void *data, int fd, short events, bool enabled)
+struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void *data, some_fd fd, short events, bool enabled)
 {
 	struct sock_com *r = malloc(sizeof(*r));
 
@@ -1589,7 +1590,7 @@ void sock_com_delete(struct sock_com *s)
 	pthread_mutex_unlock(&sock_com_lock);
 }
 
-struct sock_com *sock_com_fd_find(int fd)
+struct sock_com *sock_com_fd_find(some_fd fd)
 {
 	struct sock_com *ret_val = NULL;
 	struct sock_com *pos;
