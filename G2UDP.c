@@ -1879,7 +1879,7 @@ static void udp_setup_filter(some_fd udp_so GCC_ATTR_UNUSED_PARAM, union combo_a
 	int ret_val;
 
 	prg.bf_len   = anum(G2UDPPValid);
-	prg.bf_insns = G2UDPPValid;
+	prg.bf_insns = (struct bpf_insn *)(intptr_t)G2UDPPValid;
 
 	ret_val = setsockopt(udp_so, SOL_SOCKET, SO_ATTACH_FILTER, &prg, sizeof(prg));
 	if (ret_val)
