@@ -1305,16 +1305,21 @@ do \
 
 	/* fixup */
 	tc1 = add_cmp(&R, &Sbox[0], &MP, &MM, use_mp);
+/*	printf("tc1: %i\truf: %i\n", tc1, ruf);*/
 	if(tc1 <= -ruf)
 	{
-		if(tc1 < -ruf)
-			k--;
+		if(tc1 < -ruf) {
+/*			printf("k--\n");*/
+/*			k--;*/
+		}
 		mul10(&R);
 		mul10(&MM);
 		if(use_mp)
 			mul10(&MP);
-	} else if(tc1 == ruf)
+	} else if(tc1 == ruf) {
+/*		printf("k++\n"); */
 		k++;
+	}
 
 /*	printf("k = %d\n", k);
 	printf("R = "); print_big(&R);
@@ -1341,7 +1346,7 @@ do \
 		add_big(&Sbox[7], &Sbox[0], &Sbox[8]);
 	}
 
-	dig_i = k + 1;
+	dig_i = k;
 	if(dig_i < 0) {
 		int dot_i = 1;
 		for(; dot_i >= dig_i; dot_i--)
@@ -1350,7 +1355,9 @@ do \
 		ADD_CHAR_TO_BUF('0');
 
 again:
-	if(!--dig_i)
+/*	printf("dig_i: %i\n", dig_i);
+	fflush(stdout);*/
+	if(!dig_i--)
 		ADD_CHAR_TO_BUF('.');
 	if(qr_shift)
 	{ /* Take advantage of the fact that Sbox[0] = (ash 1 s_n) */
