@@ -841,7 +841,7 @@ static noinline BOOLEAN init_db_environ(void)
 	return TRUE;
 }
 
-#define QUERY_CREAT "CREATE TABLE g2cd_data (mkey VARCHAR("str_it(MAX_KEY_LEN)") PRIMARY KEY, mvalue VARCHAR("str_it(MAX_VALUE_LEN)"));"
+#define QUERY_CREAT "CREATE TABLE g2cd_data (mkey VARCHAR("str_it(MAX_KEY_LEN)") PRIMARY KEY, mvalue VARCHAR("str_it(MAX_VALUE_LEN2)"));"
 DBM *dbm_open(const char *f, int flags, int mode GCC_ATTR_UNUSED_PARAM)
 {
 	char *rptr, *wptr;
@@ -1013,13 +1013,21 @@ datum dbm_fetch(DBM *db, datum key)
 	SQLHSTMT stmt;
 	SQLRETURN res;
 	SQLLEN len;
-	SQLLEN rlen;
+	SQLLEN rlen = SQL_NULL_DATA;
 	size_t i;
 
-	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
-	if(!SQL_SUCCEEDED(res))
-		goto out;
+	if(db->stmt != SQL_NULL_HSTMT) {
+		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
+		db->stmt = SQL_NULL_HSTMT;
+	}
 
+	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_dbc(db->dbc, "SQLAllocHandle");
+		goto out;
+	}
+
+	logg_develd("key: \"%s\"\n", key.dptr);
 //HACK: we know the key are strings
 	len = key.dsize-1;
 	res = SQLBindParameter(
@@ -1034,20 +1042,28 @@ datum dbm_fetch(DBM *db, datum key)
 		key.dsize-1, /* buffer len */
 		&len /* strlen or indp */
 	);
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLBindParameter");
 		goto out_freeh;
+	}
 
 	res = SQLBindCol(stmt, 1, SQL_C_CHAR, receive_buf, sizeof(receive_buf), &rlen);
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLBindCol");
 		goto out_freeh;
+	}
 
 	res = SQLExecDirect(stmt, (SQLCHAR *)(intptr_t)QUERY_SELV, str_size(QUERY_SELV));
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLExecDirect");
 		goto out_freeh;
+	}
 
 	res = SQLFetch(stmt);
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(stmt, "SQLFetch");
 		goto out_freeh;
+	}
 
 	if(SQL_NULL_DATA == rlen)
 		goto out_freeh;
@@ -1082,20 +1098,30 @@ datum dbm_firstkey(DBM *db)
 		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
 
 	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &db->stmt);
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_dbc(db->dbc, "SQLAllocHandle");
 		goto out;
+	}
 
 	res = SQLBindCol(db->stmt, 1, SQL_C_CHAR, db->key_store, sizeof(db->key_store), &db->rlen);
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(db->stmt, "SQLBindCol");
 		goto out_freeh;
+	}
 
 	res = SQLExecDirect(db->stmt, (SQLCHAR *)(intptr_t)QUERY_KEY, str_size(QUERY_KEY));
-	if(!SQL_SUCCEEDED(res))
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(db->stmt, "SQLExecDirect");
 		goto out_freeh;
+	}
 
 	res = SQLFetch(db->stmt);
-	if(!SQL_SUCCEEDED(res))
+	if(SQL_NO_DATA == res)
 		goto out_freeh;
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(db->stmt, "SQLFetch");
+		goto out_freeh;
+	}
 
 	if(SQL_NULL_DATA == db->rlen || -1 == db->rlen)
 		goto out_freeh;
@@ -1106,7 +1132,7 @@ datum dbm_firstkey(DBM *db)
 out:
 	return value;
 out_freeh:
-	free(db->stmt);
+	SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
 	db->stmt = SQL_NULL_HSTMT;
 	goto out;
 }
@@ -1117,11 +1143,15 @@ datum dbm_nextkey(DBM *db)
 	SQLRETURN res;
 
 	if(db->stmt == SQL_NULL_HSTMT)
-		return dbm_firstkey(db);
+		goto out;
 
 	res = SQLFetch(db->stmt);
-	if(!SQL_SUCCEEDED(res))
+	if(SQL_NO_DATA == res)
 		goto out_freeh;
+	if(!SQL_SUCCEEDED(res)) {
+		odbc_error_stmt(db->stmt, "SQLFetch");
+		goto out_freeh;
+	}
 
 	if(SQL_NULL_DATA == db->rlen || -1 == db->rlen)
 		goto out_freeh;
@@ -1132,7 +1162,7 @@ datum dbm_nextkey(DBM *db)
 out:
 	return value;
 out_freeh:
-	free(db->stmt);
+	SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
 	db->stmt = SQL_NULL_HSTMT;
 	goto out;
 }
@@ -1158,6 +1188,11 @@ int dbm_store(DBM *db, datum key, datum content, int store_mode)
 	if(content.dsize > MAX_VALUE_LEN || key.dsize-1  > MAX_KEY_LEN) {
 		errno = EINVAL;
 		return ret;
+	}
+
+	if(db->stmt != SQL_NULL_HSTMT) {
+		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
+		db->stmt = SQL_NULL_HSTMT;
 	}
 
 	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
@@ -1295,6 +1330,11 @@ int dbm_delete(DBM *db, datum key)
 	SQLRETURN res;
 	SQLLEN len;
 	int ret = -1;
+
+	if(db->stmt != SQL_NULL_HSTMT) {
+		SQLFreeHandle(SQL_HANDLE_STMT, db->stmt);
+		db->stmt = SQL_NULL_HSTMT;
+	}
 
 	res = SQLAllocHandle(SQL_HANDLE_STMT, db->dbc, &stmt);
 	if(!SQL_SUCCEEDED(res))

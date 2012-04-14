@@ -183,6 +183,7 @@ LIB_MY_PTHREAD_EXTRN(int sigaction(int signum, const struct sigaction *act, stru
 #   include <sqlext.h>
 #   define MAX_KEY_LEN 255
 #   define MAX_VALUE_LEN 80
+#   define MAX_VALUE_LEN2 160
 typedef struct {
 	void *dptr;
 	size_t dsize;
