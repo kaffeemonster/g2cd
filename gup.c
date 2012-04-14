@@ -61,10 +61,24 @@
 #define NUM_EEVENT 8
 
 /* data-structures */
+struct stat_cnt {
+	unsigned long cnt;
+	char padding[128 - sizeof(long)];
+};
+
 static struct worker_sync {
 	some_fd epollfd;
 	some_fd from_main;
-	char padding[128 - 2 * sizeof(some_fd)]; /* move at least a cacheline between data */
+	pthread_t *helper;
+	size_t num_helper;
+	struct stat_cnt *wake_cnt;
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	cpu_set_t cst_all;
+#else
+	char padding1[128 - 2 * sizeof(some_fd) -
+	              2* sizeof(void *) - sizeof(size_t)];
+#endif
+	/* move at least a cacheline between data */
 	volatile bool keep_going;
 } worker;
 
@@ -72,6 +86,10 @@ static void clean_up_gup(int);
 static bool handle_abort(struct simple_gup *, struct epoll_event *);
 static bool handle_gups(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM], g2_connection_t **lcon, int num);
 static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev);
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+static noinline void pin_to_one(size_t);
+static void pin_to_all(size_t);
+#endif
 
 static void *gup_loop(void *param)
 {
@@ -79,8 +97,14 @@ static void *gup_loop(void *param)
 	struct epoll_event eevents[NUM_EEVENT];
 	struct norm_buff *lbuff[MULTI_RECV_NUM];
 	g2_connection_t *lcon = NULL;
-	int num_poll, i;
+	size_t local_thread_num = (size_t)(intptr_t)param, i;
+	int num_poll;
 	int refill_count = EVENT_SPACE / 2;
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	unsigned long last_wake_cnt = 0;
+	unsigned long local_time_diff = 0;
+	bool high_gear = false;
+#endif
 
 	/* make our hzp ready */
 	hzp_alloc();
@@ -106,11 +130,14 @@ static void *gup_loop(void *param)
 		goto out;
 	}
 
-	my_snprintf(lbuff[0]->data, lbuff[0]->limit, OUR_PROC " guppie %ti", (intptr_t)param);
+	my_snprintf(lbuff[0]->data, lbuff[0]->limit, OUR_PROC " guppie %ti", local_thread_num);
 #ifdef DRD_ME
 	ANNOTATE_THREAD_NAME(lbuff[0]->data);
 #endif
 	g2_set_thread_name(lbuff[0]->data);
+
+	/* set the local time to something sane */
+	update_local_time();
 
 	while(worker.keep_going)
 	{
@@ -123,11 +150,48 @@ static void *gup_loop(void *param)
 			g2_packet_local_refill();
 			refill_count += EVENT_SPACE / 2;
 		}
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+		if(local_time_diff) {
+			/* we progressed at least 1 sec */
+			unsigned long wakes;
+			rmb();
+
+			/*
+			 * sum up all wakes, if this is racy, it's OK, it's
+			 * only a stat counter
+			 */
+			for(i = 0, wakes = 0; i < worker.num_helper; i++)
+				wakes += worker.wake_cnt[i].cnt;
+			/*
+			 * make sure we get a positive diff, wakes may overflow.
+			 * If this happens, we will ignore the result for
+			 * one round, no harm...
+			 */
+			if(wakes > last_wake_cnt)
+			{
+				unsigned long wakes_diff = wakes - last_wake_cnt, frac;
+				frac = wakes_diff / local_time_diff;
+				/* do we have lot of wakeups */
+// TODO: which wakeup count per sec
+// TODO: devide by helper? keep it per helper?
+				if (frac > 50 && !high_gear) {
+					/* pin thread to one cpu */
+					pin_to_one(local_thread_num);
+					high_gear = true;
+				} else if (frac < 30 && high_gear) {
+					/* allow thread to roam */
+					pin_to_all(local_thread_num);
+					high_gear = false;
+				}
+			}
+			last_wake_cnt = wakes;
+		}
+#endif
 
 		/*
-		 * Originaly we let one worker thread poll, retrieving a big
-		 * batch of events and then hand out the events one by one
-		 * to all the worker threads.
+		 * Originaly we let one worker thread poll, retrieving a
+		 * big batch of events and then hand out the events one
+		 * by one to all the worker threads.
 		 *
 		 * This gives low response times and "even" distribution.
 		 * But is prop. only scalable with low event rates.
@@ -174,8 +238,9 @@ static void *gup_loop(void *param)
 		 * totally screw you:
 		 * Propritary extentions like virtualisation which can
 		 * not be updated.
-		 * That stuff "works", it not like its totally broken. Lot's
-		 * of machines fullfilling their dutys, mail, web, etc.
+		 * That stuff "works", it's not like its totally broken.
+		 * Lot's of machines fullfilling their dutys, mail, web,
+		 * etc.
 		 *
 		 * But apparently i'm pushing the limits far beyond...
 		 *
@@ -192,6 +257,14 @@ static void *gup_loop(void *param)
 		num_poll = do_the_poll(eevents, anum(eevents));
 		if(0 > num_poll)
 			break;
+
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+		/* update local wake counter */
+		worker.wake_cnt[local_thread_num].cnt += num_poll;
+		wmb();
+		local_time_diff =
+#endif
+		update_local_time();
 
 		refill_count -= num_poll;
 		/* use result */
@@ -214,7 +287,7 @@ out:
 
 	/* clean up our hzp */
 	hzp_free();
-	if(param)
+	if(local_thread_num)
 		pthread_exit(NULL);
 	/* only the creator thread should get out here */
 	return NULL;
@@ -389,7 +462,6 @@ static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev)
 		switch(num_poll)
 		{
 		default:
-			update_local_time();
 			break;
 		/* Something bad happened */
 		case -1:
@@ -413,9 +485,8 @@ static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev)
 void *gup(void *param)
 {
 	struct epoll_event eevents;
-	static pthread_t *helper;
 	static struct simple_gup from_main;
-	size_t num_helper, i;
+	size_t i;
 
 #ifdef DRD_ME
 	DRD_IGNORE_VAR(worker.keep_going);
@@ -440,10 +511,10 @@ void *gup(void *param)
 		goto out_epoll;
 	}
 
-	num_helper  = server.settings.num_threads;
-	if(!num_helper)
+	worker.num_helper  = server.settings.num_threads;
+	if(!worker.num_helper)
 	{
-		num_helper = get_cpus_online();
+		worker.num_helper = get_cpus_online();
 		/*
 		 * if we only have a single CPU, 99.999% of the time locks
 		 * will be uncontended and programm flow is near linear.
@@ -453,16 +524,21 @@ void *gup(void *param)
 		 * (num_cpu + ourself) to have a thread ready running if a thread
 		 * blocks another on a lock.
 		 */
-		num_helper = 1 == num_helper ? 0 : num_helper;
+		worker.num_helper = 1 == worker.num_helper ? 1 : worker.num_helper + 1;
 	}
-	if(num_helper)
-	{
-		helper = malloc(num_helper * sizeof(*helper));
-		if(!helper) {
-			logg_errno(LOGF_CRIT, "No mem for gup helper threads, will run with one");
-			num_helper = 0;
-		}
+	worker.helper = malloc(worker.num_helper * sizeof(*worker.helper));
+	if(!worker.helper) {
+		logg_errno(LOGF_CRIT, "No mem for gup helper threads, abort");
+		goto out_epoll;
 	}
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	pthread_getaffinity_np(pthread_self(), CPU_SETSIZE, &worker.cst_all);
+	worker.wake_cnt = malloc(worker.num_helper * sizeof(*worker.wake_cnt));
+	if(!worker.helper) {
+		logg_errno(LOGF_CRIT, "No mem for gup wake_cnt stats, abort");
+		goto out_helper;
+	}
+#endif
 	/*
 	 * init udp first, if it fails to set the port right for ipv6
 	 * we have to disable ipv6
@@ -473,13 +549,14 @@ void *gup(void *param)
 		goto out_no_accept;
 
 	worker.keep_going = true;
-	for(i = 0; i < num_helper; i++)
+	worker.helper[0] = pthread_self();
+	for(i = 1; i < worker.num_helper; i++)
 	{
 		int res;
-		if((res = pthread_create(&helper[i], &server.settings.t_def_attr, gup_loop, (void *)(i + 1)))) {
+		if((res = pthread_create(&worker.helper[i], &server.settings.t_def_attr, gup_loop, (void *)(i)))) {
 			errno = res;
 			logg_errnod(LOGF_WARN, "starting gup helper threads, will run with %zu", i);
-			num_helper = i;
+			worker.num_helper = i;
 			break;
 		}
 	}
@@ -487,12 +564,12 @@ void *gup(void *param)
 	/* we are up and running */
 	server.status.all_abord[THREAD_GUP] = true;
 	/* we become one of them, only the special one which cleans up */
-	gup_loop(NULL);
+	gup_loop((void *)0);
 
-	for(i = 0; i < num_helper; i++)
+	for(i = 1; i < worker.num_helper; i++)
 	{
 		int res;
-		if((res = pthread_join(helper[i], NULL))) {
+		if((res = pthread_join(worker.helper[i], NULL))) {
 			errno = res;
 			logg_errno(LOGF_WARN, "taking down gup helper threads");
 			break;
@@ -504,7 +581,11 @@ out_no_accept:
 	clean_up_udp();
 out_no_udp:
 	clean_up_gup(from_main.fd);
-	free(helper);
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	free(worker.wake_cnt);
+#endif
+out_helper:
+	free(worker.helper);
 out_epoll:
 	my_epoll_close(worker.epollfd);
 out:
@@ -656,6 +737,22 @@ void gup_con_mark_write(struct g2_connection *con)
 /*
  * Utility
  */
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+static noinline void pin_to_one(size_t i)
+{
+	cpu_set_t cst;
+
+	CPU_ZERO(&cst);
+	CPU_SET(i, &cst);
+	pthread_setaffinity_np(worker.helper[i], CPU_SETSIZE, &cst);
+}
+
+static void pin_to_all(size_t i)
+{
+	pthread_setaffinity_np(worker.helper[i], CPU_SETSIZE, &worker.cst_all);
+}
+#endif
+
 static bool handle_abort(struct simple_gup *sg, struct epoll_event *ev)
 {
 	bool ret_val = true;

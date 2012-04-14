@@ -157,11 +157,19 @@ _G2MAIN_EXTRNVAR(time_t local_time_now);
 #endif
 _G2MAIN_EXTRNVAR(volatile time_t master_time_now);
 
-static always_inline void update_local_time(void)
+static always_inline unsigned long update_local_time(void)
 {
-	local_time_now = master_time_now;
+	time_t local_master_time_now = master_time_now;
+	unsigned long result;
 // TODO: membar?
 	barrier();
+	/*
+	 * time should only go forward, at least the
+	 * difference.
+	 */
+	result = local_master_time_now - local_time_now;
+	local_time_now = local_master_time_now;
+	return result;
 }
 
 static always_inline void set_master_time(time_t now)

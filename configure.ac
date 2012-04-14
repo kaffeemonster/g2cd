@@ -953,7 +953,7 @@ AC_FUNC_MMAP
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul strerror_s sysctlbyname inet_ntop inet_pton dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
+AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul strerror_s sysctlbyname inet_ntop inet_pton pthread_setaffinity_np dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
 
 if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)

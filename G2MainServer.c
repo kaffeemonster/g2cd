@@ -1488,6 +1488,9 @@ static noinline __init bool startup(int argc, char **args)
 		logg_pos(LOGF_WARN, "Error registering log reopen handler\n");
 #endif
 
+	/* make sure the global clock has some sane start value */
+	set_master_time(time(NULL));
+
 	server_running = true;
 	/* fire up threads */
 	if((errno = pthread_create(&main_threads[THREAD_GUP], &server.settings.t_def_attr, (void *(*)(void *))&gup, (void *)&sock_com[THREAD_GUP][DIR_IN]))) {
