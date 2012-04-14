@@ -526,14 +526,14 @@ void *gup(void *param)
 		 */
 		worker.num_helper = 1 == worker.num_helper ? 1 : worker.num_helper + 1;
 	}
-	worker.helper = malloc(worker.num_helper * sizeof(*worker.helper));
+	worker.helper = calloc(worker.num_helper, sizeof(*worker.helper));
 	if(!worker.helper) {
 		logg_errno(LOGF_CRIT, "No mem for gup helper threads, abort");
 		goto out_epoll;
 	}
 #if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
-	pthread_getaffinity_np(pthread_self(), CPU_SETSIZE, &worker.cst_all);
-	worker.wake_cnt = malloc(worker.num_helper * sizeof(*worker.wake_cnt));
+	pthread_getaffinity_np(pthread_self(), sizeof(worker.cst_all), &worker.cst_all);
+	worker.wake_cnt = calloc(worker.num_helper, sizeof(*worker.wake_cnt));
 	if(!worker.helper) {
 		logg_errno(LOGF_CRIT, "No mem for gup wake_cnt stats, abort");
 		goto out_helper;
@@ -744,12 +744,12 @@ static noinline void pin_to_one(size_t i)
 
 	CPU_ZERO(&cst);
 	CPU_SET(i, &cst);
-	pthread_setaffinity_np(worker.helper[i], CPU_SETSIZE, &cst);
+	pthread_setaffinity_np(worker.helper[i], sizeof(cst), &cst);
 }
 
 static void pin_to_all(size_t i)
 {
-	pthread_setaffinity_np(worker.helper[i], CPU_SETSIZE, &worker.cst_all);
+	pthread_setaffinity_np(worker.helper[i], sizeof(worker.cst_all), &worker.cst_all);
 }
 #endif
 

@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -86,6 +86,10 @@
 # include <unistd.h>
 #endif
 
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+# include "my_pthread.h"
+#endif
+
 #ifndef _SC_NPROCESSORS_ONLN
 # ifdef _SC_NPROC_ONLN
 #   define _SC_NPROCESSORS_ONLN _SC_NPROC_ONLN
@@ -113,6 +117,18 @@ unsigned get_cpus_online(void)
 
 	if(pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0) == 1)
 		return (unsigned)psd.psd_proc_cnt;
+#endif
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	{
+		/*
+		 * ask the affinity stuff, we may be confined to a smaller
+		 * set of CPUs then are avail in HW
+		 */
+		cpu_set_t cst;
+		int res = pthread_getaffinity_np(pthread_self(), sizeof(cst), &cst);
+		if(0 == res)
+			return CPU_COUNT(&cst);
+	}
 #endif
 #ifdef _SC_NPROCESSORS_ONLN
 	{
