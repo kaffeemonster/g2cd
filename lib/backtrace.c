@@ -2,7 +2,7 @@
  * backtrace.c
  * try to spit out a backtrace on crashes
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -140,7 +140,7 @@ static GCC_ATTR_COLD void sig_segv_print(int signr, siginfo_t *si, void *vuc)
 #if defined(__alpha__)
 	static unsigned long greg_space[NGREG];
 #endif
-	static pthread_mutex_t bt_mutex = PTHREAD_MUTEX_INITIALIZER;
+	static mutex_t bt_mutex = MUTEX_INITIALIZER;
 	static sigjmp_buf catch_sigsegv;
 	static volatile sig_atomic_t critical = 0;
 	static char path[4096];
@@ -193,7 +193,7 @@ We will now try scary things to aid debuging the situation.\n\
 	}
 	else
 	{
-		if(pthread_mutex_lock(&bt_mutex))
+		if(mutex_lock(&bt_mutex))
 		{
 # define DEATHSTR_2 "\"I'm scared Dave. Will i dream?\"\n\
 Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
@@ -296,7 +296,7 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 		}
 		break;
 	default:
-		pthread_mutex_unlock(&bt_mutex);
+		mutex_unlock(&bt_mutex);
 		return;
 	}
 	wptr = mutoa(strplitcpy(path, "\n\n["), (unsigned)getpid());

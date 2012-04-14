@@ -2,7 +2,7 @@
  * guid.c
  * little stuff to generate a guid
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,7 +31,7 @@
 #include "hthash.h"
 
 static struct aes_encrypt_ctx ae_ctx;
-static pthread_mutex_t ctx_lock;
+static mutex_t ctx_lock;
 static union guid_fast l_res;
 
 void guid_generate(unsigned char out[GUID_SIZE])
@@ -39,7 +39,7 @@ void guid_generate(unsigned char out[GUID_SIZE])
 	/* get random bytes for our guid */
 	random_bytes_get(out, GUID_SIZE);
 
-	pthread_mutex_lock(&ctx_lock);
+	mutex_lock(&ctx_lock);
 	/* encrypt IV with our random key */
 	aes_ecb_encrypt(&ae_ctx, &l_res, &l_res);
 	/* xor bytes with result, creating next IV */
@@ -49,7 +49,7 @@ void guid_generate(unsigned char out[GUID_SIZE])
 	l_res.d[3] ^= get_unaligned(((uint32_t *)out)+3);
 	/* create output */
 	memcpy(out, &l_res, GUID_SIZE);
-	pthread_mutex_unlock(&ctx_lock);
+	mutex_unlock(&ctx_lock);
 
 	/*
 	 * fix up the bytes to be a valid guid
@@ -85,17 +85,17 @@ void guid_tick(void)
 	random_bytes_get(&key, sizeof(key));
 	/* create the new key */
 	aes_encrypt_key128(&t_ctx, key);
-	pthread_mutex_lock(&ctx_lock);
+	mutex_lock(&ctx_lock);
 	/* put key in place */
 	ae_ctx = t_ctx;
 	/* and a fresh IV */
 	memcpy(&l_res, key + RAND_BLOCK_BYTE, sizeof(l_res));
-	pthread_mutex_unlock(&ctx_lock);
+	mutex_unlock(&ctx_lock);
 }
 
 void guid_init(void)
 {
-	pthread_mutex_init(&ctx_lock, NULL);
+	mutex_init(&ctx_lock);
 	guid_tick();
 }
 

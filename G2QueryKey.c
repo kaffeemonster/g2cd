@@ -179,7 +179,7 @@ struct g2_qk_salts
 static struct g2_qk_salts g2_qk_s;
 static struct
 {
-	pthread_mutex_t lock;
+	mutex_t lock;
 	uint32_t ht_seed;
 	struct hlist_head free_list;
 	struct rb_root tree;
@@ -339,7 +339,7 @@ static __init void qk_init(void)
 {
 	size_t i;
 
-	if((errno = pthread_mutex_init(&cache.lock, NULL)))
+	if((errno = mutex_init(&cache.lock)))
 		diedie("initialising qk cache lock");
 
 	/* shuffle all entrys in the free list */
@@ -349,7 +349,7 @@ static __init void qk_init(void)
 
 static void qk_deinit(void)
 {
-	pthread_mutex_destroy(&cache.lock);
+	mutex_destroy(&cache.lock);
 }
 
 static struct qk_cache_entry *qk_cache_entry_alloc(void)
@@ -496,7 +496,7 @@ void g2_qk_add(uint32_t qk, const union combo_addr *addr)
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return;
 	/* already in the cache? */
 	e = cache_ht_lookup(addr, h);
@@ -540,7 +540,7 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("ahhhh, QK cache lock stuck, bye!");
 	}
@@ -563,7 +563,7 @@ bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return false;
 	/* already in the cache? */
 	e = cache_ht_lookup(addr, h);
@@ -572,7 +572,7 @@ bool g2_qk_lookup(uint32_t *qk, const union combo_addr *addr)
 			*qk = e->e.qk;
 		ret_val = true;
 	}
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("ahhhh, QK cache lock stuck, bye!");
 	}

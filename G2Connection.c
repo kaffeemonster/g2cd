@@ -279,7 +279,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	else {
 		INIT_HLIST_NODE(&work_entry->registry);
 		shortlock_init(&work_entry->pts_lock);
-		pthread_mutex_init(&work_entry->lock, NULL);
+		mutex_init(&work_entry->lock);
 		work_entry->qht = NULL;
 	}
 
@@ -301,7 +301,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 //	DRD_TRACE_VAR(work_entry->aux_to);
 #endif
 	if(!new)
-		pthread_mutex_unlock(&work_entry->lock);
+		mutex_unlock(&work_entry->lock);
 }
 
 static void g2_con_free_internal(g2_connection_t *to_free)
@@ -351,7 +351,7 @@ static void g2_con_free_internal(g2_connection_t *to_free)
 #endif
 
 	shortlock_destroy(&to_free->pts_lock);
-	pthread_mutex_destroy(&to_free->lock);
+	mutex_destroy(&to_free->lock);
 }
 
 void g2_con_free_glob(g2_connection_t *to_free)

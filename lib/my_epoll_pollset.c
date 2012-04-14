@@ -39,8 +39,8 @@
 /* put the poison on the top, there should be kernel-mem -> sig11 */
 #define EPDATA_POISON	0xFEEBDAEDFEEBDAEDUL
 #define CAPACITY_INCREMENT 100
-static pthread_mutex_t my_epoll_wmutex;
-static pthread_mutex_t my_epoll_pmutex;
+static mutex_t my_epoll_wmutex;
+static mutex_t my_epoll_pmutex;
 struct poll_data
 {
 	struct hzp_free hzp;
@@ -118,10 +118,10 @@ static __init void my_epoll_init(void)
 	struct epoll_event *e_ptr;
 
 	/* generate a lock for shared free_cons */
-	if((errno = pthread_mutex_init(&my_epoll_wmutex, NULL)))
+	if((errno = mutex_init(&my_epoll_wmutex)))
 		diedie("creating my_epoll writes mutex");
 	/* generate a lock for emulating oneshot */
-	if((errno = pthread_mutex_init(&my_epoll_pmutex, NULL)))
+	if((errno = mutex_init(&my_epoll_pmutex)))
 		diedie("creating my_epoll poll mutex");
 
 	tmp_ptr = malloc(sizeof(*fds) + (sizeof(struct epoll_event) * ((size_t)EPOLL_QUEUES * 20 + 1)));
@@ -143,7 +143,7 @@ static void my_epoll_deinit(void)
 	tmp = fds;
 	fds = NULL;
 	free(tmp);
-//	pthread_mutex_destroy(&my_epoll_mutex);
+//	mutex_destroy(&my_epoll_mutex);
 }
 
 int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
@@ -177,7 +177,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 		return -1;
 	}
 
-	if((res = pthread_mutex_lock(&my_epoll_wmutex))) {
+	if((res = mutex_lock(&my_epoll_wmutex))) {
 		errno = res;
 		logg_errno(LOGF_ERR, "locking my_epoll writers mutex");
 		return -1;
@@ -238,7 +238,7 @@ int my_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 	pctl.fd = fd;
 	ret_val = pollset_clt(epfd, &pctl, 1);
 UNLOCK:
-	if((res = pthread_mutex_unlock(&my_epoll_wmutex))) {
+	if((res = mutex_unlock(&my_epoll_wmutex))) {
 		errno = res;
 		diedie("unlocking my_epoll writers mutex");
 	}
@@ -264,7 +264,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		return -1;
 	}
 
-	if(unlikely(res = pthread_mutex_lock(&my_epoll_pmutex))) {
+	if(unlikely(res = mutex_lock(&my_epoll_pmutex))) {
 		errno = res;
 		diedie("locking my_epoll pollset mutex");
 	}
@@ -325,7 +325,7 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 		logg_errno(LOGF_DEBUG, "poll");
 		break;
 	}
-	if(unlikely(res = pthread_mutex_unlock(&my_epoll_pmutex))) {
+	if(unlikely(res = mutex_unlock(&my_epoll_pmutex))) {
 		errno = res;
 		diedie("unlocking my_epoll pollset mutex");
 	}
@@ -350,7 +350,7 @@ int my_epoll_create(int size)
 	if(-1 == ret_val)
 		return -1;
 
-	if((res = pthread_mutex_lock(&my_epoll_wmutex))) {
+	if((res = mutex_lock(&my_epoll_wmutex))) {
 		errno = res;
 		logg_errno(LOGF_ERR, "locking my_epoll writes mutex");
 		return -1;
@@ -361,7 +361,7 @@ int my_epoll_create(int size)
 		ret_val = -1;
 	}
 
-	if((res = pthread_mutex_unlock(&my_epoll_wmutex))) {
+	if((res = mutex_unlock(&my_epoll_wmutex))) {
 		errno = res;
 		diedie("unlocking my_epoll writes mutex");
 	}

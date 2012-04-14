@@ -254,7 +254,7 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 
 	barrier();
 	pthread_mutex_lock(&wakeup.mutex);
-	pthread_mutex_lock(&new_timeout->lock);
+	mutex_lock(&new_timeout->lock);
 
 	if(RB_EMPTY_NODE(&new_timeout->rb) && !new_timeout->rearm_in_progress)
 	{
@@ -268,7 +268,7 @@ bool timeout_add(struct timeout *new_timeout, unsigned int timeout)
 	} else
 		ret_val = false;
 
-	pthread_mutex_unlock(&new_timeout->lock);
+	mutex_unlock(&new_timeout->lock);
 	pthread_mutex_unlock(&wakeup.mutex);
 
 	return ret_val;
@@ -285,11 +285,11 @@ bool timeout_advance(struct timeout *timeout, unsigned int advancement)
 	barrier();
 	pthread_mutex_lock(&wakeup.mutex);
 
-	if(0 != pthread_mutex_trylock(&timeout->lock))
+	if(0 != mutex_trylock(&timeout->lock))
 		goto out_unlock;
 
 	if(RB_EMPTY_NODE(&timeout->rb) || timeout->rearm_in_progress) {
-		pthread_mutex_unlock(&timeout->lock);
+		mutex_unlock(&timeout->lock);
 		goto out_unlock;
 	}
 	logg_develd_old("%u, advancing %p\n", gettid(), timeout);
@@ -303,7 +303,7 @@ bool timeout_advance(struct timeout *timeout, unsigned int advancement)
 	ret_val = timeout_rb_insert(timeout);
 	print_tree_dot(&wakeup.tree, "advance_after_insert");
 
-	pthread_mutex_unlock(&timeout->lock);
+	mutex_unlock(&timeout->lock);
 	if(ret_val && !timespec_after(&now, &wakeup.time))
 		pthread_cond_broadcast(&wakeup.cond);
 
@@ -319,11 +319,11 @@ bool timeout_cancel(struct timeout *who_to_cancel)
 
 retry:
 	pthread_mutex_lock(&wakeup.mutex);
-	pthread_mutex_lock(&who_to_cancel->lock);
+	mutex_lock(&who_to_cancel->lock);
 	rmb();
 	if(who_to_cancel->rearm_in_progress)
 	{
-		pthread_mutex_unlock(&who_to_cancel->lock);
+		mutex_unlock(&who_to_cancel->lock);
 		pthread_mutex_unlock(&wakeup.mutex);
 		cpu_relax();
 #ifdef _POSIX_PRIORITY_SCHEDULING
@@ -341,7 +341,7 @@ retry:
 		RB_CLEAR_NODE(&who_to_cancel->rb);
 		ret_val = true;
 	}
-	pthread_mutex_unlock(&who_to_cancel->lock);
+	mutex_unlock(&who_to_cancel->lock);
 	pthread_mutex_unlock(&wakeup.mutex);
 
 	return ret_val;
@@ -396,7 +396,7 @@ static int kick_timeouts(void)
 		local_time_now = now.tv_sec;
 		set_master_time(now.tv_sec);
 		/* lock the timeout */
-		pthread_mutex_lock(&t->lock);
+		mutex_lock(&t->lock);
 		logg_develd_old("now: %li.%li\tto: %li.%li\n",
 		                now.tv_sec, now.tv_nsec, t->t.tv_sec, t->t.tv_nsec);
 		/*
@@ -410,7 +410,7 @@ static int kick_timeouts(void)
 			print_tree_dot(&wakeup.tree, "timeout_after_erase");
 			RB_CLEAR_NODE(&t->rb);
 		} else {
-			pthread_mutex_unlock(&t->lock);
+			mutex_unlock(&t->lock);
 			continue;
 		}
 		hzp_ref(HZP_EPOLL, t->data);
@@ -445,7 +445,7 @@ static int kick_timeouts(void)
 			t->rearm_in_progress = true;
 			wmb();
 		}
-		pthread_mutex_unlock(&t->lock);
+		mutex_unlock(&t->lock);
 		/*
 		 * release the timeout, reaquire the tree lock
 		 * ===============================================================
@@ -454,7 +454,7 @@ static int kick_timeouts(void)
 		pthread_mutex_lock(&wakeup.mutex);
 		if(ret)
 		{
-			pthread_mutex_lock(&t->lock);
+			mutex_lock(&t->lock);
 			if(RB_EMPTY_NODE(&t->rb))
 			{
 				/*
@@ -470,7 +470,7 @@ static int kick_timeouts(void)
 			}
 			t->rearm_in_progress = false;
 			wmb();
-			pthread_mutex_unlock(&t->lock);
+			mutex_unlock(&t->lock);
 		}
 		hzp_unref(HZP_EPOLL);
 	}

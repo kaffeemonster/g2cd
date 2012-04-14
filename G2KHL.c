@@ -177,7 +177,7 @@ static struct {
 	enum gwc_res_states state;
 } act_gwc;
 static struct {
-	pthread_mutex_t lock;
+	mutex_t lock;
 	int khl_dump;
 	int num;
 	uint32_t ht_seed;
@@ -283,7 +283,7 @@ bool __init g2_khl_init(void)
 
 	put_boot_gwc_in_cache();
 
-	if((errno = pthread_mutex_init(&cache.lock, NULL))) {
+	if((errno = mutex_init(&cache.lock))) {
 		logg_errno(LOGF_ERR, "initialising KHL cache lock");
 		return false;
 	}
@@ -1340,7 +1340,7 @@ void g2_khl_add(const union combo_addr *addr, time_t when, bool cluster)
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return;
 
 	/* already in the cache? */
@@ -1387,7 +1387,7 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("gnarf, KHL cache lock stuck, bye!");
 	}
@@ -1399,7 +1399,7 @@ size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
 	struct rb_node *n;
 	size_t res, res_t, wrap_arounds;
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return 0;
 
 	for(res = 0, n = rb_first(&cache.tree), wrap_arounds = 0;
@@ -1419,7 +1419,7 @@ size_t g2_khl_fill_s(struct khl_entry p[], size_t len, int s_fam)
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 
-	if(unlikely(res_t = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(res_t = mutex_unlock(&cache.lock))) {
 		errno = res_t;
 		diedie("gnarf, KHL cache lock stuck, bye!");
 	}
@@ -1433,7 +1433,7 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 	struct rb_node *n;
 	size_t res, res_tmp, wrap_arounds;
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return 0;
 
 	for(res = 0, n = rb_first(&cache.tree), wrap_arounds = 0;
@@ -1451,7 +1451,7 @@ size_t g2_khl_fill_p(struct khl_entry p[], size_t len, int s_fam)
 			memcpy(&p[res++], &e->e, sizeof(p[0]));
 	}
 
-	if(unlikely(res_tmp = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(res_tmp = mutex_unlock(&cache.lock))) {
 		errno = res_tmp;
 		diedie("gnarf, KHL cache lock stuck, bye!");
 	}

@@ -125,7 +125,7 @@ static inline bool init_con_u(some_fd *, union combo_addr *);
 /* Vars */
 static struct
 {
-	pthread_mutex_t lock;
+	mutex_t lock;
 	uint32_t ht_seed;
 	struct hlist_head free_list;
 	struct rb_root tree;
@@ -167,7 +167,7 @@ static __init void udp_init(void)
 	if((errno = pthread_key_create(&key2udp_lcb, (void(*)(void *))free)))
 		diedie("couln't create TLS key for local UDP compress buffer");
 #endif
-	if((errno = pthread_mutex_init(&cache.lock, NULL)))
+	if((errno = mutex_init(&cache.lock)))
 		diedie("initialising udp cache lock");
 	/* shuffle all entrys in the free list */
 	for(i = 0; i < UDP_CACHE_SIZE; i++)
@@ -195,7 +195,7 @@ static void udp_deinit(void)
 	}
 	pthread_key_delete(key2udp_lcb);
 #endif
-	pthread_mutex_destroy(&cache.lock);
+	mutex_destroy(&cache.lock);
 }
 
 static struct norm_buff *udp_get_lsbuf(void)
@@ -360,9 +360,9 @@ static void udp_reas_cache_entry_free_unlocked(struct udp_reas_cache_entry *e)
 	}
 	memset(e, 0, sizeof(*e));
 
-	pthread_mutex_lock(&cache.lock);
+	mutex_lock(&cache.lock);
 	hlist_add_head(&e->node, &cache.free_list);
-	pthread_mutex_unlock(&cache.lock);
+	mutex_unlock(&cache.lock);
 }
 
 static void udp_reas_cache_entry_free_glob(struct udp_reas_cache_entry *e)
@@ -500,7 +500,7 @@ void g2_udp_reas_timeout(void)
 	int res;
 
 	to_time = local_time_now - UDP_REAS_TIMEOUT;
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return;
 
 	for(e = udp_reas_cache_last(); e && e->e.when < to_time;)
@@ -512,7 +512,7 @@ void g2_udp_reas_timeout(void)
 		udp_reas_cache_entry_free_glob(t);
 	}
 
-	if(unlikely(res = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(res = mutex_unlock(&cache.lock))) {
 		errno = res;
 		diedie("udp reassambly lock stuck, sh**!");
 	}
@@ -748,7 +748,7 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return NULL;
 	/* already in the cache? */
 	e = cache_ht_lookup(addr, seq, h);
@@ -849,7 +849,7 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 		 * (assumed...), but this should help a lot.
 		 */
 		if(recv_mask == 0)
-			pthread_mutex_unlock(&cache.lock);
+			mutex_unlock(&cache.lock);
 
 		n_knot->nr   = p->part;
 		n_knot->end  = p->part;
@@ -889,7 +889,7 @@ static noinline g2_packet_t *g2_udp_reas_add(gnd_packet_t *p, struct norm_buff *
 	else
 		cache_ht_add(e, h);
 out_unlock:
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("ahhhh, udp reassembly cache lock stuck, bye!");
 	}

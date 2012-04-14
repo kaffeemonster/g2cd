@@ -2,7 +2,7 @@
  * ansi_prng.c
  * Pseudo random number generator according to ANSI X9.31
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -64,7 +64,7 @@ static struct
 	union dvector I;
 	union dvector V;
 	struct aes_encrypt_ctx actx;
-	pthread_mutex_t lock;
+	mutex_t lock;
 	union dvector ne[4];
 	unsigned bytes_used;
 } ctx;
@@ -164,7 +164,7 @@ void noinline random_bytes_get(void *ptr, size_t len)
 {
 	unsigned char *buf = ptr;
 
-	pthread_mutex_lock(&ctx.lock);
+	mutex_lock(&ctx.lock);
 
 	do
 	{
@@ -187,7 +187,7 @@ void noinline random_bytes_get(void *ptr, size_t len)
 		}
 	} while(len);
 
-	pthread_mutex_unlock(&ctx.lock);
+	mutex_unlock(&ctx.lock);
 }
 
 void random_bytes_rekey(void)
@@ -197,7 +197,7 @@ void random_bytes_rekey(void)
 	/* create a new random key */
 	aes_encrypt_key128(&tctx, &ctx.ne[0]);
 	/* lock other out */
-	pthread_mutex_lock(&ctx.lock);
+	mutex_lock(&ctx.lock);
 	/* set new key */
 	ctx.actx = tctx;
 	/* fuzz internal vectors */
@@ -221,7 +221,7 @@ void random_bytes_rekey(void)
 	 */
 	for(i = (ctx.ne[0].c[0] % 32) + 8; i--;)
 		more_random_bytes();
-	pthread_mutex_unlock(&ctx.lock);
+	mutex_unlock(&ctx.lock);
 }
 
 static const char *get_text(void)
@@ -250,7 +250,7 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	 * So to not loose our mlock, do this first.
 	 * </paranoid mode>
 	 */
-	pthread_mutex_init(&ctx.lock, NULL);
+	mutex_init(&ctx.lock);
 #ifdef _POSIX_MEMLOCK_RANGE
 	/* Now try to lock our ctx into mem for fun and profit */
 	{

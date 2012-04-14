@@ -94,7 +94,7 @@
 
 /* Thread data */
 static pthread_t main_threads[THREAD_SUM];
-static pthread_mutex_t sock_com_lock;
+static mutex_t sock_com_lock;
 static some_fd sock_com[THREAD_SUM_COM][2];
 static LIST_HEAD(sock_com_list);
 static volatile sig_atomic_t server_running;
@@ -355,7 +355,7 @@ static int bounce_from_timer(void *data)
 	/* we hold the connection lock, tear it down */
 	gup_teardown_con(btt->con);
 	/* we hold a hzp reference on it */
-	pthread_mutex_unlock(&btt->con->lock);
+	mutex_unlock(&btt->con->lock);
 	hzp_unref(HZP_QHT);
 	/*
 	 * to avoid use after free in timer code, defer
@@ -443,7 +443,7 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 		 * make sure we lock the conection to keep out the
 		 * worker threads.
 		 */
-		if(btt && !pthread_mutex_trylock(&con->lock))
+		if(btt && !mutex_trylock(&con->lock))
 		{
 			/* we have the con, tear it down */
 			logg_devel("init bounced teardown\n");
@@ -915,7 +915,7 @@ static __init void setup_resources(void)
 {
 	size_t i;
 
-	if((errno = pthread_mutex_init(&sock_com_lock, NULL))) {
+	if((errno = mutex_init(&sock_com_lock))) {
 		logg_errno(LOGF_CRIT, "couldn't init sock_com lock");
 		exit(EXIT_FAILURE);
 	}
@@ -1578,9 +1578,9 @@ struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *, short), void
 	r->fd = fd;
 	r->events = events;
 	r->enabled = enabled;
-	pthread_mutex_lock(&sock_com_lock);
+	mutex_lock(&sock_com_lock);
 	list_add(&r->l, &sock_com_list);
-	pthread_mutex_unlock(&sock_com_lock);
+	mutex_unlock(&sock_com_lock);
 	return r;
 }
 
@@ -1588,9 +1588,9 @@ void sock_com_delete(struct sock_com *s)
 {
 	if(!s)
 		return;
-	pthread_mutex_lock(&sock_com_lock);
+	mutex_lock(&sock_com_lock);
 	list_del(&s->l);
-	pthread_mutex_unlock(&sock_com_lock);
+	mutex_unlock(&sock_com_lock);
 }
 
 struct sock_com *sock_com_fd_find(some_fd fd)
@@ -1598,14 +1598,14 @@ struct sock_com *sock_com_fd_find(some_fd fd)
 	struct sock_com *ret_val = NULL;
 	struct sock_com *pos;
 
-	pthread_mutex_lock(&sock_com_lock);
+	mutex_lock(&sock_com_lock);
 	list_for_each_entry(pos, &sock_com_list, l) {
 		if(pos->fd == fd) {
 			ret_val = pos;
 			break;
 		}
 	}
-	pthread_mutex_unlock(&sock_com_lock);
+	mutex_unlock(&sock_com_lock);
 	return ret_val;
 }
 
@@ -1614,7 +1614,7 @@ static my_pollfd *sock_com_create_pfd(my_pollfd *pfd, unsigned *num, unsigned *l
 	struct sock_com *pos;
 	unsigned i = 0;
 
-	pthread_mutex_lock(&sock_com_lock);
+	mutex_lock(&sock_com_lock);
 	list_for_each_entry(pos, &sock_com_list, l)
 	{
 		if(!pos->enabled)
@@ -1632,7 +1632,7 @@ static my_pollfd *sock_com_create_pfd(my_pollfd *pfd, unsigned *num, unsigned *l
 		pfd[i].revents = 0;
 		i++;
 	}
-	pthread_mutex_unlock(&sock_com_lock);
+	mutex_unlock(&sock_com_lock);
 	*num = i;
 	return pfd;
 }

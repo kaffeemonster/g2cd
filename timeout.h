@@ -42,7 +42,7 @@ struct timeout
 # ifndef WIN32
 	struct rb_node rb;
 	struct timespec t;
-	pthread_mutex_t lock;
+	mutex_t lock;
 # else
 	HANDLE t_handle;
 # endif
@@ -63,13 +63,13 @@ struct timeout
 static inline void INIT_TIMEOUT(struct timeout *t)
 {
 	RB_CLEAR_NODE(&t->rb);
-	pthread_mutex_init(&t->lock, NULL);
+	mutex_init(&t->lock);
 	t->rearm_in_progress = 0;
 }
 
 static inline void DESTROY_TIMEOUT(struct timeout *t GCC_ATTR_UNUSED_PARAM)
 {
-//	pthread_mutex_destroy(&t->lock);
+//	mutex_destroy(&t->lock);
 }
 # else
 static inline void INIT_TIMEOUT(struct timeout *t)

@@ -66,7 +66,7 @@ bool hzp_alloc(void)
 	return true;
 }
 
-static pthread_mutex_t hzp_free_lock;
+static mutex_t hzp_free_lock;
 GCC_ATTR_CONSTRUCT __init static void init_hzp_free_lock(void)
 {
 #ifdef DRD_ME
@@ -74,7 +74,7 @@ GCC_ATTR_CONSTRUCT __init static void init_hzp_free_lock(void)
 	DRD_IGNORE_VAR(hzp_threads);
 	DRD_IGNORE_VAR(hzp_freelist);
 #endif
-	if((errno = pthread_mutex_init(&hzp_free_lock, NULL)))
+	if((errno = mutex_init(&hzp_free_lock)))
 		diedie("couldn't init hzp free lock");
 }
 
@@ -86,7 +86,7 @@ void hzp_free(void)
 	atomicst_t *whead;
 
 	local_hzp.flags.used = false;
-	if(unlikely(pthread_mutex_lock(&hzp_free_lock)))
+	if(unlikely(mutex_lock(&hzp_free_lock)))
 		return;
 
 	/* travers list of threads */
@@ -103,7 +103,7 @@ void hzp_free(void)
 		}
 	}
 
-	pthread_mutex_unlock(&hzp_free_lock);
+	mutex_unlock(&hzp_free_lock);
 }
 #else
 static pthread_key_t key2hzp;

@@ -4255,10 +4255,10 @@ out_free:
 	return 0;
 }
 
-static pthread_mutex_t crawl_s_lock;
+static mutex_t crawl_s_lock;
 static GCC_ATTR_CONSTRUCT __init void init_crawl_lock(void)
 {
-	if((errno = pthread_mutex_init(&crawl_s_lock, NULL)))
+	if((errno = mutex_init(&crawl_s_lock)))
 		diedie("could not init crawl lock");
 }
 
@@ -4271,14 +4271,14 @@ static bool handle_CRAWLR(struct ptype_action_args *parg)
 	bool ret_val = false;
 	int res;
 
-	if(unlikely(pthread_mutex_lock(&crawl_s_lock)))
+	if(unlikely(mutex_lock(&crawl_s_lock)))
 		return false;
 
 	if(local_time_now < (last_send + CRAWLR_TIMEOUT))
 		goto out_unlock;
 	last_send = local_time_now;
 
-	if(unlikely(res = pthread_mutex_unlock(&crawl_s_lock))) {
+	if(unlikely(res = mutex_unlock(&crawl_s_lock))) {
 		errno = res;
 		diedie("crawl_s_lock stuck, bye!");
 	}
@@ -4425,7 +4425,7 @@ out_free:
 	return ret_val;
 
 out_unlock:
-	if(unlikely(res = pthread_mutex_unlock(&crawl_s_lock))) {
+	if(unlikely(res = mutex_unlock(&crawl_s_lock))) {
 		errno = res;
 		diedie("crawl_s_lock stuck, bye!");
 	}
@@ -4470,13 +4470,13 @@ static const struct s_data *get_s_data(bool timeout GCC_ATTR_UNUSED_PARAM)
 {
 	const struct s_data *ret_val = NULL;
 #if defined(HAVE_DLOPEN) && !defined(WIN32)
-	static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
+	static mutex_t s_lock = MUTEX_INITIALIZER;
 	static void *handle;
 	static const struct s_data *s_data;
 	static time_t last_send;
 	int res;
 
-	if(unlikely(pthread_mutex_lock(&s_lock)))
+	if(unlikely(mutex_lock(&s_lock)))
 		return NULL;
 
 	if(!handle) {
@@ -4499,7 +4499,7 @@ static const struct s_data *get_s_data(bool timeout GCC_ATTR_UNUSED_PARAM)
 
 	ret_val = s_data;
 out_unlock:
-	if(unlikely(res = pthread_mutex_unlock(&s_lock))) {
+	if(unlikely(res = mutex_unlock(&s_lock))) {
 		errno = res;
 		diedie("s_lock stuck, bye!");
 	}

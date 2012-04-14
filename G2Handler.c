@@ -66,7 +66,7 @@ void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[MULTI_RECV_N
 	g2_connection_t *w_entry = e_wptr->data.ptr;
 	int lock_res;
 
-	if((lock_res = pthread_mutex_trylock(&w_entry->lock))) {
+	if((lock_res = mutex_trylock(&w_entry->lock))) {
 		/* somethings wrong */
 		if(EBUSY == lock_res)
 			return; /* if already locked, do nothing */
@@ -86,7 +86,7 @@ void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[MULTI_RECV_N
 			recycle_con(tmp_con_holder, epoll_fd, false);
 		else { /* this should not happen... */
 			logg_pos(LOGF_ERR, "Somethings wrong with our polled FD's, couldn't solve it\n");
-			pthread_mutex_unlock(&w_entry->lock);
+			mutex_unlock(&w_entry->lock);
 		}
 		return;
 	}
@@ -490,7 +490,7 @@ nothing_to_read:
 	manage_buffer_after(&w_entry->recv, lrecv_buff);
 	manage_buffer_after(&w_entry->send, lsend_buff);
 	shortlock_lock(&w_entry->pts_lock);
-	pthread_mutex_unlock(&w_entry->lock);
+	mutex_unlock(&w_entry->lock);
 	p_entry->events = w_entry->poll_interrests;
 	shortlock_unlock(&w_entry->pts_lock);
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {

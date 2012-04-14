@@ -73,7 +73,7 @@ struct guid_cache_entry
 };
 
 static struct {
-	pthread_mutex_t lock;
+	mutex_t lock;
 	int guid_dump;
 	uint32_t ht_seed;
 	struct hlist_head free_list;
@@ -93,7 +93,7 @@ bool __init g2_guid_init(void)
 	char *name, *buff;
 	size_t name_len = 0, i;
 
-	if((errno = pthread_mutex_init(&cache.lock, NULL))) {
+	if((errno = mutex_init(&cache.lock))) {
 		logg_errno(LOGF_ERR, "initialising GUID cache lock");
 		return false;
 	}
@@ -376,7 +376,7 @@ bool g2_guid_lookup(const uint8_t guid_a[GUID_SIZE], enum guid_type gt, union co
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return false;
 
 	/* already in the cache? */
@@ -389,7 +389,7 @@ bool g2_guid_lookup(const uint8_t guid_a[GUID_SIZE], enum guid_type gt, union co
 	ret_val = true;
 
 out_unlock:
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("gnarf, GUID cache lock stuck, bye!");
 	}
@@ -426,7 +426,7 @@ bool g2_guid_add(const uint8_t guid_a[GUID_SIZE], const union combo_addr *addr, 
 	 */
 	barrier();
 
-	if(unlikely(pthread_mutex_lock(&cache.lock)))
+	if(unlikely(mutex_lock(&cache.lock)))
 		return ret_val;
 
 	/* already in the cache? */
@@ -476,7 +476,7 @@ life_tree_error:
 		cache_ht_add(e, h);
 
 out_unlock:
-	if(unlikely(h = pthread_mutex_unlock(&cache.lock))) {
+	if(unlikely(h = mutex_unlock(&cache.lock))) {
 		errno = h;
 		diedie("gnarf, GUID cache lock stuck, bye!");
 	}

@@ -427,7 +427,7 @@ void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM
 	g2_connection_t *tmp_con = ev->data.ptr;
 	int lock_res;
 
-	if((lock_res = pthread_mutex_trylock(&tmp_con->lock))) {
+	if((lock_res = mutex_trylock(&tmp_con->lock))) {
 		/* somethings wrong */
 		if(EBUSY == lock_res)
 			return; /* if already locked, do nothing */
@@ -447,7 +447,7 @@ void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM
 
 	tmp_con->gup = GUP_G2CONNEC;
 	shortlock_lock(&tmp_con->pts_lock);
-	pthread_mutex_unlock(&tmp_con->lock);
+	mutex_unlock(&tmp_con->lock);
 	ev->events = tmp_con->poll_interrests;
 	shortlock_unlock(&tmp_con->pts_lock);
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, tmp_con->com_socket, ev)) {
@@ -497,7 +497,7 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, some_fd 
 	if(!ret_val)
 	{
 		shortlock_lock(&w_entry->pts_lock);
-		pthread_mutex_unlock(&w_entry->lock);
+		mutex_unlock(&w_entry->lock);
 		/*
 		 * First release lock, than change epoll foo
 		 * This is inherent racy, but prevents that another thread

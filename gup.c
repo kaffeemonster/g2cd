@@ -633,7 +633,7 @@ int handler_active_timeout(void *arg)
 	if(local_time_now >= (con->last_active + (3 * HANDLER_ACTIVE_TIMEOUT)))
 	{
 		logg_develd("run into timeout for %p#I\n", &con->remote_host);
-		if(EBUSY == pthread_mutex_trylock(&con->lock))
+		if(EBUSY == mutex_trylock(&con->lock))
 		{
 			/*
 			 * the connection is already locked, we can not tear it down,
@@ -651,7 +651,7 @@ int handler_active_timeout(void *arg)
 			logg_devel("direct teardown\n");
 			teardown_con(con, worker.epollfd);
 			/* we hold the hzp ref on it */
-			pthread_mutex_unlock(&con->lock);
+			mutex_unlock(&con->lock);
 			return 0;
 		}
 	}
