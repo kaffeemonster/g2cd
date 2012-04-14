@@ -423,7 +423,7 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 	if(ioctl(con->com_socket, SIOCOUTQ, &val) < 0)
 #endif
 		val = 0;
-	shortlock_t_lock(&con->pts_lock);
+	shortlock_lock(&con->pts_lock);
 	if(unlikely(con->flags.dismissed ||
 	  ((val || !list_empty(&con->packets_to_send)) &&
 	    local_time_now >= con->last_send + (3 * HANDLER_ACTIVE_TIMEOUT))))
@@ -437,7 +437,7 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 		 * The worker do not seem to respond to this sucker,
 		 * so bounce it to the timer thread.
 		 */
-		shortlock_t_unlock(&con->pts_lock);
+		shortlock_unlock(&con->pts_lock);
 		btt = malloc(sizeof(*btt));
 		/*
 		 * make sure we lock the conection to keep out the
@@ -467,7 +467,7 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 		}
 		return 0;
 	}
-	shortlock_t_unlock(&con->pts_lock);
+	shortlock_unlock(&con->pts_lock);
 
 	if(con->flags.upeer)
 		return check_hub_health(con, carg);

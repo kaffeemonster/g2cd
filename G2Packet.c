@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004 - 2012 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -919,9 +919,9 @@ static void g2_packet_add2target(g2_packet_t *to_add, struct list_head *target, 
 {
 	if(target_lock)
 	{
-		shortlock_t_lock(target_lock);
+		shortlock_lock(target_lock);
 		list_add_tail(&to_add->list, target);
-		shortlock_t_unlock(target_lock);
+		shortlock_unlock(target_lock);
 	}
 	else
 		list_add_tail(&to_add->list, target);

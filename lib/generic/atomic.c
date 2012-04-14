@@ -2,7 +2,7 @@
  * atomic.c
  * generic implementation of atomic ops
  *
- * Copyright (c) 2006-2010 Jan Seiffert
+ * Copyright (c) 2006-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -46,7 +46,7 @@ static __init void gen_atomic_init(void)
 	int i = ATOMIC_HASH_SIZE - 1;
 	do
 	{
-		if(shortlock_t_init(gen_atomic_lock + i))
+		if(shortlock_init(gen_atomic_lock + i))
 			diedie("initialising generic atomic locks");
 	}
 	while(i--);
@@ -55,75 +55,75 @@ static __init void gen_atomic_init(void)
 // TODO: catch errors?
 void gen_atomic_inc(atomic_t *x)
 {
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	x->d++;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 }
 
 int gen_atomic_inc_return(atomic_t *x)
 {
 	int ret;
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	ret = x->d++;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 	return ret;
 }
 
 void gen_atomic_dec(atomic_t *x)
 {
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	x->d--;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 }
 
 int gen_atomic_dec_test(atomic_t *x)
 {
 	int retval;
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	retval = --(x->d) == 0;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 	return retval;
 }
 
 int gen_atomic_x(int nval, atomic_t *oval)
 {
 	int tmp;
-	shortlock_t_lock(ATOMIC_HASH(oval));
+	shortlock_lock(ATOMIC_HASH(oval));
 	tmp = oval->d;
 	oval->d = nval;
-	shortlock_t_unlock(ATOMIC_HASH(oval));
+	shortlock_unlock(ATOMIC_HASH(oval));
 	return tmp;
 }
 
 void *gen_atomic_px(void *nval, atomicptr_t *oval)
 {
 	void *tmp;
-	shortlock_t_lock(ATOMIC_HASH(oval));
+	shortlock_lock(ATOMIC_HASH(oval));
 	tmp = oval->d;
 	oval->d = nval;
-	shortlock_t_unlock(ATOMIC_HASH(oval));
+	shortlock_unlock(ATOMIC_HASH(oval));
 	return tmp;
 }
 
 int gen_atomic_cmpx(int nval, int oval, atomic_t *x)
 {
 	int ret_val = oval;
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	ret_val = x->d;
 	if(oval == ret_val)
 		x->d = nval;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 	return ret_val;
 }
 
 void *gen_atomic_cmppx(void *nval, void *oval, atomicptr_t *x)
 {
 	void *ret_val = oval;
-	shortlock_t_lock(ATOMIC_HASH(x));
+	shortlock_lock(ATOMIC_HASH(x));
 	ret_val = x->d;
 	if(oval == ret_val)
 		x->d = nval;
-	shortlock_t_unlock(ATOMIC_HASH(x));
+	shortlock_unlock(ATOMIC_HASH(x));
 	return ret_val;
 }
 

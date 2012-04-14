@@ -2,7 +2,7 @@
  * G2Connection.c
  * helper-function for G2-Connections
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -278,7 +278,7 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 	}
 	else {
 		INIT_HLIST_NODE(&work_entry->registry);
-		shortlock_t_init(&work_entry->pts_lock);
+		shortlock_init(&work_entry->pts_lock);
 		pthread_mutex_init(&work_entry->lock, NULL);
 		work_entry->qht = NULL;
 	}
@@ -350,7 +350,7 @@ static void g2_con_free_internal(g2_connection_t *to_free)
 //	DRD_STOP_IGNORING_VAR(to_free->gup);
 #endif
 
-	shortlock_t_destroy(&to_free->pts_lock);
+	shortlock_destroy(&to_free->pts_lock);
 	pthread_mutex_destroy(&to_free->lock);
 }
 

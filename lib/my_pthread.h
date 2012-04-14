@@ -26,6 +26,25 @@
 #ifndef LIB_MY_PTHREAD_H
 # define LIB_MY_PTHREAD_H
 
+/*
+ * if we are on a SMP-System (also HT) take a spinlock for
+ * short locks, else a mutex, since our only Processor shouldn't
+ * active spin-wait for itself
+ */
+#if defined HAVE_SMP && (defined HAVE_SPINLOCKS || defined WIN32)
+# define shortlock_t	pthread_spinlock_t
+# define shortlock_init(da_lock)	pthread_spin_init (da_lock, PTHREAD_PROCESS_PRIVATE)
+# define shortlock_destroy(da_lock)	pthread_spin_destroy(da_lock)
+# define shortlock_lock(da_lock)	pthread_spin_lock(da_lock)
+# define shortlock_unlock(da_lock)	pthread_spin_unlock(da_lock)
+#else
+# define shortlock_t	pthread_mutex_t
+# define shortlock_init(da_lock)	pthread_mutex_init (da_lock, NULL)
+# define shortlock_destroy(da_lock)	pthread_mutex_destroy(da_lock)
+# define shortlock_lock(da_lock)	pthread_mutex_lock(da_lock)
+# define shortlock_unlock(da_lock)	pthread_mutex_unlock(da_lock)
+#endif /* HAVE_SMP */
+
 # ifndef WIN32
 #  include <pthread.h>
 #  define set_s_errno(x) (errno = (x))

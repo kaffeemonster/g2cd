@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * code to accept connections and handshake G2
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -446,10 +446,10 @@ void handle_con_a(struct epoll_event *ev, struct norm_buff *lbuff[MULTI_RECV_NUM
 		return;
 
 	tmp_con->gup = GUP_G2CONNEC;
-	shortlock_t_lock(&tmp_con->pts_lock);
+	shortlock_lock(&tmp_con->pts_lock);
 	pthread_mutex_unlock(&tmp_con->lock);
 	ev->events = tmp_con->poll_interrests;
-	shortlock_t_unlock(&tmp_con->pts_lock);
+	shortlock_unlock(&tmp_con->pts_lock);
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, tmp_con->com_socket, ev)) {
 		logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 		/*
@@ -483,9 +483,9 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, some_fd 
 			goto killit_silent;
 
 		if(initiate_g2(w_entry)) {
-			shortlock_t_lock(&w_entry->pts_lock);
+			shortlock_lock(&w_entry->pts_lock);
 			w_entry->poll_interrests |= (uint32_t) EPOLLOUT;
-			shortlock_t_unlock(&w_entry->pts_lock);
+			shortlock_unlock(&w_entry->pts_lock);
 		} else if(w_entry->flags.dismissed)
 			goto killit;
 		else if (G2CONNECTED == w_entry->connect_state)
@@ -496,7 +496,7 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, some_fd 
 	manage_buffer_after(&w_entry->send, lsend_buff);
 	if(!ret_val)
 	{
-		shortlock_t_lock(&w_entry->pts_lock);
+		shortlock_lock(&w_entry->pts_lock);
 		pthread_mutex_unlock(&w_entry->lock);
 		/*
 		 * First release lock, than change epoll foo
@@ -505,7 +505,7 @@ static g2_connection_t *handle_socket_io_a(struct epoll_event *p_entry, some_fd 
 		 * before we could get out of the locked region
 		 */
 		p_entry->events = w_entry->poll_interrests;
-		shortlock_t_unlock(&w_entry->pts_lock);
+		shortlock_unlock(&w_entry->pts_lock);
 		if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 			logg_errno(LOGF_NOTICE, "changing sockets Epoll-interrests");
 			w_entry->flags.dismissed = true;
@@ -1356,9 +1356,9 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			/* and UPROC? I don't want their profile, i don't care about the content,
 			 * it's xml, but broken SH 2.5.0.0 does not deliver GUID */
 			if(g2_packet_add_LNI(to_con)) {
-				shortlock_t_lock(&to_con->pts_lock);
+				shortlock_lock(&to_con->pts_lock);
 				to_con->poll_interrests |= (uint32_t) EPOLLOUT;
-				shortlock_t_unlock(&to_con->pts_lock);
+				shortlock_unlock(&to_con->pts_lock);
 			}
 			timeout_add(&to_con->active_to, HANDLER_ACTIVE_TIMEOUT);
 			more_bytes_needed = true;

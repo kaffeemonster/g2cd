@@ -142,7 +142,7 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 		 * This spinlock protects the list, but also
 		 * barriers the packet creation from our reading
 		 */
-		shortlock_t_lock(&w_entry->pts_lock);
+		shortlock_lock(&w_entry->pts_lock);
 		if(!list_empty(&w_entry->packets_to_send))
 		{
 			struct list_head head;
@@ -151,7 +151,7 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 more_packet_encode:
 			INIT_LIST_HEAD(&head);
 			list_splice_init(&w_entry->packets_to_send, &head);
-			shortlock_t_unlock(&w_entry->pts_lock);
+			shortlock_unlock(&w_entry->pts_lock);
 
 			list_for_each_safe(e, n, &head)
 			{
@@ -170,17 +170,17 @@ more_packet_encode:
 				list_del(e);
 				g2_packet_free(entry);
 			}
-			shortlock_t_lock(&w_entry->pts_lock);
+			shortlock_lock(&w_entry->pts_lock);
 			if(!list_empty(&head))
 				list_splice(&head, &w_entry->packets_to_send);
 			else if(!list_empty(&w_entry->packets_to_send))
 				goto more_packet_encode;
-			shortlock_t_unlock(&w_entry->pts_lock);
+			shortlock_unlock(&w_entry->pts_lock);
 			if(w_entry->flags.dismissed)
 				return w_entry;
 		}
 		else
-			shortlock_t_unlock(&w_entry->pts_lock);
+			shortlock_unlock(&w_entry->pts_lock);
 
 no_pfill_before_write:
 		if(ENC_DEFLATE == w_entry->encoding_out)
@@ -255,10 +255,10 @@ retry_pack:
 				buffer_compact(*w_entry->send_u);
 			if(buffer_remaining(*w_entry->send_u) > 10)
 			{
-				shortlock_t_lock(&w_entry->pts_lock);
+				shortlock_lock(&w_entry->pts_lock);
 				if(!list_empty(&w_entry->packets_to_send))
 						goto more_packet_encode;
-				shortlock_t_unlock(&w_entry->pts_lock);
+				shortlock_unlock(&w_entry->pts_lock);
 			}
 			/*
 			 * when the o-buffer is full (avail_out == 0) we have to
@@ -414,9 +414,9 @@ retry_unpack:
 					parg.target      = &w_entry->packets_to_send;
 					parg.opaque      = NULL;
 					if(g2_packet_decide_spec(&parg, g2_packet_dict)) {
-						shortlock_t_lock(&w_entry->pts_lock);
+						shortlock_lock(&w_entry->pts_lock);
 						w_entry->poll_interrests |= (uint32_t)EPOLLOUT;
-						shortlock_t_unlock(&w_entry->pts_lock);
+						shortlock_unlock(&w_entry->pts_lock);
 					}
 
 					save_build_packet = false;
@@ -489,10 +489,10 @@ retry_unpack:
 nothing_to_read:
 	manage_buffer_after(&w_entry->recv, lrecv_buff);
 	manage_buffer_after(&w_entry->send, lsend_buff);
-	shortlock_t_lock(&w_entry->pts_lock);
+	shortlock_lock(&w_entry->pts_lock);
 	pthread_mutex_unlock(&w_entry->lock);
 	p_entry->events = w_entry->poll_interrests;
-	shortlock_t_unlock(&w_entry->pts_lock);
+	shortlock_unlock(&w_entry->pts_lock);
 	if(0 > my_epoll_ctl(epoll_fd, EPOLL_CTL_MOD, w_entry->com_socket, p_entry)) {
 		logg_errno(LOGF_DEBUG, "changing EPoll interrests");
 		return w_entry;

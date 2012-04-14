@@ -608,13 +608,13 @@ int accept_timeout(void *arg)
 
 	p_entry.data.u64 = 0;
 	p_entry.data.ptr = con;
-	shortlock_t_lock(&con->pts_lock);
+	shortlock_lock(&con->pts_lock);
 	con->flags.dismissed = true;
 // TODO: also try to teardown?
 	/* recheck with rsp. to the conreg & locking on accept */
 	/* nope: we try to cancel this timer on teardown */
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-	shortlock_t_unlock(&con->pts_lock);
+	shortlock_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 	return 0;
 }
@@ -640,10 +640,10 @@ int handler_active_timeout(void *arg)
 			 * or we would face a deadlock vs. timer handling, retry in a second
 			 */
 			ret_val = 10;
-			shortlock_t_lock(&con->pts_lock);
+			shortlock_lock(&con->pts_lock);
 			con->flags.dismissed = true;
 			p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-			shortlock_t_unlock(&con->pts_lock);
+			shortlock_unlock(&con->pts_lock);
 		}
 		else
 		{
@@ -663,10 +663,10 @@ int handler_active_timeout(void *arg)
 		if(!pi)
 			return ret_val;
 		pi->type = PT_PI;
-		shortlock_t_lock(&con->pts_lock);
+		shortlock_lock(&con->pts_lock);
 		list_add_tail(&pi->list, &con->packets_to_send);
 		p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-		shortlock_t_unlock(&con->pts_lock);
+		shortlock_unlock(&con->pts_lock);
 	}
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 	return ret_val;
@@ -681,9 +681,9 @@ int handler_z_flush_timeout(void *arg)
 	con->u.handler.z_flush = true;
 	/* matched by the rmb() in G2Handler.c, z_flush handling on write */
 	wmb();
-	shortlock_t_lock(&con->pts_lock);
+	shortlock_lock(&con->pts_lock);
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
-	shortlock_t_unlock(&con->pts_lock);
+	shortlock_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 	return 0;
 }
@@ -700,12 +700,12 @@ void g2_handler_con_mark_write(struct g2_packet *p, struct g2_connection *con)
 	 * it also barriers our packet creation before another
 	 * cpu reads the packets to write them to the socket
 	 */
-	shortlock_t_lock(&con->pts_lock);
+	shortlock_lock(&con->pts_lock);
 
 	list_add_tail(&p->list, &con->packets_to_send);
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
 
-	shortlock_t_unlock(&con->pts_lock);
+	shortlock_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 }
 
@@ -726,11 +726,11 @@ void gup_con_mark_write(struct g2_connection *con)
 	 * it also barriers our packet creation before another
 	 * cpu reads the packets to write them to the socket
 	 */
-	shortlock_t_lock(&con->pts_lock);
+	shortlock_lock(&con->pts_lock);
 
 	p_entry.events = con->poll_interrests |= (uint32_t)EPOLLOUT;
 
-	shortlock_t_unlock(&con->pts_lock);
+	shortlock_unlock(&con->pts_lock);
 	my_epoll_ctl(worker.epollfd, EPOLL_CTL_MOD, con->com_socket, &p_entry);
 }
 
