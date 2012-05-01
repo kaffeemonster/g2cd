@@ -1875,9 +1875,37 @@ static void udp_setup_filter(some_fd udp_so GCC_ATTR_UNUSED_PARAM, union combo_a
 	 * If this fails or is not avail., it's OK.
 	 */
 # include "G2UDPPValid.h"
-	struct bpf_program prg;
+	struct {
+		/*
+		 * The Linux kernel internal struct bpf_program (struct sock_fprog),
+		 * which has to be passed into the kernel, is not like the BSD
+		 * original. The len field is only an 16 bit quantity.
+		 * You can either include the kernel header, but including kernel
+		 * header is always considered bad taste, or the non matching
+		 * definition from libpcap.
+		 *
+		 * <insert 4 letter words here>
+		 *
+		 * Under LE targets, this works by accident, since the lower
+		 * 16 bit of an int overlap with the 16 bit len. On BE targets
+		 * the number gets written in the padding. oops.
+		 *
+		 * Apropos padding, thanks to this move the struct depends on
+		 * the silent padding of at least 2 bytes between len and the
+		 * pointer. On mixed bit targets (32 Bit userspace process, 64
+		 * bit kernel) the kernel internal representation surely will
+		 * put there 6 bytes of padding, hopefully the compat layer,
+		 * to translate the call, will do the right thing(TM).
+		 *
+		 * According to net maintainer there is no issue and nothing
+		 * to talk about...
+		 */
+		unsigned short bf_len;
+		const struct bpf_insn *bf_insns;
+	} prg;
 	int ret_val;
 
+	memset(&prg, 0, sizeof(prg));
 	prg.bf_len   = anum(G2UDPPValid);
 	prg.bf_insns = (struct bpf_insn *)(intptr_t)G2UDPPValid;
 
