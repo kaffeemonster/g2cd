@@ -2,7 +2,7 @@
  * G2Packet.h
  * home of g2_packet_t and header-file for G2Packet.c
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -50,13 +50,13 @@
  * The number behind the name is an internal detail of the packet
  * typer ATM. It's the sorting weight when packets share the same
  * prefix. A packet sortet first gets tested first everytime a
- * packet decends in this prefix!! So this should be the common packet.
+ * packet decends in this prefix! So this should be the common packet.
  * (Do not confuse with the sorting down here, which is <see above>.
  * When there is no "collision", the packet typer sorts alphabeticaly,
  * then by weight)
  *
  * Hint: ATM there are some hacky optimisations to reduce
- * cache footprint, so after more than 126 Packet types
+ * cache footprint, so after more than 32k Packet types
  * things need to be reviewd. And hopefully none gets
  * interresting ideas what are legal characters in a type.
  */
@@ -207,6 +207,8 @@ typedef struct g2_packet
 			char    buf[1 + 3 + 4 + 32];
 		} in;
 		char       out[sizeof(struct _pd_mixed_buf_internal)];
+		uint32_t   type[2];
+		uint64_t   type_ll;
 	} pd;
 
 	/* everything up to data trunk gets wiped */
@@ -251,7 +253,7 @@ _G2PACK_EXTRN(void g2_packet_local_refill(void));
 _G2PACK_EXTRN(void g2_packet_free(g2_packet_t *));
 _G2PACK_EXTRN(void g2_packet_free_glob(g2_packet_t *));
 _G2PACK_EXTRN(void g2_packet_clean(g2_packet_t *to_clean));
-_G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const char type_str[16]));
+_G2PACK_EXTRN(void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2]));
 _G2PACK_EXTRNVAR(const char g2_ptype_names[PT_MAXIMUM][8])
 _G2PACK_EXTRNVAR(const uint8_t g2_ptype_names_length[PT_MAXIMUM])
 

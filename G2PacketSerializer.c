@@ -2,7 +2,7 @@
  * G2PacketSerializer.c
  * Serializer for G2-packets
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -202,12 +202,6 @@ static inline int read_length(struct big_buff *source, g2_packet_t *target, size
 
 static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 {
-	union
-	{
-		char type_str[16]; /* 8 + 2 */
-		uint64_t type_ll[2];
-	} u;
-
 	/* fetch the up to eigth type-bytes */
 	if(unlikely(target->type_length > buffer_remaining(*source))) {
 		target->more_bytes_needed = true;
@@ -215,21 +209,14 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 	}
 
 	/*
-	 * Since a type can be 8 byte long, it is also a uint64_t. And
-	 * because we need !two! zeros behind the type, we set the !two!
-	 * u64 to 0, this should be 2 or 4 moves.
-	 * One day we might change the packet typer to a "magic 64Bit
-	 * interpreter", which means you treat the u64 with 0 padding at
-	 * the end as one big number, to lookup (hashtable, what ever,
-	 * don't know, it't the super duper thing shareaza is doing).
-	 * instead of our byte-by-byte table interpreter.
+	 * Since a type can be 8 bytes long, it is also an uint64_t.
+	 * This should be 1 or 2 moves.
 	 */
-	u.type_ll[0] = 0;
-	u.type_ll[1] = 0;
+	target->pd.type_ll = 0;
 
 	if(likely(target->type_length))
 	{
-		char *t_ptr = u.type_str, *s_ptr = buffer_start(*source);
+		char *s_ptr = buffer_start(*source);
 		char *h_ptr = &target->pd.in.type[0], c;
 		size_t i;
 
@@ -246,7 +233,6 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 			}
 			/* save unmodified header for forwarding */
 			*h_ptr++ = c;
-			*t_ptr++ = c;
 		}
 	} else {
 		/* Normaly can not happen, Illegal Packet... */
@@ -254,7 +240,7 @@ static inline int read_type_p(struct pointer_buff *source, g2_packet_t *target)
 		return -1;
 	}
 
-	g2_packet_find_type(target, u.type_str);
+	g2_packet_find_type(target, target->pd.type);
 
 	target->packet_decode++;
 	return 1;
@@ -632,7 +618,8 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				/* no, realloc */
 				char *tmp_ptr = NULL;
 				if(target->data_trunk_is_freeable ||
-				   target->length > sizeof(target->pd.in.buf))
+				   ((target->type != PT_UNKNOWN && target->length > sizeof(target->pd.out)) ||
+				    (target->type == PT_UNKNOWN && target->length > sizeof(target->pd.in.buf)) ))
 				{
 					struct packet_data_store *pds;
 
@@ -679,8 +666,13 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				else
 				{
 					target->data_trunk_is_freeable = false;
-					tmp_ptr = target->pd.in.buf;
-					target->data_trunk.capacity = sizeof(target->pd.in.buf);
+					if(target->type != PT_UNKNOWN) {
+						tmp_ptr = target->pd.out;
+						target->data_trunk.capacity = sizeof(target->pd.out);
+					} else {
+						tmp_ptr = target->pd.in.buf;
+						target->data_trunk.capacity = sizeof(target->pd.in.buf);
+					}
 				}
 
 				target->data_trunk.data = tmp_ptr;
@@ -742,22 +734,6 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 
 	return ret_val;
 }
-
-/*static inline bool g2_packet_extract_from_stream_xxx(struct norm_buff *source, g2_packet_t *target, size_t max_len)
-{
-	struct pointer_buff tmp_buf =
-		{.pos = source->pos,
-		 .limit = source->limit,
-		 .capacity = source->capacity,
-		 .data = source->data}; // refer to sec_buffer.h why this is needed
-	bool ret_val                = g2_packet_extract_from_stream(&tmp_buf, target, max_len);
-
-	source->pos                 = tmp_buf.pos;
-	source->limit               = tmp_buf.limit;
-	
-	return ret_val;
-}*/
-
 
 #if 0
 		case GET_CHILD_PACKETS:
@@ -876,9 +852,9 @@ ssize_t g2_packet_serialize_to_iovec(g2_packet_t *p, struct iovec vec[], size_t 
 	{
 	case DECIDE_ENCODE:
 		p->packet_encode = PREPARE_SERIALIZATION;
-	case SERIALIZATION_PREPARED_MIN:
-	case PREPARE_SERIALIZATION:
 	case PREPARE_SERIALIZATION_MIN:
+	case PREPARE_SERIALIZATION:
+	case SERIALIZATION_PREPARED_MIN:
 		ret = g2_packet_serialize_prep(p);
 		if(-1 == ret)
 			return ret;
@@ -997,15 +973,14 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 		{
 		case DECIDE_ENCODE:
 			source->packet_encode = PREPARE_SERIALIZATION_MIN;
-		case PREPARE_SERIALIZATION:
 		case PREPARE_SERIALIZATION_MIN:
+		case PREPARE_SERIALIZATION:
 			{
 				ssize_t ret;
 				ret = g2_packet_serialize_prep_min(source);
 				if(unlikely(-1 == ret))
 					return false;
 			}
-		case SERIALIZATION_PREPARED:
 		case SERIALIZATION_PREPARED_MIN:
 			source->packet_encode = SERIALIZE_CONTROL;
 		case SERIALIZE_CONTROL:
@@ -1027,18 +1002,16 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 					source->more_bytes_needed = true;
 					break;
 				}
-				if(likely(1 == source->length_length))
+				if(likely(!source->big_endian))
 					*buffer_start(*target) = (char)(source->length&0xFF);
 				else
 				{
-					if(likely(!source->big_endian))
+					if(likely(1 == source->length_length))
 						*buffer_start(*target) = (char)(source->length&0xFF);
-					else {
-						if(likely(2 == source->length_length))
-							*buffer_start(*target) = (char)((source->length>>8)&0xFF);
-						else
-							*buffer_start(*target) = (char)((source->length>>16)&0xFF);
-					}
+					else if(likely(2 == source->length_length))
+						*buffer_start(*target) = (char)((source->length>>8)&0xFF);
+					else
+						*buffer_start(*target) = (char)((source->length>>16)&0xFF);
 				}
 				target->pos++;
 			}
@@ -1092,6 +1065,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 			SERIALIZE_TYPE_ON_NUM(7, unlikely);
 		case SERIALIZE_TYPE8:
 			SERIALIZE_TYPE_ON_NUM(8, unlikely);
+		case SERIALIZATION_PREPARED:
 			/* How to continue ? */
 			if(source->is_literal || list_empty(&source->children)) {
 				source->packet_encode = SERIALIZE_DATA_PREP;
@@ -1193,11 +1167,10 @@ bool g2_packet_serialize_to_buff(g2_packet_t *source, struct norm_buff *target)
  */
 static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, bool write_header)
 {
-	size_t size = 0, child_size = 0, i, j;
-	uint8_t control = 0;
+	size_t size = 0, child_size = 0;
 
-	if(recurs > 20) {
-		logg_develd("ALARM: %p \n", p);
+	if(unlikely(recurs > 20)) {
+		logg_develd("Recursion ALARM %zu: %p \n", recurs, p);
 		return -1;
 	}
 
@@ -1273,25 +1246,25 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, 
 	}
 
 // TODO: this is broken ATM, and uneeded
-	control = create_control_byte(p);
-
 	/* check if headerspace is free */
-	if(p->data_trunk.data == p->pd.out)
+	if(!p->data_trunk_is_freeable &&
+	   p->data_trunk.data >= p->pd.out && p->data_trunk.data < p->pd.out + sizeof(p->pd.out))
 	{
 		size_t size_needed = p->length_length + p->type_length + 1;
 		/* OhOh, we have a Problem, data to send may stored in header space */
 		if((sizeof(p->pd.out) - size_needed) < buffer_remaining(p->data_trunk)) {
-			char *tmp_ptr;
+			struct packet_data_store *pds;
 			/* totaly fucked up, header and data to big */
 			logg_develd("Packet with stuffed data! Expensive Fixup for \"%s\": %zu\n",
 				g2_ptype_names[p->type], buffer_remaining(p->data_trunk));
-			if(!(tmp_ptr = malloc(sizeof(p->pd.out))))
+			pds = malloc(sizeof(*pds) + buffer_remaining(p->data_trunk));
+			if(!pds)
 				return -1;
-			my_memcpy(tmp_ptr, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
-			p->data_trunk.data = tmp_ptr;
+			my_memcpy(pds->data, buffer_start(p->data_trunk), buffer_remaining(p->data_trunk));
+			p->data_trunk.data = pds->data;
 			p->data_trunk_is_freeable = true;
 		}
-		else if(size_needed > p->data_trunk.pos)
+		else if(p->pd.out + size_needed > buffer_start(p->data_trunk))
 		{
 			size_t dlength = buffer_remaining(p->data_trunk);
 			/* move data up */
@@ -1304,22 +1277,28 @@ static ssize_t g2_packet_serialize_prep_internal(g2_packet_t *p, size_t recurs, 
 		}
 		/* else we are lucky bastards */
 	}
+	/* pre put the type name in the right spot, so it may not get overwritten */
+	if(p->type != PT_UNKNOWN)
+		cpy_rest(p->pd.out + 1 + p->length_length,
+		         g2_ptype_names[p->type], p->type_length);
+	else
+		my_memmove(p->pd.out + 1 + p->length_length,
+		           p->pd.in.type, p->type_length);
 
-	i = 0;
-	p->pd.out[i++] = control;
+	p->pd.out[0] = create_control_byte(p);
 	/* write the inner packet length */
 	if(1 == p->length_length)
-		p->pd.out[i++] = (char)size;
+		p->pd.out[1] = (char)size;
 	else if(!p->big_endian) {
 		uint32_t nsize = size;
-		for(j = 0; j < p->length_length; j++, nsize >>=8)
+		size_t i, j;
+		for(i = 1, j = 0; j < p->length_length; j++, nsize >>=8)
 			p->pd.out[i++] = (char)(nsize & 0xFF);
 	} else {
-		for(j = p->length_length; j--;)
+		size_t i, j;
+		for(i = 1, j = p->length_length; j--;)
 			p->pd.out[i++] = (char)(size >> (j*8)) & 0xFF;
 	}
-	for(j = 0; j < p->type_length; i++, j++)
-		p->pd.out[i] = g2_ptype_names[p->type][j];
 
 	/*
 	 * return REAL packet length !!
@@ -1370,4 +1349,4 @@ ssize_t g2_packet_serialize_prep(g2_packet_t *p)
 }
 
 static char const rcsid_ps[] GCC_ATTR_USED_VAR = "$Idi$";
-//EOF
+/* EOF */

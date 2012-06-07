@@ -409,43 +409,53 @@ const uint8_t g2_ptype_names_length[] GCC_ATTR_VIS("hidden") =
  * Packet typer function
  *
  */
-void g2_packet_find_type(g2_packet_t *packet, const char type_str[16])
+void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 {
-	unsigned i = g2_ptype_dict_table[(unsigned char)type_str[0]] << 1;
-	unsigned j = 1;
+	unsigned low, mid, high;
+	uint32_t key, mval;
 
-	prefetch(&g2_ptype_state_table[i]);
+	prefetch(&g2_ptyper_table[(T_NUM_BASE / 2) - 1]);
 	packet->type = PT_UNKNOWN;
-	if(unlikely((unsigned char)-1 == i))
-		goto out;
 
+	low  = 0;
+	high = T_NUM_BASE - 1;
+	key = type[0];
+
+	/* bsearch the packet name */
 	do
 	{
-		const unsigned char x = g2_ptype_state_table[i].c;
-		const char match = T_GET_CHAR(x);
-		logg_develd_old("\tp x: 0x%02X m: 0x%02X, '%c', %i, %i\n", x, match ? : '0',
-			type_str[j] ? : '0', i, g2_ptype_state_table[i].u.d);
-		if(likely(type_str[j] == match))
-		{
-			if(likely(T_IS_LAST(x))) {
-				if(likely(type_str[j+1] == '\0')) {
-					packet->type = T_GET_TYPE(g2_ptype_state_table[i].u.t);
-					break;;
-				}
-			} else {
-				i += T_GET_DELTA(g2_ptype_state_table[i].u.d);
-				j++;
-				continue;
-			}
-		}
-		if(unlikely(T_IS_END(g2_ptype_state_table[i].u.d)))
-			break;
-		i++;
-	} while(j < 16);
+		mid = (low + high) / 2;
+		mval = g2_ptyper_table[mid].c;
 
-out:
+		if(mval < key)
+			low = mid + 1;
+		else if(mval > key)
+			high = mid - 1;
+		else
+			break;
+	} while(low <= high);
+
+	if(likely(mval == key))
+	{
+		if(likely(g2_ptyper_table[mid].t != PT_UNKNOWN))
+			packet->type = g2_ptyper_table[mid].t;
+		else
+		{
+			key = type[1];
+			do
+			{
+				mid = g2_ptyper_table[mid].idx;
+				if(g2_ptyper_table[mid].c == key) {
+					packet->type = g2_ptyper_table[mid].t;
+					break;
+				}
+			} while(g2_ptyper_table[mid].idx != 0);
+		}
+	}
+
 	if(unlikely(PT_UNKNOWN == packet->type))
-		logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\"\tC: %s\n", type_str, packet->is_compound ? "true" : "false");
+		logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\" (%#08x,%#08x)\tC: %s\n",
+			(const char *)type, type[0], type[1], packet->is_compound ? "true" : "false");
 }
 
 /*

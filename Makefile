@@ -619,7 +619,11 @@ print_pretty: $(TARED_FILES)
 #
 #
 G2PacketTyper.h: G2PacketTyperGenerator ccdrv
-	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator $@
+	@if [ "$(TARGET_ENDIAN)" = "little" ] ; then \
+		./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator -l $@ ; \
+	else \
+		./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2PacketTyperGenerator -b $@ ; \
+	fi
 
 G2HeaderFields.h: G2HeaderFieldsSort ccdrv
 	@./ccdrv -s$(VERBOSE) "GEN[$@]" ./G2HeaderFieldsSort $@

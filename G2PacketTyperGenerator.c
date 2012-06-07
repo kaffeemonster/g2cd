@@ -2,7 +2,7 @@
  * G2PacketTyperGenerator.c
  * Automatic generator for the G2-Packet typer tables
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -45,55 +45,242 @@ const struct p_names p_names[] =
 };
 #undef ENUM_CMD
 
+struct p_table {
+	unsigned start;
+	unsigned type;
+	unsigned idx;
+	long long weight;
+};
+
 #define die(x) do { fprintf(stderr, "%s::%s@%d: %s\n", __FILE__, __func__, __LINE__, x); exit(EXIT_FAILURE); } while(false)
 
-struct tree_hl
-{
-	char c;
-	bool last;
-	enum g2_ptype type;
-	long long weight;
-	int line;
-	size_t num_child;
-	size_t size_child;
-	struct tree_hl *child[];
-};
+# define swab32(x) ((unsigned int)(				\
+	(((unsigned int)(x) & (unsigned int)0x000000ffUL) << 24) |		\
+	(((unsigned int)(x) & (unsigned int)0x0000ff00UL) <<  8) |		\
+	(((unsigned int)(x) & (unsigned int)0x00ff0000UL) >>  8) |		\
+	(((unsigned int)(x) & (unsigned int)0xff000000UL) >> 24)))
 
-struct table_hl
-{
-	char c;
-	bool last;
-	bool last_table;
-	enum g2_ptype type;
-	uint8_t delta;
-	unsigned next;
-};
+# define swab64(x) ((unsigned long long)(				\
+	(((unsigned long long)(x) & (unsigned long long)0x00000000000000ffULL) << 56) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x000000000000ff00ULL) << 40) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x0000000000ff0000ULL) << 24) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x00000000ff000000ULL) <<  8) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x000000ff00000000ULL) >>  8) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x0000ff0000000000ULL) >> 24) |	\
+	(((unsigned long long)(x) & (unsigned long long)0x00ff000000000000ULL) >> 40) |	\
+	(((unsigned long long)(x) & (unsigned long long)0xff00000000000000ULL) >> 56)))
 
-static struct tree_hl *tree_hl_first[128];
-static unsigned table_hl_first[128];
-static struct table_hl table_hl[1024];
-static unsigned table_max;
 static const char *f_name = "G2PacketTyper.h";
+static int target_is_bigendian;
+static int verbose;
 static FILE *out;
+static unsigned table_used, table_base_num;
+static struct p_table *f;
 
-
-static void make_tree_hl(void);
-static void print_tree_hl(void);
-static void sort_tree_hl(void);
-static void clean_tree_hl(void);
-static void tree2table(void);
-static void print_table_hl(void);
-static void print_table_ll(void);
 static void print_trailer(void);
+static void print_table(void);
 static void print_score(void);
 static void print_weight(void);
+static int host_is_bigendian(void);
+
+static int p_table_cmp(const void *a, const void *b)
+{
+	const struct p_table *aa = a, *bb = b;
+	int diff;
+
+	diff = aa->start - bb->start;
+	if(diff)
+		return diff;
+	return bb->weight - aa->weight;
+}
+
+static int p_table_cmp_swp(const void *a, const void *b)
+{
+	const struct p_table *aa = a, *bb = b;
+	int diff;
+
+	diff = swab32(aa->start) - swab32(bb->start);
+	if(diff)
+		return diff;
+	return bb->weight - aa->weight;
+}
+
+static void new_p_table(void)
+{
+	unsigned i;
+	unsigned real_num, used, back_index, base_num;
+
+	f = malloc(PT_MAXIMUM * 2 * sizeof(*f));
+	if(!f)
+		die("allocating mem");
+	real_num = PT_MAXIMUM * 2;
+	base_num = back_index = PT_MAXIMUM-1;
+
+	/* add all packets to the array */
+	for(i = 1, used = 0, back_index; i < PT_MAXIMUM; i++)
+	{
+		memcpy(&f[i-1].start, &p_names[i].c[0], 4);
+		used++;
+		f[i-1].weight = p_names[i].weight;
+		if(p_names[i].c[3] != '\0')
+		{
+			f[i-1].type = PT_UNKNOWN;
+			f[i-1].idx = back_index;
+			memcpy(&f[back_index].start, &p_names[i].c[4], 4);
+			f[back_index].weight = p_names[i].weight;
+			f[back_index].type = i;
+			f[back_index].idx  = 0;
+			used++;
+			back_index++;
+		}
+		else
+		{
+			f[i-1].type = i;
+			f[i-1].idx  = 0;
+		}
+		if(used >= real_num)
+		{
+			struct p_table *t = realloc(f, real_num*2*sizeof(*f));
+			if(t) {
+				real_num *= 2;
+				f = t;
+			} else {
+				die("reallocating mem");
+			}
+		}
+	}
+	if(verbose)
+	{
+		for(i = 0; i < used; i++)
+		{
+			printf("%3.0u: \"%-4.4s\"\tt: %u\ti: %u\tw: %lli\n",
+					i, (const char *)&f[i].start, f[i].type, f[i].idx,
+					f[i].weight);
+		}
+		puts("----------------------------------------");
+	}
+
+	/* sort it */
+	qsort(f, PT_MAXIMUM-1, sizeof(*f),
+		target_is_bigendian != host_is_bigendian() ? p_table_cmp_swp : p_table_cmp);
+	if(verbose)
+	{
+		for(i = 0; i < used; i++)
+		{
+			printf("%3.0u: \"%-4.4s\"\tt: %u\ti: %u\tw: %lli\n",
+					i, (const char *)&f[i].start, f[i].type, f[i].idx,
+					f[i].weight);
+		}
+		puts("----------------------------------------");
+	}
+
+	/* remove and chain duplicates */
+	for(i = 1; i < base_num; i++)
+	{
+		unsigned j;
+
+		if(f[i-1].start != f[i].start)
+			continue;
+
+		j = f[i-1].idx;
+		while(f[j].idx != 0)
+			j = f[j].idx;
+
+		f[j].idx = f[i].idx;
+
+		if(i + 1 < used)
+			memmove(&f[i], &f[i+1], (used - (i+1)) * sizeof(*f));
+		base_num--;
+		used--;
+		i--;
+		for(j = 0; j < used; j++) {
+			if(f[j].idx)
+				f[j].idx--;
+		}
+	}
+	if(verbose)
+	{
+		for(i = 0; i < used; i++)
+		{
+			printf("%3.0u: \"%-4.4s\"\tt: %u\ti: %u\tw: %lli\n",
+					i, (const char *)&f[i].start, f[i].type, f[i].idx,
+					f[i].weight);
+		}
+		puts("----------------------------------------");
+	}
+
+	/* sort second tier */
+	back_index = base_num;
+	for(i = 0; i < base_num; i++)
+	{
+		unsigned j, idx;
+		struct p_table t;
+
+		if(f[i].idx == 0)
+			continue;
+
+		if(f[i].idx != back_index)
+		{
+			idx = f[i].idx;
+			t = f[back_index];
+			f[back_index] = f[idx];
+			f[idx] = t;
+			for(j = 0; j < used; j++) {
+				if(f[j].idx == back_index) {
+					f[j].idx = idx;
+					break;
+				}
+			}
+		}
+		idx = back_index++;
+		f[i].idx = idx;
+
+		while(f[idx].idx != 0)
+		{
+			unsigned u = f[idx].idx;
+
+			if(u != back_index)
+			{
+				t = f[u];
+				f[u] = f[back_index];
+				f[back_index] = t;
+				for(j = 0; j < used; j++) {
+					if(f[j].idx == back_index) {
+						f[j].idx = u;
+						break;
+					}
+				}
+				f[idx].idx = back_index;
+			}
+			idx = back_index++;
+		}
+	}
+	if(verbose)
+	{
+		for(i = 0; i < used; i++)
+		{
+			printf("%3.0u: \"%-4.4s\"\tt: %u\ti: %u\tw: %lli\n",
+					i, (const char *)&f[i].start, f[i].type, f[i].idx,
+					f[i].weight);
+		}
+		puts("----------------------------------------");
+	}
+
+	for(i = 0; i < used; i++) {
+		if(f[i].idx > 0xffff)
+			die("Table to big!! New trick needed");
+	}
+
+	table_used = used;
+	table_base_num = base_num;
+}
 
 int main(int argc, char *argv[])
 {
-	int i, verbose = 0;
+	int i;
 
-	if(PT_MAXIMUM > 0x7F)
-		die("More than 7Bit packet types!! new trick needed");
+	if(PT_MAXIMUM > 0xfff)
+		die("More than 12Bit packet types!! new trick needed");
 
 	for(i = 1; i < argc; i++)
 	{
@@ -111,6 +298,12 @@ int main(int argc, char *argv[])
 				case 'c':
 					print_weight();
 					return EXIT_SUCCESS;
+				case 'b':
+					target_is_bigendian = !0;
+					break;
+				case 'l':
+					target_is_bigendian = 0;
+					break;
 				default:
 					break;
 				}
@@ -126,29 +319,13 @@ int main(int argc, char *argv[])
 		putchar('\n');
 	}
 
-	memset(table_hl_first, -1, sizeof(table_hl_first));
-	make_tree_hl();
-	if(verbose > 2)
-		print_tree_hl();
-	sort_tree_hl();
-	if(verbose > 3)
-		print_tree_hl();
-	clean_tree_hl();
-	if(verbose)
-		print_tree_hl();
-	tree2table();
-	if(verbose)
-		print_table_hl();
-	for(i = 0; i < (sizeof(table_hl_first)/sizeof(table_hl_first[0])); i++) {
-		if((unsigned)-1 != table_hl_first[i] && 0xFF < table_hl_first[i])
-			die("jump delta to big, new tricks needed!!");
-	}
+	new_p_table();
 
 	if(!(out = fopen(f_name, "w")))
 		die("couldn't open out file");
 	print_trailer();
 	fflush(out);
-	print_table_ll();
+	print_table();
 	print_score();
 	fflush(out);
 	fclose(out);
@@ -156,300 +333,35 @@ int main(int argc, char *argv[])
 	return EXIT_SUCCESS;
 }
 
-static void make_tree_hl_name_r(const char *name, struct tree_hl *t, long long weight, enum g2_ptype type)
+static void print_table(void)
 {
-	struct tree_hl *x;
-	int i;
-	char c = name[0];
+	unsigned i;
+	char ap_name[32];
 
-	t->weight += weight;
-	if(c) {
-		if(c < 0x20)
-			die("char smaller 0x20!! Control char in packetname?? Trick needed");
-		if((unsigned)c > 0x7F)
-			die("char greater 7Bit!! new trick needed");
-		for(i = 0; i < t->num_child; i++) {
-			if(t->child[i] && t->child[i]->c == c)
-				goto recurse;
-		}
-	}
+	if(target_is_bigendian)
+		fputs("\t/* table is big endian */\n", out);
+	else
+		fputs("\t/* table is little endian */\n", out);
 
-	if(!(x = calloc(1, sizeof(*x) + (c ? 4 : 1)*sizeof(x))))
-		die("Error allocating mem");
-	x->c = c;
-	x->size_child = c ? 4 : 1;
-	t->child[t->num_child++] = x;
-	if(!c)
+	strcpy(ap_name, "PT_");
+	if(target_is_bigendian == host_is_bigendian())
 	{
-		x->last = true;
-		x->type = type;
-		x->weight = weight;
-		return;
-	} else
-		i = t->num_child - 1;
-
-recurse:
-	make_tree_hl_name_r(&name[1], t->child[i], weight, type);
-	if(t->child[i]->num_child >= t->child[i]->size_child)
-	{
-		if(!(x = realloc(t->child[i], sizeof(*t) + t->child[i]->size_child * 2 * sizeof(t))))
-			die("Error reallocating mem");
-		x->size_child *= 2;
-		t->child[i] = x;
-	}
-}
-
-static void make_tree_hl_name(const char *name, long long weight, enum g2_ptype type)
-{
-	struct tree_hl *t;
-	unsigned c = name[0];
-
-	if(!c)
-		return;
-	if(c < 0x20)
-		die("char smaller 0x20!! Control char in packetname?? Trick needed");
-	if(c > 0x7F)
-		die("char greater 7Bit!! new trick needed");
-
-	if(!(t = tree_hl_first[c]))
-	{
-		if(!(t = calloc(1, sizeof(*t) + 4 * sizeof(t))))
-			die("Error allocating mem");
-		t->c = c;
-		t->size_child = 4;
-		tree_hl_first[c] = t;
-	}
-
-	make_tree_hl_name_r(&name[1], t, weight, type);
-	if(t->num_child >= t->size_child)
-	{
-		struct tree_hl *x;
-		if(!(x = realloc(t, sizeof(*t) + t->size_child * 2 * sizeof(t))))
-			die("Error reallocating mem");
-		x->size_child *= 2;
-		tree_hl_first[c] = x;
-	}
-}
-
-static void make_tree_hl(void)
-{
-	int i;
-	for(i = 1; i < PT_MAXIMUM; i++) {
-		if(p_names[i].c[0] & 0x80)
-			die("8 Bit character on begining of packet name?");
-		make_tree_hl_name(p_names[i].c, p_names[i].weight, i);
-	}
-}
-
-static void clean_tree_hl_r(struct tree_hl *t, unsigned level)
-{
-	int i;
-
-	if(t->num_child == 1 &&
-	   t->child[0]->c == '\0' &&
-	   t->child[0]->last &&
-	   level != 1)
-	{
-		t->last = true;
-		t->type = t->child[0]->type;
-		free(t->child[0]);
-		t->child[0] = NULL;
-		t->num_child = 0;
-	}
-
-	for(i = 0; i < t->num_child; i++)
-		clean_tree_hl_r(t->child[i], level + 1);
-
-}
-
-static void clean_tree_hl(void)
-{
-	int i;
-	for(i = 0; i < sizeof(tree_hl_first)/sizeof(tree_hl_first[0]); i++) {
-		if(!tree_hl_first[i])
-			continue;
-		clean_tree_hl_r(tree_hl_first[i], 1);
-	}
-}
-
-static void print_tree_hl_r(struct tree_hl *t, int level)
-{
-	printf("%c %lli%s\t", t->c ? t->c : '0', t->weight, t->last ? "!" : "");
-
-	if(!t->last)
-	{
-		int i;
-		for(i = 0; i < t->num_child; i++)
+		for(i = 0; i < table_used; i++)
 		{
-			if(i) {
-				int j;
-				for(j = 0; j < level ; j++)
-					putchar('\t');
-			}
-			print_tree_hl_r(t->child[i], level + 1);
+			strcpy(&ap_name[3], p_names[f[i].type].c);
+			fprintf(out, "\t{0x%08x, %12s, %3u},\t /* \"%-4.4s\" */\n",
+				f[i].start, ap_name, f[i].idx, (const char *)&f[i].start);
 		}
 	}
 	else
-		putchar('\n');
-}
-
-static void print_tree_hl(void)
-{
-	int i;
-	for(i = 0; i < sizeof(tree_hl_first)/sizeof(tree_hl_first[0]); i++)
 	{
-		if(!tree_hl_first[i])
-			continue;
-		print_tree_hl_r(tree_hl_first[i], 1);
-		putchar('\n');
-	}
-}
-
-static int tree_hl_cmp(const void *a, const void *b)
-{
-	const struct tree_hl * const *x = a;
-	const struct tree_hl * const *y = b;
-
-	return (*y)->weight - (*x)->weight;
-}
-
-static void sort_tree_hl_r(struct tree_hl *t)
-{
-	int i;
-
-	if(t->last)
-		return;
-
-	if(t->num_child)
-	{
-		for(i = 0; i < t->num_child; i++)
-			sort_tree_hl_r(t->child[i]);
-
-		qsort(t->child, t->num_child, sizeof(t->child[0]), tree_hl_cmp);
-	}
-}
-
-static void sort_tree_hl(void)
-{
-	int i;
-	for(i = 0; i < sizeof(tree_hl_first)/sizeof(tree_hl_first[0]); i++) {
-		if(!tree_hl_first[i])
-			continue;
-		sort_tree_hl_r(tree_hl_first[i]);
-	}
-}
-
-static void print_table_hl(void)
-{
-	unsigned i;
-	for(i = 0; i < table_max; i++)
-	{
-		char tmp[16];
-		int j = 8 - strlen(p_names[table_hl[i].type].c);
-		tmp[j] = '\0';
-		while(j)
-			tmp[--j] = ' ';
-		strcat(tmp, p_names[table_hl[i].type].c);
-
-		printf("[% 4d] '%c' %s\tla: %c lt: %c n: %-4u d: %-4u\n%s", i,
-		       table_hl[i].c ? table_hl[i].c : '0',
-		       tmp, table_hl[i].last ? 't' : 'f',
-		       table_hl[i].last_table ? 't' : 'f', table_hl[i].next,
-		       table_hl[i].delta, table_hl[i].last_table ? "\n" : "");
-	}
-}
-
-static void tree2table_r(struct tree_hl *t)
-{
-	struct table_hl *x;
-	unsigned i;
-
-	for(i = 0; i < t->num_child; i++)
-	{
-		x = &table_hl[table_max];
-		t->child[i]->line = table_max++;
-		x->c = t->child[i]->c;
-		x->type = t->child[i]->type;
-		x->last = t->child[i]->last;
-	}
-	table_hl[table_max - 1].last_table = true;
-	for(i = 0; i < t->num_child; i++)
-	{
-		if(!t->child[i]->last) {
-			table_hl[t->child[i]->line].next = table_max;
-			table_hl[t->child[i]->line].delta = table_max - t->child[i]->line;
-			if(table_hl[t->child[i]->line].delta > 0x7F)
-				die("Table delta to big!! New trick needed");
+		for(i = 0; i < table_used; i++)
+		{
+			strcpy(&ap_name[3], p_names[f[i].type].c);
+			fprintf(out, "\t{0x%08x, %12s, %3u},\t /* \"%-4.4s\" */\n",
+				swab32(f[i].start), ap_name, f[i].idx, (const char *)&f[i].start);
 		}
-		tree2table_r(t->child[i]);
 	}
-}
-
-static void tree2table(void)
-{
-	int i;
-	for(i = 0; i < sizeof(tree_hl_first)/sizeof(tree_hl_first[0]); i++)
-	{
-		if(!tree_hl_first[i])
-			continue;
-		if(table_max % 2)
-			table_max++;
-		table_hl_first[i] = table_max / 2;
-		tree2table_r(tree_hl_first[i]);
-	}
-}
-
-static void print_table_ll_r(unsigned index, unsigned level)
-{
-	unsigned i = index;
-
-	do
-	{
-		unsigned t;
-		char c[3];
-
-		c[0]= table_hl[i].c ? table_hl[i].c : '\\';
-		c[1]= table_hl[i].c ? '\0' : '0';
-		c[2]= '\0';
-		fprintf(out, "\t[% 4d] =", i);
-		for(t = 0; t < level; t++)
-			putc('\t', out);
-		if(!table_hl[i].last && !table_hl[i].last_table)
-			fprintf(out, "T_NEXT('%s',% 3d),\n", c, table_hl[i].delta);
-		else if(!table_hl[i].last && table_hl[i].last_table)
-			fprintf(out, "T_TEND('%s',% 3d),\n", c, table_hl[i].delta);
-		else if(table_hl[i].last && !table_hl[i].last_table)
-			fprintf(out, "T_LAST('%s', PT_%s),\n", c, p_names[table_hl[i].type].c);
-		else
-			fprintf(out, "T_LEND('%s', PT_%s),\n", c, p_names[table_hl[i].type].c);
-	} while(!table_hl[i++].last_table);
-
-	i = index;
-	do
-	{
-		if(!table_hl[i].last) {
-			int j = i + table_hl[i].delta;
-			print_table_ll_r(j, level + 1);
-		}
-	} while(!table_hl[i++].last_table);
-}
-
-static void print_table_ll(void)
-{
-	int i;
-	for(i = 0; i < sizeof(table_hl_first)/sizeof(table_hl_first[0]); i++)
-	{
-		char aline[80];
-		if((unsigned)-1 == table_hl_first[i])
-			continue;
-
-		memset(aline, isalnum(i) ? i : '-', 65);
-		aline[65] = '\0';
-		fprintf(out, "/*\t       %s */\n", aline);
-		print_table_ll_r(table_hl_first[i] * 2, 1);
-		fflush(out);
-	}
-
 }
 
 static void print_trailer(void)
@@ -490,70 +402,21 @@ static void print_trailer(void)
 		" * packet typer\n"
 		" *\n"
 		" */\n"
-		"#define T_END_FLAG	(1 << 7)\n"
-		"#define T_LAST_FLAG	(1 << 7)\n"
+		"#define T_NUM_BASE %u\n"
+		"#define T_NUM_TOTAL %u\n"
 		"\n"
-		"#define T_IS_END(x)	((x) & T_END_FLAG)\n"
-		"#define T_IS_LAST(x)	((x) & T_LAST_FLAG)\n"
-		"#define T_GET_CHAR(x)	((char)((x) & 0x7F))\n"
-		"#define T_GET_TYPE(x)	((enum g2_ptype)((x) & 0x7F))\n"
-		"#define T_GET_DELTA(x)	((unsigned char)((x) & 0x7F))\n"
-		"\n"
-		"#define T_LEND(x, y) \\\n"
-		"	{ .c = (x)|T_LAST_FLAG, .u = { .t = y|T_END_FLAG }}\n"
-		"#define T_LAST(x, y) \\\n"
-		"	{ .c = (x)|T_LAST_FLAG, .u = { .t = y }}\n"
-		"#define T_NEXT(x, y) \\\n"
-		"	{ .c = (x), .u = { .d = y }}\n"
-		"#define T_TEND(x, y) \\\n"
-		"	{ .c = (x), .u = { .d = y|T_END_FLAG }}\n"
 		"static const struct\n"
 		"{\n"
-		"	const unsigned char c;\n"
-		"	union\n"
-		"	{\n"
-		"		const enum g2_ptype t;\n"
-		"		const unsigned char d;\n"
-		"	} u;\n"
-		"} g2_ptype_state_table[] =\n"
-		"{\n"
-		"	/* Align entry points on even numbers */\n",
-	f_name, now_tm->tm_year + 1900);
+		"	const unsigned int c;\n"
+		"	const unsigned short t;\n"
+		"	const unsigned short idx;\n"
+		"} g2_ptyper_table[] =\n"
+		"{\n",
+	f_name, now_tm->tm_year + 1900, table_base_num, table_used);
 }
 
 static void print_score(void)
 {
-	static const char *text[] =
-	{
-		"	/*         ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   ,   , */\n",
-		"	/*      NUL,SOH,STX,ETX,EOT,ENQ,ACK,BEL, BS, HT, LF, VT, FF, CR, SO, SI, */\n",
-		"	/*      DLE,DC1,DC2,DC3,DC4,NAK,SYN,ETB,CAN, EM,SUB,ESC, FS, GS, RS, US, */\n",
-		"	/*      SPC,  !,  \",  #,  $,  %,  &,  '   (,  ),  *,  +,  ,,  -,  .,  /, */\n",
-		"	/*        0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  :,  ;,  <,  =,  >,  ?, */\n",
-		"	/*        @,  A,  B,  C,  D,  E,  F,  G,  H,  I,  J,  K,  L,  M,  N,  O, */\n",
-		"	/*        P,  Q,  R,  S,  T,  U,  V,  W,  X,  Y,  Z,  [,  \\,  ],  ^,  _, */\n",
-		"	/*        `,  a,  b,  c,  d,  e,  f,  g,  h,  i,  j,  k,  l,  m,  n,  o, */\n",
-		"	/*        p,  q,  r,  s,  t,  u,  v,  w,  x,  y,  z,  {,  |   },  ~,DEL, */\n",
-	};
-	const unsigned nelem = sizeof(table_hl_first) / sizeof(table_hl_first[0]);
-	unsigned i, j;
-
-	fprintf(out, "};\n"
-			"\n"
-			"/* index from above / 2 */\n"
-			"static const unsigned char g2_ptype_dict_table[%u] =\n"
-			"{\n"
-			"	/*       00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, */\n",
-		nelem);
-
-	for(i = 0; i < (nelem >> 4); i++)
-	{
-		fprintf(out, "	/* %02X */", i << 4);
-		for(j = 0; j < (1 << 4); j++)
-			fprintf(out, "% 3i,", table_hl_first[(i << 4) + j]);
-		putc('\n', out);
-		fputs(text[i < 8 ? i + 1 : 0], out);
-	}
 	fputs("};\n"
 		"/* EOF */\n",
 		out);
@@ -564,4 +427,13 @@ static void print_weight(void)
 	unsigned i;
 	for(i = 0; i < PT_MAXIMUM; i++)
 		printf("%s\tcount: %llu\n", p_names[i].c, p_names[i].weight);
+}
+
+static int host_is_bigendian(void)
+{
+	static const union {
+		unsigned int d;
+		unsigned char endian[sizeof(unsigned int)];
+	} x = {1};
+	return x.endian[0] == 0;
 }
