@@ -276,15 +276,8 @@ static struct big_buff *udp_get_c_buff(size_t len)
 		}
 	}
 
-	/* round up to a power of two */
 	len += sizeof(*t);
-	len--;
-	len |= len >> 1;
-	len |= len >> 2;
-	len |= len >> 4;
-	len |= len >> 8;
-	len |= len >> 16;
-	len++;
+	len = roundup_power_of_2(len);
 	len += len == 0;
 	len = (len < 4096 ? 4096 : len);
 	t = malloc(len);

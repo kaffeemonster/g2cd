@@ -304,14 +304,7 @@ void __init g2_conreg_init(void)
 
 	count_c = server.settings.max_connection_sum / CHAIN_FILL_FACTOR;
 	count_c += count_c == 0; /* at least one */
-	/* round up to a power of two */
-	count_c--;
-	count_c |= count_c >> 1;
-	count_c |= count_c >> 2;
-	count_c |= count_c >> 4;
-	count_c |= count_c >> 8;
-	count_c |= count_c >> 16;
-	count_c++;
+	count_c = roundup_power_of_2(count_c);
 	/* take the int sqrt */
 	count_c  = flsst(count_c) - 1;
 /*	count_c  = DIV_ROUNDUP(count_c, LEVEL_SHIFT); */

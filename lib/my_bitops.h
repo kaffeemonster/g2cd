@@ -2,7 +2,7 @@
  * my_bitops.h
  * header-file for some global usefull bitbanging functions
  *
- * Copyright (c) 2004-2011 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -116,6 +116,20 @@ static inline char *strcpyreverse(char *dst, const char *begin, const char *end)
 	while(end >= begin)
 		*dst++ = *end--;
 	return dst;
+}
+
+/* round up to a power of two */
+static inline size_t roundup_power_of_2(size_t c)
+{
+	c--;
+	c |= c >> 1;
+	c |= c >> 2;
+	c |= c >> 4;
+	c |= c >> 8;
+	c |= c >> 16;
+	if((sizeof(c)*BITS_PER_CHAR) > 32)
+		c |= (c >> 16) >> 16;
+	return c + 1;
 }
 
 LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src, size_t len));
