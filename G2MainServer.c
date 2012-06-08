@@ -52,6 +52,9 @@
 #include <fcntl.h>
 #include "lib/my_pthread.h"
 #include <unistd.h>
+#ifdef HAVE_DL_ITERATE_PHDR
+# include <link.h>
+#endif
 #ifdef DRD_ME
 # include <valgrind/drd.h>
 #endif
@@ -882,7 +885,7 @@ static __init void change_the_user(void)
 	 * from Cygwin). So when run under Cygwin, it is *NOT*
 	 * possible to change the uid. The gid could be changed, but
 	 * again: this is simply Cygwin-internal emulated. So:
-	 * - Get the unpriviledged account you could find. Create
+	 * - Get the most  unpriviledged account you could find. Create
 	 *   one or use "Guest". Guest *should* be unprivilaged
 	 *   enough (some Win-experts around?). The Guest-account
 	 *   has to be simply enabeled.
@@ -910,6 +913,33 @@ static __init void change_the_user(void)
 		die("We don't want to use the Admin-account!\n");
 #endif /* __CYGWIN__ */
 }
+
+#ifdef HAVE_DL_ITERATE_PHDR
+static int tls_iter_callback(struct dl_phdr_info *info, size_t size GCC_ATTRIB_UNUSED, void *data)
+{
+	size_t *total = data, i;
+	for(i = 0; i < info->dlpi_phnum; i++) {
+		if(PT_TLS == info->dlpi_phdr[i].p_type)
+			*total += info->dlpi_phdr[i].p_memsz;
+	}
+	return 0;
+}
+
+static inline size_t account_for_tls(size_t s)
+{
+	size_t total = 0;
+	dl_iterate_phdr(tls_iter_callback, &total);
+	logg_develd("TLS size: %zu\n", total);
+	/* 1k of theft is ok */
+	s += total < (1024*(sizeof(size_t)/4)) ? 0 : total;
+	return s;
+}
+#else
+static inline size_t account_for_tls(size_t s)
+{
+	return s;
+}
+#endif
 
 static __init void setup_resources(void)
 {
@@ -978,20 +1008,33 @@ static __init void setup_resources(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if(!pthread_attr_getstacksize(&server.settings.t_def_attr, &i))
-	{
-		/*
-		 * set thread stacksize to 64k
-		 * Yes, this is constraining, but the default on some BSD.
-		 * And by the way looks nicer (have your little proc take 27MB looks
-		 * scary, even if its 3 * 8 MB Thread stack, mostly unused (not backed
-		 * by real memory) only 12kb used)
-		 * For 64 Bit we take more memory, because all stuff is bigger.
-		 */
-// TODO: also raise to low values
-		if(i > (64 * 1024) || sizeof(size_t) > 4)
-			pthread_attr_setstacksize(&server.settings.t_def_attr, 64 * 1024 * (sizeof(size_t)/4));
-	}
+	/*
+	 * set thread stacksize to 64k
+	 * Yes, this is constraining, but the default on some BSD.
+	 * And by the way looks nicer (have your little proc take 400MB looks
+	 * scary, even if its 8 * 8 MB Thread stack, mostly unused (not backed
+	 * by real memory) only 12kb used)
+	 * For 64 Bit we take more memory, because all stuff is bigger.
+	 *
+	 * This is a two way thing.
+	 * On the one hand to preserve Virtual Memory space, on the other hand
+	 * to keep the programming practice that way that plattforms which
+	 * deliver low stackspace are accounted for.
+	 */
+	i = 64 * 1024 * (sizeof(size_t)/4);
+	/*
+	 * glibc subtracts the TLS space from the stackspace.
+	 * This is ... lets say fascinating.
+	 * If the TLS-Space gets larger (either by lots of small items or some
+	 * larger) the real stack gets smaller and smaller.
+	 * We confine ourself already to 64kb, but with glibc stealing
+	 * stackspace behind our back...
+	 * ... not cool man, not cool.
+	 * Account for that.
+	 */
+	i = account_for_tls(i);
+	i = roundup_power_of_2(i);
+	pthread_attr_setstacksize(&server.settings.t_def_attr, i);
 
 	/* IPC */
 	/* open Sockets for IPC */
@@ -1080,7 +1123,7 @@ static inline const char *get_etext(void)
 #ifdef HAVE_NO_ETEXT
 	const char *rval;
 	/*
-	 * force the address of some func int the middle of the .text segment
+	 * force the address of some func in the middle of the .text segment
 	 * into an register, then do nothing with it. This way it comes out
 	 * as an char pointer (arithmetic on function pointer is forbidden,
 	 * and GCC is _*very*_ persitent about that. No matter how much you

@@ -547,7 +547,7 @@ esac
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h sys/mman.h valgrind/valgrind.h syslog.h wchar.h winsock2.h ws2tcpip.h pcap-bpf.h])
+AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h sys/mman.h valgrind/valgrind.h syslog.h wchar.h winsock2.h ws2tcpip.h pcap-bpf.h link.h])
 
 AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
 
@@ -953,7 +953,7 @@ AC_FUNC_MMAP
 AC_FUNC_STRERROR_R
 AC_FUNC_STRNLEN
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul strerror_s sysctlbyname inet_ntop inet_pton pthread_setaffinity_np dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd])
+AC_CHECK_FUNCS([isblank dup2 dlopen ftruncate gethostname getpagesize gettimeofday localtime_r memchr memmove mempcpy memset munmap mprotect malloc_usable_size recvmmsg socket strchr strchrnul strcspn strerror strrchr strstr strtoul strerror_s sysctlbyname inet_ntop inet_pton pthread_setaffinity_np dbus_connection_try_register_object_path dbus_threads_init_default dbus_watch_get_unix_fd dl_iterate_phdr])
 
 if test x"$strerror_mtsafe" = xyes; then
 	AC_DEFINE(HAVE_MTSAFE_STRERROR, 1, strerror is thread save)
