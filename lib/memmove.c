@@ -2,7 +2,7 @@
  * memmove.c
  * memmove
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,9 +36,10 @@
 #include "../config.h"
 #include "other.h"
 
-#include "my_bitops.h"
-#include "my_bitopsm.h"
+# include "my_bitops.h"
+# include "my_bitopsm.h"
 
+#ifndef MEMSPECIAL_DONT_DO_IT
 void *my_memmove(void *dst, const void *src, size_t len)
 {
 	/* trick gcc to generate lean stack frame and do a tailcail */
@@ -56,8 +57,9 @@ void *my_memmove(void *dst, const void *src, size_t len)
 }
 
 /* memmove as a macro... yeah */
-#undef memmove
+# undef memmove
 void *memmove(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memmove");
+#endif
 
 static char const rcsid_mvg[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

@@ -60,17 +60,34 @@ LIB_MY_BITOPS_EXTRN(void *mem_searchrn(void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(size_t mem_spn_ff(const void *src, size_t len));
 LIB_MY_BITOPS_EXTRN(size_t str_spn_space(const char *str));
 LIB_MY_BITOPS_EXTRN(char *str_skip_space(char *str));
-# undef memcpy
-LIB_MY_BITOPS_EXTRN(void *my_memcpy(void *restrict dst, const void *restrict src, size_t len));
-LIB_MY_BITOPS_EXTRN(void *my_memcpy_fwd(void *dst, const void *src, size_t len));
-LIB_MY_BITOPS_EXTRN(void *my_memcpy_rev(void *dst, const void *src, size_t len));
+
+#ifdef __GLIBC_PREREQ
+# if __GLIBC_PREREQ(2, 14) && (defined(__i386__) || defined(__x86_64__))
+#  define MEMSPECIAL_DONT_DO_IT
+# else
+#  undef MEMSPECIAL_DONT_DO_IT
+# endif
+#else
+# undef MEMSPECIAL_DONT_DO_IT
+#endif
+
 # undef mempcpy
 # if !defined(HAVE_MEMPCPY) && !defined(MEMPCPY_DEFINED)
 LIB_MY_BITOPS_EXTRN_I(void *mempcpy(void *restrict dst, const void *restrict src, size_t len));
 # endif
 LIB_MY_BITOPS_EXTRN(void *my_mempcpy(void *restrict dst, const void *restrict src, size_t len));
-# undef memmove
+#  undef memcpy
+LIB_MY_BITOPS_EXTRN(void *my_memcpy(void *restrict dst, const void *restrict src, size_t len));
+
+# ifdef MEMSPECIAL_DONT_DO_IT
+#  define my_memmove(a, b, c) memmove(a, b, c)
+# else
+#  undef memmove
 LIB_MY_BITOPS_EXTRN(void *my_memmove(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *my_memcpy_fwd(void *dst, const void *src, size_t len));
+LIB_MY_BITOPS_EXTRN(void *my_memcpy_rev(void *dst, const void *src, size_t len));
+# endif
+
 # undef memchr
 LIB_MY_BITOPS_EXTRN(void *my_memchr(const void *s, int c, size_t n));
 LIB_MY_BITOPS_EXTRN(int strncasecmp_a(const char *s1, const char *s2, size_t n));

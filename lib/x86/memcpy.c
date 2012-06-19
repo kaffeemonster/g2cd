@@ -2,7 +2,7 @@
  * memcpy.c
  * memcpy - x86 version
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -24,14 +24,16 @@
  */
 
 #include "../other.h"
-#include "x86_features.h"
+
+#ifndef MEMSPECIAL_DONT_DO_IT
+# include "x86_features.h"
 
 static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const void *restrict src, size_t len)
 {
 	char *restrict dst_c;
 	const char *restrict src_c;
 
-#ifdef __i386__
+# ifdef __i386__
 	asm (
 			"push	%0\n\t"
 			"push	%2\n\t"
@@ -55,7 +57,7 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const v
 		: "0" (dst), "1" (src), "2" (len), "m" (*(const char *)src)
 	);
 	return dst_c;
-#else
+# else
 	void *ret;
 	size_t t;
 	asm (
@@ -75,12 +77,12 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_small(void *restrict dst, const v
 		: "0" (dst), "1" (src), "2" (len), "m" (*(const char *)src)
 	);
 	return ret;
-#endif
+# endif
 }
 
-#define HAVE_MMX
-#define HAVE_SSE
-#ifndef __x86_64__
+# define HAVE_MMX
+# define HAVE_SSE
+# ifndef __x86_64__
 static GCC_ATTR_FASTCALL void *memcpy_medium_MMX(void *restrict dst, const void *restrict src, size_t len)
 {
 	size_t i;
@@ -150,119 +152,119 @@ static GCC_ATTR_FASTCALL void *memcpy_medium_MMX(void *restrict dst, const void 
 	return old_dst;
 }
 
-# undef ARCH_NAME_SUFFIX
-# undef WANT_BIG
-# define ARCH_NAME_SUFFIX _medium_SSE
-# include "memcpy_tmpl.c"
-# undef ARCH_NAME_SUFFIX
-# define WANT_BIG
-# define ARCH_NAME_SUFFIX _big_SSE
-# include "memcpy_tmpl.c"
-
-# define HAVE_3DNOW
-# undef ARCH_NAME_SUFFIX
-# undef WANT_BIG
-# define ARCH_NAME_SUFFIX _medium_SSE_3DNOW
-# include "memcpy_tmpl.c"
-# undef ARCH_NAME_SUFFIX
-# define WANT_BIG
-# define ARCH_NAME_SUFFIX _big_SSE_3DNOW
-# include "memcpy_tmpl.c"
-# undef HAVE_3DNOW
-#endif
-
-#define HAVE_SSE2
-#undef ARCH_NAME_SUFFIX
-#undef WANT_BIG
-#define ARCH_NAME_SUFFIX _medium_SSE2
-#include "memcpy_tmpl.c"
-#undef ARCH_NAME_SUFFIX
-#define WANT_BIG
-#define ARCH_NAME_SUFFIX _big_SSE2
-#include "memcpy_tmpl.c"
-
-#define HAVE_3DNOW
-#undef ARCH_NAME_SUFFIX
-#undef WANT_BIG
-#define ARCH_NAME_SUFFIX _medium_SSE2_3DNOW
-#include "memcpy_tmpl.c"
-#undef ARCH_NAME_SUFFIX
-#define WANT_BIG
-#define ARCH_NAME_SUFFIX _big_SSE2_3DNOW
-#include "memcpy_tmpl.c"
-#undef HAVE_3DNOW
-
-#ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 217
-#  define HAVE_SSE3
 #  undef ARCH_NAME_SUFFIX
 #  undef WANT_BIG
-#  define ARCH_NAME_SUFFIX _medium_SSE3
+#  define ARCH_NAME_SUFFIX _medium_SSE
 #  include "memcpy_tmpl.c"
 #  undef ARCH_NAME_SUFFIX
 #  define WANT_BIG
-#  define ARCH_NAME_SUFFIX _big_SSE3
+#  define ARCH_NAME_SUFFIX _big_SSE
 #  include "memcpy_tmpl.c"
 
 #  define HAVE_3DNOW
 #  undef ARCH_NAME_SUFFIX
 #  undef WANT_BIG
-#  define ARCH_NAME_SUFFIX _medium_SSE3_3DNOW
+#  define ARCH_NAME_SUFFIX _medium_SSE_3DNOW
 #  include "memcpy_tmpl.c"
 #  undef ARCH_NAME_SUFFIX
 #  define WANT_BIG
-#  define ARCH_NAME_SUFFIX _big_SSE3_3DNOW
+#  define ARCH_NAME_SUFFIX _big_SSE_3DNOW
 #  include "memcpy_tmpl.c"
 #  undef HAVE_3DNOW
 # endif
-#endif
+
+# define HAVE_SSE2
+# undef ARCH_NAME_SUFFIX
+# undef WANT_BIG
+# define ARCH_NAME_SUFFIX _medium_SSE2
+# include "memcpy_tmpl.c"
+# undef ARCH_NAME_SUFFIX
+# define WANT_BIG
+# define ARCH_NAME_SUFFIX _big_SSE2
+# include "memcpy_tmpl.c"
+
+# define HAVE_3DNOW
+# undef ARCH_NAME_SUFFIX
+# undef WANT_BIG
+# define ARCH_NAME_SUFFIX _medium_SSE2_3DNOW
+# include "memcpy_tmpl.c"
+# undef ARCH_NAME_SUFFIX
+# define WANT_BIG
+# define ARCH_NAME_SUFFIX _big_SSE2_3DNOW
+# include "memcpy_tmpl.c"
+# undef HAVE_3DNOW
+
+# ifdef HAVE_BINUTILS
+#  if HAVE_BINUTILS >= 217
+#   define HAVE_SSE3
+#   undef ARCH_NAME_SUFFIX
+#   undef WANT_BIG
+#   define ARCH_NAME_SUFFIX _medium_SSE3
+#   include "memcpy_tmpl.c"
+#   undef ARCH_NAME_SUFFIX
+#   define WANT_BIG
+#   define ARCH_NAME_SUFFIX _big_SSE3
+#   include "memcpy_tmpl.c"
+
+#   define HAVE_3DNOW
+#   undef ARCH_NAME_SUFFIX
+#   undef WANT_BIG
+#   define ARCH_NAME_SUFFIX _medium_SSE3_3DNOW
+#   include "memcpy_tmpl.c"
+#   undef ARCH_NAME_SUFFIX
+#   define WANT_BIG
+#   define ARCH_NAME_SUFFIX _big_SSE3_3DNOW
+#   include "memcpy_tmpl.c"
+#   undef HAVE_3DNOW
+#  endif
+# endif
 
 static __init_cdata const struct test_cpu_feature tfeat_my_memcpy_medium[] =
 {
-#ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 217
+# ifdef HAVE_BINUTILS
+#  if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [3] = CFB(CFEATURE_3DNOWPRE)}},
 	{.func = (void (*)(void))memcpy_medium_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_medium_SSE3,       .features = {[1] = CFB(CFEATURE_SSE3)}},
+#  endif
 # endif
-#endif
 	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_medium_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_medium_SSE2,       .features = {[0] = CFB(CFEATURE_SSE2)}},
-#ifndef __x86_64__
+# ifndef __x86_64__
 	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [3] = CFB(CFEATURE_3DNOWPRE)}},
 	{.func = (void (*)(void))memcpy_medium_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_medium_SSE,        .features = {[0] = CFB(CFEATURE_SSE)}},
 	{.func = (void (*)(void))memcpy_medium_MMX,        .features = {[0] = CFB(CFEATURE_MMX)}},
-#endif
+# endif
 	{.func = (void (*)(void))memcpy_small,             .features = {}, .flags = CFF_DEFAULT},
 };
 
 static __init_cdata const struct test_cpu_feature tfeat_my_memcpy_big[] =
 {
-#ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 217
+# ifdef HAVE_BINUTILS
+#  if HAVE_BINUTILS >= 217
 	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [3] = CFB(CFEATURE_3DNOWPRE)}},
 	{.func = (void (*)(void))memcpy_big_SSE3_3DNOW, .features = {[1] = CFB(CFEATURE_SSE3), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_big_SSE3,       .features = {[1] = CFB(CFEATURE_SSE3)}},
+#  endif
 # endif
-#endif
 	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_big_SSE2_3DNOW, .features = {[0] = CFB(CFEATURE_SSE2), [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_big_SSE2,       .features = {[0] = CFB(CFEATURE_SSE2)}},
-#ifndef __x86_64__
+# ifndef __x86_64__
 	{.func = (void (*)(void))memcpy_big_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [3] = CFB(CFEATURE_3DNOWPRE)}},
 	{.func = (void (*)(void))memcpy_big_SSE_3DNOW,  .features = {[0] = CFB(CFEATURE_SSE),  [2] = CFB(CFEATURE_3DNOW)}},
 	{.func = (void (*)(void))memcpy_big_SSE,        .features = {[0] = CFB(CFEATURE_SSE)}},
 	{.func = (void (*)(void))memcpy_medium_MMX,     .features = {[0] = CFB(CFEATURE_MMX)}},
-#endif
+# endif
 	{.func = (void (*)(void))memcpy_small,          .features = {}, .flags = CFF_DEFAULT},
 };
 
-#ifndef USE_SIMPLE_DISPATCH
+# ifndef USE_SIMPLE_DISPATCH
 GCC_ATTR_FASTCALL void *my_memcpy_medium(void *restrict dst, const void *restrict src, size_t len);
 GCC_ATTR_FASTCALL void *my_memcpy_big(void *restrict dst, const void *restrict src, size_t len);
-#endif
+# endif
 DYN_JMP_DISPATCH_ST(GCC_ATTR_FASTCALL void *, my_memcpy_medium, (void *restrict dst, const void *restrict src, size_t len), (dst, src, len))
 DYN_JMP_DISPATCH_ST(GCC_ATTR_FASTCALL void *, my_memcpy_big, (void *restrict dst, const void *restrict src, size_t len), (dst, src, len))
 
@@ -282,6 +284,10 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 		return my_memcpy_medium(dst, src, len);
 	return my_memcpy_big(dst, src, len);
 }
+#else
+# include <string.h>
+# define memcpy_big(a, b, c) memcpy(a, b, c)
+#endif
 
 void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 {
@@ -292,9 +298,10 @@ void *my_memcpy(void *restrict dst, const void *restrict src, size_t len)
 	return memcpy_big(dst, src, len);
 }
 
+#ifndef MEMSPECIAL_DONT_DO_IT
 void *my_memcpy_fwd(void *dst, const void *src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
-
-#include "../generic/memcpy_rev.c"
+# include "../generic/memcpy_rev.c"
+#endif
 /*@unused@*/
 static char const rcsid_mcx[] GCC_ATTR_USED_VAR = "$Id:$";
 /* EOF */

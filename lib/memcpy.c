@@ -2,7 +2,7 @@
  * memcpy.c
  * memcpy
  *
- * Copyright (c) 2008-2009 Jan Seiffert
+ * Copyright (c) 2008-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -56,6 +56,8 @@
 #endif
 
 /* memcpy as a macro... autschen */
-#undef memcpy
+#ifndef MEMSPECIAL_DONT_DO_IT
+# undef memcpy
 void *memcpy(void *restrict dst, const void *restrict src, size_t len) GCC_ATTR_ALIAS("my_memcpy");
+#endif
 /* EOF */
