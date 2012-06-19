@@ -134,16 +134,16 @@ typedef size_t nreg_t;
 # define NOT_MEM	"notq	"
 # define PICREG_R %%rbx
 # define PICREG "%%rbx"
-# ifdef __LP64__
-typedef size_t nreg_t;
-#  define NOST SOST
-#  define MY_AMD64
-#  define PTRP ""
-# else
+# ifdef __ILP32__
 typedef unsigned long long nreg_t;
 #  define NOST (sizeof nreg_t)
 #  define MY_X32
 #  define PTRP "q"
+# else
+typedef size_t nreg_t;
+#  define NOST SOST
+#  define MY_AMD64
+#  define PTRP ""
 # endif
 #endif
 
