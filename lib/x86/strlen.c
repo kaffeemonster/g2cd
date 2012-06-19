@@ -64,6 +64,7 @@
  * Hmmm, but not on the offenders...
  */
 
+#include "x86.h"
 #include "x86_features.h"
 
 #define SOV32	32
@@ -83,15 +84,15 @@ static size_t strlen_AVX2(const char *s)
 		"prefetcht0	(%1)\n\t"
 		"mov	%1, %2\n\t"
 #  else
-		"prefetcht0	(%3)\n\t"
+		"prefetcht0	(%"PTRP"3)\n\t"
 		"mov	%3, %1\n\t"
 		"mov	%k3, %k2\n\t"
 #  endif
-		"and	$-16, %1\n\t"
+		"and	$-32, %1\n\t"
 		"vpxor	%%ymm4, %%ymm4, %%ymm4\n\t"
 		"xor	%k1, %k2\n\t"
 		"jz	6f\n\t"
-		"vpcmpeqb	(%1), %%ymm4, %%ymm1\n\t"
+		"vpcmpeqb	(%"PTRP"1), %%ymm4, %%ymm1\n\t"
 		"vpmovmskb	%%ymm1, %k0\n\t"
 		"shr	%b2, %k0\n\t"
 		"shl	%b2, %k0\n\t"
@@ -99,17 +100,17 @@ static size_t strlen_AVX2(const char *s)
 		".p2align 2\n"
 		"1:\t"
 		"lea	128(%1), %1\n\t"
-		"vpcmpeqb	-96(%1), %%ymm4, %%ymm0\n\t"
+		"vpcmpeqb	-96(%"PTRP"1), %%ymm4, %%ymm0\n\t"
 		"vptest	%%ymm0, %%ymm4\n\t"
 		"jnc	5f\n\t"
-		"vpcmpeqb	-64(%1), %%ymm4, %%ymm1\n\t"
+		"vpcmpeqb	-64(%"PTRP"1), %%ymm4, %%ymm1\n\t"
 		"vptest	%%ymm1, %%ymm4\n\t"
 		"jnc	4f\n\t"
-		"vpcmpeqb	-32(%1), %%ymm4, %%ymm2\n\t"
+		"vpcmpeqb	-32(%"PTRP"1), %%ymm4, %%ymm2\n\t"
 		"vptest	%%ymm2, %%ymm4\n\t"
 		"jnc	3f\n"
 		"6:\n\t"
-		"vpcmpeqb	(%1), %%ymm4, %%ymm3\n\t"
+		"vpcmpeqb	(%"PTRP"1), %%ymm4, %%ymm3\n\t"
 		"vptest	%%ymm3, %%ymm4\n\t"
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm3, %k0\n\t"
@@ -168,7 +169,7 @@ static size_t strlen_AVX(const char *s)
 		"prefetcht0	(%1)\n\t"
 		"mov	%1, %2\n\t"
 #else
-		"prefetcht0	(%3)\n\t"
+		"prefetcht0	(%"PTRP"3)\n\t"
 		"mov	%3, %1\n\t"
 		"mov	%k3, %k2\n\t"
 #endif
@@ -176,7 +177,7 @@ static size_t strlen_AVX(const char *s)
 		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
 		"xor	%k1, %k2\n\t"
 		"jz	7f\n\t"
-		"vpcmpeqb	(%1), %%xmm0, %%xmm1\n\t"
+		"vpcmpeqb	(%"PTRP"1), %%xmm0, %%xmm1\n\t"
 		"vpmovmskb	%%xmm1, %k0\n\t"
 		"shr	%b2, %k0\n\t"
 		"jz	1f\n\t"
@@ -197,14 +198,14 @@ static size_t strlen_AVX(const char *s)
 		"add	$64, %1\n\t"
 		/* LSB,Norm,EqEach,Bytes */
 		/*             6543210 */
-		"vpcmpistri	$0b0001000, -48(%1), %%xmm0\n\t"
+		"vpcmpistri	$0b0001000, -48(%"PTRP"1), %%xmm0\n\t"
 		"jz	6f\n\t"
-		"vpcmpistri	$0b0001000, -32(%1), %%xmm0\n\t"
+		"vpcmpistri	$0b0001000, -32(%"PTRP"1), %%xmm0\n\t"
 		"jz	5f\n\t"
-		"vpcmpistri	$0b0001000, -16(%1), %%xmm0\n\t"
+		"vpcmpistri	$0b0001000, -16(%"PTRP"1), %%xmm0\n\t"
 		"jz	4f\n"
 		"7:\n\t"
-		"vpcmpistri	$0b0001000, (%1), %%xmm0\n\t"
+		"vpcmpistri	$0b0001000, (%"PTRP"1), %%xmm0\n\t"
 		"jnz	1b\n\t"
 		"jmp	3f\n\t"
 		"6:\n"
@@ -248,7 +249,7 @@ static size_t strlen_SSE42(const char *s)
 		"prefetcht0	(%1)\n\t"
 		"mov	%1, %2\n\t"
 #else
-		"prefetcht0	(%3)\n\t"
+		"prefetcht0	(%"PTRP"3)\n\t"
 		"mov	%3, %1\n\t"
 		"mov	%k3, %k2\n\t"
 #endif
@@ -256,7 +257,7 @@ static size_t strlen_SSE42(const char *s)
 		"pxor	%%xmm0, %%xmm0\n\t"
 		"xor	%k1, %k2\n\t"
 		"jz	7f\n\t"
-		"movdqa	(%1), %%xmm1\n\t"
+		"movdqa	(%"PTRP"1), %%xmm1\n\t"
 		"pcmpeqb	%%xmm0, %%xmm1\n\t"
 		"pmovmskb	%%xmm1, %k0\n\t"
 		"shr	%b2, %k0\n\t"
@@ -278,14 +279,14 @@ static size_t strlen_SSE42(const char *s)
 		"add	$64, %1\n\t"
 		/* LSB,Norm,EqEach,Bytes */
 		/*             6543210 */
-		"pcmpistri	$0b0001000, -48(%1), %%xmm0\n\t"
+		"pcmpistri	$0b0001000, -48(%"PTRP"1), %%xmm0\n\t"
 		"jz	6f\n\t"
-		"pcmpistri	$0b0001000, -32(%1), %%xmm0\n\t"
+		"pcmpistri	$0b0001000, -32(%"PTRP"1), %%xmm0\n\t"
 		"jz	5f\n\t"
-		"pcmpistri	$0b0001000, -16(%1), %%xmm0\n\t"
+		"pcmpistri	$0b0001000, -16(%"PTRP"1), %%xmm0\n\t"
 		"jz	4f\n"
 		"7:\n\t"
-		"pcmpistri	$0b0001000, (%1), %%xmm0\n\t"
+		"pcmpistri	$0b0001000, (%"PTRP"1), %%xmm0\n\t"
 		"jnz	1b\n\t"
 		"jmp	3f\n"
 		"6:\n"
@@ -323,7 +324,7 @@ static size_t strlen_SSE41(const char *s)
 		"prefetcht0	(%1)\n\t"
 		"mov	%1, %2\n\t"
 #else
-		"prefetcht0	(%3)\n\t"
+		"prefetcht0	(%"PTRP"3)\n\t"
 		"mov	%3, %1\n\t"
 		"mov	%k3, %k2\n\t"
 #endif
@@ -334,7 +335,7 @@ static size_t strlen_SSE41(const char *s)
 		"pxor	%%xmm3, %%xmm3\n\t"
 		"xor	%k1, %k2\n\t"
 		"jz	6f\n\t"
-		"movdqa	(%1), %%xmm1\n\t"
+		"movdqa	(%"PTRP"1), %%xmm1\n\t"
 		"pcmpeqb	%%xmm0, %%xmm1\n\t"
 		"pmovmskb	%%xmm1, %k0\n\t"
 		"shr	%b2, %k0\n\t"
@@ -343,17 +344,17 @@ static size_t strlen_SSE41(const char *s)
 		".p2align 2\n"
 		"1:\t"
 		"add	$64, %1\n\t"
-		"pcmpeqb	-48(%1), %%xmm0\n\t"
+		"pcmpeqb	-48(%"PTRP"1), %%xmm0\n\t"
 		"ptest	%%xmm0, %%xmm1\n\t"
 		"jnc	5f\n\t"
-		"pcmpeqb	-32(%1), %%xmm1\n\t"
+		"pcmpeqb	-32(%"PTRP"1), %%xmm1\n\t"
 		"ptest	%%xmm1, %%xmm2\n\t"
 		"jnc	4f\n\t"
-		"pcmpeqb	-16(%1), %%xmm2\n\t"
+		"pcmpeqb	-16(%"PTRP"1), %%xmm2\n\t"
 		"ptest	%%xmm2, %%xmm3\n\t"
 		"jnc	3f\n"
 		"6:\n\t"
-		"pcmpeqb	(%1), %%xmm3\n\t"
+		"pcmpeqb	(%"PTRP"1), %%xmm3\n\t"
 		"ptest	%%xmm3, %%xmm0\n\t"
 		"jc	1b\n\t"
 		"pmovmskb	%%xmm3, %k0\n\t"
@@ -410,7 +411,7 @@ static size_t strlen_SSE2(const char *s)
 		"prefetcht0	(%1)\n\t"
 		"mov	%1, %2\n\t"
 #else
-		"prefetcht0	(%3)\n\t"
+		"prefetcht0	(%"PTRP"3)\n\t"
 		"mov	%3, %1\n\t"
 		"mov	%k3, %k2\n\t"
 #endif
@@ -421,7 +422,7 @@ static size_t strlen_SSE2(const char *s)
 		"pxor	%%xmm3, %%xmm3\n\t"
 		"xor	%k1, %k2\n\t"
 		"jz	6f\n\t"
-		"movdqa	(%1), %%xmm1\n\t"
+		"movdqa	(%"PTRP"1), %%xmm1\n\t"
 		"pcmpeqb	%%xmm0, %%xmm1\n\t"
 		"pmovmskb	%%xmm1, %k0\n\t"
 		"shr	%b2, %k0\n\t"
@@ -430,21 +431,21 @@ static size_t strlen_SSE2(const char *s)
 		".p2align 2\n"
 		"1:\t"
 		"add	$64, %1\n\t"
-		"pcmpeqb	-48(%1), %%xmm0\n\t"
-		"pmovmskb	%%xmm0, %0\n\t"
+		"pcmpeqb	-48(%"PTRP"1), %%xmm0\n\t"
+		"pmovmskb	%%xmm0, %k0\n\t"
 		"test	%k0, %k0\n\t"
 		"jnz	5f\n\t"
-		"pcmpeqb	-32(%1), %%xmm1\n\t"
-		"pmovmskb	%%xmm1, %0\n\t"
+		"pcmpeqb	-32(%"PTRP"1), %%xmm1\n\t"
+		"pmovmskb	%%xmm1, %k0\n\t"
 		"test	%k0, %k0\n\t"
 		"jnz	4f\n\t"
-		"pcmpeqb	-16(%1), %%xmm2\n\t"
-		"pmovmskb	%%xmm2, %0\n\t"
+		"pcmpeqb	-16(%"PTRP"1), %%xmm2\n\t"
+		"pmovmskb	%%xmm2, %k0\n\t"
 		"test	%k0, %k0\n\t"
 		"jnz	3f\n"
 		"6:\n\t"
-		"pcmpeqb	(%1), %%xmm3\n\t"
-		"pmovmskb	%%xmm3, %0\n\t"
+		"pcmpeqb	(%"PTRP"1), %%xmm3\n\t"
+		"pmovmskb	%%xmm3, %k0\n\t"
 		"test	%k0, %k0\n\t"
 		"jz	1b\n\t"
 		"jmp	2f\n\t"
@@ -488,7 +489,7 @@ static size_t strlen_SSE(const char *s)
 		"pxor	%%mm1, %%mm1\n\t"
 		"pxor	%%mm2, %%mm2\n\t"
 		"pxor	%%mm3, %%mm3\n\t"
-		"xor	%k1, %k2\n\t"
+		"xor	%1, %2\n\t"
 		"jz	6f\n\t"
 		"movq	(%1), %%mm1\n\t"
 		"pcmpeqb	%%mm0, %%mm1\n\t"
@@ -543,9 +544,9 @@ static size_t strlen_SSE(const char *s)
 static size_t strlen_x86(const char *s)
 {
 	const char *p;
-	size_t t, len;
+	nreg_t t, len;
 	asm (
-		"mov	(%1), %2\n\t"
+		"mov	(%"PTRP"1), %2\n\t"
 #ifdef __i386__
 		"lea	-0x1010101(%2), %0\n\t"
 #else
@@ -553,8 +554,12 @@ static size_t strlen_x86(const char *s)
 #endif
 		"not	%2\n\t"
 		"and	%2, %0\n\t"
+#ifdef __i386__
 		"mov	%5, %2\n\t"
-		"xor	%1, %2\n\t"
+#else
+		"mov	%k5, %k2\n\t"
+#endif
+		"xor	%k1, %k2\n\t"
 		"shl	$3, %2\n\t"
 		"and	%6, %0\n\t"
 		"shr	%b2, %0\n\t"
@@ -564,7 +569,7 @@ static size_t strlen_x86(const char *s)
 		".p2align 2\n"
 		"1:\n\t"
 		"add	%4, %1\n\t"
-		"mov	(%1), %2\n\t"
+		"mov	(%"PTRP"1), %2\n\t"
 #ifdef __i386__
 		"lea	-0x1010101(%2), %0\n\t"
 #else
@@ -588,13 +593,13 @@ static size_t strlen_x86(const char *s)
 		"imul	%2, %0\n\t"
 		"shr	$56, %0\n\t"
 #endif
-		"add	%1, %0\n\t"
-		"sub	%5, %0"
+		"add	%"PTRP"1, %0\n\t"
+		"sub	%"PTRP"5, %0"
 	: /* %0 */ "=&a" (len),
 	  /* %1 */ "=&r" (p),
 	  /* %2 */ "=&c" (t)
-	: /* %3 */ "1" (ALIGN_DOWN(s, SOST)),
-	  /* %4 */ "K" (SOST),
+	: /* %3 */ "1" (ALIGN_DOWN(s, NOST)),
+	  /* %4 */ "K" (NOST),
 #ifdef __i386__
 	  /*
 	   * 386 should keep it on stack to prevent
