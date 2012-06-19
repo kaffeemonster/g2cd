@@ -29,7 +29,7 @@
 # if defined(__ARM_NEON__) && defined(__ARMEL__)
 #  define ARM_NEON_SANE 1
 # endif
-# if defined(__IWMMXT__)
+# if defined(__IWMMXT__) || defined(__ARM_WMMX)
 #  define ARM_IWMMXT_SANE 1
 # endif
 # if defined(__GNUC__) && ( \
@@ -40,7 +40,7 @@
             defined(__ARM_ARCH_6__)   || defined(__ARM_ARCH_6J__)  || \
             defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6ZK__) || \
             defined(__ARM_ARCH_7A__)  || defined(__ARM_ARCH_7R__) \
-        )) \
+        )) || (defined(__ARM_FEATURE_SIMD32)) \
     )
 #  define ARM_DSP_SANE 1
 # endif
@@ -203,7 +203,7 @@ static inline unsigned long alu_ucmp16_gte_msk(unsigned long a, unsigned long b)
 # if _GNUC_PREREQ (4,0)
 #  define ctlz(a) __builtin_clz(a)
 #  define cttz(a) __builtin_ctz(a)
-# else
+# elif defined(__ARM_FEATURE_CLZ)
 static inline unsigned ctlz(size_t a)
 {
 	unsigned r;
@@ -217,6 +217,8 @@ static inline unsigned cttz(size_t a)
 	a = (size_t)(-((ssize_t)a)) & a;
 	return 31 - ctlz(a);
 }
+# else
+#  error "your ARM sucks"
 # endif
 
 # define arm_nul_byte_index_b(x) ((HOST_IS_BIGENDIAN) ? ctlz((x)) : cttz((x)))

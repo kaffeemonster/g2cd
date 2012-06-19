@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2012 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -53,7 +53,7 @@
 	defined(__ARM_ARCH_5TE__) || defined(__ARM_ARCH_5TEJ__) || \
 	defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || \
 	defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__) || \
-	defined(__ARM_ARCH_7A__)
+	defined(__ARM_ARCH_7A__) || defined(__ARM_FEATURE_CLZ)
 #  include "arm/flsst.c"
 # elif defined(__tile__)
 #  include "tile/flsst.c"
