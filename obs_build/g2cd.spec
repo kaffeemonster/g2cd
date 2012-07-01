@@ -8,7 +8,7 @@ Summary: A G2 hub only implementation
 Name: %{shortname}
 Version: %{ver_real}.%{ver_revno}
 Release: 1
-License: GPLv3
+License: GPL-3.0
 %define fullname %{name}-%{ver_real}-%{ver_revno}
 # norootforbuild
 
