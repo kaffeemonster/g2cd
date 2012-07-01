@@ -90,6 +90,7 @@
  * than twice as fast, so should beat scasq on x86_64.
  */
 
+#include "x86.h"
 #include "x86_features.h"
 
 #define SOV8	8
@@ -108,7 +109,7 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 	asm (
 		"mov	%7, %k2\n\t"
 		"vpcmpeqb	%%ymm1, %%ymm1, %%ymm1\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%ymm0\n\t"
 		"sub	%k3, %k2\n\t"
 		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
 		"vpxor	%%ymm0, %%ymm1, %%ymm0\n\t" /* invert match */
@@ -138,9 +139,9 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"prefetcht0 96(%1)\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
-		"vmovdqa	%c7(%1), %%ymm2\n\t"
+		"prefetcht0 96(%"PTRP"1)\n\t"
+		"vmovdqa	(%"PTRP"1), %%ymm0\n\t"
+		"vmovdqa	%c7(%"PTRP"1), %%ymm2\n\t"
 		"vptest	%%ymm1, %%ymm0\n\t"
 		"jnc	10b\n\t"
 		"vptest	%%ymm1, %%ymm2\n\t"
@@ -152,7 +153,7 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 		"jae	1b\n\t"
 		"cmp	%7, %2\n\t"
 		"jnae	9f\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%ymm0\n\t"
 		"vptest	%%ymm1, %%ymm0\n\t"
 		"jnc	10b\n\t"
 		"sub	%7, %2\n\t"
@@ -160,7 +161,7 @@ static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
 		"jle	6b\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%ymm0\n\t"
 		"vpcmpeqb	%%ymm0, %%ymm1, %%ymm0\n\t"
 		"vpxor	%%ymm0, %%ymm1, %%ymm0\n\t" /* invert match */
 		"vpmovmskb	%%ymm0, %k0\n\t"
@@ -218,7 +219,7 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 	asm (
 		"mov	%7, %k2\n\t"
 		"vpcmpeqb	%%xmm1, %%xmm1, %%xmm1\n\t"
-		"vmovdqa	(%1), %%xmm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%xmm0\n\t"
 		"vperm2f128	$0, %%ymm1, %%ymm1, %%ymm1\n\t"
 		"sub	%k3, %k2\n\t"
 		"vpcmpeqb	%%xmm0, %%xmm1, %%xmm0\n\t"
@@ -236,7 +237,7 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 		"jnae	9f\n\t"
 		"test	$((%c7*2)-1), %1\n\t"
 		"jz	2f\n\t"
-		"vmovdqa	(%1), %%xmm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%xmm0\n\t"
 		"vptest	%%xmm1, %%xmm0\n\t"
 		"jnc	10f\n\t"
 		"sub	%7, %2\n\t"
@@ -260,8 +261,8 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"prefetcht0 96(%1)\n\t"
-		"vmovdqa	(%1), %%ymm0\n\t"
+		"prefetcht0 96(%"PTRP"1)\n\t"
+		"vmovdqa	(%"PTRP"1), %%ymm0\n\t"
 		"vptest	%%ymm1, %%ymm0\n\t"
 		"jnc	8b\n\t"
 		"sub	%7*2, %2\n\t"
@@ -271,7 +272,7 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 		"jae	1b\n\t"
 		"cmp	%7, %2\n\t"
 		"jnae	9f\n\t"
-		"vmovdqa	(%1), %%xmm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%xmm0\n\t"
 		"vptest	%%xmm1, %%xmm0\n\t"
 		"jnc	10b\n\t"
 		"sub	%7, %2\n\t"
@@ -279,7 +280,7 @@ static size_t mem_spn_ff_AVX(const void *s, size_t len)
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
 		"jle	6b\n\t"
-		"vmovdqa	(%1), %%xmm0\n\t"
+		"vmovdqa	(%"PTRP"1), %%xmm0\n\t"
 		"vpcmpeqb	%%xmm0, %%xmm1, %%xmm0\n\t"
 		"vpxor	%%xmm0, %%xmm1, %%xmm0\n\t" /* invert match */
 		"vpmovmskb	%%xmm0, %k0\n\t"
@@ -330,7 +331,7 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 	asm (
 		"mov	%7, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm1\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"sub	%k3, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
@@ -360,9 +361,9 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"prefetcht0 96(%1)\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
-		"movdqa	%c7(%1), %%xmm2\n\t"
+		"prefetcht0 96(%"PTRP"1)\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
+		"movdqa	%c7(%"PTRP"1), %%xmm2\n\t"
 		"ptest	%%xmm1, %%xmm0\n\t"
 		"jnc	10b\n\t"
 		"ptest	%%xmm1, %%xmm2\n\t"
@@ -374,7 +375,7 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 		"jae	1b\n\t"
 		"cmp	%7, %2\n\t"
 		"jnae	9f\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"ptest	%%xmm1, %%xmm0\n\t"
 		"jnc	10b\n\t"
 		"sub	%7, %2\n\t"
@@ -382,7 +383,7 @@ static size_t mem_spn_ff_SSE41(const void *s, size_t len)
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
 		"jle	6b\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
 		"pmovmskb	%%xmm0, %k0\n\t"
@@ -428,12 +429,12 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 	const unsigned char *p;
 	size_t ret;
 	size_t f, t;
-	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+	asm volatile ("prefetcht0 (%"PTRP"0)" : : "r" (s));
 
 	asm (
 		"mov	%7, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm1\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"sub	%k3, %k2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
@@ -461,9 +462,9 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 		"jmp	4f\n\t"
 		".p2align 2\n"
 		"1:\n\t"
-		"prefetcht0 96(%1)\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
-		"movdqa	%c7(%1), %%xmm2\n\t"
+		"prefetcht0 96(%"PTRP"1)\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
+		"movdqa	%c7(%"PTRP"1), %%xmm2\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm2\n\t"
 		"pmovmskb	%%xmm0, %k0\n\t"
@@ -479,7 +480,7 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 		"jae	1b\n\t"
 		"cmp	%7, %2\n\t"
 		"jnae	9f\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pmovmskb	%%xmm0, %k0\n\t"
 		"cmp	$0xffff, %k0\n\t"
@@ -489,7 +490,7 @@ static size_t mem_spn_ff_SSE2(const void *s, size_t len)
 		"9:\n\t"
 		"cmp	$0, %2\n\t"
 		"jle	6b\n\t"
-		"movdqa	(%1), %%xmm0\n\t"
+		"movdqa	(%"PTRP"1), %%xmm0\n\t"
 		"pcmpeqb	%%xmm1, %%xmm0\n\t"
 		"pxor	%%xmm1, %%xmm0\n\t" /* invert match */
 		"pmovmskb	%%xmm0, %k0\n\t"
@@ -630,31 +631,40 @@ static size_t mem_spn_ff_SSE(const void *s, size_t len)
 static size_t mem_spn_ff_x86(const void *s, size_t len)
 {
 	const unsigned char *p = s;
+#if 0
+	size_t r = ALIGN_DIFF(p, NOST);
+// TODO: align or not...
+	len -= r;
+	for(; r; p++, r--) {
+		if(0xff != *p)
+			goto OUT;
+	}
+#endif
 
-// TODO: do the align dance?
-	if(len / SOST)
+	if(len / NOST)
 	{
-		size_t t, u;
+		size_t t;
+		nreg_t u;
 		asm (
-			"repe scas (%0), %3\n\t"
+			"repe scas (%"PTRP"0), %3\n\t"
 			"je	1f\n\t"
-			"sub	%4, %0\n\t"
+			"sub	%4, %"PTRP"0\n\t"
 			"lea	%c4(%2, %1, %c4), %2\n"
 			"1:"
 			: /* %0 */ "=D" (p),
 			  /* %1 */ "=c" (t),
 			  /* %2 */ "=r" (len),
 			  /* %3 */ "=a" (u)
-			: /* %4 */ "i" (SOST),
+			: /* %4 */ "i" (NOST),
 			  "0" (p),
-			  "1" (len / SOST),
-			  "2" (len % SOST),
-			  "3" (~(size_t)0),
-			  "m" (*(const size_t *)p)
+			  "1" (len / NOST),
+			  "2" (len % NOST),
+			  "3" (~(nreg_t)0),
+			  "m" (*(const nreg_t *)p)
 			: "cc"
 		);
 	}
-	if(SOST != SO32)
+	if(NOST != SO32)
 	{
 		if(len >= SO32 && 0xFFFFFFFFu == *(const uint32_t *)p) {
 			p   += SO32;
@@ -669,7 +679,7 @@ static size_t mem_spn_ff_x86(const void *s, size_t len)
 		p++;
 		len--;
 	}
-
+OUT:
 	return (size_t)(p - (const unsigned char *)s);
 }
 
