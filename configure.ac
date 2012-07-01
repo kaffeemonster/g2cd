@@ -35,6 +35,7 @@ default_enable_release=no
 disable_dyndispatch=no
 disable_backtraces=no
 disable_dbus=no
+disable_libcurl=no
 disable_hw_mult=no
 disable_smp=no
 disable_asm=no
@@ -108,6 +109,9 @@ AC_ARG_WITH([backtraces], [AS_HELP_STRING([--without-backtraces],
 AC_ARG_WITH([dbus], [AS_HELP_STRING([--without-dbus],
             [do you want a dbus interface])],
             [disable_dbus="$witheval"], [])
+AC_ARG_WITH([libcurl], [AS_HELP_STRING([--without-libcurl],
+            [do you want to use libcurl (advised)])],
+            [disable_libcurl="$witheval"], [])
 AC_ARG_ENABLE([debug], [AS_HELP_STRING([--enable-debug],
               [make a debug build])],
               [my_enable_debug=yes], [])
@@ -557,6 +561,7 @@ AX_CHECK_ZLIB
 # keep this above the dbm test, so when cross compiling and
 # pkg-config takes the host libs, things brake
 m4_include([m4/pkg.m4])
+# check for dbus
 if test x"$disable_dbus" = xno; then
 	dbus_on_machine=no
 	PKG_CHECK_EXISTS([dbus-1], [dbus_on_machine=yes], [])
@@ -592,6 +597,64 @@ if test x"$disable_dbus" = xno; then
                [AC_MSG_RESULT([no])])
 			if test x"$dbus_working" = xyes; then
 				AC_DEFINE(HAVE_DBUS, 1, Define to 1 if we have dbus)
+			else
+				CFLAGS="$oCFLAGS"
+				LIBS="$oLIBS"
+			fi
+		else
+			CFLAGS="$oCFLAGS"
+			LIBS="$oLIBS"
+		fi
+		CPPFLAGS="$oCPPFLAGS"
+	fi
+fi
+
+# check for libcurl
+if test x"$disable_libcurl" = xno; then
+	libcurl_on_machine=no
+	oCPPFLAGS="$CPPFLAGS"
+	oCFLAGS="$CFLAGS"
+	oLIBS="$LIBS"
+
+	PKG_CHECK_EXISTS([libcurl], [libcurl_on_machine=yes], [])
+
+	if test x"$dbus_on_machine" = xyes; then
+		PKG_CHECK_MODULES([LIBCURL], [libcurl])
+		CPPFLAGS="$LIBCURL_CPPFLAGS $CPPFLAGS"
+		CFLAGS="$LIBCURL_CFLAGS $CFLAGS"
+		LIBS="$LIBCURL_LIBS $LIBS"
+#	else
+# test curl-config
+# curl-config drags in everything and the kitchen sink
+# it a classic example of a foo-config script, kind of
+# why pkg-conf exists.
+# libcurl even provides a libcurl.m4 to help use it,
+# but it only uses curl-config in the background
+# m4_include([m4/libcurl.m4])
+# LIBCURL_CHECK_CONFIG([yes], [7.19.4],[],[])
+	fi
+
+	if test x"$libcurl_on_machine" = xyes; then
+		libcurl_header=no
+		AC_CHECK_HEADER(curl/curl.h, [libcurl_header=yes], [], [])
+		if test x"$libcurl_header" = xyes; then
+			libcurl_working=no
+			AC_MSG_CHECKING([if libcurl is new enough])
+			AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+                [
+#include <curl/curl.h>
+                ],
+                [
+#if LIBCURL_VERSION_NUM < 0x071304
+# error "libcurl version to low"
+#endif
+                ]
+               )],
+               [AC_MSG_RESULT([yes])
+                libcurl_working=yes],
+               [AC_MSG_RESULT([no])])
+			if test x"$libcurl_working" = xyes; then
+				AC_DEFINE(HAVE_LIBCURL, 1, Define to 1 if we have libcurl)
 			else
 				CFLAGS="$oCFLAGS"
 				LIBS="$oLIBS"

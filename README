@@ -1,7 +1,7 @@
 	G2CD - Gnutella 2 Server Daemon
 
-	Copyright (c) 2004-2010 Jan Seiffert  ->  kaffeemonster@googlemail.com
-	
+	Copyright (c) 2004-2012 Jan Seiffert  ->  kaffeemonster@googlemail.com
+
 	This file is part of g2cd.
 
 	g2cd is free software; you can redistribute it and/or modify
@@ -68,7 +68,7 @@
 		       so i simply recomment gmake]
 	* Your systems header files (libc etc.)
 	* The zlib, library and header-files
-	* A db lib, library and header-files (Berkeley DB or something else
+	* A dbm lib, library and header-files (Berkeley DB or something else
 	  which provides dbm_* functions commonly available by ndbm.h)
 		[note: yes, the dbm_* interface is "obsolete", but it seems to
 		       be widely available. It suits my simple needs and i found
@@ -76,11 +76,26 @@
 		       copyright in the header, last change 1996, probably to
 		       add 'extern "C"', so i would call it mature technology ;) ]
 
+	highly recommended:
+	* libcurl >= Version 7.19.4
+		[note: From time to time there may be the need to connect to a
+		       Gnutella Web Cache (GWC) by http. A simple http connection
+		       is very simple to establish, but the http protocol holds
+		       lots of more complicated things in store (encodings, compression,
+		       redirects, encryption, authentification, proxys, etc.).
+		       For that reason the GWC-specification _demands_ a _proper_
+		       http client is used, not some home grown quick hack, because
+		       otherwise harm for the GWC could ensue (by you hammering them
+		       with useless/broken requests).
+		       libcurl is a everything and the kitchensink bloat, but it is
+		       a proper http client, and so it's use is highly recommended]
+
 	recommended:
 	* An Editor
 	* Programming skills
 	* Using-the-system skills
 	* Brain 1.0
+
 
 	What to do:
 	 First of all unpack the .tar.bz2 to some place.
@@ -182,7 +197,7 @@
 	powerpc, powerpc64, arm, alpha).
 	 Apropros other archs: I can only test x86 (and give SPARC a smoke test),
 	and that only on older systems. <irony>So i deliberatly deposited some
-	broken code for other archs and those guys with their new x86 (SSE4.2)
+	broken code for other archs and those guys with their new x86 (AVX)
 	to trip over.</irony>
 	 You can disable most of this brokenness and activate some workarounds
 	with configure, but not all of it...
@@ -333,9 +348,9 @@
 
 	 The 15 retries configured by default on Linux® (and/or other
 	systems) may be standard conformant and were needed/good in the
-	70's, but means these connections will linger around for approx.
-	11 minutes. Maybe longer, up to 546 minutes (9 days...), depending
-	on the backoff strategy.
+	70's, or interstellar connections, but means these connections
+	will linger around for approx. 11 minutes. Maybe longer, up to
+	546 minutes (9 days...), depending on the backoff strategy.
 
 	 Unfortunatly G2CD can do nothing about that, there is no per
 	connection setting we can frob. On Linux® YOU have to configure the
@@ -361,7 +376,7 @@
 	 G2CD can connect to DBus to export some data at runtime about it's
 	status. For this you need to compile G2CD with DBus support (should
 	happen automatically if you have the DBus develop stuff (header, etc)
-	installed), enable it in the config file, and configured DBus to allow
+	installed), enable it in the config file, and configure DBus to allow
 	connections from/to G2CD. The last part is normally done in an config
 	file in /etc/dbus/system.d/whatever.conf.
 	 Such a config file could look like this:
@@ -502,7 +517,7 @@ method return sender=:1.72 -> dest=:1.73 reply_serial=2
 	  that win only allows 64 sockets to be monitored by these APIs.
 	  Vista and higher (Server 2008, Win7, etc.) finally have a WSAPoll,
 	  which is the real poll (what took you so long?), only with another
-	  name.
+	  name, but prop. the same restriction.
 	   Some emulation/wrapper for poll is now in place, which makes g2cd
 	  tick, but for epoll, i don't know how to "fix" that. Emulation by poll
 	  would only work on Vista and higher, and is not recommended. There
