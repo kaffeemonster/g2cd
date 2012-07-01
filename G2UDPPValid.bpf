@@ -2,7 +2,7 @@
 ; G2UDPPValid.bpf
 ; berkely packet filter program to prefilter packets on the udp socket
 ;
-; Copyright (c) 2011 Jan Seiffert
+; Copyright (c) 2011-2012 Jan Seiffert
 ;
 ; This file is part of g2cd.
 ;
@@ -23,26 +23,80 @@
 ; $Id:$
 ;
 
-; TODO: we could filter for priv/bogus addresses
-; but then there would be no override possible + it would may be expensive
-; + we want to optimize it
-; Esp. since this is a socket filter on non-raw sockets, can we still access
-; the IP header?
-;
-
+; check we have some sane min length
 ; TODO: we could drop the length check, since we access the 8 byte afterwards
 ;  But how good translates this in the JIT + if there are really a lot of to small packets this hits early
 	ld	#len						; load packet len
 	jge	#UDP_RELIABLE_LENGTH + 8, #next, DROP		; if packet < G2_MIN_LEN + UDP_HDR_LEN goto grop
+; check the packet starts with 'GND'
 	ld	[8]						; load complete first 4 byte
 ; TODO: loaded data should be in host byte order, but it isn't ?
 	and	#0xffffff00					; mask first 3 byte
 	jeq	#0x474e4400, #next, DROP			; if first 3 byte != "GND" goto drop
+; check the sender IP address, drop some really broken source addresses
+; loading the network part is a Linux extentions, but general socket filter are anyway
+;	leax	net[12]						; load load address
+;	ldb	net[0]						; load the first byte from the network header
+;	and	#0xf0						; mask out the upper nibble
+;	jeq	#0x40, IPV4, #next				; is it 4?
+;	jeq	#0x60, IPV6, DROP				; is it 6? no -> drop
+;IPV6:
+;	ld	net[8]						; load first dword of source address
+;	jeq	#0, CONT_IPV6, #next				; if 0, continue with other ipv6 tests
+;	jeq	#0x20010DB8, DROP, #next			; documentation prefix
+;	jeq	#0x20010002, CHECK_BMWG, #next			; check for benchmark network start of prefix
+;	and	#0xfffffff0					; /28
+; TODO: assigned until 2014
+;	jeq	#0x20010010, DROP, #next			; ORCHID RFC4843, non routable
+;	and	#0xff000000					; /8
+;	jeq	#0xff000000, DROP, CONT_CHECKS			; Multicast
+;CONT_IPV6:
+;	ld	net[12]						; load second dword of source address
+;	jeq	#0, #next, CONT_CHECKS				; if not 0, normal ipv6
+;	ld	net[16]						; load third dword of source address
+;	jeq	#0xffff, CHECK_V4_MAPPED, #next			; the new ipv4 mapped address, check the v4 address
+;	jeq	#0x0064FF9B, CHECK_V4_MAPPED, #next		; the BEHAVE prefix, also v4 mapped
+;	jeq	#0, DROP, CONT_CHECKS				; the old compat mapping is deprecated, drop it
+;CHECK_BMWG:
+;	ld	net[12]						; get third dword of address
+;	and	#0xffff0000					; /16
+;	jeq	#0, DROP, CONT_CHECKS				; if not in 0/16, then we have a normal ipv6
+;CHECK_V4_MAPPED:
+;	leax	net[20]						; load load address of last dword of source address
+;IPV4:
+;	ld	[x+0]						; load source ip address
+;	jeq	#0xffffffff, DROP, #next			; global multicast is bogus
+;	and	#0xffffff00					; /24
+; TODO: keep an eye if this block gets assigned
+;	jeq	#0xC0000000, DROP, #next			; future protocol assignments
+;	jeq	#0xC0000200, DROP, #next			; test net 1
+;	jeq	#0xC6336400, DROP, #next			; test net 2
+;	jeq	#0xCB007100, DROP, #next			; test net 3
+;	jeq	#0xC0586300, DROP, #next			; 6to4 relay any cast, never source
+;	and	#0xfffe0000					; /15
+;	jeq	#0xC6120000, DROP, #next			; benchmark network
+;	and	#0xff000000					; /8
+;	jeq	#0x7F000000, DROP, #next			; loopback
+;	jeq	#0, DROP, #next					; 0.0.0.0/8 "this net" and ip any
+;	and	#0xf0000000					; /4
+;	jeq	#0xE0000000, DROP, #next			; Multicast
+;	jeq	#0xF0000000, DROP, #next			; Future use
+;	jmp	CONT_CHECKS
+; TODO: we could filter for priv addresses
+; but then there would be no override possible + it would may be expensive
+CONT_CHECKS:
+; check if this is an ack
 	ldb	[15]						; get count
 ; TODO: since we are not really interrestet in ACKs (count == 0), we could drop them
-	jgt	#0, #next, ACCEPT				; if count == 0 goto accept
+	jeq	#0, ACCEPT, #next				; if count == 0 goto accept
+; check that the part number is not greater then the count
+	tax							; move count to X
+	ldb	[14]						; load part number
+	jgt	X, DROP, #next					; if count > part, drop it
+; check if the packet wants to be ack'ed, the length is (nearly, UDP check) irrelevant to ack it
 	ldb	[11]						; load the flags
 	jset	#FLAG_ACK, ACCEPT, #next			; if ack is set goto accept
+; check if an absolut min length is achieved
 	ld	#len						; load packet len
 ; TODO: on single part packets we could check for MIN_PACKET_LENGTH
 	jge	#UDP_RELIABLE_LENGTH + 8 + 1, #next, DROP	; if there isn't a single byte of data in this packet goto drop
