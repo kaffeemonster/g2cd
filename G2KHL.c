@@ -38,6 +38,9 @@
 #endif
 #include <errno.h>
 #include <sys/types.h>
+#ifdef HAVE_LIBCURL
+# include <curl/curl.h>
+#endif
 #include "lib/combo_addr.h"
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -100,6 +103,7 @@ static DBM_TYPE dbm_open(const char *f, int flags, int mode)
 #include "lib/rbtree.h"
 #include "lib/my_bitops.h"
 #include "lib/ansi_prng.h"
+#include "timeout.h"
 #ifndef O_BINARY
 # define O_BINARY 0
 #endif
@@ -114,15 +118,27 @@ static DBM_TYPE dbm_open(const char *f, int flags, int mode)
 #define KHL_DUMP_ENDIAN_MARKER 0x12345678
 #define KHL_DUMP_VERSION 0
 
-#define KHL_MNMT_STATI \
-	ENUM_CMD( BOOT    ), \
-	ENUM_CMD( FILL    ), \
-	ENUM_CMD( GWC_RES ), \
-	ENUM_CMD( GWC_CON ), \
-	ENUM_CMD( GWC_REQ ), \
-	ENUM_CMD( GWC_REC ), \
-	ENUM_CMD( IDLE    ), \
-	ENUM_CMD( MAXIMUM ) /* count */
+#ifdef HAVE_LIBCURL
+#  define KHL_MNMT_STATI \
+	ENUM_CMD( BOOT      ), \
+	ENUM_CMD( FILL      ), \
+	ENUM_CMD( GWC_RES   ), \
+	ENUM_CMD( GWC_WAIT  ), \
+	ENUM_CMD( GWC_KICK  ), \
+	ENUM_CMD( GWC_CLEAN ), \
+	ENUM_CMD( IDLE      ), \
+	ENUM_CMD( MAXIMUM   ) /* count */
+#else
+# define KHL_MNMT_STATI \
+	ENUM_CMD( BOOT      ), \
+	ENUM_CMD( FILL      ), \
+	ENUM_CMD( GWC_RES   ), \
+	ENUM_CMD( GWC_CON   ), \
+	ENUM_CMD( GWC_REQ   ), \
+	ENUM_CMD( GWC_REC   ), \
+	ENUM_CMD( IDLE      ), \
+	ENUM_CMD( MAXIMUM   ) /* count */
+#endif
 
 #define ENUM_CMD(x) KHL_##x
 enum khl_mnmt_states
@@ -131,7 +147,8 @@ enum khl_mnmt_states
 };
 #undef ENUM_CMD
 
-#define GWC_RES_STATI \
+#ifndef HAVE_LIBCURL
+# define GWC_RES_STATI \
 	ENUM_CMD( HTTP            ), \
 	ENUM_CMD( HTTP_11         ), \
 	ENUM_CMD( HTTP_SKIP_WHITE ), \
@@ -139,12 +156,13 @@ enum khl_mnmt_states
 	ENUM_CMD( CRLFCRLF        ), \
 	ENUM_CMD( FIND_LINE       )
 
-#define ENUM_CMD(x) GWC_RES_##x
+# define ENUM_CMD(x) GWC_RES_##x
 enum gwc_res_states
 {
 	GWC_RES_STATI
 };
-#undef ENUM_CMD
+# undef ENUM_CMD
+#endif
 
 struct gwc
 {
@@ -168,18 +186,30 @@ struct khl_cache_entry
 static DBM_TYPE gwc_db;
 static struct {
 	struct gwc data;
+	struct norm_buff *buff;
+#ifdef HAVE_LIBCURL
+	CURL *chandle;
+	CURLM *mhandle;
+	struct curl_slist *header_stuff;
+	char *request_url;
+	time_t timeout_last_update;
+	long timeout_ms;
+	unsigned int curl_version_num;
+	int curl_features;
+#else
 	struct addrinfo *addrinfo;
 	struct addrinfo *next_addrinfo;
-	struct norm_buff *buff;
 	char *request_string;
 	unsigned port;
 	int socket;
 	enum gwc_res_states state;
+#endif
 } act_gwc;
 static struct {
 	mutex_t lock;
 	int khl_dump;
 	int num;
+	enum khl_mnmt_states state;
 	uint32_t ht_seed;
 	struct hlist_head free_list;
 	struct rb_root tree;
@@ -187,13 +217,13 @@ static struct {
 	struct khl_cache_entry entrys[KHL_CACHE_SIZE];
 } cache;
 #define ENUM_CMD(x) str_it(KHL_##x)
-static const char khl_mnmt_states_names[][12] =
+static const char khl_mnmt_states_names[][16] =
 {
 	KHL_MNMT_STATI
 };
 #undef ENUM_CMD
 
-#ifdef DEBUG_DEVEL_OLD
+#if defined(DEBUG_DEVEL_OLD) && !defined(HAVE_LIBCURL)
 # define ENUM_CMD(x) str_it(GWC_RES_##x)
 static const char *gwc_res_http_names[] =
 {
@@ -237,6 +267,132 @@ static void put_boot_gwc_in_cache(void)
 /*
  * Functs
  */
+#ifdef HAVE_LIBCURL
+static void handle_watch(struct sock_com *sc, short events)
+{
+	int ev = 0;
+	int rhandle = 0;
+	CURLMcode curlm_res;
+
+	ev |= events & POLLIN  ? CURL_CSELECT_IN  : 0;
+	ev |= events & POLLOUT ? CURL_CSELECT_OUT : 0;
+	ev |= events & POLLERR ? CURL_CSELECT_ERR : 0;
+
+	curlm_res = curl_multi_socket_action(act_gwc.mhandle, sc->fd, ev, &rhandle);
+	if(CURLM_OK != curlm_res) {
+		logg_posd(LOGF_INFO, "error in multi_socket_action: %s\n", curl_multi_strerror(curlm_res));
+		cache.state = KHL_GWC_KICK;
+	} else {
+		if(!rhandle)
+			cache.state = KHL_GWC_CLEAN;
+	}
+}
+
+static int add_watch(curl_socket_t s, int action)
+{
+	struct sock_com *sc;
+	short events = 0;
+
+	switch(action)
+	{
+	case CURL_POLL_NONE:
+		break;
+	case CURL_POLL_IN:
+		events |= POLLIN;
+		break;
+	case CURL_POLL_OUT:
+		events |= POLLOUT;
+		break;
+	case CURL_POLL_INOUT:
+		events |= POLLIN | POLLOUT;
+		break;
+	case CURL_POLL_REMOVE:
+		/* should not happen!! */
+// TODO: do a remove
+		return 0;
+	}
+
+	logg_develd_old("adding watch: %#hx %s\n", events, action != CURL_POLL_NONE ? "enabled" : "disabled");
+	sc = sock_com_add_fd(handle_watch, NULL, s, events, action != CURL_POLL_NONE);
+	if(sc) {
+		CURLMcode curlm_res = curl_multi_assign(act_gwc.mhandle, s, sc);
+		if(CURLM_OK != curlm_res) {
+			logg_posd(LOGF_INFO, "couldn't assign sock_com to libcurl socket: %s\n", curl_multi_strerror(curlm_res));
+			return -1;
+		} else
+			return 0;
+	} else
+		return -1;
+}
+
+static int toggle_watch(int action, struct sock_com *sc)
+{
+	short events = 0;
+
+	switch(action)
+	{
+	case CURL_POLL_NONE:
+		break;
+	case CURL_POLL_IN:
+		events |= POLLIN;
+		break;
+	case CURL_POLL_OUT:
+		events |= POLLOUT;
+		break;
+	case CURL_POLL_INOUT:
+		events |= POLLIN | POLLOUT;
+		break;
+	case CURL_POLL_REMOVE:
+		/* should not happen!! */
+// TODO: do a remove
+		return 0;
+	}
+	logg_develd_old("toggling watch %p oev: %#hx nev: %#hx oe: %i ne: %i \n",
+		sc, sc->events, events, sc->enabled, action != CURL_POLL_NONE);
+	sc->enabled = action != CURL_POLL_NONE;
+	sc->events = events;
+	return 0;
+}
+
+static int remove_watch(struct sock_com *s)
+{
+	logg_develd_old("want to remove watch: %p\n", s);
+
+	if(!s)
+		return 0;
+
+	logg_develd_old("removing watch: %p\n", s);
+	sock_com_delete(s);
+	return 0;
+}
+
+static int gwc_curl_socket_callback(CURL *easy /* easy handle */ GCC_ATTR_UNUSED_PARAM,
+                                    curl_socket_t s /* socket */,
+                                    int action /* see values below */,
+                                    void *userp /* private callback pointer */ GCC_ATTR_UNUSED_PARAM,
+                                    void *socketp)
+{
+	if(CURL_POLL_REMOVE == action)
+		return remove_watch(socketp);
+
+	if(!socketp)
+		return add_watch(s, action);
+
+	return toggle_watch(action, socketp);
+}
+
+static int gwc_curl_timeout_callback(CURLM *multi /* multi handle */ GCC_ATTR_UNUSED_PARAM,
+                                     long timeout_ms /* the new timeout */,
+                                     void *userp /* private callback pointer */ GCC_ATTR_UNUSED_PARAM)
+{
+	logg_develd_old("new timeout for %p: %ld\n", multi, timeout_ms);
+	act_gwc.timeout_last_update = local_time_now;
+	act_gwc.timeout_ms = timeout_ms;
+	return 0;
+}
+
+#endif
+
 bool __init g2_khl_init(void)
 {
 	struct khl_entry *e;
@@ -245,6 +401,11 @@ bool __init g2_khl_init(void)
 	const char *gwc_cache_fname;
 	char *name, *buff;
 	size_t name_len = 0, i;
+#ifdef HAVE_LIBCURL
+	CURLcode curl_res;
+	CURLMcode curlm_res;
+	curl_version_info_data *cvi_data;
+#endif
 
 #ifdef DRD_ME
 	DRD_IGNORE_VAR(cache.num);
@@ -307,6 +468,34 @@ bool __init g2_khl_init(void)
 	random_bytes_get(&name_len, sizeof(name_len));
 	srand((unsigned int)name_len);
 
+#ifdef HAVE_LIBCURL
+	curl_res = curl_global_init(CURL_GLOBAL_ALL & (~CURL_GLOBAL_WIN32));
+	if(curl_res) {
+		logg_posd(LOGF_ERR, "Initialising libcurl failed with %i\n", curl_res);
+		return false;
+	}
+	act_gwc.mhandle = curl_multi_init();
+	if(!act_gwc.mhandle) {
+		logg_pos(LOGF_ERR, "Can't get a libcurl multihandle\n");
+		return false;
+	}
+	act_gwc.header_stuff = curl_slist_append(NULL, "Cache-control: no-cache");
+	act_gwc.header_stuff = curl_slist_append(act_gwc.header_stuff, "Accept: text/plain");
+	curlm_res = curl_multi_setopt(act_gwc.mhandle, CURLMOPT_SOCKETFUNCTION, gwc_curl_socket_callback);
+	if(CURLM_OK != curlm_res) {
+		logg_posd(LOGF_ERR, "Can't register socket callback with libcurl: %s\n", curl_multi_strerror(curlm_res));
+		return false;
+	}
+	curlm_res = curl_multi_setopt(act_gwc.mhandle, CURLMOPT_TIMERFUNCTION, gwc_curl_timeout_callback);
+	if(CURLM_OK != curlm_res) {
+		logg_posd(LOGF_ERR, "Can't register timeout callback with libcurl: %s\n", curl_multi_strerror(curlm_res));
+		return false;
+	}
+	cvi_data = curl_version_info(CURLVERSION_NOW);
+	act_gwc.curl_version_num  = cvi_data->version_num;
+	act_gwc.curl_features     = cvi_data->features;
+#endif
+
 	/* try to read a khl dump */
 	if(!server.settings.khl.dump_fname)
 		return true;
@@ -322,7 +511,7 @@ bool __init g2_khl_init(void)
 	cache.khl_dump = open(name, O_CREAT|O_RDWR|O_BINARY, 0664);
 	if(-1 == cache.khl_dump) {
 		logg_errnod(LOGF_INFO, "couldn't open khl dump \"%s\"", name);
-		return true;
+		goto out;
 	}
 
 	buff = alloca(500);
@@ -392,6 +581,16 @@ static void gwc_clean(void)
 {
 	gwc_writeback(&act_gwc.data);
 
+#ifdef HAVE_LIBCURL
+	free(act_gwc.request_url);
+	act_gwc.request_url = NULL;
+
+	if(act_gwc.chandle) {
+		curl_multi_remove_handle(act_gwc.mhandle, act_gwc.chandle);
+		curl_easy_cleanup(act_gwc.chandle);
+		act_gwc.chandle = NULL;
+	}
+#else
 	if(act_gwc.addrinfo)
 		freeaddrinfo(act_gwc.addrinfo);
 	act_gwc.addrinfo = NULL;
@@ -403,11 +602,12 @@ static void gwc_clean(void)
 
 	free(act_gwc.request_string);
 	act_gwc.request_string = NULL;
-	free(act_gwc.buff);
-	act_gwc.buff = NULL;
 
 	act_gwc.port = 80; /* general http */
 	act_gwc.state = GWC_RES_HTTP;
+#endif
+	free(act_gwc.buff);
+	act_gwc.buff = NULL;
 }
 
 static void gwc_kick(struct gwc *gwc)
@@ -499,6 +699,325 @@ const char *g2_khl_get_url(void)
 	return key.dptr;
 }
 
+static noinline void gwc_handle_line(char *line, time_t lnow)
+{
+	char *wptr;
+	char response;
+
+	/* we need at least 2 chars */
+	if(2 > strlen(line))
+		return;
+
+	logg_develd_old("gwc \"%s\" response: \"%s\"\n", act_gwc.data.url, line);
+	/* skip whitespace */
+	wptr = str_skip_space(line);
+
+	response = *wptr++;
+	/* make shure there is a field seperator */
+	if('|' != *wptr++)
+		return;
+	/* what kind of response in this line? */
+	switch(response)
+	{
+	case 'I':
+	case 'i':
+		{
+			char *next;
+			int period;
+
+			next = strstr(wptr, "access|period|");
+			if(!next)
+				break;
+			/* skip whitespace at period start */
+			wptr = str_skip_space(next + str_size("access|period|"));
+			if(*wptr && isdigit_a(*(unsigned char *)wptr))
+				period = atoi(wptr);
+			else
+				break;
+
+			act_gwc.data.access_period = period > 3 * 60 ? period : 60 * 60;
+		}
+		break;
+	case 'H':
+	case 'h':
+		{
+			union combo_addr a;
+			int since = 0;
+			char *next;
+
+			/* first try to find next seperator */
+			next = strchr(wptr, '|');
+			if(next) {
+				*next++ = '\0';
+				/* skip whitespace at timestamp start */
+				next = str_skip_space(next);
+				if(*next && isdigit_a(*(unsigned char *)next))
+					since = atoi(next);
+			}
+
+			/* skip whitespace at addr start */
+			wptr = str_skip_space(wptr);
+
+			memset(&a, 0, sizeof(a));
+			if(!combo_addr_read_wport(wptr, &a)) {
+				logg_develd("failed to parse \"%s\"\n", wptr);
+				break;
+			}
+
+			if(!combo_addr_port(&a))
+				combo_addr_set_port(&a, htons(6346));
+
+			/*
+			 * this host is in the gwc cache since 'since' senconds.
+			 * Since hosts are short lived, we turn the wheel back in time.
+			 */
+			g2_khl_add(&a, lnow - since, false);
+		}
+		break;
+	case 'U':
+	case 'u':
+		{
+			struct gwc new_gwc;
+			datum key, value;
+			size_t len;
+//			int since = 0;
+			char *next, *after_prot;
+
+			next = strstr(wptr, "http://");
+			if(!next)
+			{
+#ifdef HAVE_LIBCURL
+				if(!(act_gwc.curl_features & CURL_VERSION_SSL))
+					break;
+				next = strstr(wptr, "https://");
+				if(next)
+					after_prot = next + str_size("https://");
+				else
+#endif
+					break;
+			} else {
+				after_prot = next + str_size("http://");
+			}
+			wptr = next;
+
+			/* first try to find next seperator */
+			next = strchr(wptr, '|');
+			if(next) {
+				len = next - wptr;
+				*next++ = '\0';
+#if 0
+				/* skip whitespace at timestamp start */
+				next = str_skip_space(next);
+				if(*next && isdigit_a(*(unsigned char *)next))
+					since = atoi(next);
+#endif
+			}
+			else
+				len = strlen(wptr);
+			/* trim trailing whitespace */
+			for(next = wptr + len; next--, next >= wptr && isspace_a(*(unsigned char *)next);)
+				/* nothing to do */;
+
+			if(next < wptr)
+				break;
+			len = next + 1 - wptr;
+			wptr[len] = '\0';
+
+			if(NULL == strchr(after_prot, '/')) {
+				wptr[len++] = '/';
+				wptr[len] = '\0';
+			}
+
+			key.dptr  = (void *)wptr;
+			key.dsize = len + 1;
+
+			value = dbm_fetch(gwc_db, key);
+			if(!value.dptr)
+			{
+				/* this url is not in cache */
+				logg_posd(LOGF_DEBUG, "putting GWC \"%s\" in cache\n", wptr);
+				new_gwc.q_count = 0;
+				new_gwc.m_count = 1;
+				new_gwc.seen_last = lnow;
+				new_gwc.access_last = 0;
+				new_gwc.access_period = 60 * 60;
+				new_gwc.url = NULL;
+				value.dptr  = (char *) &new_gwc;
+				value.dsize = sizeof(new_gwc);
+			}
+			else {
+				struct gwc *known_gwc = (void *) value.dptr;
+				known_gwc->seen_last = lnow;
+			}
+			/*
+			 * this gwc cache is in this gwc cache since 'since' senconds.
+			 * Since gwcs are long lived, we do NOT turn the wheel back in time.
+			 */
+			if(dbm_store(gwc_db, key, value, DBM_REPLACE))
+				logg_errno(LOGF_WARN, "error accessing gwc db");
+		}
+		break;
+	default:
+		/* unknown response, don't bother */
+		break;
+	}
+}
+
+#ifdef HAVE_LIBCURL
+static size_t gwc_curl_readfunc(void *ptr, size_t size, size_t nmemb, void *userdata GCC_ATTR_UNUSED_PARAM)
+{
+	/* this function should not get called */
+	memset(ptr, 0, size * nmemb);
+	return size * nmemb;
+}
+
+static size_t gwc_curl_writefunc(char *ptr, size_t size, size_t nmemb, void *userdata GCC_ATTR_UNUSED_PARAM)
+{
+	size_t pos = 0;
+	struct norm_buff *buff = act_gwc.buff;
+
+	logg_develd_old("size: %zu\tnmemb: %zu\n", size, nmemb);
+	/* this should not happen, since size should be 1 */
+	if(unlikely(nmemb > ((~((size_t)0))/size)))
+		return 0;
+	size = size * nmemb;
+
+	do {
+		size_t rem = buffer_remaining(*buff);
+		char *wptr;
+
+		if(!rem)
+		{
+			/* buffer still full? force forward progress */
+			buffer_flip(*buff);
+			buffer_skip(*buff);
+			buffer_compact(*buff);
+			rem = buffer_remaining(*buff);
+		}
+		rem = rem < size - pos ? rem : size - pos;
+		memcpy(buffer_start(*buff), ptr + pos, rem);
+		pos += rem;
+		buff->pos += rem;
+		buffer_flip(*buff);
+
+		/* turn \r -> \n */
+		while((wptr = memchr(buffer_start(*buff), '\r', buffer_remaining(*buff)))) {
+			*wptr++ = '\n';
+			buff->pos = wptr - buff->data;
+		}
+		buff->pos = 0;
+
+		while((wptr = memchr(buffer_start(*buff), '\n', buffer_remaining(*buff)))) {
+			*wptr++ = '\0';
+			gwc_handle_line(buffer_start(*buff), local_time_now);
+			buff->pos = wptr - buff->data;
+		}
+		buffer_compact(*buff);
+	} while(size - pos);
+
+	return size;
+}
+
+/* the progressmeter callback */
+static int gwc_curl_meterfunc(void *clientp GCC_ATTR_UNUSED_PARAM,
+                              double dltotal GCC_ATTR_UNUSED_PARAM, double dlnow GCC_ATTR_UNUSED_PARAM,
+                              double ultotal GCC_ATTR_UNUSED_PARAM, double ulnow GCC_ATTR_UNUSED_PARAM)
+{
+	/*
+	 * should not be called, we do not want a progress
+	 * meter, but to prevent prints, provide and set callback
+	 */
+	return 0;
+}
+
+#if 0
+static int gwc_curl_debugfunc(CURL *handle, curl_infotype ci, char *data, size_t dlen, void *userp)
+{
+
+}
+#endif
+
+# define do_an_setopt(option, value) do { \
+	if(CURLE_OK != (cres = curl_easy_setopt(act_gwc.chandle, option, value))) { \
+		opt_name = str_it(option); \
+		goto out_err_opt; \
+	} } while(0)
+# define do_an_setopt_missing_ok(option, value) do { \
+	cres = curl_easy_setopt(act_gwc.chandle, option, value); \
+	if(CURLE_OK != cres && CURLE_FAILED_INIT != cres) { \
+		opt_name = str_it(option); \
+		goto out_err_opt; \
+	} } while(0)
+# define HTTP_GET_PARAM "?get=1&hostfile=1&net=gnutella2&client=" OWN_VENDOR_CODE "&version=" OUR_VERSION "&ping=1"
+static bool gwc_curl_prepare(void)
+{
+	const char *opt_name;
+	size_t slen;
+	CURLcode cres;
+	CURLMcode cmres;
+
+	logg_develd("asking gwc \%s\"\n", act_gwc.data.url);
+	slen = strlen(act_gwc.data.url);
+	act_gwc.request_url = malloc(slen + sizeof(HTTP_GET_PARAM));
+	if(!act_gwc.request_url) {
+		logg_errno(LOGF_INFO, "couldn't request mem for request_url");
+		return false;
+	}
+	memcpy(act_gwc.request_url, act_gwc.data.url, slen);
+	strplitcpy(act_gwc.request_url + slen, HTTP_GET_PARAM);
+
+	act_gwc.buff = malloc(sizeof(*act_gwc.buff));
+	if(!act_gwc.buff) {
+		logg_errno(LOGF_INFO, "couldn't request mem for buffer");
+		return false;
+	}
+	act_gwc.buff->capacity = sizeof(act_gwc.buff->data);
+	buffer_clear(*act_gwc.buff);
+
+	act_gwc.chandle = curl_easy_init();
+	if(!act_gwc.chandle) {
+		logg_pos(LOGF_INFO, "couldn't get libcurl easy handle\n");
+		return false;
+	}
+
+# ifdef DEBUG_DEVEL_OLD
+	do_an_setopt(CURLOPT_VERBOSE, 1l);
+# endif
+	do_an_setopt(CURLOPT_PROGRESSFUNCTION, gwc_curl_meterfunc);
+	do_an_setopt(CURLOPT_WRITEFUNCTION, gwc_curl_writefunc);
+	do_an_setopt(CURLOPT_READFUNCTION, gwc_curl_readfunc);
+	do_an_setopt(CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
+	do_an_setopt(CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
+	do_an_setopt(CURLOPT_AUTOREFERER, 1l);
+	do_an_setopt(CURLOPT_FOLLOWLOCATION, 1l);
+	do_an_setopt(CURLOPT_MAXREDIRS, 30l);
+	do_an_setopt(CURLOPT_USERAGENT, OUR_UA);
+	do_an_setopt(CURLOPT_HTTPHEADER, act_gwc.header_stuff);
+# if LIBCURL_VERSION_NUM >= 0x071506
+	if(act_gwc.curl_version_num >= 0x071506)
+		do_an_setopt(CURLOPT_ACCEPT_ENCODING, "");
+	else
+# endif
+		do_an_setopt(CURLOPT_ENCODING, "");
+	do_an_setopt_missing_ok(CURLOPT_WILDCARDMATCH, 0l);
+	do_an_setopt(CURLOPT_URL, act_gwc.request_url);
+
+	cmres = curl_multi_add_handle(act_gwc.mhandle, act_gwc.chandle);
+	if(CURLM_OK != cmres) {
+		logg_posd(LOGF_INFO, "adding easy handle to multi handle: %s\n", curl_multi_strerror(cmres));
+		goto out_err;
+	}
+
+	return true;
+out_err_opt:
+	logg_posd(LOGF_INFO, "libcurl setting \"%s\": %s\n", opt_name, curl_easy_strerror(cres));
+out_err:
+	curl_easy_cleanup(act_gwc.chandle);
+	act_gwc.chandle = NULL;
+	return false;
+}
+
+#else
 static bool gwc_resolv(void)
 {
 	char *url, *node, *service, *path, *wptr;
@@ -687,153 +1206,6 @@ out_err:
 	closesocket(act_gwc.socket);
 	act_gwc.socket = -1;
 	return false;
-}
-
-static void gwc_handle_line(char *line, time_t lnow)
-{
-	char *wptr;
-	char response;
-
-	/* we need at least 2 chars */
-	if(2 > strlen(line))
-		return;
-
-	logg_develd_old("gwc \"%s\" response: \"%s\"\n", act_gwc.data.url, line);
-	/* skip whitespace */
-	wptr = str_skip_space(line);
-
-	response = *wptr++;
-	/* make shure there is a field seperator */
-	if('|' != *wptr++)
-		return;
-	/* what kind of response in this line? */
-	switch(response)
-	{
-	case 'I':
-	case 'i':
-		{
-			char *next;
-			int period;
-
-			next = strstr(wptr, "access|period|");
-			if(!next)
-				break;
-			/* skip whitespace at period start */
-			wptr = str_skip_space(next + str_size("access|period|"));
-			if(*wptr && isdigit_a(*(unsigned char *)wptr))
-				period = atoi(wptr);
-			else
-				break;
-
-			act_gwc.data.access_period = period > 3 * 60 ? period : 60 * 60;
-		}
-		break;
-	case 'H':
-	case 'h':
-		{
-			union combo_addr a;
-			int since = 0;
-			char *next;
-
-			/* first try to find next seperator */
-			next = strchr(wptr, '|');
-			if(next) {
-				*next++ = '\0';
-				/* skip whitespace at timestamp start */
-				next = str_skip_space(next);
-				if(*next && isdigit_a(*(unsigned char *)next))
-					since = atoi(next);
-			}
-
-			/* skip whitespace at addr start */
-			wptr = str_skip_space(wptr);
-
-			memset(&a, 0, sizeof(a));
-			if(!combo_addr_read_wport(wptr, &a)) {
-				logg_develd("failed to parse \"%s\"\n", wptr);
-				break;
-			}
-
-			if(!combo_addr_port(&a))
-				combo_addr_set_port(&a, htons(6346));
-
-			/*
-			 * this host is in the gwc cache since 'since' senconds.
-			 * Since hosts are short lived, we turn the wheel back in time.
-			 */
-			g2_khl_add(&a, lnow - since, false);
-		}
-		break;
-	case 'U':
-	case 'u':
-		{
-			struct gwc new_gwc;
-			datum key, value;
-			size_t len;
-//			int since = 0;
-			char *next;
-
-			next = strstr(wptr, "http://");
-			if(!next)
-				break;
-			wptr = next;
-
-			/* first try to find next seperator */
-			next = strchr(wptr, '|');
-			if(next) {
-				len = next - wptr;
-				*next++ = '\0';
-#if 0
-				/* skip whitespace at timestamp start */
-				next = str_skip_space(next);
-				if(*next && isdigit_a(*(unsigned char *)next))
-					since = atoi(next);
-#endif
-			}
-			else
-				len = strlen(wptr);
-			/* trim trailing whitespace */
-			for(next = wptr + len; next--, next >= wptr && isspace_a(*(unsigned char *)next);)
-				/* nothing to do */;
-
-			if(next < wptr)
-				break;
-			len = next + 1 - wptr;
-			wptr[len] = '\0';
-
-			key.dptr  = (void *)wptr;
-			key.dsize = len + 1;
-
-			value = dbm_fetch(gwc_db, key);
-			if(!value.dptr)
-			{
-				/* this url is not in cache */
-				logg_posd(LOGF_DEBUG, "putting GWC \"%s\" in cache\n", wptr);
-				new_gwc.q_count = 0;
-				new_gwc.m_count = 1;
-				new_gwc.seen_last = lnow;
-				new_gwc.access_last = 0;
-				new_gwc.access_period = 60 * 60;
-				new_gwc.url = NULL;
-				value.dptr  = (char *) &new_gwc;
-				value.dsize = sizeof(new_gwc);
-			}
-			else {
-				struct gwc *known_gwc = (void *) value.dptr;
-				known_gwc->seen_last = lnow;
-			}
-			/*
-			 * this gwc cache is in this gwc cache since 'since' senconds.
-			 * Since gwcs are long lived, we do NOT turn the wheel back in time.
-			 */
-			if(dbm_store(gwc_db, key, value, DBM_REPLACE))
-				logg_errno(LOGF_WARN, "error accessing gwc db");
-		}
-		break;
-	default:
-		/* unknown response, don't bother */
-		break;
-	}
 }
 
 static int gwc_handle_response(void)
@@ -1029,40 +1401,71 @@ static int gwc_receive(void)
 	}
 	return ret_val;
 }
+#endif
 
 bool g2_khl_tick(void)
 {
-	static enum khl_mnmt_states state = KHL_BOOT;
 	bool long_poll = false;
 
-	if(KHL_IDLE != state)
-		logg_develd("state: %s\n", khl_mnmt_states_names[state]);
+	if(KHL_IDLE != cache.state)
+		logg_develd("state: %s\n", khl_mnmt_states_names[cache.state]);
 
-	switch(state)
+	switch(cache.state)
 	{
 	case KHL_BOOT:
-		state = KHL_CACHE_FILL > cache.num ? KHL_FILL : KHL_IDLE;
+		cache.state = KHL_CACHE_FILL > cache.num ? KHL_FILL : KHL_IDLE;
 		break;
 	case KHL_FILL:
 		if(gwc_switch())
-			state = KHL_GWC_RES;
+			cache.state = KHL_GWC_RES;
 		else
 			put_boot_gwc_in_cache();
 		break;
 	case KHL_GWC_RES:
-		if(gwc_resolv())
-			state = KHL_GWC_CON;
+#ifdef HAVE_LIBCURL
+		if(gwc_curl_prepare())
+			cache.state = KHL_GWC_WAIT;
 		else
-			state = KHL_FILL;
+			cache.state = KHL_FILL;
+		break;
+	case KHL_GWC_WAIT:
+		logg_develd_old("time: %ld %ld %ld\n", act_gwc.timeout_ms, act_gwc.timeout_last_update, local_time_now);
+		if(act_gwc.timeout_ms >= 0 &&
+		   (act_gwc.timeout_last_update + ((act_gwc.timeout_ms+999)/1000)) <= local_time_now)
+		{
+			int rhandles = 0;
+			logg_devel_old("calling action\n");
+			CURLMcode cmres = curl_multi_socket_action(act_gwc.mhandle, CURL_SOCKET_TIMEOUT, 0, &rhandles);
+			if(CURLM_OK != cmres) {
+				logg_posd(LOGF_INFO, "error calling multi_socket_action on timeout: %s\n", curl_multi_strerror(cmres));
+				cache.state = KHL_GWC_KICK;
+			} else {
+				logg_develd_old("rhandles: %i\n", rhandles);
+				if(!rhandles)
+					cache.state = KHL_GWC_CLEAN;
+			}
+		}
+		break;
+	case KHL_GWC_KICK:
+		gwc_kick(&act_gwc.data);
+	case KHL_GWC_CLEAN:
+		gwc_clean();
+		cache.state = KHL_IDLE;
+		break;
+#else
+		if(gwc_resolv())
+			cache.state = KHL_GWC_CON;
+		else
+			cache.state = KHL_FILL;
 		break;
 	case KHL_GWC_CON:
 		{
 			int result = gwc_connect();
 			if(!result)
-				state = KHL_GWC_REQ;
+				cache.state = KHL_GWC_REQ;
 			else {
 				if(-1 == result)
-					state = KHL_FILL;
+					cache.state = KHL_FILL;
 				break;
 			}
 		}
@@ -1079,33 +1482,34 @@ bool g2_khl_tick(void)
 				act_gwc.data.q_count++;
 				time(&act_gwc.data.seen_last);
 				gwc_clean();
-				state = KHL_FILL;
+				cache.state = KHL_FILL;
 				break;
 			}
-			state = KHL_GWC_REC;
+			cache.state = KHL_GWC_REC;
 		}
 		else {
-			state = KHL_FILL;
+			cache.state = KHL_FILL;
 			break;
 		}
 	case KHL_GWC_REC:
 		{
 			int result = gwc_receive();
 			if(0 > result)
-				state = KHL_FILL; /* clean?? */
+				cache.state = KHL_FILL; /* clean?? */
 			else if (0 == result) {
 				act_gwc.data.q_count++;
 				time(&act_gwc.data.seen_last);
 				gwc_clean();
-				state = KHL_IDLE;
+				cache.state = KHL_IDLE;
 			}
 		}
 		break;
+#endif
 	case KHL_IDLE:
 		if(KHL_CACHE_FILL > cache.num)
-			state = KHL_FILL;
+			cache.state = KHL_FILL;
 		else
-			state = KHL_IDLE;
+			cache.state = KHL_IDLE;
 // TODO: anounce ourself to gwc
 		/*
 		 * wget -v -S -U G2CD -O -
@@ -1115,7 +1519,7 @@ bool g2_khl_tick(void)
 		break;
 	case KHL_MAXIMUM:
 		logg_devel("Ouch! khl state is MAXIMUM?? Should not happen! Fixing up...");
-		state = KHL_IDLE;
+		cache.state = KHL_IDLE;
 	}
 
 	return long_poll;
@@ -1191,6 +1595,22 @@ out:
 	close(cache.khl_dump);
 	if(act_gwc.data.url)
 		free((void *)(intptr_t)act_gwc.data.url);
+#ifdef HAVE_LIBCURL
+	if(act_gwc.chandle) {
+		curl_multi_remove_handle(act_gwc.mhandle, act_gwc.chandle);
+		curl_easy_cleanup(act_gwc.chandle);
+		act_gwc.chandle = NULL;
+	}
+	if(act_gwc.mhandle) {
+		curl_multi_cleanup(act_gwc.mhandle);
+		act_gwc.chandle = NULL;
+	}
+	if(act_gwc.header_stuff) {
+		curl_slist_free_all(act_gwc.header_stuff);
+		act_gwc.header_stuff = NULL;
+	}
+	curl_global_cleanup();
+#endif
 }
 
 
