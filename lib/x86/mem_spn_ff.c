@@ -679,7 +679,9 @@ static size_t mem_spn_ff_x86(const void *s, size_t len)
 		p++;
 		len--;
 	}
+#if 0
 OUT:
+#endif
 	return (size_t)(p - (const unsigned char *)s);
 }
 
