@@ -205,17 +205,17 @@ static inline bool is_486(void)
 	return toggle_eflags_test(1 << 18);
 }
 
-static __init inline void cpu_feature_clear(int f)
+static __init inline void cpu_feature_clear(unsigned f)
 {
 	our_cpu.features[f / 32] &= ~(1 << (f % 32));
 }
 
-static __init inline void cpu_feature_set(int f)
+static __init inline void cpu_feature_set(unsigned f)
 {
 	our_cpu.features[f / 32] |= 1 << (f % 32);
 }
 
-static __init inline bool cpu_feature(int f)
+static __init inline bool cpu_feature(unsigned f)
 {
 	return !!(our_cpu.features[f / 32] & (1 << (f % 32)));
 }
@@ -540,7 +540,13 @@ static __init void identify_cpu(void)
 	 *    main crash)
 	 *  - those OS are OLD and IMHO broken
 	 */
+
+	/* valgrind sometimes has problems emulating certain instr. */
+#if 0
 	cpu_feature_clear(CFEATURE_SSE4_2);
+	cpu_feature_clear(CFEATURE_SSE4_1);
+	cpu_feature_clear(CFEATURE_SSSE3);
+#endif
 
 	return;
 }
