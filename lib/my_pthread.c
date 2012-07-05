@@ -264,11 +264,11 @@ void pthread_exit(void *retval)
 
 int pthread_join(pthread_t thread, void **retval)
 {
-	int ret_st = 0;
+	DWORD ret_st = 0;
 	HANDLE thread_h = OpenThread(THREAD_ALL_ACCESS, FALSE, (DWORD)thread);
 
 	WaitForSingleObject(thread_h, INFINITE);
-	if(!GetExitCodeThread(thread_h, (LPDWORD)retval))
+	if(!GetExitCodeThread(thread_h, &retval))
 		ret_st = EINVAL;
 
 	CloseHandle(thread_h);
