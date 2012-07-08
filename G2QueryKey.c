@@ -247,7 +247,7 @@ void __init g2_qk_init(void)
 	g2_qk_s.act_salt = i % TIME_SLOT_COUNT;
 	g2_qk_s.last_update = time(NULL);
 	/* server need around 70min after boot to gather enough entropy */
-	server_last_rekey = g2_qk_s.last_update + 10 * 60;
+	server_last_rekey = g2_qk_s.last_update + 70 * 60 - 60 * 60 * 24;
 	/* also init the guid generator */
 	guid_init();
 }
@@ -279,7 +279,7 @@ void g2_qk_tick(void)
 	 */
 	t_diff = local_time_now - server_last_rekey;
 	t_diff = t_diff >= 0 ? t_diff : -t_diff;
-	if(t_diff > 70 * 60) {
+	if(t_diff > 60 * 60 * 24) {
 		unsigned int data[DIV_ROUNDUP(RAND_BLOCK_BYTE*2, sizeof(unsigned int))];
 		g2_main_get_entropy(data);
 		random_bytes_rekey((char *)data);
