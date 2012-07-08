@@ -107,26 +107,99 @@ static void increment_counter(union dvector *ctr, uint32_t incr)
 	unsigned i;
 # ifndef HAVE_TIMODE
 	uint64_t c = incr;
-	c = ctr->u[0] + c;
-	ctr->u[0] = c;
-	c = c >> 32;
-	for(i = 1; i < anum(ctr->u); i++) {
+	for(i = 0; i < anum(ctr->u); i++) {
 		c = ctr->u[i] + c;
 		ctr->u[i] = c;
 		c = c >> 32;
 	}
 # else
 	unsigned c __attribute__((mode(TI))) = incr;
-	c = ctr->v[0] + c;
-	ctr->v[0] = c;
-	c = c >> 64;
-	for(i = 1; i < anum(ctr->v); i++) {
+	for(i = 0; i < anum(ctr->v); i++) {
 		c += ctr->v[i];
 		ctr->v[i] = c;
 		c = c >> 64;
 	}
 # endif
 #endif
+}
+
+static always_inline void butterfly_one(uint32_t *d, unsigned idx)
+{
+	unsigned idx_o = (idx + 1) % (RAND_BLOCK_BYTE/SO32);
+	uint32_t t = d[idx];
+	d[idx] = d[idx_o];
+	d[idx_o] = t;
+}
+
+static always_inline void butterfly_two(uint32_t *d, unsigned idx)
+{
+	unsigned idx_o = (idx + 2) % (RAND_BLOCK_BYTE/SO32);
+	uint32_t t = d[idx];
+	d[idx] = d[idx_o];
+	d[idx_o] = t;
+}
+
+static void butterfly(union dvector *d, uint32_t transf)
+{
+	switch(transf % 16)
+	{
+	case 0:
+		break;
+	case 1:
+		butterfly_one(d->u, 0);
+		break;
+	case 2:
+		butterfly_one(d->u, 1);
+		break;
+	case 3:
+		butterfly_one(d->u, 2);
+		break;
+	case 4:
+		butterfly_one(d->u, 3);
+		break;
+	case 5:
+		butterfly_one(d->u, 0);
+		butterfly_one(d->u, 2);
+		break;
+	case 6:
+		butterfly_one(d->u, 1);
+		butterfly_one(d->u, 3);
+		break;
+	case 7:
+		butterfly_two(d->u, 0);
+		break;
+	case 8:
+		butterfly_two(d->u, 1);
+		break;
+	case 9:
+		butterfly_two(d->u, 0);
+		butterfly_two(d->u, 1);
+		break;
+	case 10:
+		butterfly_two(d->u, 0);
+		butterfly_one(d->u, 0);
+		break;
+	case 11:
+		butterfly_two(d->u, 1);
+		butterfly_one(d->u, 0);
+		break;
+	case 12:
+		butterfly_two(d->u, 0);
+		butterfly_one(d->u, 1);
+		break;
+	case 13:
+		butterfly_two(d->u, 1);
+		butterfly_one(d->u, 1);
+		break;
+	case 14:
+		butterfly_two(d->u, 0);
+		butterfly_one(d->u, 2);
+		break;
+	case 15:
+		butterfly_two(d->u, 1);
+		butterfly_one(d->u, 2);
+		break;
+	}
 }
 
 /* generate more random bytes */
@@ -141,6 +214,8 @@ static void more_random_bytes_rctx_int(struct rctx *rctx)
 	xor_vectors(&I, &rctx->V, &tmp);
 	aes_ecb_encrypt(&rctx->actx, &rctx->rand_data, &tmp);
 
+	butterfly(&rctx->rand_data, rctx->V.u[0]);
+	butterfly(&rctx->DT, rctx->V.u[1]);
 	/* xor random data with I, encrypt to get new V */
 	xor_vectors(&rctx->rand_data, &I, &tmp);
 	aes_ecb_encrypt(&rctx->actx, &rctx->V, &tmp);
