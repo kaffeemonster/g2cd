@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <zlib.h>
 #include "my_pthread.h"
 #ifndef WIN32
 # include <sys/mman.h>
@@ -48,26 +49,30 @@
 #include "other.h"
 #include "aes.h"
 #include "ansi_prng.h"
+#if RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__x86_64__)
+# include "x86/x86.h"
+#endif
 
 union dvector
 {
 	size_t s[RAND_BLOCK_BYTE/SOST];
 	uint64_t v[RAND_BLOCK_BYTE/sizeof(uint64_t)];
+	unsigned long l[RAND_BLOCK_BYTE/sizeof(unsigned long)];
 	uint32_t u[RAND_BLOCK_BYTE/SO32];
 	unsigned char c[RAND_BLOCK_BYTE];
-} GCC_ATTR_ALIGNED(RAND_BLOCK_BYTE);
+} GCC_ATTR_ALIGNED(16);
 
-static struct
+static struct rctx
 {
 	union dvector rand_data;
-	union dvector DT;
-	union dvector I;
 	union dvector V;
+	union dvector DT;
 	struct aes_encrypt_ctx actx;
 	mutex_t lock;
-	union dvector ne[4];
+	uint32_t adler;
 	unsigned bytes_used;
-} ctx;
+	union dvector ne[3];
+} ctx GCC_ATTR_ALIGNED(16);
 
 /* our memxor is a little over enginered for this... */
 static void xor_vectors(const union dvector *in1, const union dvector *in2, union dvector *out)
@@ -78,29 +83,31 @@ static void xor_vectors(const union dvector *in1, const union dvector *in2, unio
 		out->s[i] = in1->s[i] ^ in2->s[i];
 }
 
-static void increment_counter(union dvector *ctr)
+static void increment_counter(union dvector *ctr, uint32_t incr)
 {
 #if RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__i386__)
 	asm(
-		"addl	$1,   (%1)\n\t"
-		"adcl	$0,  4(%1)\n\t"
-		"adcl	$0,  8(%1)\n\t"
-		"adcl	$0, 12(%1)\n\t"
+		"addl	%2,    %1\n\t"
+		"adcl	$0,  4+%1\n\t"
+		"adcl	$0,  8+%1\n\t"
+		"adcl	$0, 12+%1\n\t"
 		: /* %0 */ "=m" (ctr->u[0])
-		: /* %2 */ "r" (ctr->u)
+		: /* %1 */ "m" (*ctr->u),
+		  /* %2 */ "r" (incr)
 	);
 #elif RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__x86_64__)
 	asm(
-		"addq	$1,   (%1)\n\t"
-		"adcq	$0,  8(%1)\n\t"
+		"addq	%q2,   %1\n\t"
+		"adcq	$0,  8+%1\n\t"
 		: /* %0 */ "=m" (ctr->v[0])
-		: /* %2 */ "r" (ctr->v)
+		: /* %1 */ "m" (*ctr->v),
+		  /* %2 */ "r" (incr)
 	);
 #else
 	unsigned i;
 # ifndef HAVE_TIMODE
-	uint64_t c = 0;
-	c = ctr->u[0] + c + 1;
+	uint64_t c = incr;
+	c = ctr->u[0] + c;
 	ctr->u[0] = c;
 	c = c >> 32;
 	for(i = 1; i < anum(ctr->u); i++) {
@@ -109,8 +116,8 @@ static void increment_counter(union dvector *ctr)
 		c = c >> 32;
 	}
 # else
-	unsigned c __attribute__((mode(TI))) = 0;
-	c = ctr->v[0] + c + 1;
+	unsigned c __attribute__((mode(TI))) = incr;
+	c = ctr->v[0] + c;
 	ctr->v[0] = c;
 	c = c >> 64;
 	for(i = 1; i < anum(ctr->v); i++) {
@@ -123,21 +130,20 @@ static void increment_counter(union dvector *ctr)
 }
 
 /* generate more random bytes */
-static noinline void more_random_bytes(void)
+static void more_random_bytes_rctx_int(struct rctx *rctx)
 {
-	union dvector tmp;
+	union dvector tmp, I;
 
 	/* encrypt counter, get intermediate I */
-	memcpy(&tmp, &ctx.DT, sizeof(tmp));
-	aes_ecb_encrypt(&ctx.actx, &ctx.I, &tmp);
+	aes_ecb_encrypt(&rctx->actx, &I, &rctx->DT);
 
 	/* xor I with V, encrypt to get output */
-	xor_vectors(&ctx.I, &ctx.V, &tmp);
-	aes_ecb_encrypt(&ctx.actx, &ctx.rand_data, &tmp);
+	xor_vectors(&I, &rctx->V, &tmp);
+	aes_ecb_encrypt(&rctx->actx, &rctx->rand_data, &tmp);
 
 	/* xor random data with I, encrypt to get new V */
-	xor_vectors(&ctx.rand_data, &ctx.I, &tmp);
-	aes_ecb_encrypt(&ctx.actx, &ctx.V, &tmp);
+	xor_vectors(&rctx->rand_data, &I, &tmp);
+	aes_ecb_encrypt(&rctx->actx, &rctx->V, &tmp);
 
 	/*
 	 * update counter
@@ -156,8 +162,21 @@ static noinline void more_random_bytes(void)
 	 * not said which bit pattern the counter has to have
 	 * (can be seen as a f(x) with a long period).
 	 */
-	increment_counter(&ctx.DT);
+	increment_counter(&rctx->DT, rctx->adler);
+
+	/* checksum I */
+	rctx->adler = adler32(rctx->adler, I.c, sizeof(I));
+}
+
+static noinline void more_random_bytes(void)
+{
+	more_random_bytes_rctx_int(&ctx);
 	ctx.bytes_used = 0;
+}
+
+static noinline void more_random_bytes_rctx(struct rctx *rctx)
+{
+	more_random_bytes_rctx_int(rctx);
 }
 
 void noinline random_bytes_get(void *ptr, size_t len)
@@ -190,60 +209,96 @@ void noinline random_bytes_get(void *ptr, size_t len)
 	mutex_unlock(&ctx.lock);
 }
 
-void random_bytes_rekey(void)
+static const unsigned char *get_text(void)
 {
-	struct aes_encrypt_ctx tctx;
-	unsigned i;
-	/* create a new random key */
-	aes_encrypt_key128(&tctx, &ctx.ne[0]);
-	/* lock other out */
-	mutex_lock(&ctx.lock);
-	/* set new key */
-	ctx.actx = tctx;
-	/* fuzz internal vectors */
-	/* set the initial vector state to some random value */
-	xor_vectors(&ctx.V, &ctx.ne[1], &ctx.V);
-	xor_vectors(&ctx.DT, &ctx.ne[2], &ctx.DT);
-	xor_vectors(&ctx.I, &ctx.ne[3], &ctx.I);
-	/* get new random data */
-	more_random_bytes();
-	memcpy(&ctx.ne[0], &ctx.rand_data, RAND_BLOCK_BYTE);
-	more_random_bytes();
-	memcpy(&ctx.ne[1], &ctx.rand_data, RAND_BLOCK_BYTE);
-	more_random_bytes();
-	memcpy(&ctx.ne[2], &ctx.rand_data, RAND_BLOCK_BYTE);
-	more_random_bytes();
-	memcpy(&ctx.ne[3], &ctx.rand_data, RAND_BLOCK_BYTE);
-	/*
-	 * keep the crng running for ?? times, more iterations make it harder to
-	 * get to the initial state, and so to the results of the above calls
-	 * and the input for the rekeying in 24 hours.
-	 */
-	for(i = (ctx.ne[0].c[0] % 32) + 8; i--;)
-		more_random_bytes();
-	mutex_unlock(&ctx.lock);
-}
-
-static const char *get_text(void)
-{
-	const char *rval;
+	const unsigned char *rval;
 	/* get address of some func in text segment */
 	asm("" : "=r" (rval) : "0" (more_random_bytes));
 	return rval;
 }
 
+void random_bytes_rekey(void)
+{
+	char tmp_store[sizeof(struct rctx) + sizeof(union dvector) + 16];
+	struct rctx *rctx;
+	union dvector *ni;
+	unsigned i;
+
+	rctx = (struct rctx *)ALIGN(tmp_store, 16);
+	ni   = rctx->ne;
+
+	/* seed adler from a little bit sbox data */
+	rctx->adler = adler32(1, get_text() - (ctx.ne[2].u[1] % 8192), 4096);
+	/* create a new random key */
+	aes_encrypt_key128(&rctx->actx, &ctx.ne[0]);
+
+	/* fuzz internal vectors */
+	/* set the initial vector state to some random value */
+	xor_vectors(&ctx.V, &ctx.ne[1], &rctx->V);
+	xor_vectors(&ctx.DT, &ctx.ne[2], &rctx->DT);
+	/* get new random data */
+	more_random_bytes_rctx(rctx);
+	memcpy(&ctx.ne[0], &rctx->rand_data, RAND_BLOCK_BYTE);
+	more_random_bytes_rctx(rctx);
+	memcpy(&ctx.ne[1], &rctx->rand_data, RAND_BLOCK_BYTE);
+	more_random_bytes_rctx(rctx);
+	memcpy(&ctx.ne[2], &rctx->rand_data, RAND_BLOCK_BYTE);
+	/*
+	 * keep the crng running for ?? times, more iterations make it harder to
+	 * get to the initial state, and so to the results of the above calls
+	 * and the input for the rekeying in 24 hours.
+	 */
+	for(i = (ctx.ne[0].c[ctx.ne[0].c[1] % 16] % 32) + 8; i--;)
+		more_random_bytes_rctx(rctx);
+
+	/*
+	 * Again recreate the key, so if the key is reconstructed
+	 * from the random output, the random data entropy
+	 * for the next rekeying is not simply guessable
+	 */
+	aes_encrypt_key128(&rctx->actx, &rctx->rand_data);
+
+	memset(&ni[0], 0, sizeof(*ni) * 4);
+
+	/* move state forward */
+	for(i = (ctx.ne[1].c[ctx.ne[0].c[2] % 16] % 32) + 8; i--;) {
+		more_random_bytes_rctx(rctx);
+		xor_vectors(&ni[i % 4], &rctx->rand_data, &ni[i % 4]);
+	}
+
+	/* again scramble the state */
+	ctx.adler = adler32(rctx->adler, ni[0].c, sizeof(*ni) * 4);
+	xor_vectors(&rctx->V, &ni[1], &rctx->V);
+	xor_vectors(&rctx->DT, &ni[2], &rctx->DT);
+
+	/* move state forward */
+	for(i = (ctx.ne[2].c[ctx.ne[0].c[3] % 16] % 32) + 8; i--;)
+		more_random_bytes_rctx(rctx);
+
+	/* lock other out */
+	mutex_lock(&ctx.lock);
+	/* set the new key */
+	memcpy(&ctx.rand_data, &rctx->rand_data, offsetof(struct rctx, lock));
+	ctx.adler = rctx->adler;
+	ctx.bytes_used = RAND_BLOCK_BYTE;
+	mutex_unlock(&ctx.lock);
+}
+
 void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 {
-	union dvector td;
+	union dvector td, st[2];
 	struct timeval now;
 	uint32_t *p, i, t;
-	const char *sbox;
+	const unsigned char *sbox;
+	unsigned char *wptr;
 	const unsigned magic = 0x5BD1E995;
 
 	/*
 	 * <paranoid mode>
+	 * mutex_init first!
+	 *
 	 * This lib func may do who knows what to our mem
-	 * (it is "free" to do so, maybe it also needs to
+	 * (it is "free" to do so, maybe it needs to
 	 * frobnicate with the mapping to get coherent mem
 	 * for atomic ops or something like that), in contrast
 	 * to the rest of funcs (which are simple or our own).
@@ -251,6 +306,7 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	 * </paranoid mode>
 	 */
 	mutex_init(&ctx.lock);
+
 #ifdef _POSIX_MEMLOCK_RANGE
 	/* Now try to lock our ctx into mem for fun and profit */
 	{
@@ -273,33 +329,57 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	 * as long as we do have a random key and vector,
 	 * this is not that important
 	 */
+	/* bit reverse the input vector to the other fields */
+	for(i = 0, wptr = &st[1].c[RAND_BLOCK_BYTE-1]; i < RAND_BLOCK_BYTE * 2; i++)
+	{
+		unsigned char a = data[i];
+		a = ((a & 0x55u) << 1) | ((a & 0xAAu) >> 1);
+		a = ((a & 0x33u) << 2) | ((a & 0xCCu) >> 2);
+		a = ((a & 0x0Fu) << 4) | ((a & 0xF0u) >> 4);
+		*wptr-- = a;
+	}
+
+	/* get some more foo */
 	t = getpid() | (getppid() << 16);
-	ctx.ne[2].u[3] = t;
+	st[1].u[3] ^= t;
 
 	gettimeofday(&now, 0);
 	/* if gtod fails, we deliberatly pick up stack garbage as fallback */
-	memcpy(ctx.ne[2].c, &now.tv_usec, sizeof(now.tv_usec));
-	memcpy(ctx.ne[2].c + sizeof(now.tv_usec), &now.tv_sec, sizeof(now.tv_sec));
+	st[0].l[0] ^= now.tv_sec;
+	st[0].l[1] ^= now.tv_usec;
 
 	/* let the milliseconds decide where we pick the text segment */
 	sbox = get_text() + (now.tv_usec / 1000);
 
 	/* fill the I vector */
-	memcpy(&ctx.ne[3], sbox - 8192, RAND_BLOCK_BYTE);
+	memcpy(&td, sbox - 8192, sizeof(td));
+	xor_vectors(&st[1], &td, &st[1]);
+
+	/* seed adler from a little bit sbox data */
+	ctx.adler = adler32(1, sbox - (st[1].u[1] % 8192) , 4096);
 
 	/* mix it baby */
-	t = ctx.ne[0].u[0] ^ get_unaligned((const uint32_t *)sbox);
+	t = st[1].u[0] ^ get_unaligned((const uint32_t *)sbox) ^ ctx.adler;
 	t ^= ((t >> 13) ^ (t << 7)) * magic;
-	for(i = 0, p = &ctx.ne[2].u[0]; i++ < ((RAND_BLOCK_BYTE * 2)/SO32);) {
+	for(i = 0, p = &st[0].u[0]; i++ < ((RAND_BLOCK_BYTE * 2)/SO32);) {
 			uint32_t o_rd = *p;
 			*p++ ^= t;
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 			t ^= o_rd ^ get_unaligned((const uint32_t *)(sbox + (t & 0xffff)));
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 	}
+	memcpy(&ctx.ne[2], st, sizeof(ctx.ne[2]));
+
+	/* mix in all rand data */
+	ctx.adler = adler32(ctx.adler, ctx.ne[0].c, sizeof(ctx.ne[0])*2);
+	ctx.adler = adler32(ctx.adler, st[0].c, sizeof(st));
 
 	/* now init the real data */
 	random_bytes_rekey();
+
+	/* for the first rekeying, make sure its all mixed well */
+	for(i = (ctx.rand_data.c[0] % 4)+1; i--;)
+		random_bytes_rekey();
 
 	/* initialise clib rands */
 	random_bytes_get(&td, sizeof(td));

@@ -93,9 +93,9 @@ extern const uint32_t aes_fl_tab[4][256];
 extern const uint32_t aes_it_tab[4][256];
 extern const uint32_t aes_il_tab[4][256];
 
-static inline uint8_t byte(const uint32_t x, const unsigned n)
+static inline size_t byte(const uint32_t x, const unsigned n)
 {
-	return x >> (n << 3);
+	return (x >> (n << 3)) & 0xff;
 }
 
 static inline uint32_t ror32(uint32_t word, unsigned int shift)
