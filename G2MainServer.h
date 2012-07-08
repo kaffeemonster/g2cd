@@ -207,6 +207,8 @@ _G2MAIN_EXTRN(struct sock_com *sock_com_add_fd(void (*handler)(struct sock_com *
 _G2MAIN_EXTRN(void sock_com_delete(struct sock_com *s));
 _G2MAIN_EXTRN(struct sock_com *sock_com_fd_find(some_fd fd));
 
+_G2MAIN_EXTRN(void g2_main_get_entropy(void *data));
+
 #if 0
 #include <syscall.h>
 static inline pid_t gettid(void)

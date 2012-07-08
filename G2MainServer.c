@@ -1137,18 +1137,15 @@ static inline const char *get_etext(void)
 #endif
 }
 
-static __init void init_prng(void)
+void g2_main_get_entropy(void *data)
 {
-	/*
-	 * WARNING: even if the compiler cries and valgrind screems:
-	 * Do NOT memset/init rd!
-	 */
 	union {
 		unsigned u[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
 		unsigned short s[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned short))];
 		unsigned char c[RAND_BLOCK_BYTE * 2];
-	} rd;
+	} *rd = data;
 	bool have_entropy = false;
+	static bool not_first_time;
 #ifndef WIN32
 	int fin;
 	/*
@@ -1163,31 +1160,40 @@ static __init void init_prng(void)
 	if(0 > fin) {
 		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
 		            server.settings.entropy_source);
-	} else if(sizeof(rd.u) != read(fin, rd.u, sizeof(rd.u))) {
+	} else if(sizeof(rd->u) != read(fin, rd->u, sizeof(rd->u))) {
 		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
 		            server.settings.entropy_source);
 	} else
 		have_entropy = true;
 	close(fin);
+	if(have_entropy)
+		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd->u),
+		     server.settings.entropy_source);
 #else
 	HCRYPTPROV cprovider_h = (HCRYPTPROV)INVALID_HANDLE_VALUE;
 	if(CryptAcquireContext(&cprovider_h, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-		CryptGenRandom(cprovider_h, sizeof(rd.u), (BYTE *)rd.u);
+		CryptGenRandom(cprovider_h, sizeof(rd->u), (BYTE *)rd->u);
 		CryptReleaseContext(cprovider_h, 0);
 		have_entropy = true;
 	}
 #endif
-	if(!have_entropy)
+	/*
+	 * most server have bad entropy on boot
+	 * so do the manual mixer enyway on init
+	 */
+	if(!have_entropy || !not_first_time)
 	{
 		struct timeval now;
 		unsigned i, t;
 		unsigned magic = 0x5BD1E995;
 		const char *sbox;
 
-		logg(LOGF_CRIT, "WARNING: We could not gather high quality entropy!\n"
-		                "         Will try to rectify, but this may impact the\n"
-		                "         SECURITY of this G2 Hub. Please examine the\n"
-		                "         situation and configure a proper entropy source!\n");
+		if(!have_entropy)
+			logg(LOGF_CRIT, "WARNING: We could not gather high quality entropy!\n"
+			                "         Will try to rectify, but this may impact the\n"
+			                "         SECURITY of this G2 Hub. Please examine the\n"
+			                "         situation and configure a proper entropy source!\n");
+
 		sbox = g2_get_sbox();
 		gettimeofday(&now, 0);
 		/* create a pseudo random seed */
@@ -1206,10 +1212,10 @@ static __init void init_prng(void)
 			sbox = get_etext() + (t & 0xffff);
 		t ^= get_unaligned((const unsigned *)sbox);
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
-		/* mix the uninitialized stack buffer with this seed */
-		for(i = 0; i < anum(rd.u); i++) {
-			unsigned o_rd = rd.u[i];
-			rd.u[i] ^= t;
+		/* mix the maybe uninitialized stack buffer with this seed */
+		for(i = 0; i < anum(rd->u); i++) {
+			unsigned o_rd = rd->u[i];
+			rd->u[i] ^= t;
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 			t ^= o_rd ^ get_unaligned((const unsigned *)(sbox + (t & 0xffff)));
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
@@ -1234,6 +1240,7 @@ static __init void init_prng(void)
 		 * the enviroment may be relocated and so does not have
 		 * an aux vector behind it.
 		 */
+		if(!not_first_time && !have_entropy)
 		{
 // TODO: using the pointer size is wrong...
 /* this should be the ELF size, 32 or 64 bit */
@@ -1253,7 +1260,7 @@ static __init void init_prng(void)
 				if(av[0] == 25) /* AT_RANDOM */
 				{
 					unsigned char *ar = (unsigned char *)av[1];
-					uint16_t *rds = (uint16_t *)rd.s;
+					uint16_t *rds = (uint16_t *)rd->s;
 					for(sbox -= ar[0], i = 0; i < 15; i++, ar++)
 						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)ar)));
 					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *ar));
@@ -1263,19 +1270,24 @@ static __init void init_prng(void)
 			}
 		}
 #endif
+		not_first_time = true;
 		/*
 		 * Even if we could not get entropy, feed rd into the prng.
 		 * If everything failes, its "random" stack data, undefined
 		 * behaivior for the rescue...
 		 */
 	}
-#ifndef WIN32
-	else
-		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd.u),
-		     server.settings.entropy_source);
-#endif
+}
 
-	random_bytes_init((char *)rd.c);
+static __init void init_prng(void)
+{
+	/*
+	 * WARNING: even if the compiler cries and valgrind screems:
+	 * Do NOT memset/init rd!
+	 */
+	unsigned u[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+	g2_main_get_entropy(u);
+	random_bytes_init((char *)u);
 }
 
 static void read_uprofile(void)

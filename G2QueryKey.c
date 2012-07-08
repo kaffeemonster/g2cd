@@ -176,6 +176,7 @@ struct g2_qk_salts
 } GCC_ATTR_ALIGNED(16);
 
 /* Vars */
+static time_t server_last_rekey;
 static struct g2_qk_salts g2_qk_s;
 static struct
 {
@@ -245,17 +246,30 @@ void __init g2_qk_init(void)
 	random_bytes_get(&i, sizeof(g2_qk_s.act_salt));
 	g2_qk_s.act_salt = i % TIME_SLOT_COUNT;
 	g2_qk_s.last_update = time(NULL);
+	/* server need around 70min after boot to gather enough entropy */
+	server_last_rekey = g2_qk_s.last_update + 10 * 60;
 	/* also init the guid generator */
 	guid_init();
 }
 
 void g2_qk_tick(void)
 {
-	static long last_k_upd;
 	unsigned n_salt, t;
 	long t_diff;
 
-	t_diff = local_time_now - g2_qk_s.last_update;
+	/*
+	 * ATTENTION!
+	 * Server often have low entropy and a
+	 * limited value spread in their
+	 * /dev/(u)random output on boot.
+	 *
+	 * We as a program can do very little about it,
+	 * except gather more and better entropy then
+	 * the kernel.
+	 *
+	 * So we better rekey with a fresh read
+	 * from /dev/(u)random after 1 hour.
+	 */
 	/*
 	 * on local_time_now wrap:
 	 * unsigned to 0:
@@ -263,14 +277,19 @@ void g2_qk_tick(void)
 	 * singed to neg TIME_MAX:
 	 *	sudden large diff -> action -> short period
 	 */
+	t_diff = local_time_now - server_last_rekey;
+	t_diff = t_diff >= 0 ? t_diff : -t_diff;
+	if(t_diff > 70 * 60) {
+		unsigned int data[DIV_ROUNDUP(RAND_BLOCK_BYTE*2, sizeof(unsigned int))];
+		g2_main_get_entropy(data);
+		random_bytes_rekey((char *)data);
+		server_last_rekey = local_time_now;
+	}
+
+	t_diff = local_time_now - g2_qk_s.last_update;
 	t_diff = t_diff >= 0 ? t_diff : -t_diff;
 	if(t_diff < TIME_SLOT_SECS)
 		return;
-
-	t_diff = local_time_now - last_k_upd;
-	t_diff = t_diff >= 0 ? t_diff : -t_diff;
-	if(t_diff < 60*60*24)
-		random_bytes_rekey();
 
 	n_salt = (g2_qk_s.act_salt + 1) % TIME_SLOT_COUNT;
 	random_bytes_get(g2_qk_s.salts[n_salt], sizeof(g2_qk_s.salts[n_salt]));

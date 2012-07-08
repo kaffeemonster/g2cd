@@ -217,7 +217,7 @@ static const unsigned char *get_text(void)
 	return rval;
 }
 
-void random_bytes_rekey(void)
+void random_bytes_rekey(const char data[RAND_BLOCK_BYTE * 2])
 {
 	char tmp_store[sizeof(struct rctx) + sizeof(union dvector) + 16];
 	struct rctx *rctx;
@@ -227,6 +227,10 @@ void random_bytes_rekey(void)
 	rctx = (struct rctx *)ALIGN(tmp_store, 16);
 	ni   = rctx->ne;
 
+	memcpy(ni, data, RAND_BLOCK_BYTE * 2);
+	/* mix in possible fresh entropy */
+	xor_vectors(&ni[0], &ctx.ne[0], &ctx.ne[0]);
+	xor_vectors(&ni[1], &ctx.ne[1], &ctx.ne[1]);
 	/* seed adler from a little bit sbox data */
 	rctx->adler = adler32(1, get_text() - (ctx.ne[2].u[1] % 8192), 4096);
 	/* create a new random key */
@@ -244,9 +248,10 @@ void random_bytes_rekey(void)
 	more_random_bytes_rctx(rctx);
 	memcpy(&ctx.ne[2], &rctx->rand_data, RAND_BLOCK_BYTE);
 	/*
-	 * keep the crng running for ?? times, more iterations make it harder to
-	 * get to the initial state, and so to the results of the above calls
-	 * and the input for the rekeying in 24 hours.
+	 * keep the crypto powered prng running for ?? times, more
+	 * iterations make it harder to get to the initial state, and
+	 * so to the results of the above calls and the input for the
+	 * rekeying in 24 hours.
 	 */
 	for(i = (ctx.ne[0].c[ctx.ne[0].c[1] % 16] % 32) + 8; i--;)
 		more_random_bytes_rctx(rctx);
@@ -374,12 +379,16 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	ctx.adler = adler32(ctx.adler, ctx.ne[0].c, sizeof(ctx.ne[0])*2);
 	ctx.adler = adler32(ctx.adler, st[0].c, sizeof(st));
 
+	/* clear space for additional entropy, we don't have any */
+	memset(&st[0], 0, sizeof(st));
+
+	sbox -= 16384;
 	/* now init the real data */
-	random_bytes_rekey();
+	random_bytes_rekey((const char *)sbox);
 
 	/* for the first rekeying, make sure its all mixed well */
 	for(i = (ctx.rand_data.c[0] % 4)+1; i--;)
-		random_bytes_rekey();
+		random_bytes_rekey((const char *)sbox + ((i+1)*RAND_BLOCK_BYTE*2));
 
 	/* initialise clib rands */
 	random_bytes_get(&td, sizeof(td));
