@@ -208,35 +208,76 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 	return r;
 }
 
-static GCC_ATTR_FASTCALL char *put_dec_full5(char *buf, unsigned q)
+static GCC_ATTR_FASTCALL char *put_dec_full9(char *buf, unsigned q)
 {
 	unsigned r;
-	char a = '0';
 
-#if 0
-	if(q >= 50000) {
-		a = '5';
-		q -= 50000;
-	}
-
-	r      = (q * 0xcccd) >> 19;
-	*buf++ = (q - 10 * r) + '0';
-#else
-	r      = (q * (uint64_t)0xcccd) >> 19;
-	*buf++ = (q - 10 * r) + '0';
-#endif
-
+	/*
+	 * this code assumes there is some sort of 64 bit multiply.
+	 * For 64 bit archs this is OK. 32 Bit archs often have a
+	 * widening mul or some sort of "get high part of result"
+	 * instruction.
+	 * If the above does not match your arch (or is < 32bit),
+	 * it sucks, plain simple.
+	 */
+	r      = (q * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (q - 10 * r) + '0'; /* 1 */
+	q      = (r * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (r - 10 * q) + '0'; /* 2 */
+	r      = (q * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (q - 10 * r) + '0'; /* 3 */
+	q      = (r * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (r - 10 * q) + '0'; /* 4 */
+	r      = (q * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (q - 10 * r) + '0'; /* 5 */
+	/* Now value is under 10000, can avoid 64-bit multiply */
 	q      = (r * 0x199a) >> 16;
-	*buf++ = (r - 10 * q)  + '0';
-
+	*buf++ = (r - 10 * q)  + '0'; /* 6 */
 	r      = (q * 0xcd) >> 11;
-	*buf++ = (q - 10 * r)  + '0';
+	*buf++ = (q - 10 * r)  + '0'; /* 7 */
+	q      = (r * 0xcd) >> 11;
+	*buf++ = (r - 10 * q) + '0'; /* 8 */
+	*buf++ = q + '0'; /* 9 */
+	return buf;
+}
 
-	q      = (r * 0xd) >> 7;
-	*buf++ = (r - 10 * q) + '0';
+char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned r)
+{
+	unsigned q;
 
-	*buf++ = q + a;
+	if(r >= 100*1000*1000) /* 1 */
+		return put_dec_full9(buf, r);
 
+	q      = (r * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (r - 10 * q) + '0'; /* 2 */
+	if(!q)
+		return buf;
+	r      = (q * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (q - 10 * r) + '0'; /* 3 */
+	if(!r)
+		return buf;
+	q      = (r * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (r - 10 * q) + '0'; /* 4 */
+	if(!q)
+		return buf;
+	r      = (q * (uint64_t)0x1999999a) >> 32;
+	*buf++ = (q - 10 * r) + '0'; /* 5 */
+	if(!r)
+		return buf;
+	/* Now value is under 10000, can avoid 64-bit multiply */
+	q      = (r * 0x199a) >> 16;
+	*buf++ = (r - 10 * q)  + '0'; /* 6 */
+	if(!q)
+		return buf;
+	r      = (q * 0xcd) >> 11;
+	*buf++ = (q - 10 * r)  + '0'; /* 7 */
+	if(!r)
+		return buf;
+	q      = (r * 0xcd) >> 11;
+	*buf++ = (r - 10 * q) + '0'; /* 8 */
+	if(!q)
+		return buf;
+	*buf++ = q + '0'; /* 9 */
 	return buf;
 }
 
@@ -258,72 +299,71 @@ static GCC_ATTR_FASTCALL char *put_dec_full4(char *buf, unsigned q)
 	return buf;
 }
 
-
-char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned q)
-{
-	unsigned r;
-
-	/* if we have to print more than 5 digit, use the full version */
-	if(q > 9999)
-		return put_dec_full5(buf, q);
-
-	r      = (q * 0x199a) >> 16;
-	*buf++ = (q - 10 * r) + '0';
-
-	if(r)
-	{
-		q      = (r * 0xcd) >> 11;
-		*buf++ = (r - 10 * q)  + '0';
-	
-		if(q)
-		{
-			r      = (q * 0xcd) >> 11;
-			*buf++ = (q - 10 * r)  + '0';
-
-			if(r)
-				*buf++ = r + '0';
-		}
-	}
-
-	return buf;
-}
-
 static noinline char *put_dec(char *buf, unsigned num)
 {
-	/* larger numbers are more unlikely, or: small numbers are common */
-	while(unlikely(num >= 100000)) {
-		unsigned rem = num % 100000;
-		num /= 100000;
-		buf  = put_dec_full5(buf, rem);
-	}
-	return put_dec_trunc(buf, num);
+	unsigned rem;
+
+	if(likely(num < 1000*1000*1000))
+		return put_dec_trunc(buf, num);
+
+	rem = num;
+	num = 0;
+	/* the trip count is 1 to 4 on this one, better then a divide */
+	do
+	{
+		rem -= 1000*1000*1000;
+		num++;
+		/* most older compiler are to clever and make this a divide
+		 * again, because they detect the pattern, but don't take the trip
+		 * count into acount. So a smack on the head (a simple barrier
+		 * does not help...) is needed.
+		 */
+		__asm__ ("" : "=r" (rem) : "0" (rem));
+	} while(rem >= 1000*1000*1000);
+	 /*
+	  * for the 32bit unsigned we are aiming at here there can now only
+	  * be one digit left from 1 to 4.
+	  * Since we output 9 full digits before it, we know before hand
+	  * where to put it.
+	  */
+	buf[9] = num + '0';
+	return put_dec_full9(buf, rem) + 1;
 }
 
-static noinline char *put_dec_ll(char *buf, unsigned long long num)
+#ifdef __x86_64__
+/* gotta love x32.... */
+# define LONGLONG_ARITH_FINE 1
+#else
+# define LONGLONG_ARITH_FINE 0
+#endif
+
+static noinline char *put_dec_ll_large(char *buf, unsigned long long num)
 {
-	if(sizeof(size_t) == sizeof(num))
+	/* when we come here, num should be larger then 4 billion */
+	if(sizeof(size_t) == sizeof(num) || LONGLONG_ARITH_FINE)
 	{
-		while(unlikely(num >= 100000)) {
-			unsigned rem = num % 100000;
-			num /= 100000;
-			buf  = put_dec_full5(buf, rem);
-		}
+		do {
+			unsigned rem = num % 1000*1000*1000;
+			num /= 1000*1000*1000;
+			buf  = put_dec_full9(buf, rem);
+			/* larger numbers are more unlikely, or: small numbers are common */
+		} while(unlikely(num >= 1000*1000*1000));
 		return put_dec_trunc(buf, num);
 	}
 	else
 	{
-		unsigned d3, d2, d1, q;
+		/*
+		 * the code above needs a 64 bit devide
+		 * which is bad for some archs, so do it differently
+		 */
+		uint32_t d3, d2, d1, q, h;
 
-		if(num < 10) {
-			*buf++ = '0' + (unsigned)num;
-			return buf;
-		}
+		d1  = ((uint32_t)num >> 16);
+		h   = (num >> 32);
+		d2  = (h        ) & 0xFFFF;
+		d3  = (h   >> 16);
 
-		d1  = (num >> 16) & 0xFFFF;
-		d2  = (num >> 32) & 0xFFFF;
-		d3  = (num >> 48) & 0xFFFF;
-
-		q   = 656 * d3 + 7296 * d2 + 5536 * d1 + (num & 0xFFFF);
+		q   = 656 * d3 + 7296 * d2 + 5536 * d1 + ((uint32_t)num & 0xFFFF);
 
 		buf = put_dec_full4(buf, q % 10000);
 		q   = q / 10000;
@@ -337,15 +377,25 @@ static noinline char *put_dec_ll(char *buf, unsigned long long num)
 		q   = d2 / 10000;
 
 		d3  = q + 281 * d3;
+		if(!d3)
+			goto done;
 		buf = put_dec_full4(buf, d3 % 10000);
 		q   = d3 / 10000;
-
+		if(!q)
+			goto done;
 		buf = put_dec_full4(buf, q);
-
+done:
 		while(buf[-1] == '0')
 			--buf;
 		return buf;
 	}
+}
+
+static noinline char *put_dec_ll(char *buf, unsigned long long num)
+{
+	if(num > UINT_MAX)
+		return put_dec_ll_large(buf, num);
+	return put_dec(buf, num);
 }
 
 /*****************************************************************************************
