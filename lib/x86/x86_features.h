@@ -160,6 +160,9 @@
 	FEATURE5( BMI2      ,  8, "BMI2"                              ), \
 	FEATURE5( ERMS      ,  9, "Enhanced REP MOVSB/STOSB"          ), \
 	FEATURE5( INVPCID   , 10, "Invalidate Process-context ID"     ), \
+	FEATURE5( RTM       , 11, "Restricted Transactional Memory"   ), \
+	FEATURE5( RDSEED    , 12, "RDSEED instruction"                ), \
+	FEATURE5( ADX       , 13, "ADCX and ADOX instruction"         ), \
 	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
