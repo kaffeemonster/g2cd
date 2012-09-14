@@ -50,6 +50,8 @@ enum cpu_vendor
 	X86_VENDOR_NEXGEN,
 	X86_VENDOR_UMC,
 	X86_VENDOR_RISE,
+	x86_VENDOR_VIA,
+	x86_VENDOR_VORTEX
 };
 
 struct cpuinfo
@@ -542,7 +544,7 @@ static __init void identify_cpu(void)
 	 */
 
 	/* valgrind sometimes has problems emulating certain instr. */
-#if 0
+#if 1
 	cpu_feature_clear(CFEATURE_SSE4_2);
 	cpu_feature_clear(CFEATURE_SSE4_1);
 	cpu_feature_clear(CFEATURE_SSSE3);
@@ -744,10 +746,14 @@ static __init void identify_vendor(struct cpuinfo *cpu)
 		cpu->vendor = X86_VENDOR_NSC;
 	else if(cmp_vendor(s, "NexGenDriven"))
 		cpu->vendor = X86_VENDOR_NEXGEN;
-	else if(cmp_vendor(s, "UMC UMC UMC"))
+	else if(cmp_vendor(s, "UMC UMC UMC "))
 		cpu->vendor = X86_VENDOR_UMC;
 	else if(cmp_vendor(s, "RiseRiseRise"))
 		cpu->vendor = X86_VENDOR_RISE;
+	else if(cmp_vendor(s, "VIA VIA VIA "))
+		cpu->vendor = X86_VENDOR_VIA;
+	else if(cmp_vendor(s, "Vortex86 SoC"))
+		cpu->vendor = X86_VENDOR_VORTEX;
 	else
 		cpu->vendor = X86_VENDOR_OTHER;
 }
