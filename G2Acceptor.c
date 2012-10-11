@@ -199,6 +199,17 @@ static inline bool init_con_a(some_fd *accept_so, union combo_addr *our_addr)
 	if(my_epoll_bind(*accept_so, casa(our_addr), casalen(our_addr)))
 		OUT_ERR("binding accept fd");
 
+#if 0 && defined(TCP_FASTOPEN)
+	{
+		/*
+		 * fastopen is not that interesting for us, we have UDP.
+		 * so to document use...
+		 */
+		int qlen = server.settings.max_connection_sum/16;
+		my_epoll_setsockopt(*accept_so, SOL_TCP, TCP_FASTOPEN, &qlen, sizeof(qlen));
+	}
+#endif
+
 	if(my_epoll_listen(*accept_so, BACKLOG))
 		OUT_ERR("calling listen()");
 
@@ -301,7 +312,7 @@ bool handle_accept_in(struct simple_gup *sg, void *wke_ptr, some_fd epoll_fd)
 	/*
 	 * Our streams are basically "thin", here and there a packet every
 	 * odd second (only the sum makes the traffic). But thin streams
-	 * are a little problematic because  they do not trigger proper
+	 * are a little problematic because they do not trigger proper
 	 * TCP optimitiations, for example because a stable RTT can not
 	 * be mesured.
 	 * Linux >= 2.6.34 has some magic to handle them better (faster
