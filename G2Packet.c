@@ -409,6 +409,16 @@ const uint8_t g2_ptype_names_length[] GCC_ATTR_VIS("hidden") =
  * Packet typer function
  *
  */
+static void noinline find_type_outline_print(g2_packet_t *packet, const uint32_t type[2])
+{
+	/*
+	 * remove the stack setup and a lot of mov's from the icache for the hotpath
+	 * and it gets nicely tail called.
+	 */
+	logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\" (%#08x,%#08x)\tC: %s\n",
+		(const char *)type, type[0], type[1], packet->is_compound ? "true" : "false");
+}
+
 void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 {
 	unsigned low, mid, high;
@@ -435,6 +445,37 @@ void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 			break;
 	} while(low <= high);
 
+// TODO: switch to linear search after n bisects
+	/*
+	 * Bisecting always has the problem to get inefficent
+	 * at the last steps, when the number to choose from
+	 * gets small.
+	 * say we have 6 left, then bisecting them needs 4 steps
+	 * in the unlucky case
+	 * A linear search is much more simple and not any more
+	 * inefficient in that case (consecutive values should
+	 * be in one cache line, and linear search triggers HW-
+	 * prefetch).
+	 * Esp. the conditons for a bisect generate a conditional
+	 * jmp fest in asm.
+	 * Only problem: another condition to stop the search
+	 * does not make it nicer and the lin. search also comes
+	 * with overhead (loop setup and whatnot) we would have to
+	 * pay additionaly to the bisect tax, we already paid...
+	 */
+#if 0
+	while(high - low >= 8);
+
+	mid = low;
+	do
+	{
+		mval = g2_ptyper_table[mid].c;
+		if(mval == key)
+			break;
+	} while(++mid <= high);
+#endif
+
+
 	if(likely(mval == key))
 	{
 		if(likely(g2_ptyper_table[mid].t != PT_UNKNOWN))
@@ -454,8 +495,7 @@ void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 	}
 
 	if(unlikely(PT_UNKNOWN == packet->type))
-		logg_posd(LOGF_DEBUG, "Unknown packet type \"%s\" (%#08x,%#08x)\tC: %s\n",
-			(const char *)type, type[0], type[1], packet->is_compound ? "true" : "false");
+		find_type_outline_print(packet, type);
 }
 
 /*
