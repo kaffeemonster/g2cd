@@ -161,8 +161,9 @@
 	FEATURE5( ERMS      ,  9, "Enhanced REP MOVSB/STOSB"          ), \
 	FEATURE5( INVPCID   , 10, "Invalidate Process-context ID"     ), \
 	FEATURE5( RTM       , 11, "Restricted Transactional Memory"   ), \
-	FEATURE5( RDSEED    , 12, "RDSEED instruction"                ), \
+	FEATURE5( RDSEED    , 12, "RDSEED instruction"   /* 18? */    ), \
 	FEATURE5( ADX       , 13, "ADCX and ADOX instruction"         ), \
+	FEATURE5( SMAP      , 14, "Supervisor Mode Access Prevention" ), \
 	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
@@ -202,13 +203,13 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 
 # ifdef USE_SIMPLE_DISPATCH
 #  define _DYN_JMP_CONSTRUCTOR(name) \
-	static GCC_ATTR_CONSTRUCT __init void name##_select(void) { \
+	static GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init void name##_select(void) { \
 		name##_ptr = test_cpu_feature(tfeat_##name, anum(tfeat_##name)); \
 	}
 # else
 #  ifndef __PIC__
 #   define _DYN_JMP_CONSTRUCTOR(name) \
-	static GCC_ATTR_CONSTRUCT __init void name##_select(void) { \
+	static GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init void name##_select(void) { \
 		patch_instruction(name, tfeat_##name, anum(tfeat_##name)); \
 	}
 #  else
