@@ -72,6 +72,7 @@ LIBHEADS = \
 	$(MPL)/byteorder.h \
 	$(MPL)/itoa.h \
 	$(MPL)/rbtree.h \
+	$(MPL)/rbtree_augmented.h \
 	$(MPL)/list.h \
 	$(MPL)/hlist.h \
 	$(MPL)/hthash.h \
