@@ -1364,6 +1364,7 @@ static int gwc_receive(void)
 				closesocket(act_gwc.socket);
 				act_gwc.socket = -1;
 				ret_val = 0;
+				free(s);
 				s = NULL;
 			}
 			else
@@ -1378,6 +1379,7 @@ static int gwc_receive(void)
 			closesocket(act_gwc.socket);
 			act_gwc.socket = -1;
 			ret_val = -1;
+			free(s);
 			s = NULL;
 		}
 	}
@@ -1391,6 +1393,8 @@ static int gwc_receive(void)
 			closesocket(act_gwc.socket);
 		act_gwc.socket = -1;
 		ret_val = -1;
+		free(s);
+		s = NULL;
 	}
 	buffer_compact(*buff);
 	if(!buffer_remaining(*buff)) {
