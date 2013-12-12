@@ -2,7 +2,7 @@
  * atomic.h
  * atomic primitves for mips
  *
- * Copyright (c) 2007-2010 Jan Seiffert
+ * Copyright (c) 2007-2013 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -87,8 +87,19 @@
 
 static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 {
-	void *ret_val, *dummy;
+	void *ret_val;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"swapwu	%0, %2\n\t"
+		: /* %0 */ "=d" (ret_val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (val));
+# else
+	void *dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -106,14 +117,26 @@ static always_inline void *atomic_px_32(void *val, atomicptr_t *ptr)
 		  /* %2 */ "=&r" (dummy)
 		: /* %3 */ "m" (atomic_pread(ptr)),
 		  /* %4 */ "Jr" (val));
+# endif
 	return ret_val;
 }
 
 # if __mips == 64 || defined(__mips64)
 static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 {
-	void *ret_val, *dummy;
+	void *ret_val;
 
+#  if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"swapd	%0, %2\n\t"
+		: /* %0 */ "=d" (ret_val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (val));
+#  else
+	void *dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -129,6 +152,7 @@ static always_inline void *atomic_px_64(void *val, atomicptr_t *ptr)
 		  /* %2 */ "=&r" (dummy)
 		: /* %3 */ "m" (atomic_pread(ptr)),
 		  /* %4 */ "Jr" (val));
+#  endif
 	return ret_val;
 }
 # endif
@@ -150,7 +174,18 @@ static always_inline void *atomic_px(void *val, atomicptr_t *ptr)
 
 static always_inline int atomic_x_32(int val, atomic_t *ptr)
 {
-	int ret_val, dummy;
+	int ret_val;
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"swapw	%0, %2\n\t"
+		: /* %0 */ "=d" (ret_val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (val));
+# else
+	int dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -168,13 +203,25 @@ static always_inline int atomic_x_32(int val, atomic_t *ptr)
 		  /* %2 */ "=&r" (dummy)
 		: /* %3 */ "m" (atomic_read(ptr)),
 		  /* %4 */ "Jr" (val));
+# endif
 	return ret_val;
 }
 
 # if __mips == 64 || defined(__mips64)
 static always_inline int atomic_x_64(int val, atomic_t *ptr)
 {
-	int ret_val, dummy;
+	int ret_val;
+#  if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"swapd	%0, %2\n\t"
+		: /* %0 */ "=d" (ret_val),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (val));
+#  else
+	int dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -191,6 +238,7 @@ static always_inline int atomic_x_64(int val, atomic_t *ptr)
 		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "Jr" (val));
 	return ret_val;
+#  endif
 }
 # endif
 
@@ -351,6 +399,16 @@ static always_inline void atomic_inc(atomic_t *ptr)
 {
 	int tmp;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"ldaddw	%0, %2\n\t"
+		: /* %0 */ "=d" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (1));
+# else
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -362,12 +420,23 @@ static always_inline void atomic_inc(atomic_t *ptr)
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
 		: /* %2 */ "m" (atomic_read(ptr)));
+# endif
 }
 
 static always_inline void atomic_dec(atomic_t *ptr)
 {
 	int tmp;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"ldaddw	%0, %2\n\t"
+		: /* %0 */ "=d" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (-1));
+# else
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -379,12 +448,23 @@ static always_inline void atomic_dec(atomic_t *ptr)
 		: /* %0 */ "=&r" (tmp),
 		  /* %1 */ "=m" (atomic_read(ptr))
 		: /* %2 */ "m" (atomic_read(ptr)));
+#endif
 }
 
 static always_inline void atomic_add(int i, atomic_t *ptr)
 {
 	int tmp;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"ldaddw	%0, %2\n\t"
+		: /* %0 */ "=d" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (i));
+# else
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -397,6 +477,7 @@ static always_inline void atomic_add(int i, atomic_t *ptr)
 		  /* %1 */ "=m" (atomic_read(ptr))
 		: /* %2 */ "m" (atomic_read(ptr)),
 		  /* %3 */ "IJr" (i));
+# endif
 }
 
 static always_inline void atomic_sub(int i, atomic_t *ptr)
@@ -419,8 +500,20 @@ static always_inline void atomic_sub(int i, atomic_t *ptr)
 
 static always_inline int atomic_dec_return(atomic_t *ptr)
 {
-	int tmp, dummy;
+	int tmp;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"ldaddw	%0, %2\n\t"
+		: /* %0 */ "=d" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (-1));
+	tmp--;
+# else
+	int dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -435,6 +528,7 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 		  /* %1 */ "=m" (atomic_read(ptr)),
 		  /* %2 */ "=&r" (dummy)
 		: /* %3 */ "m" (atomic_read(ptr)));
+# endif
 	return tmp;
 }
 
@@ -442,8 +536,19 @@ static always_inline int atomic_dec_return(atomic_t *ptr)
 
 static always_inline int atomic_inc_return(atomic_t *ptr)
 {
-	int tmp, dummy;
+	int tmp;
 
+# if defined(_MIPS_ARCH_XLP|_MIPS_ARCH_XLR)
+	__asm__ __volatile__(
+		"ldaddw	%0, %2\n\t"
+		: /* %0 */ "=d" (tmp),
+		/* gcc < 3 needs this, "+m" will not work reliable */
+		  /* %1 */ "=m" (atomic_pread(ptr))
+		: /* %2 */ "d" (ptr),
+		  /* %3 */ "m" (atomic_pread(ptr)),
+		  /* %4 */ "0" (1));
+# else
+	int dummy;
 	__asm__ __volatile__(
 		".set mips3\n"
 		"1:\n\t"
@@ -458,6 +563,7 @@ static always_inline int atomic_inc_return(atomic_t *ptr)
 		  /* %1 */ "=m" (atomic_read(ptr)),
 		  /* %2 */ "=&r" (dummy)
 		: /* %3 */ "m" (atomic_read(ptr)));
+# endif
 	return tmp;
 }
 
