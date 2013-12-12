@@ -59,7 +59,7 @@ static size_t mempopcnt_generic(const void *s, size_t len);
 # define SP "%%esp"
 #endif
 
-static const struct { uint32_t d[9][4]; } vals GCC_ATTR_ALIGNED(32) =
+static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 {
 	{
 	/*   0 */ {0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa, 0xaaaaaaaa},
@@ -70,7 +70,10 @@ static const struct { uint32_t d[9][4]; } vals GCC_ATTR_ALIGNED(32) =
 	/*  80 */ {0x00ff00ff, 0x00ff00ff, 0x0000ffff, 0x0000ffff},
 	/*  96 */ {0x04030201, 0x08070605, 0x0c0b0a09, 0x100f0e0d},  /* reg_num_mask_lo */
 	/* 112 */ {0x14131211, 0x18171615, 0x1c1b1a19, 0x201f1e1d},  /* reg_num_mask_high */
-	/* 128 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302}   /* lut_st */
+	/* 128 */ {0x02010100, 0x03020201, 0x03020201, 0x04030302},   /* lut_st */
+	/* 144 */ {0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f},
+	/* 160 */ {0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f},
+	/* 176 */ {0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f}
 	}
 };
 
@@ -207,8 +210,9 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 		"vorpd	%%ymm4, %%ymm0, %%ymm0\n\t"
 
 		"add	$256, %3\n\t"
-		"prefetchnta	0x70(%3)\n\t"
-		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
+//		"prefetchnta	0x70(%3)\n\t"
+		"vmovdqa	160+%5,%%ymm4\n\t" /* 0x0f0f0f0f0f */
+//		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
 
 		"vxorpd	%%ymm2, %%ymm3, %%ymm3\n\t"
 		"vandpd	%%ymm3, %%ymm2, %%ymm2\n\t"
