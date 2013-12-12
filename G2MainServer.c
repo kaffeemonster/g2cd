@@ -865,6 +865,13 @@ static __init void change_the_user(void)
 //		exit(EXIT_FAILURE);
 	}
 
+//TODO: loop on EGAIN?
+	/*
+	 * older linux sometimes EGAIN, so we better keep trying.
+	 * But desc. on man page does not sound if looping would help...
+	 * so leave it at the "die if fail" policy ment for production
+	 * use?
+	 */
 	if(setuid((uid_t) nameinfo->pw_uid))
 	{
 		logg_errno(LOGF_WARN, "setting UID");
