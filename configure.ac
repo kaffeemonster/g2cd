@@ -618,7 +618,7 @@ if test x"$disable_libcurl" = xno; then
 
 	PKG_CHECK_EXISTS([libcurl], [libcurl_on_machine=yes], [])
 
-	if test x"$dbus_on_machine" = xyes; then
+	if test x"$libcurl_on_machine" = xyes; then
 		PKG_CHECK_MODULES([LIBCURL], [libcurl])
 		CPPFLAGS="$LIBCURL_CPPFLAGS $CPPFLAGS"
 		CFLAGS="$LIBCURL_CFLAGS $CFLAGS"
