@@ -1088,7 +1088,7 @@ static uint8_t *gnd_buff_prep(struct norm_buff *d_hold, uint16_t seq, uint8_t pa
 	*buffer_start(*d_hold) = flags;
 	d_hold->pos++;
 	/* sequence */
-	put_unaligned(seq, ((uint16_t *)buffer_start(*d_hold)));
+	put_unaligned_le16(seq, ((uint16_t *)buffer_start(*d_hold)));
 	d_hold->pos += 2;
 	/* part */
 	num_ptr = (uint8_t *)buffer_start(*d_hold);

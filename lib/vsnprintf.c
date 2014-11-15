@@ -408,7 +408,7 @@ static noinline const char *decimal_finish(char *buf, const char *fmt, struct fo
 		size_t i;
 
 		i = spec->width - len;
-		i = i < spec->maxlen ? i : spec->maxlen;
+		i = i < sav ? i : sav;
 		if(spec->u.flags.zero && !spec->u.flags.left)
 		{
 			if(spec->precision)
@@ -2282,7 +2282,17 @@ static const char *lit_p(char *buf, const char *fmt, struct format_spec *spec)
 	spec->len++;
 	return end_format(buf, fmt, spec);
 }
-
+static const char *nul_in(char *buf, const char *fmt, struct format_spec *spec)
+{
+	/* printus interuptus, how rude to put a '\0' in the middle of a format */
+	size_t fmt_len = fmt - spec->fmt_start;
+	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	if(sav)
+		my_memcpy(buf, spec->fmt_start, fmt_len < sav ? fmt_len : sav);
+	buf += fmt_len;
+	spec->len += fmt_len;
+	return end_format(buf, fmt, spec);
+}
 static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 {
 	void *n = va_arg(spec->ap, void *);
@@ -2329,7 +2339,7 @@ static const char *p_len(char *buf, const char *fmt, struct format_spec *spec)
 static const fmt_func format_table[256] =
 {
 	/*           00,     01,     02,     03,     04,     05,     06,     07,     08,     09,     0A,     0B,     0C,     0D,     0E,     0F, */
-	/* 00 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
+	/* 00 */ nul_in, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*          NUL,    SOH,    STX,    ETX,    EOT,    ENQ,    ACK,    BEL,     BS,     HT,     LF,     VT,     FF,     CR,     SO,     SI, */
 	/* 10 */ fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop, fmtnop,
 	/*          DLE,    DC1,    DC2,    DC3,    DC4,    NAK,    SYN,    ETB,    CAN,     EM,    SUB,    ESC,     FS,     GS,     RS,     US, */

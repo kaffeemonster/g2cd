@@ -17,6 +17,8 @@
 #include "../config.h"
 #include "other.h"
 #include "my_bitops.h"
+#include <stdbool.h>
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 /*
  * introsort_u32 - sort an array of u32 with intro sort
@@ -66,7 +68,7 @@
  * Additionaly we try to remove duplicates, since we are traversing the
  * array and doing lots of compares anyway. This is not 100%, but at
  * least should find some to reduce the number of elements in the output
- * (and lookups in the QHTs).
+ * (and lookups in the (compressed) QHTs).
  */
 
 /*
@@ -92,11 +94,11 @@
 /*
  * Common helper
  */
-static inline void exchange_u32(uint32_t *a, uint32_t *b)
+static inline void exchange_u32(uint32_t *x, size_t a, size_t b)
 {
-	uint32_t t = *a;
-	*a = *b;
-	*b = t;
+	uint32_t t = x[a];
+	x[a] = x[b];
+	x[b] = t;
 }
 
 /*
@@ -126,14 +128,167 @@ static void downheap_u32(uint32_t a[], size_t i, size_t n)
 	a[i - 1] = d;
 }
 
-static void heapsort_u32(uint32_t a[], size_t n)
+static noinline void heapsort_u32(uint32_t a[], size_t n)
 {
 	size_t i;
 	for(i = n / 2; i >= 1; i--)
 		downheap_u32(a, i, n);
 	for(i = n; i > 1; i--) {
-		exchange_u32(a, a + i - 1);
+		exchange_u32(a, 0, i - 1);
 		downheap_u32(a, 1, i - 1);
+	}
+}
+
+/*
+ * smoothsort as fallback
+ *
+ * smoothsort based on heapsort.
+ * Like heapsort it achieves n+log(n) in the worst case, but due to
+ * a custom heap based on Leonardo numbers it can achieve better than
+ * n+log(n) performance, where heapsort is in every case n+log(n)
+ */
+static const uint32_t LP[] = {
+	1, 1, 3, 5, 9, 15, 25, 41, 67, 109,
+	177, 287, 465, 753, 1219, 1973, 3193, 5167, 8361, 13529, 21891,
+	35421, 57313, 92735, 150049, 242785, 392835, 635621, 1028457,
+	1664079, 2692537, 4356617, 7049155, 11405773, 18454929, 29860703,
+	48315633, 78176337, 126491971, 204668309, 331160281, 535828591,
+	866988873 /* the next number is > 31 bits */
+};
+
+static void sift_u32(uint32_t *head, unsigned int pshift)
+{
+	/* we do not use Floyd's improvements to the heapsort sift, because we
+	 * are not doing what heapsort does - always moving nodes from near
+	 * the bottom of the tree to the root. */
+	uint32_t val = *head;
+	while(pshift > 1)
+	{
+		uint32_t *rt = head - 1, *lf = head - 1 - LP[pshift - 2];
+
+		if(val >= *lf && val >= *rt)
+			break;
+
+		if(*lf >= *rt) {
+			*head = *lf;
+			head = lf;
+			pshift -= 1;
+		} else {
+			*head = *rt;
+			head = rt;
+			pshift -= 2;
+		}
+	}
+	*head = val;
+}
+
+static void trinkle_u32(uint32_t *head, unsigned int p, unsigned int pshift, bool isTrusty)
+{
+	uint32_t val = *head;
+
+	while (p != 1)
+	{
+		uint32_t *stepson = head - LP[pshift];
+
+		if (*stepson <= val)
+			break; /* current node is greater than head. sift. */
+
+		/* no need to check this if we know the current node is trusty,
+		 * because we just checked the head (which is val, in the first
+		 * iteration) */
+		if (!isTrusty && pshift > 1) {
+			if (*(head - 1) >= *stepson ||
+			    *(head - 1 - LP[pshift - 2]) >= *stepson)
+				break;
+		}
+
+		*head = *stepson;
+		head = stepson;
+		int trail = __builtin_ctz(p & ~1);
+		p >>= trail;
+		pshift += trail;
+		isTrusty = false;
+	}
+
+	if (!isTrusty) {
+		*head = val;
+		sift_u32(head, pshift);
+	}
+}
+
+static noinline void smoothsort_u32(uint32_t A[], size_t n)
+{
+	size_t head = 0; /* the offset of the first element of the prefix into A */
+	/*
+	 * These variables need a little explaining. If our string of heaps
+	 * is of length 38, then the heaps will be of size 25+9+3+1, which are
+	 * Leonardo numbers 6, 4, 2, 1.
+	 * Turning this into a binary number, we get b01010110 = 0x56. We represent
+	 * this number as a pair of numbers by right-shifting all the zeros and
+	 * storing the mantissa and exponent as "p" and "pshift".
+	 * This is handy, because the exponent is the index into L[] giving the
+	 * size of the rightmost heap, and because we can instantly find out if
+	 * the rightmost two heaps are consecutive Leonardo numbers by checking
+	 * (p&3)==3
+	 */
+	unsigned int p = 1; /* the bitmap of the current standard concatenation >> pshift */
+	unsigned int pshift = 1;
+
+	while(head < n)
+	{
+		if((p & 3) == 3)
+		{
+			/* Add 1 by merging the first two blocks into a larger one.
+			 * The next Leonardo number is one bigger. */
+			sift_u32(&A[head], pshift);
+			p >>= 2;
+			pshift += 2;
+		}
+		else
+		{
+			/* adding a new block of length 1 */
+			if(LP[pshift - 1] >= n - head) /* this block is its final size. */
+				trinkle_u32(&A[head], p, pshift, false);
+			else /* this block will get merged. Just make it trusty. */
+				sift_u32(&A[head], pshift);
+
+			if (pshift == 1) {
+				p <<= 1; /* LP[1] is being used, so we add use LP[0] */
+				pshift--;
+			} else {
+				p <<= (pshift - 1); /* shift out to position 1, add LP[1] */
+				pshift = 1;
+			}
+		}
+		p |= 1;
+		head++;
+	}
+
+	trinkle_u32(&A[head], p, pshift, false);
+
+	while(pshift != 1 || p != 1)
+	{
+		if(pshift <= 1) {
+			/* block of length 1. No fiddling needed */
+			int trail = __builtin_ctz(p & ~1);
+			p >>= trail;
+			pshift += trail;
+		}
+		else
+		{
+			p <<= 2;
+			p ^= 7;
+			pshift -= 2;
+
+			/* This block gets broken into three bits. The rightmost bit is a
+			 * block of length 1. The left hand part is split into two, a block
+			 * of length LP[pshift+1] and one of LP[pshift].  Both these two
+			 * are appropriately heapified, but the root nodes are not
+			 * necessarily in order. We therefore semitrinkle both of them */
+			trinkle_u32(&A[head - LP[pshift] - 1], p >> 1, pshift + 1, true);
+			trinkle_u32(&A[head - 1], p, pshift, true);
+		}
+		head--;
 	}
 }
 
@@ -174,15 +329,113 @@ start_loop:
 }
 
 /*
- * intro sort
+ * switcher
  */
-static uint32_t medianof3_u32(uint32_t a[], size_t n)
+static noinline void othersort_u32(uint32_t a[], size_t n)
 {
-	uint32_t lo = *a, mid = a[n / 2 + 1], hi = a[n - 1];
-	return mid < lo ? (hi < mid ? mid : (hi < lo ? hi : lo)) :
-	                  (hi < mid ? (hi < lo ? lo : hi) : mid);
+	/* we use an int as bitmask p, so we can only sort so many elements */
+	if(likely(n < LP[sizeof(int)*BITS_PER_CHAR]+1))
+		smoothsort_u32(a, n);
+	else
+		heapsort_u32(a, n);
 }
 
+/*
+ * intro sort
+ */
+
+/*
+ * A good pivot-point for partitioning is crucial for qsort.
+ * But finding it, besides of really searching for it, is an
+ * art. Lot's of wise men came up with lot's of solutions...
+ * But basically, we have (and want) to fudge it.
+ * The precise criticallity of the pivot-point also depends
+ * on the cost of your single operations. Since we are not the
+ * libc api sort and specially typed for u32, our cost for
+ * compares and swaps is much lowered. Still lowering compares
+ * and swaps is good, since they are a strain on the cache-bw and
+ * data dependent compares (and from that jumps) play havoc with
+ * performance of modern pipelined chips.
+ */
+static uint32_t *medianof3_u32(uint32_t *lo, uint32_t *mid, uint32_t *hi)
+{
+	return *mid < *lo ? (*hi < *mid ? mid : (*hi < *lo ? hi : lo)) :
+	                    (*hi < *mid ? (*hi < *lo ? lo : hi) : mid);
+}
+
+static noinline uint32_t pseudo_median_u32(uint32_t a[], size_t n)
+{
+	uint32_t *mid = &a[n / 2 + 1]; /* take the middle element */
+	/*
+	 * only if the array is large enough bother searching
+	 * for something else then the middle element
+	 */
+	if(n > 7)
+	{
+		uint32_t *lo = a, *hi = &a[n - 1];
+		/*
+		 * on real "big" arrays we can use Tukey's 'ninther'
+		 * pseudomedian of nine
+		 */
+		if(unlikely(n > 40)) {
+			size_t s = (n / 8);
+			lo  = medianof3_u32(lo, lo+s, lo+2*s);
+			mid = medianof3_u32(mid-s, mid, mid+s);
+			hi  = medianof3_u32(hi-2*s, hi-s, hi);
+		}
+		mid = medianof3_u32(lo, mid, hi);
+	}
+	return *mid;
+}
+
+struct p_res
+{
+	size_t l,h;
+};
+
+/*
+ * kind of 3-way partition the data:
+ * - everything lower than the pivot left
+ * - everything higher than the pivot right
+ * - everything equal than pivot in a "dead zone" in the middle
+ * this way runs (or simply lots of) the same number
+ * get split out fast, and qsort does not choke on
+ * them.
+ */
+static struct p_res partition3_u32(uint32_t x[], size_t n, uint32_t v)
+{
+	size_t a,b,c,d,l,h,s;
+	a = b = 0;
+	c = d = n - 1;
+	/* first put numers eq pivot at start and end while
+	 * pivoting all other
+	 */
+	while(1)
+	{
+		for(; b <= c && x[b] <= v; b++) {
+			if(x[b] == v)
+				exchange_u32(x, a++, b);
+		}
+		for(; c >= b && x[c] >= v; c--) {
+			if(x[c] == v)
+				exchange_u32(x, d--, c);
+		}
+		if(b > c)
+			break;
+		exchange_u32(x, b++, c--);
+	}
+	/* now put the eq numbers at start and end in the middle */
+	s = MIN(a, b-a);
+	for(l = 0, h = b - s; s; s--)
+		exchange_u32(x, l++, h++);
+	s = MIN(d-c, n - 1 - d);
+	for(l = b, h = n - s; s; s--)
+		exchange_u32(x, l++, h++);
+	return (struct p_res){b - a, d - c};
+}
+
+#if 0
+/* simpler partition */
 static size_t partition_u32(uint32_t a[], size_t j, uint32_t x)
 {
 	size_t i = 0;
@@ -195,16 +448,46 @@ static size_t partition_u32(uint32_t a[], size_t j, uint32_t x)
 			j--;
 		if(!(i < j))
 			return i;
-		exchange_u32(a + i, a + j);
+		exchange_u32(a, i, j);
 		i++;
 	}
 }
+#endif
 
-static void introsort_loop_u32(uint32_t a[], size_t n, unsigned depth_limit)
+static noinline void introsort_loop_u32(uint32_t a[], size_t n, unsigned depth_limit);
+
+static noinline void introsort_loop_u32_inner(uint32_t a[], size_t n, unsigned depth_limit)
 {
-	size_t p, n_s, n_b;
+	struct p_res p;
+	size_t n_s, n_b;
 	uint32_t *a_s, *a_b;
 
+	prefetch(a);
+	p = partition3_u32(a, n, pseudo_median_u32(a, n));
+	/*
+	 * recurse into the smaller partition first (costs _real_
+	 * stack), 'cause it should be easier to sort, while the
+	 * bigger partition uses the tail recursion eliminated path.
+	 * Suggested by Sedgewick
+	 */
+	if(p.l < p.h) {
+		a_s = a;             n_s = p.l;
+		a_b = a + (n - p.h); n_b = p.h;
+	} else {
+		a_s = a + (n - p.h); n_s = p.h;
+		a_b = a;             n_b = p.l;
+	}
+	introsort_loop_u32(a_s, n_s, depth_limit - 1);
+	/*
+	 * we could write a loop, but keep tail recursion for simplycity
+	 * the compiler should be able to eliminate it
+	 * this way we also do keep track of the depth limit
+	 */
+	introsort_loop_u32(a_b, n_b, depth_limit - 1);
+}
+
+static noinline void introsort_loop_u32(uint32_t a[], size_t n, unsigned depth_limit)
+{
 	/*
 	 * only pre sort, where quick sort is most effective,
 	 * final run will be something else
@@ -220,33 +503,11 @@ static void introsort_loop_u32(uint32_t a[], size_t n, unsigned depth_limit)
 		 * for the worst case, quickly switch to some other sorting
 		 * alg. for this partition
 		 */
-		heapsort_u32(a, n);
+		othersort_u32(a, n);
 		return;
 	}
 
-	p = partition_u32(a, n, medianof3_u32(a, n));
-	/*
-	 * recurse into the smaller partition first (costs _real_
-	 * stack), 'cause it should be easier to sort, while the
-	 * bigger partition uses the tail recursion eliminated path.
-	 * Suggested by Sedgewick
-	 */
-	if(n - p < p) {
-		a_s = a + p; n_s = n - p;
-		a_b = a;     n_b = p;
-	} else {
-		a_s = a;     n_s = p;
-		a_b = a + p; n_b = n - p;
-	}
-	prefetch(a_s);
-	introsort_loop_u32(a_s, n_s, depth_limit - 1);
-	/*
-	 * we could write a loop, but keep tail recursion for simplycity
-	 * the compiler should be able to eliminate it
-	 * this way we also do keep track of the depth limit
-	 */
-	prefetch(a_b);
-	introsort_loop_u32(a_b, n_b, depth_limit - 1);
+	introsort_loop_u32_inner(a, n, depth_limit);
 }
 
 size_t introsort_u32(uint32_t a[], size_t n)

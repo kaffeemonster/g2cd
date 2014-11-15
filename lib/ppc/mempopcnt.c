@@ -216,6 +216,24 @@ size_t mempopcnt(const void *s, size_t len)
  * ops, but hopefully ppc64 qualifys for that...
  * This way we can also stay longer in the loop, less sideway
  * addition.
+ *
+ * But this is all thin ice. Loking at gcc scheduling info (which
+ * is often simplified to only help the compiler not make totaly
+ * stupid things, and is sometimes even missleading):
+ * - On the 476 popcnt is in the complex group, only goes in the
+ * integer pipeline, while simple ops go in the integer- and
+ * load/store-pipeline. But execution-time still seems to be 1
+ * and no deal-breaker like non-pipelined like a div.
+ * - power5 puts it all in one integer bag, and they are all 2 cycles?
+ * - power6 again puts it in the all integer department, 1 cylce,
+ * but it is missing a bypass (oversight?), and the comments for
+ * some patches say power6 is in-order and the instr. can generate
+ * stalls "in some cases", want an popcnt attribute to better describe
+ * popcnt behaivior on IBM devices....
+ * - power7 is all sunshine and happiness (ooo, all int, 1 clycle), but
+ * has vsx (see altivec). But that seems to have its own problems (2
+ * cycles? Two pipelines, but only one can do vec-simple, the other
+ * is for perm and blocked on store??).
  */
 static inline size_t popcountst_int1(size_t n)
 {

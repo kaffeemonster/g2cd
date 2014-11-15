@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2014 Jan Seiffert
  *
  * This file is part of g2cd.
  *

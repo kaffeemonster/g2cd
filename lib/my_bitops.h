@@ -2,7 +2,7 @@
  * my_bitops.h
  * header-file for some global usefull bitbanging functions
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2014 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -154,12 +154,13 @@ LIB_MY_BITOPS_EXTRN(size_t decode_html_entities_utf8(char *dest, const char *src
 # define CFB(x) (1 << ((x)%32))
 # define CFF_DEFAULT (1 << 0)
 # define CFF_AVX_TST (1 << 1)
+# define CFF_AVX512_TST (1 << 2)
 struct test_cpu_feature
 {
 	void (*func)(void);
 	int flags;
 # if defined(__i386__) || defined(__x86_64__)
-	uint32_t features[7];
+	uint32_t features[9];
 # endif
 };
 
