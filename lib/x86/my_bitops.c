@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2014 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,7 +74,7 @@ struct cpuinfo
 	uint32_t max_ext;
 	int count;
 	int num_cores;
-	uint32_t features[7];
+	uint32_t features[9];
 	unsigned short clflush_size;
 	bool fdiv_bug;
 	bool init_done;
@@ -411,6 +411,8 @@ static __init void identify_cpu(void)
 	if(our_cpu.max_basic >= 0x00000007) {
 		cpuids(&a, 0x00000007);
 		our_cpu.features[4] = a.r.ebx;
+		our_cpu.features[5] = a.r.ecx;
+		our_cpu.features[6] = a.r.edx;
 	}
 
 	/*
@@ -475,7 +477,7 @@ static __init void identify_cpu(void)
 			cpuids(&a, 0xC0000000UL);
 			if(((uint32_t)a.r.eax & 0xFFFF0000) == 0xC0000000) {
 				cpuids(&a, 0xC0000001UL);
-				our_cpu.features[5] = a.r.edx;
+				our_cpu.features[7] = a.r.edx;
 			}
 			/*
 			 * we could set CX8 here, but it has to be enabled in
@@ -508,7 +510,7 @@ static __init void identify_cpu(void)
 	{
 		if(our_cpu.max_ext >= 0x8000001A) {
 			cpuids(&a, 0x8000001AUL);
-			our_cpu.features[6] = a.r.eax;
+			our_cpu.features[8] = a.r.eax;
 		}
 	}
 
@@ -547,7 +549,7 @@ static __init void identify_cpu(void)
 #if 1
 	cpu_feature_clear(CFEATURE_SSE4_2);
 	cpu_feature_clear(CFEATURE_SSE4_1);
-	cpu_feature_clear(CFEATURE_SSSE3);
+//	cpu_feature_clear(CFEATURE_SSSE3);
 #endif
 
 	return;
@@ -962,13 +964,28 @@ void emit_emms(void)
  * bytes).
  */
 #define XFEATURE_ENABLED_MASK_R 0
-#define XFEATURE_XMM_STATE_SAVE (1<<1)
-#define XFEATURE_YMM_STATE_SAVE (1<<2)
-static int __init test_cpu_feature_avx_callback(void)
+/* SSE via new xsave */
+#define XFEATURE_XMM_STATE_SAVE    (1<<1)
+/* AVX */
+#define XFEATURE_YMM_STATE_SAVE    (1<<2)
+/* bound register extention */
+#define XFEATURE_BNDR_STATE_SAVE   (1<<3)
+#define XFEATURE_BNDCSR_STATE_SAVE (1<<4)
+/* AVX512 */
+#define XFEATURE_OPMSK_STATE_SAVE  (1<<5)
+#define XFEATURE_ZMMHI_STATE_SAVE  (1<<6)
+#define XFEATURE_ZMM32_STATE_SAVE  (1<<7)
+ /* the three ZMM flags always come in pair, because not setting
+  * all results in a #GP. So why make it single flags in the first
+  * place? F*** Intel
+  */
+#define XFEATURE_ZMM_STATE_SAVE    (XFEATURE_ZMM32_STATE_SAVE|XFEATURE_ZMMHI_STATE_SAVE|XFEATURE_OPMSK_STATE_SAVE)
+
+static uint64_t __init get_xcr0(void)
 {
 	uint32_t low, high;
 
-	if(!cpu_feature(CFEATURE_OSXSAVE))
+	if(!(cpu_feature(CFEATURE_XSAVE) && cpu_feature(CFEATURE_OSXSAVE)))
 		return 0;
 
 	asm volatile(
@@ -998,10 +1015,24 @@ static int __init test_cpu_feature_avx_callback(void)
 		: /* %2 */ "c" (XFEATURE_ENABLED_MASK_R)
 	);
 
-	if((low & (XFEATURE_XMM_STATE_SAVE|XFEATURE_YMM_STATE_SAVE)) !=
+	return ((uint64_t)low) | (((uint64_t)high)<<32);
+}
+
+static int __init test_cpu_feature_avx_callback(void)
+{
+	uint64_t res = get_xcr0();
+	if((res & (XFEATURE_XMM_STATE_SAVE|XFEATURE_YMM_STATE_SAVE)) !=
 	   (XFEATURE_XMM_STATE_SAVE|XFEATURE_YMM_STATE_SAVE))
 		return 0;
+	return 1;
+}
 
+static int __init test_cpu_feature_avx512_callback(void)
+{
+	uint64_t res = get_xcr0();
+	if((res & (XFEATURE_ZMM_STATE_SAVE|XFEATURE_XMM_STATE_SAVE|XFEATURE_YMM_STATE_SAVE)) !=
+	   (XFEATURE_ZMM_STATE_SAVE|XFEATURE_XMM_STATE_SAVE|XFEATURE_YMM_STATE_SAVE))
+		return 0;
 	return 1;
 }
 
@@ -1021,8 +1052,14 @@ __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 			f |= (our_cpu.features[j] & t[i].features[j]) ^ t[i].features[j];
 		if(f)
 			continue;
-		if(t[i].flags & CFF_AVX_TST && !test_cpu_feature_avx_callback())
-			continue;
+		if(t[i].flags & CFF_AVX512_TST) {
+			if(!test_cpu_feature_avx512_callback())
+				continue;
+		}
+		if(t[i].flags & CFF_AVX_TST) {
+			if(!test_cpu_feature_avx_callback())
+				continue;
+		}
 		return t[i].func;
 	}
 	return NULL; /* whoever fucked it up, die! */

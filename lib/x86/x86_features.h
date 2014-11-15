@@ -2,7 +2,7 @@
  * x86_features.h
  * x86 feature bits
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2014 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -33,6 +33,8 @@
 # define FEATURE5(x,y,z) ENUM_CMD(x, (y + 128))
 # define FEATURE6(x,y,z) ENUM_CMD(x, (y + 160))
 # define FEATURE7(x,y,z) ENUM_CMD(x, (y + 192))
+# define FEATURE8(x,y,z) ENUM_CMD(x, (y + 224))
+# define FEATURE9(x,y,z) ENUM_CMD(x, (y + 256))
 # define X86_CPU_FEATURE_ENUM \
 	FEATURE1( FPU       ,  0, "FPU on chip"                       ), \
 	FEATURE1( VME       ,  1, "Virtual-8086 Mode Extensions"      ), \
@@ -155,28 +157,41 @@
 	FEATURE4( PERFCTRC  , 23, "Core performance counter ext."     ), \
 	FEATURE5( FGSBASE   ,  0, "User Baseregister manipulation"    ), \
 	FEATURE5( BMI       ,  3, "Bit manipulation inst." /*tzcnt*/  ), \
+	FEATURE5( HLE       ,  4, "HLE"                               ), \
 	FEATURE5( AVX2      ,  5, "AVX2"                              ), \
 	FEATURE5( SMEP      ,  7, "Supervisor Mode NX"                ), \
 	FEATURE5( BMI2      ,  8, "BMI2"                              ), \
 	FEATURE5( ERMS      ,  9, "Enhanced REP MOVSB/STOSB"          ), \
 	FEATURE5( INVPCID   , 10, "Invalidate Process-context ID"     ), \
 	FEATURE5( RTM       , 11, "Restricted Transactional Memory"   ), \
-	FEATURE5( RDSEED    , 12, "RDSEED instruction"   /* 18? */    ), \
-	FEATURE5( ADX       , 13, "ADCX and ADOX instruction"         ), \
-	FEATURE5( SMAP      , 14, "Supervisor Mode Access Prevention" ), \
-	FEATURE6( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
-	FEATURE6( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
-	FEATURE6( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
-	FEATURE6( PL_ACE_E  ,  7, "Padlock ACE enabled"               ), \
-	FEATURE6( PL_ACE2   ,  8, "Padlock ACE2 avail."               ), \
-	FEATURE6( PL_ACE2_E ,  9, "Padlock ACE2 enabled"              ), \
-	FEATURE6( PL_PHE    , 10, "Padlock Hashing Engine"            ), \
-	FEATURE6( PL_PHE_E  , 11, "Padlock HE enabled"                ), \
-	FEATURE6( PL_PMM    , 12, "Padlock Montgommery Multiplier"    ), \
-	FEATURE6( PL_PMM_E  , 13, "Padlock MM enabled"                ), \
-	FEATURE6( CX_MMX    , 31, "Cyrix MMX Ext." /* F3(MIR_FXSR) */ ), \
-	FEATURE7( AP_FP128  ,  0, "SSE is 128 bit wide"               ), \
-	FEATURE7( AP_MOVU   ,  1, "Movu instr. better then movl/movh" )
+	FEATURE5( MPX       , 14, "Memory Prot. Extensions (BOUND)"   ), \
+	FEATURE5( AVX512F   , 16, "AVX512 Foundation Instr."          ), \
+	FEATURE5( AVX512DQ  , 17, "AVX512 Double-/Quadword instr."    ), \
+	FEATURE5( RDSEED    , 18, "RDSEED instruction" /* once 12? */ ), \
+	FEATURE5( ADX       , 19, "ADCX and ADOX instruction" /*13?*/ ), \
+	FEATURE5( SMAP      , 20, "Supervisor Mode Access Prevention" ), \
+	FEATURE5( CLFLUSHOPT, 23, "Cache Line Flush ???"              ), \
+	FEATURE5( IPTRACE   , 25, "Intel Processor Trace Ext."        ), \
+	FEATURE5( AVX512PF  , 26, "AVX512 Prefetch Instr."            ), \
+	FEATURE5( AVX512ER  , 27, "AVX512 Exponential + Recriprocal"  ), \
+	FEATURE5( AVX512CD  , 28, "AVX512 Conflict Detection"         ), \
+	FEATURE5( SHA       , 29, "Secure Hash Alg. Instr."           ), \
+	FEATURE5( AVX512BW  , 30, "AVX512 Byte/Word Instr."           ), \
+	FEATURE5( AVXVL     , 31, "AVX Vec. Length Ext.(512 on 128)"  ), \
+	FEATURE6( PFTCHWT1  ,  0, "PREFETCHWT1"                       ), \
+	FEATURE8( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
+	FEATURE8( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
+	FEATURE8( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
+	FEATURE8( PL_ACE_E  ,  7, "Padlock ACE enabled"               ), \
+	FEATURE8( PL_ACE2   ,  8, "Padlock ACE2 avail."               ), \
+	FEATURE8( PL_ACE2_E ,  9, "Padlock ACE2 enabled"              ), \
+	FEATURE8( PL_PHE    , 10, "Padlock Hashing Engine"            ), \
+	FEATURE8( PL_PHE_E  , 11, "Padlock HE enabled"                ), \
+	FEATURE8( PL_PMM    , 12, "Padlock Montgommery Multiplier"    ), \
+	FEATURE8( PL_PMM_E  , 13, "Padlock MM enabled"                ), \
+	FEATURE8( CX_MMX    , 31, "Cyrix MMX Ext." /* F3(MIR_FXSR) */ ), \
+	FEATURE9( AP_FP128  ,  0, "SSE is 128 bit wide"               ), \
+	FEATURE9( AP_MOVU   ,  1, "Movu instr. better then movl/movh" )
 
 # define ENUM_CMD(x,y) CFEATURE_##x = y
 enum x86_cpu_features
@@ -208,8 +223,14 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 	}
 # else
 #  ifndef __PIC__
+/*
+ * whole-program and the new hip kid in town lto remove this cruicial func because they can't
+ * see it's used, so force output by saying it's magically invoked "extern".
+ * unfortunatly it foces it into the external symbol table....
+ */
 #   define _DYN_JMP_CONSTRUCTOR(name) \
-	static GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init void name##_select(void) { \
+	GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_select(void); \
+	GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_select(void) { \
 		patch_instruction(name, tfeat_##name, anum(tfeat_##name)); \
 	}
 #  else
@@ -292,7 +313,7 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 #   define _DYN_JMP_INSTRUCTION(name) \
 	".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
 	".long	" #name "_runtime_sw - 1f\n\t" \
-	".byte	0x00, 0x00\n" \
+	".byte	0x0f,0x1f,0x00\n" \
 	"1:\n\t" \
 	_DYN_JMP_DBG_END(name)
 #   define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
@@ -321,7 +342,8 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 #  define _DYN_JMP_REST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".globl " #name "\n\t", , )
 #  define _DYN_JMP_REST_NR(name, prot, call) _DYN_JMP_REST(void, name, prot, call)
 #  define _DYN_JMP_REST_ALIAS(rtype, name, prot, call, sname) _DYN_JMP_REST_GEN(name, ".globl " #name "\n\t", ".set " #sname ", " #name "\n\t", ".globl " #sname "\n\t")
-#  define _DYN_JMP_REST_ST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".local " #name "\n\t", , )
+// #  define _DYN_JMP_REST_ST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".local " #name "\n\t", , )
+#  define _DYN_JMP_REST_ST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".globl " #name "\n\t", , )
 # endif
 
 # define DYN_JMP_DISPATCH(rtype, name, prot, call) \
