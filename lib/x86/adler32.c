@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   x86 implementation
  * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 2009-2014 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -17,7 +17,7 @@
 #include "../other.h"
 #define HAVE_ADLER32_VEC
 #ifndef USE_SIMPLE_DISPATCH
-uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+GCC_ATTRIB(externally_visible) uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 #else
 static uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 #endif
@@ -144,7 +144,7 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 		"add	%0, %1\n\t"	/* 2 */
 	/*   0 */
 		"dec	%3\n\t"
-		"jnz	2b"
+		"jnz	2b\n\t"
 	: /* %0 */ "=R" (*s1),
 	  /* %1 */ "=R" (*s2),
 	  /* %2 */ "=abdSD" (buf),
@@ -300,7 +300,6 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		"prefetchnta	0x70(%0)\n\t"
 		"paddd	%%xmm3, %%xmm7\n\t"	/* vs1_round_sum += vs1 */
 		"add	$16, %0\n\t"		/* advance input data pointer */
-		"dec	%1\n\t"			/* decrement inner_k */
 		"movdqa	%%xmm0, %%xmm1\n\t"	/* make a copy of the input data */
 #if (HAVE_BINUTILS-0) >= 217
 		"pmaddubsw %%xmm5, %%xmm0\n\t"	/* multiply all input bytes by vord_b bytes, add adjecent results to words */
@@ -310,6 +309,7 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		"psadbw	%%xmm4, %%xmm1\n\t"	/* subtract zero from every byte, add 8 bytes to a sum */
 		"paddw	%%xmm0, %%xmm6\n\t"	/* vs2_i += in * vorder_b */
 		"paddd	%%xmm1, %%xmm3\n\t"	/* vs1 += psadbw */
+		"dec	%1\n\t"			/* decrement inner_k */
 		"jnz	1b\n\t"			/* repeat if inner_k != 0 */
 		"movdqa	%%xmm6, %%xmm0\n\t"	/* copy vs2_i */
 		"punpckhwd	%%xmm4, %%xmm0\n\t"	/* zero extent vs2_i upper words to dwords */
@@ -867,7 +867,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_ge16_any(uint32_t adler, const uint8_t *buf, unsigned len)
 {
 	/* split Adler-32 into component sums */
 	uint32_t s1 = adler & 0xffff;
@@ -881,6 +881,148 @@ static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsign
 
 	/* return recombined sums */
 	return (s2 << 16) | s1;
+}
+
+#ifdef __x86_64__
+/* ========================================================================= */
+/*
+ * Small version for x86_64 which uses unaligned loads and clearly stays under
+ * NMAX.
+ * Only SSE2, since x86_64 always has SSE2.
+ */
+static noinline uint32_t adler32_mod16(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	/* split Adler-32 into component sums */
+	uint32_t s1 = adler & 0xffff;
+	uint32_t s2 = (adler >> 16) & 0xffff;
+
+	/* simply do it, we do not expect more then NMAX as len */
+	asm volatile (
+		"prefetchnta	(%0)\n\t"
+		"movd	%1, %%xmm4\n\t"
+		"movd	%2, %%xmm3\n\t"
+		"pxor	%%xmm2, %%xmm2\n\t"
+		"pxor	%%xmm5, %%xmm5\n\t"
+		"pxor	%%xmm6, %%xmm6\n\t"
+		"pxor	%%xmm7, %%xmm7\n\t"
+		".p2align 4,,7\n"
+		".p2align 3\n"
+		"1:\n\t"
+		"movdqu	(%0), %%xmm0\n\t"	/* fetch input data */
+		"paddd	%%xmm4, %%xmm5\n\t"	/* vs1_round_sum += vs1 */
+		"add	$16, %0\n\t"
+		"dec	%3\n\t"
+		"movdqa	%%xmm0, %%xmm1\n\t"	/* copy input data */
+		"psadbw	%%xmm2, %%xmm0\n\t"	/* add all bytes horiz. */
+		"paddd	%%xmm0, %%xmm4\n\t"	/* add that to vs1 */
+		"movdqa	%%xmm1, %%xmm0\n\t"	/* copy input data */
+		"punpckhbw	%%xmm2, %%xmm1\n\t"	/* zero extent input upper bytes to words */
+		"punpcklbw	%%xmm2, %%xmm0\n\t"	/* zero extent input lower bytes to words */
+		"paddw	%%xmm1, %%xmm7\n\t"	/* vs2_h_words += in_high_words */
+		"paddw	%%xmm0, %%xmm6\n\t"	/* vs2_l_words += in_low_words */
+		"jnz	1b\n\t"
+		"pmaddwd	32+%4, %%xmm7\n\t"	/* multiply vs2_h_words with order, add adjecend results */
+		"pmaddwd	16+%4, %%xmm6\n\t"	/* multiply vs2_l_words with order, add adjecend results */
+		"pslld	$4, %%xmm5\n\t"	/* vs1_round_sum * 16 */
+		"paddd	%%xmm7, %%xmm3\n\t"	/* add to vs2 */
+		"paddd	%%xmm6, %%xmm3\n\t"	/* add to vs2 */
+		"paddd	%%xmm5, %%xmm3\n\t"	/* add vs1_round_sum to vs2 */
+		"pshufd	$0xEE, %%xmm4, %%xmm1\n\t"
+		"pshufd	$0xEE, %%xmm3, %%xmm0\n\t"
+		"paddd	%%xmm4, %%xmm1\n\t"
+		"paddd	%%xmm3, %%xmm0\n\t"
+		"pshufd	$0xE5, %%xmm0, %%xmm3\n\t"
+		"paddd	%%xmm0, %%xmm3\n\t"
+		"movd	%%xmm1, %1\n\t"
+		"movd	%%xmm3, %2\n"
+		"8:\n\t"
+	: /* %0 */ "=r" (buf),
+	  /* %1 */ "=r" (s1),
+	  /* %2 */ "=r" (s2),
+	  /* %3 */ "=r" (len)
+	: /* %4 */ "m" (vord),
+	  /*    */ "0" (buf),
+	  /*    */ "1" (s1),
+	  /*    */ "2" (s2),
+	  /*    */ "3" (len/16)
+	: "cc", "memory"
+# ifdef __SSE__
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+# endif
+	);
+	/* actually we expect much less, anything "large" should be hanedled by
+	 * the real vector versions above, MOD28 it */
+	MOD28(s1);
+	MOD28(s2);
+
+	/* return recombined sums */
+	return (s2 << 16) | s1;
+}
+
+static noinline uint32_t adler32_e16(uint32_t adler, const uint8_t *buf, unsigned len GCC_ATTR_UNUSED_PARAM)
+{
+	/* split Adler-32 into component sums */
+	uint32_t s1, s2;
+	prefetch(&vord);
+
+	/* simply do it, we expect exactly 16 as len */
+	asm volatile (
+		"movdqu	%3, %%xmm0\n\t"	/* fetch input data */
+		"pxor	%%xmm2, %%xmm2\n\t"
+		"movdqa	%%xmm0, %%xmm4\n\t"	/* copy input data */
+		"movdqa	%%xmm0, %%xmm5\n\t"	/* copy input data */
+		"psadbw	%%xmm2, %%xmm0\n\t"	/* add all bytes horiz. */
+		"punpckhbw	%%xmm2, %%xmm5\n\t"	/* zero extent input upper bytes to words */
+		"punpcklbw	%%xmm2, %%xmm4\n\t"	/* zero extent input lower bytes to words */
+		"pmaddwd	32+%2, %%xmm5\n\t"	/* multiply vs2_h_words with order, add adjecend results */
+		"pmaddwd	16+%2, %%xmm4\n\t"	/* multiply vs2_l_words with order, add adjecend results */
+		"pshufd	$0xEE, %%xmm0, %%xmm3\n\t"
+		"paddd	%%xmm3, %%xmm0\n\t"
+		"movd	%%xmm0, %0\n\t"
+		"paddd	%%xmm5, %%xmm4\n\t"	/* add to vs2 */
+		"pshufd	$0xEE, %%xmm4, %%xmm2\n\t"
+		"paddd	%%xmm2, %%xmm4\n\t"
+		"pshufd	$0xE5, %%xmm4, %%xmm2\n\t"
+		"paddd	%%xmm2, %%xmm4\n\t"
+		"movd	%%xmm4, %1\n"
+		"8:\n\t"
+	: /* %0 */ "=r" (s1),
+	  /* %1 */ "=r" (s2)
+	: /* %2 */ "m" (vord),
+	  /* %3 */ "m" (*buf)
+	: "cc", "memory"
+# ifdef __SSE__
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5"
+# endif
+	);
+	/* split Adler-32 into component sums */
+	s1 += adler & 0xffff;
+	s2 += ((adler >> 16) & 0xffff) + ((adler & 0xffff) * 16);
+	/* actually we expect much less, MOD28 it */
+	MOD28(s1);
+	MOD28(s2);
+
+	/* return recombined sums */
+	return (s2 << 16) | s1;
+}
+#endif
+
+
+static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	if(len == 16)
+		return adler32_e16(adler, buf, len);
+	return adler32_mod16(adler, buf, len);
+}
+
+/* ========================================================================= */
+static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+#ifdef __x86_64__
+	if((len % 16) == 0)
+		return adler32_16(adler, buf, len);
+#endif
+	return adler32_ge16_any(adler, buf, len);
 }
 
 /* ========================================================================= */
