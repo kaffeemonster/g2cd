@@ -1,3 +1,5 @@
+*.o
+*.~1~
 *.lo
 *.lzma
 *.bz2
@@ -6,6 +8,7 @@
 *.diff
 *.patch
 *.rtl
+*.swp
 g2cd
 g2cd.exe
 ccdrv
@@ -41,6 +44,7 @@ zlib/contrib
 .arflockgate
 lib/aes_tab_gen
 lib/five_tab_gen
+lib/libcommon.a
 g2cd.conf
 config_auto.h.in
 configure
