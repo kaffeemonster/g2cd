@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2012 Jan Seiffert
+ * Copyright (c) 2004 - 2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -248,6 +248,13 @@
 # define GCC_CONSTANT_P(x) __builtin_constant_p(x)
 #else
 # define GCC_CONSTANT_P(x) (0)
+#endif
+
+/* clang could join the party */
+#if _GNUC_PREREQ (5,0)
+# define GCC_OVERFLOW_UMUL(a, b, res)  __builtin_umul_overflow(a, b, res)
+#else
+# define GCC_OVERFLOW_UMUL(a, b, res)  ({bool r = a <= (UINT_MAX / b) ? false : true; if(!r) *res = a * b; r;})
 #endif
 
 #ifdef GOT_GOT

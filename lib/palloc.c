@@ -2,7 +2,7 @@
  * palloc.c
  * Allocator for the pad
  *
- * Copyright (c) 2012 Jan Seiffert
+ * Copyright (c) 2012-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -282,14 +282,17 @@ static int blsize(struct d_heap *d, pa_address va)
 void *pa_alloc(void *opaque, unsigned int num, unsigned int size)
 {
 	struct d_heap *d;
-	size_t bsize;
+	size_t bsize, t;
 	pa_address resa;
 
-	if(!opaque || size > UINT_MAX / num)
+	if(!opaque)
+		return NULL;
+	if(unlikely(GCC_OVERFLOW_UMUL(num, size, &bsize)))
 		return NULL;
 	d = opaque;
-	bsize = num * size;
-	bsize = (bsize + sizeof(ssize_t) - 1) / sizeof(ssize_t);
+	/* carefully round up */
+	t = bsize / sizeof(size_t);
+	bsize = t + !!(bsize % sizeof(size_t));
 
 	/* start lock */
 	resa = blnew(d, bsize);
