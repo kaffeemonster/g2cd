@@ -2,7 +2,7 @@
  * my_epoll_kqueue.c
  * wrapper to get epoll on systems providing kqueue (BSDs)
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -167,14 +167,28 @@ int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeo
 			epv_tmp->events |= EPOLLOUT;
 			break;
 		}
-		if (ev_list[i].flags & EV_EOF)
+		if(ev_list[i].flags & EV_EOF)
 			epv_tmp->events |= POLLHUP;
-		if (ev_list[i].flags & EV_ERROR)
+		if(ev_list[i].flags & EV_ERROR)
 			epv_tmp->events |= POLLERR;
-		if (ev_list[i].flags & EV_ONESHOT) {
+		if(ev_list[i].flags & EV_ONESHOT) {
 // TODO: disable other event at oneshot
 			epv_tmp->events |= EPOLLONESHOT;
 		}
+#ifdef __APPLE__
+		/*
+		 * older darwin kernels (< 2015 without security patch)
+		 * like to report OOB data unsolicited with a "normal"
+		 * EVFILT_READ and keeps and keeps and keeps on reporting
+		 * it if you do not handle the OOB data (why should you,
+		 * if you do not expect it?).
+		 * So handle OOB data by moving the right bits in place,
+		 * the rest of the maschinery will already respond propably
+		 * to OOB data with this extra info: kill the connec.
+		 */
+		if(ev_list[i].flags & EV_OOBAND)
+			epv_tmp->events |= EPOLLPRI;
+#endif
 		epv_tmp->data.ptr = ev_list[i].udata;
 	}
 

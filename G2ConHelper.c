@@ -2,7 +2,7 @@
  * G2ConHelper.c
  * G2-specific network-helper functions
  *
- * Copyright (c) 2004-2012, Jan Seiffert
+ * Copyright (c) 2004-2015, Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -58,6 +58,8 @@ g2_connection_t *handle_socket_abnorm(struct epoll_event *p_entry)
 	g2_connection_t *w_entry = p_entry->data.ptr;
 	const char *msg = NULL;
 
+	if(p_entry->events & (uint32_t)EPOLLPRI)
+		msg = "priority data (OOB) in connection";
 	if(p_entry->events & (uint32_t)EPOLLERR)
 		msg = "error in connection!";
 	if(p_entry->events & (uint32_t)EPOLLHUP)

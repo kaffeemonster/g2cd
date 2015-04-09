@@ -2,7 +2,7 @@
  * G2Handler.c
  * code to handle G2-Protocol
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -82,6 +82,7 @@ void handle_con(struct epoll_event *e_wptr, struct norm_buff *lbuff[MULTI_RECV_N
 	if(e_wptr->events & ~((uint32_t)(EPOLLIN|EPOLLOUT|EPOLLONESHOT)))
 	{
 		g2_connection_t *tmp_con_holder = handle_socket_abnorm(e_wptr);
+		/* take the poor dear behind the shed... */
 		if(tmp_con_holder)
 			recycle_con(tmp_con_holder, epoll_fd, false);
 		else { /* this should not happen... */
@@ -367,6 +368,8 @@ retry_unpack:
 			 *
 			 * We either have to chunk our continous stream or hack a sliding
 			 * window into the guts of lzo (+ API adaption).
+			 *
+			 * Maybe for QHTs.
 			 */
 			return w_entry;
 		}
