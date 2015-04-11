@@ -30,11 +30,19 @@ INSTALL_PRG = @INSTALL_PROGRAM@
 #
 # split up system and target CFLAGS
 #	solaris is so anal... can someone please wake them with a 2 by 4?
-#	Old solaris misses everything, new solaris spews ERRORS!!!
-#	when it sees "illegal" feature combinations (stdbool only when C99,
-#	C99 not with POSIX_SOURCE when not at least XPG6, bla bla bla)
+#	Old solaris misses everything, so you have to eneable everything,
+#	new solaris spews ERRORS (sic!!!) when it sees "illegal" feature
+#	combinations (stdbool only when C99, C99 not with POSIX_SOURCE
+#	when not at least XPG6, bla bla bla)
 #	Hello?
-HOSTCFLAGS = -std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_SVID_SOURCE -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__
+#	And glibc going the same anal road, in the name of correctness...
+#	Seriously! _SVID_SOURCE depracted for _DEFAULT_SOURCE. You talked to
+#	other systems about this?
+#	You are bulding a fucking maze to navigate for simple progs (no fancy
+#	smancy configure/whatever chest), which need certain stuff from system
+#	header, which is, surprise!, after 15 years ages old, but don't want
+#	to needlessly break backward compatiblity with say a 5 year old system.
+HOSTCFLAGS = @HOSTCFLAGS@
 
 #
 # target CFLAGS

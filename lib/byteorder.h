@@ -61,12 +61,12 @@
 #  endif
 # endif
 
-# define __le16 uint16_t
-# define __le32 uint32_t
-# define __le64 uint64_t
-# define __be16 uint16_t
-# define __be32 uint32_t
-# define __be64 uint64_t
+# define my_le16 uint16_t
+# define my_le32 uint32_t
+# define my_le64 uint64_t
+# define my_be16 uint16_t
+# define my_be32 uint32_t
+# define my_be64 uint64_t
 
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  include "generic/little_endian.h"

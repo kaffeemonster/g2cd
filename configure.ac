@@ -2,7 +2,7 @@
 # configure.ac
 # autoconf input for our foo
 #
-# Copyright (c) 2010-2012 Jan Seiffert
+# Copyright (c) 2010-2015 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -395,6 +395,17 @@ case "$host" in
 		;;
 esac
 AC_SUBST(BIN2O_OPTS)
+
+HOSTCFLAGS="-std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__"
+# TODO: some nice test for glibc 2.20 instead of a switch...
+case "$host" in
+	*-gnu)
+# this will prop. break on older glibc, but newer need it. Morons!
+		HOSTCFLAGS="$HOSTCFLAGS -D_DEFAULT_SOURCE";;
+	*)
+		HOSTCFLAGS="$HOSTCFLAGS -D_SVID_SOURCE";;
+esac
+AC_SUBST(HOSTCFLAGS)
 
 m4_include([m4/ax_check_linker_flags.m4])
 # get some more symbols in the executable, so backtraces
