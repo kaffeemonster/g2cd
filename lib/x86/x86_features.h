@@ -312,7 +312,7 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 #  ifndef __PIC__
 #   define _DYN_JMP_INSTRUCTION(name) \
 	".byte	0xE9\n\t" /* make sure we get a jmp with displacement */ \
-	".long	" #name "_runtime_sw - 1f\n\t" \
+	".long	" #name "_runtime_sw - 1f + 3\n\t" \
 	".byte	0x0f,0x1f,0x00\n" \
 	"1:\n\t" \
 	_DYN_JMP_DBG_END(name)
@@ -365,5 +365,4 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 	_DYN_JMP_REST_ST(rtype, name, prot, call) \
 	_DYN_JMP_CONSTRUCTOR(name) \
 	_DYN_JMP_RT_SWITCH(rtype, name, prot, call)
-
 #endif
