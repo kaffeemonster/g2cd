@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1579,7 +1579,7 @@ static bool handle_udp_packet(struct norm_buff **d_hold_sp, union combo_addr *fr
 					            'N' == *(buffer_start(*d_hold_n)+1) &&
 					            'D' == *(buffer_start(*d_hold_n)+2))) {
 						logg_develd_old("received double GND from %pI# after unpack\n", from);
-						goto out;
+						goto out_free;
 					}
 					first_data = false;
 				}
