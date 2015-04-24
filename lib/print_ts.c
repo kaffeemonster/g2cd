@@ -2,7 +2,7 @@
  * print_ts.c
  * print a timestamp in fixed format
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -21,6 +21,8 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * $Id: $
+ *
+ * math calc_dfields is derived from freebsd libc && glibc
  */
 
 /*
@@ -33,31 +35,11 @@
  *
  * We don't need all that fancy strftime stuff. Esp. we only
  * want to print UTC, and the precision isn't that important
- * (no time conversion needed, we have a timestamp which is
- * near UTC).
+ * (not building NTP here, no time conversion needed, we have
+ * a timestamp which is near enough UTC).
  *
  * So cut the crap and get to the core part creating a
  * textual date and time.
- *
- * This is derived from glibc which is:
-
-   Copyright (C) 1991, 1993, 1997, 1998, 2002 Free Software Foundation, Inc.
-   This file is part of the GNU C Library.
-
-   The GNU C Library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option) any later version.
-
-   The GNU C Library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details.
-
-   You should have received a copy of the GNU Lesser General Public
-   License along with the GNU C Library; if not, write to the Free
-   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-   02111-1307 USA.
  */
 
 #include "other.h"
@@ -115,12 +97,10 @@ int read_ts(const char *buf, time_t *t) GCC_ATTR_VIS("hidden");
 #define SECONDS_PER_HOUR (SECONDS_PER_MIN * 60)
 #define SECONDS_PER_DAY  (SECONDS_PER_HOUR * 24)
 
-static const unsigned short days_in_year_till_month[2][13] =
+static const unsigned short days_in_year_till_month[13] =
 {
-	/* Normal years.  */
-	{ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 },
-	/* Leap years.  */
-	{ 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 }
+	/* Normal year  */
+	0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365
 };
 
 static always_inline bool is_leap_year(unsigned long year)
@@ -138,12 +118,12 @@ static always_inline bool is_leap_year(unsigned long year)
 	return false;
 }
 
-static always_inline long mod_div(long a, long b)
+static always_inline int mod_div(int a, int b)
 {
 	return a / b - (a % b < 0);
 }
 
-static always_inline long leaps_thru_end_of(long year)
+static always_inline int leaps_thru_end_of(int year)
 {
 	return mod_div(year, 4) - mod_div(year, 100) + mod_div(year, 400);
 }
@@ -156,21 +136,26 @@ struct dfields
 
 static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 {
-	long tdays, year;
-	unsigned rem;
-	const unsigned short *s, *e;
+	/* 2 billion days is enough for 5 Mio years (and even on 16 bit we get 89) */
+	int tdays, year;
+	unsigned rem, utdays, i;
 
 	/*
 	 * We are dealing with timestamps.
-	 * Of computer systems.
-	 * Anybody claming he has something older than
-	 * 1970...
+	 * Of computer systems, running nodes, on the
+	 * internet.
+	 * Anybody claming he is somewhere before
+	 * 1970 ...
 	 *
 	 * But beware, 2038 we have to revaluate the
-	 * situation.
-	 * And needs an overhaul if years turn 5 digits
+	 * situation how the unix time stamp melt down
+	 * is generally going to be fixed and whats the
+	 * official status of TS > 2 billion/< 0.
+	 *
+	 * And this needs an general overhaul if years
+	 * turn 5 digits
 	 */
-	if(unlikely(*t < 0 || (unsigned long)*t / SECONDS_PER_DAY > LONG_MAX))
+	if(unlikely(*t < 0 || (unsigned long)*t / SECONDS_PER_DAY > INT_MAX))
 		return false;
 
 	tdays      = (unsigned long)*t / SECONDS_PER_DAY;
@@ -184,7 +169,7 @@ static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 	while(tdays < 0 || tdays >= (is_leap_year(year) ? 366 : 365))
 	{
 		/* Guess a corrected year, assuming 365 days per year.  */
-		long year_guessed = year + tdays / 365 - (tdays % 365 < 0);
+		int year_guessed = year + tdays / 365 - (tdays % 365 < 0);
 		/* Adjust days and year to match the guessed year.  */
 		tdays -= ((year_guessed - year) * 365 +
 		         leaps_thru_end_of(year_guessed - 1) - leaps_thru_end_of(year - 1));
@@ -192,41 +177,54 @@ static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 	}
 	f->year = year;
 
-	s = days_in_year_till_month[is_leap_year(f->year)];
-	e = s + (tdays / 31) + 1;
-	while(e >= s)
-		if(tdays < *e)
-			e--;
-		else
-			break;
-	tdays    -= *e;
-	f->month  = (e - s) + 1;
-	f->day    = tdays + 1;
+	utdays = tdays; /* days is unsigned after the above loop */
+	f->day  = 1;
+	/* fix up leap years */
+	if(is_leap_year(f->year) && utdays > 58) {
+		if(utdays == 59)
+			f->day = 2;
+		utdays--;
+	}
+
+	for(i = (utdays / 31) + 1; i > 0 && utdays < days_in_year_till_month[i]; i--)
+		/* do nothing */;
+	utdays  -= days_in_year_till_month[i];
+	f->month = i + 1;
+	f->day  += utdays;
 
 	return true;
 }
 
-static noinline bool dfields_calc(time_t *t, const struct dfields *f)
+static noinline int dfields_calc(time_t *t, const struct dfields *f)
 {
 	unsigned long tsecs;
+	unsigned mon  = f->month; /* month is needed to be 0 to 11 */
+	unsigned year = f->year;
 
-	tsecs  = f->year - 1970;
-	tsecs *= 365;
-	tsecs += leaps_thru_end_of(f->year - 1) -  leaps_thru_end_of(1970);
-	tsecs += days_in_year_till_month[is_leap_year(f->year)][f->month - 1];
-// TODO: check day for correct value
-	/* or let it wrap, to correct... */
-	tsecs += f->day - 1;
-	tsecs *= 24;
-// TODO: why -1
+	/* checked every minute value till 3237 against glibc strftime+gmtime_r */
 	/*
-	 * we are one hour off into the future without it (compared to mktime)
-	 * but this is fishy... the 0 hour is the 0 hour, esp. on 1.1.1970 00:00:00
+	 * If we are pre March (Jan. & Feb.), no need to count
+	 * in a leap. Timewarp back a year instead so the year
+	 * test does not add a leap day.
+	 * Or shift our zero point to March so Feb is at end of year.
 	 */
-	tsecs += f->hour - 1;
+	if(0 >= (int) (mon -= 2)) {
+		mon  += 12;
+		year -= 1;
+	}
+	tsecs  = year * 365; /* get all days for the years */
+	tsecs -= 719499; /* subtract all days + leap days from 0 to 1970 */
+	tsecs += year/4 - year/100 + year/400; /* add all leap days for this year */
+	tsecs += 367*mon/12; /* multiply month by 30.58, the average day count... */
+// TODO: check day for correct value, if someone throws in the 55th of whatever
+	/* or let it simply wrap, to correct... */
+	tsecs += f->day; /* add day of month */
+	/* bring it to hours */
+	tsecs *= 24;
+	tsecs += f->hour;
 	tsecs *= 60;
 	tsecs += f->minute;
-	/* somewhere here we are bound for overflow in 2038 */
+	/* somewhere here we are bound for overflow 32 bit signed in 2038 */
 	tsecs *= 60;
 	tsecs += f->seconds;
 
@@ -279,10 +277,10 @@ size_t print_ts(char *buf, size_t n, const time_t *t)
 {
 	size_t res;
 
-	res = print_ts_rev(buf + 1, n, t);
+	res = print_ts_rev(buf + 1, n - 1, t);
 	if(res) {
 		buf[0] = '\0';
-		strreverse_l(buf, buf + res--);
+		strreverse_l(buf, buf + res);
 	}
 	return res;
 }
