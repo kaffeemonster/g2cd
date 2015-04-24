@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogerated
 #
-# Copyright (c) 2004 - 2012 Jan Seiffert
+# Copyright (c) 2004 - 2015 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -215,8 +215,7 @@ AUX = \
 	obs_build/debian.control \
 	obs_build/debian.rules \
 	obs_build/g2cd.dsc \
-	obs_build/g2cd.spec \
-	obs_build/g2cd-xUbuntu_6.06.dsc
+	obs_build/g2cd.spec
 
 #
 #	files to be included in a package
