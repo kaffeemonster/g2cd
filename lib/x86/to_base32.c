@@ -45,17 +45,22 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src, unsigned len);
 #endif
 
-static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
+static const union
+{
+	unsigned char c[16];
+	uint32_t u[4];
+	uint64_t v[2];
+} vals [] GCC_ATTR_ALIGNED(16) =
 {
 	/* 1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16 */
-	{0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00},
-	{0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF},
-	{0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF},
-	{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF},
-	{0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F},
-	{0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61},
-	{0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A},
-	{0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49},
+	{{0x0f,0x0e,0x0d,0x0c,0x0b,0x0a,0x09,0x08,0x07,0x06,0x05,0x04,0x03,0x02,0x01,0x00}},
+	{{0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0xFF,0xFF,0xFF,0xFF}},
+	{{0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF}},
+	{{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF}},
+	{{0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F}},
+	{{0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61}},
+	{{0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A}},
+	{{0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49}},
 };
 
 #ifdef HAVE_BINUTILS
@@ -63,23 +68,21 @@ static const unsigned char vals[][16] GCC_ATTR_ALIGNED(16) =
 #  ifndef __i386__
 static unsigned char *do_40bit_BMI2(unsigned char *dst, uint64_t d1)
 {
-	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "m" (vals[4][0]));
-	d1 = __swab64(d1);
+	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "r" (vals[4].v[0]));
+	d1 = __swab64(d1) + vals[5].v[0];
 
 	/* convert */
 	asm (
 			"movq	%1, %%xmm0\n\t"
-			"paddb	%2, %%xmm0\n\t"
 			"movdqa	%%xmm0, %%xmm1\n\t"
-			"pcmpgtb	%3, %%xmm1\n\t"
-			"pand	%4, %%xmm1\n\t"
+			"pcmpgtb	%2, %%xmm1\n\t"
+			"pand	%3, %%xmm1\n\t"
 			"psubb	%%xmm1, %%xmm0\n\t"
 			"movq	%%xmm0, %0"
 		: /* %0 */ "=m" (*dst)
 		: /* %1 */ "r" (d1),
-		  /* %2 */ "m" (vals[5][0]),
-		  /* %3 */ "m" (vals[6][0]),
-		  /* %4 */ "m" (vals[7][0])
+		  /* %2 */ "m" (vals[6].c[0]),
+		  /* %3 */ "m" (vals[7].c[0])
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
@@ -89,8 +92,8 @@ static unsigned char *do_40bit_BMI2(unsigned char *dst, uint64_t d1)
 # else
 static unsigned char *do_40bit_BMI2(unsigned char *dst, uint32_t a1, uint32_t a2)
 {
-	asm ("pdep %2, %1, %0" : "=r" (a1) : "r" (a1), "m" (vals[4][0]));
-	asm ("pdep %2, %1, %0" : "=r" (a2) : "r" (a2), "m" (vals[4][0]));
+	asm ("pdep %2, %1, %0" : "=r" (a1) : "r" (a1), "m" (vals[4].u[0]));
+	asm ("pdep %2, %1, %0" : "=r" (a2) : "r" (a2), "m" (vals[4].u[0]));
 	a1 = __swab32(a1);
 	a2 = __swab32(a2);
 
@@ -107,9 +110,9 @@ static unsigned char *do_40bit_BMI2(unsigned char *dst, uint32_t a1, uint32_t a2
 		: /* %0 */ "=m" (*dst)
 		: /* %1 */ "r" (a1),
 		  /* %2 */ "r" (a2),
-		  /* %2 */ "m" (vals[5][0]),
-		  /* %3 */ "m" (vals[6][0]),
-		  /* %4 */ "m" (vals[7][0])
+		  /* %3 */ "m" (vals[5].c[0]),
+		  /* %4 */ "m" (vals[6].c[0]),
+		  /* %5 */ "m" (vals[7].c[0])
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
@@ -244,7 +247,7 @@ static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4][0]),
+		: /* %3 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -358,7 +361,7 @@ static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *s
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4][0]),
+		: /* %3 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -545,7 +548,7 @@ static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *sr
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4][0]),
+		: /* %3 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -735,7 +738,7 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4][0]),
+		: /* %3 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -816,7 +819,7 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4][0]),
+		: /* %3 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
