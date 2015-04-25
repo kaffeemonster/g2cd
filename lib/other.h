@@ -254,7 +254,7 @@
 #if _GNUC_PREREQ (5,0)
 # define GCC_OVERFLOW_UMUL(a, b, res)  __builtin_umul_overflow(a, b, res)
 #else
-# define GCC_OVERFLOW_UMUL(a, b, res)  ({bool r = a <= (UINT_MAX / b) ? false : true; if(!r) *res = a * b; r;})
+# define GCC_OVERFLOW_UMUL(a, b, res)  ({bool r = a <= (UINT_MAX / b) ? false : true; *res = !r ? a * b : 0; r;})
 #endif
 
 #ifdef GOT_GOT
