@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   x86 implementation
  * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2014 Jan Seiffert
+ * Copyright (C) 2009-2015 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -1005,8 +1005,6 @@ static noinline uint32_t adler32_e16(uint32_t adler, const uint8_t *buf, unsigne
 	/* return recombined sums */
 	return (s2 << 16) | s1;
 }
-#endif
-
 
 static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, unsigned len)
 {
@@ -1014,6 +1012,7 @@ static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, unsigned
 		return adler32_e16(adler, buf, len);
 	return adler32_mod16(adler, buf, len);
 }
+#endif
 
 /* ========================================================================= */
 static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len)
