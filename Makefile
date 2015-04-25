@@ -498,7 +498,7 @@ dist: $(TARED_FILES)
 	@-$(RM) -rf `cat .fname` .fname
 
 distrevno: $(TARED_FILES)
-	@$(PORT_PR) $(DISTNAME)-r`bzr revno` > .fname
+	@$(PORT_PR) $(DISTNAME)-r`git describe --tags | sed 's/-/./g'` > .fname
 	@-$(RM) -rf `cat .fname`
 	@$(PORT_PR) "\tPREP[`cat .fname`]\n"
 	@mkdir `cat .fname`
