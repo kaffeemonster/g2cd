@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -999,7 +999,9 @@ static bool gwc_curl_prepare(void)
 	else
 # endif
 		do_an_setopt(CURLOPT_ENCODING, "");
+# if LIBCURL_VERSION_NUM >= 0x072100
 	do_an_setopt_missing_ok(CURLOPT_WILDCARDMATCH, 0l);
+# endif
 	do_an_setopt(CURLOPT_URL, act_gwc.request_url);
 
 	cmres = curl_multi_add_handle(act_gwc.mhandle, act_gwc.chandle);
