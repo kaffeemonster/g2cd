@@ -389,7 +389,7 @@ case "$host" in
 		AC_DEFINE(_XPG4_2, 1, because...)
 		AC_DEFINE(_XPG6, 1, because...);;
 	*arm*)
-		BIN2O_OPTS="-d sun -l 8";;
+		BIN2O_OPTS="-c -l 8";;
 	*)
 # is cygwin also coff?
 		;;
@@ -398,7 +398,7 @@ AC_SUBST(BIN2O_OPTS)
 
 HOSTCFLAGS="-std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__"
 case "$host" in
-	*-gnu)
+	*-gnu*)
 # This will prop. break on older glibc and any "abnormal" system, but glibc >= 2.20 need it.
 # They actively removed the _SVID_SOURCE thing, so stuff breaks if you do not define
 # the right replacement.

@@ -1,7 +1,7 @@
 /* bin2o.c
- * little helper to make a .o from (data)files
+ * little helper to make an .o from (data)files
  *
- * Copytight (c) 2006 - 2012 Jan Seiffert
+ * Copytight (c) 2006 - 2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -86,6 +86,7 @@ static int export_base_data;
 static int unhidden_tramp;
 static int rel_tramp;
 static int no_tramp;
+static char as_special_char = '@';
 #define PBUF_SIZE (1<<14)
 static char pbuf[PBUF_SIZE];
 /*               hex chars   "0x"        ", "        ".byte"                        "\n\t"                         reserve */
@@ -157,6 +158,8 @@ int main(int argc, char **argv)
 					rel_tramp = true;
 				else if('n' == argv[i][1])
 					no_tramp = true;
+				else if('c' == argv[i][1])
+					as_special_char = '%';
 				else
 					fprintf(stderr, "unknown option: '-%c'\n", argv[i][1]);
 				continue;
@@ -213,9 +216,11 @@ int main(int argc, char **argv)
 	if(GAS == as_dia)
 	{
 // TODO: only set gnu stack on __linux__ && __ELF__
-		if(!output_writestr(as_fd, "\t.section .note.GNU-stack,\"\",@progbits\n"))
+		int len = sprintf(pbuf, "\t.section .note.GNU-stack,\"\",%cprogbits\n", as_special_char);
+		if(!output_write(as_fd, pbuf, len))
 			goto out;
-		if(!output_writestr(as_fd, "\t.section .rodata,\"a\",@progbits\n"))
+		len = sprintf(pbuf, "\t.section .rodata,\"a\",%cprogbits\n", as_special_char);
+		if(!output_write(as_fd, pbuf, len))
 			goto out;
 	} else if(SUN == as_dia) {
 		if(!output_writestr(as_fd, "\t.section \".rodata\"\n"))
@@ -478,7 +483,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 		w_ptr += sprintf(w_ptr, "\t\t.type 60\n\t.endef\n");
 	} else {
 		w_ptr  = pbuf + sprintf(pbuf, "\n\t.size %s_base_data, . - %s_base_data\n", buf->name, buf->name);
-		w_ptr += sprintf(w_ptr, "\t.type %s_base_data, %cobject\n", buf->name, GAS == as_dia ? '@' : '#');
+		w_ptr += sprintf(w_ptr, "\t.type %s_base_data, %cobject\n", buf->name, GAS == as_dia ? as_special_char : '#');
 	}
 	if(!(export_base_data && no_tramp))
 	{
@@ -496,7 +501,7 @@ static int dump_region(struct xf_buf *buf, int as_fd)
 			w_ptr += sprintf(w_ptr, "\t\t.type 63\n\t.endef\n\n");
 		} else {
 			w_ptr += sprintf(w_ptr, "\t.size %s, . - %s\n", buf->name, buf->name);
-			w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? '@' : '#');
+			w_ptr += sprintf(w_ptr, "\t.type %s, %cobject\n\n", buf->name, GAS == as_dia ? as_special_char : '#');
 		}
 	}
 	if(!output_write(as_fd, pbuf, w_ptr - pbuf))
@@ -667,6 +672,7 @@ static int invokation(char *prg_name)
 	fputs("\t-u\t- unhidden trampoline\n", stderr);
 	fputs("\t-r\t- relative trampoline\n", stderr);
 	fputs("\t-n\t- no trampoline, only with -e\n", stderr);
+	fputs("\t-c\t- switch special char from '@' to '%' (ARM), only with GAS\n", stderr);
 	fputs("\tfile\t- the filename to \n", stderr);
 	return EXIT_FAILURE;
 }
