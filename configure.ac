@@ -397,11 +397,29 @@ esac
 AC_SUBST(BIN2O_OPTS)
 
 HOSTCFLAGS="-std=gnu99 -O1 -Wall -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L -D_XOPEN_SOURCE=700 -D_XPG6 -D__EXTENSIONS__"
-# TODO: some nice test for glibc 2.20 instead of a switch...
 case "$host" in
 	*-gnu)
-# this will prop. break on older glibc, but newer need it. Morons!
-		HOSTCFLAGS="$HOSTCFLAGS -D_DEFAULT_SOURCE";;
+# This will prop. break on older glibc and any "abnormal" system, but glibc >= 2.20 need it.
+# They actively removed the _SVID_SOURCE thing, so stuff breaks if you do not define
+# the right replacement.
+# Morons!
+		HOSTCFLAGS="$HOSTCFLAGS -D_SVID_SOURCE"
+		AC_MSG_CHECKING([for host glibc version])
+		glcversion=`getconf GNU_LIBC_VERSION`
+		if test $? == 0 ; then
+			glcversion=`echo $glcversion | tr -c -d '0-9'`
+			if test x"$glcversion" != "x" ; then
+				AC_MSG_RESULT([$glcversion])
+				if test "$glcversion" -ge 219 ; then
+					HOSTCFLAGS="$HOSTCFLAGS -D_DEFAULT_SOURCE"
+				fi
+			else
+				AC_MSG_RESULT([could not find])
+			fi
+		else
+			AC_MSG_RESULT([could not find])
+		fi
+		;;
 	*)
 		HOSTCFLAGS="$HOSTCFLAGS -D_SVID_SOURCE";;
 esac
@@ -637,9 +655,9 @@ if test x"$disable_libcurl" = xno; then
 #	else
 # test curl-config
 # curl-config drags in everything and the kitchen sink
-# it a classic example of a foo-config script, kind of
+# it's a classic example of a foo-config script, kind of
 # why pkg-conf exists.
-# libcurl even provides a libcurl.m4 to help use it,
+# libcurl even provides a libcurl.m4 to help use with it,
 # but it only uses curl-config in the background
 # m4_include([m4/libcurl.m4])
 # LIBCURL_CHECK_CONFIG([yes], [7.19.4],[],[])
