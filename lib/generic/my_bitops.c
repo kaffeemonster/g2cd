@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, generic fallback/nop
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -34,7 +34,9 @@ __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
 	return NULL; /* die, sucker, die! */
 }
 
-__init void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l)
+__init void patch_instruction(void *where GCC_ATTR_UNUSED_PARAM,
+                              const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
+                              size_t l GCC_ATTR_UNUSED_PARAM)
 {
 }
 
