@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   arm implementation
  * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 2009-2015 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -18,8 +18,8 @@
 
 #define NO_DIVIDE
 #if defined(ARM_NEON_SANE) || \
-    defined(ARM_IWMMXT_SANE) || \
-    defined(ARM_DSP_SANE)
+    defined(ARM_IWMMXT_SANE)
+//  defined(ARM_DSP_SANE)
 # define HAVE_ADLER32_VEC
 static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
 # if defined(ARM_NEON_SANE) || defined (ARM_IWMMXT_SANE)
