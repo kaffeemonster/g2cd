@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2014 Jan Seiffert
+ * Copyright (c) 2008-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *

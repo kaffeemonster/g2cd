@@ -2,7 +2,7 @@
  * strreverse_l.c
  * strreverse_l, x86 implementation
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -171,8 +171,8 @@ static void strreverse_l_AVX(char *begin, char *end)
 			"vlddqu	-15(%1), %%xmm0\n\t"       /* fetch input data */
 			"vlddqu	(%0), %%xmm2\n\t"
 			/* swab endianess */
-			"vpshufb	%%ymm0, %%ymm4, %%ymm0\n\t"
-			"vpshufb	%%ymm2, %%ymm4, %%ymm2\n\t"
+			"vpshufb	%%xmm0, %%xmm4, %%xmm0\n\t"
+			"vpshufb	%%xmm2, %%xmm4, %%xmm2\n\t"
 			"vmovdqu	%%xmm0, (%0)\n\t"
 			"add	$16, %0\n\t"
 			"vmovdqu	%%xmm2, -15(%1)\n\t"
