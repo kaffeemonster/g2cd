@@ -2,7 +2,7 @@
  * x86.h
  * some x86 defines
  *
- * Copyright (c) 2006-2012 Jan Seiffert
+ * Copyright (c) 2006-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -42,7 +42,6 @@
 #undef PREFETCHW
 #undef MMX_STORE
 #undef MMX_FENCE
-#undef SIZE_T_BYTE
 #undef MAKE_PREFETCH
 
 #define MAKE_PREFETCH(x, y) x #y "\n\t"
@@ -119,31 +118,34 @@
 # define PREFETCHW(x)
 #endif
 
-#ifdef __i386__
-# define SIZE_T_BYTE	4
-# define SIZE_T_SHIFT	2
-# define NOT_MEM	"notl	"
-# define PICREG_R %%ebx
-# define PICREG "%%ebx"
-typedef size_t nreg_t;
-# define NOST SOST
-# define PTRP ""
-#else
-# define SIZE_T_BYTE	8
-# define SIZE_T_SHIFT	3
-# define NOT_MEM	"notq	"
-# define PICREG_R %%rbx
-# define PICREG "%%rbx"
-# ifdef __ILP32__
-typedef unsigned long long nreg_t;
-#  define NOST (sizeof nreg_t)
-#  define MY_X32
-#  define PTRP "q"
-# else
+#ifndef X86_H
+#define X86_H
+# ifdef __i386__
+#  define SIZE_T_BYTE	4
+#  define SIZE_T_SHIFT	2
+#  define NOT_MEM	"notl	"
+#  define PICREG_R %%ebx
+#  define PICREG "%%ebx"
 typedef size_t nreg_t;
 #  define NOST SOST
-#  define MY_AMD64
 #  define PTRP ""
+# else
+#  define SIZE_T_BYTE	8
+#  define SIZE_T_SHIFT	3
+#  define NOT_MEM	"notq	"
+#  define PICREG_R %%rbx
+#  define PICREG "%%rbx"
+#  ifdef __ILP32__
+typedef unsigned long long nreg_t;
+#   define NOST (sizeof nreg_t)
+#   define MY_X32
+#   define PTRP "q"
+#  else
+typedef size_t nreg_t;
+#   define NOST SOST
+#   define MY_AMD64
+#   define PTRP ""
+#  endif
 # endif
 #endif
 
