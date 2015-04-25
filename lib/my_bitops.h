@@ -2,7 +2,7 @@
  * my_bitops.h
  * header-file for some global usefull bitbanging functions
  *
- * Copyright (c) 2004-2014 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *

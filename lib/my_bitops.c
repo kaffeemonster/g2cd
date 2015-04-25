@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops
  *
- * Copyright (c) 2008-2014 Jan Seiffert
+ * Copyright (c) 2008-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -88,6 +88,7 @@
 
 #if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
 # include "my_pthread.h"
+# include <sched.h>
 #endif
 
 #ifndef _SC_NPROCESSORS_ONLN
@@ -118,7 +119,8 @@ unsigned get_cpus_online(void)
 	if(pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0) == 1)
 		return (unsigned)psd.psd_proc_cnt;
 #endif
-#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1
+	/* CPU_COUNT is a gnu extention, avail after glibc2.6 */
+#if HAVE_PTHREAD_SETAFFINITY_NP-0 == 1 && defined CPU_COUNT
 	{
 		/*
 		 * ask the affinity stuff, we may be confined to a smaller
