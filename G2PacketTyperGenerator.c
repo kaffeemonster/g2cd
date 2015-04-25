@@ -2,7 +2,7 @@
  * G2PacketTyperGenerator.c
  * Automatic generator for the G2-Packet typer tables
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -117,7 +117,7 @@ static void new_p_table(void)
 	base_num = back_index = PT_MAXIMUM-1;
 
 	/* add all packets to the array */
-	for(i = 1, used = 0, back_index; i < PT_MAXIMUM; i++)
+	for(i = 1, used = 0; i < PT_MAXIMUM; i++)
 	{
 		memcpy(&f[i-1].start, &p_names[i].c[0], 4);
 		used++;
@@ -196,6 +196,51 @@ static void new_p_table(void)
 		for(j = 0; j < used; j++) {
 			if(f[j].idx)
 				f[j].idx--;
+		}
+	}
+	if(verbose)
+	{
+		for(i = 0; i < used; i++)
+		{
+			printf("%3.0u: \"%-4.4s\"\tt: %u\ti: %u\tw: %lli\n",
+					i, (const char *)&f[i].start, f[i].type, f[i].idx,
+					f[i].weight);
+		}
+		puts("----------------------------------------");
+	}
+
+	/* check if we need to look at the second 4 bytes */
+	for(i = 1; i < base_num; i++)
+	{
+		char c;
+		unsigned x = f[i-1].start, j;
+
+		if(!host_is_bigendian())
+			x = swab32(x);
+		c = x & 0xff;
+
+		if(c == 0)
+			continue;
+
+		j = f[i-1].idx;
+
+		if(f[j].start != 0)
+			continue;
+
+		if(f[j].idx != 0)
+			continue;
+
+		f[i-1].type = f[j].type;
+		f[i-1].idx = 0;
+
+		if(j + 1 < used)
+			memmove(&f[j], &f[j+1], (used - (j+1)) * sizeof(*f));
+		used--;
+		for(x = 0; x < used; x++) {
+			if(f[x].idx < j)
+				continue;
+			if(f[x].idx)
+				f[x].idx--;
 		}
 	}
 	if(verbose)

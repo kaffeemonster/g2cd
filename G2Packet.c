@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -478,8 +478,10 @@ void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 
 	if(likely(mval == key))
 	{
-		if(likely(g2_ptyper_table[mid].t != PT_UNKNOWN))
-			packet->type = g2_ptyper_table[mid].t;
+		if(likely(g2_ptyper_table[mid].t != PT_UNKNOWN)) {
+			if(likely(type[1] == 0)) /* make sure other 4 byte are clear */
+				packet->type = g2_ptyper_table[mid].t;
+		}
 		else
 		{
 			key = type[1];
