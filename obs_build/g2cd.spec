@@ -1,7 +1,7 @@
 # Defines a constant that is used later by the spec file.
 %define shortname g2cd
 %define ver_real 0.0.00.11
-%define ver_revno r428
+%define ver_revno 358.gdb8d309
 
 # Name, brief description, and version 
 Summary: A G2 hub only implementation
@@ -9,7 +9,7 @@ Name: %{shortname}
 Version: %{ver_real}.%{ver_revno}
 Release: 1
 License: GPL-3.0
-%define fullname %{name}-%{ver_real}-%{ver_revno}
+%define fullname %{name}-%{ver_real}-r%{ver_real}.%{ver_revno}
 # norootforbuild
 
 # Define buildroot
@@ -31,42 +31,53 @@ Vendor: Jan Seiffert
 # dependencies.
 AutoReq: yes
 
+BuildRequires: gcc
+BuildRequires: zlib-devel
+%if %{?rhel}%{!?rhel:0} >= 7
+BuildRequires: gdbm-devel
+%else
+BuildRequires: db-devel
+%endif
 # Mandriva 2009.1 is broken, it can not decide which db-devel to install by default
 %if 0%{?mdkversion}
 %if 0%{?mdkversion} == 200910
 %ifarch x86_64
-BuildRequires: gcc zlib-devel db-devel lib64db4.7-devel dbus-devel libdbus-1-devel libpcap-devel python pkgconfig ncurses-devel
+BuildRequires: lib64db4.7-devel dbus-devel libdbus-1-devel libpcap-devel pkgconfig
 %else
-BuildRequires: gcc zlib-devel db-devel libdb4.7-devel dbus-devel libdbus-1-devel libpcap-devel python pkgconfig ncurses-devel
+BuildRequires: libdb4.7-devel dbus-devel libdbus-1-devel libpcap-devel pkgconfig
 # endif arch
 %endif
 %else
-BuildRequires: gcc zlib-devel db-devel dbus-devel libdbus-1-devel libpcap-devel python pkgconfig ncurses-devel
+BuildRequires: dbus-devel libdbus-1-devel libpcap-devel pkgconfig
 # endif mdkversion ==
 %endif
 # else mdkversion
 %else
 %if 0%{?suse_version}
 %if 0%{?suse_version} >= 1000
-BuildRequires: gcc zlib-devel db-devel dbus-1-devel libpcap-devel python pkg-config ncurses-devel
+BuildRequires: dbus-1-devel libpcap-devel pkg-config
 %else
-BuildRequires: gcc zlib-devel db-devel libpcap-devel python ncurses-devel
+BuildRequires: libpcap-devel
 %endif
 # else suse_version
 %else
 %if 0%{?rhel_version}
 %if 0%{?rhel_version} >= 500 && 0%{?rhel_version} < 600
-BuildRequires: gcc zlib-devel db-devel dbus-devel libpcap-devel python pkgconfig ncurses-devel
+BuildRequires: dbus-devel libpcap-devel pkgconfig
 %else
-BuildRequires: gcc zlib-devel db-devel dbus-devel python pkgconfig ncurses-devel
+BuildRequires: dbus-devel pkgconfig
 %endif
 %else
-BuildRequires: gcc zlib-devel db-devel dbus-devel libpcap-devel python pkgconfig ncurses-devel
+BuildRequires: dbus-devel libpcap-devel pkgconfig
 %endif
 # endif suse_version
 %endif
 # endif mdkversion
 %endif
+
+BuildRequires: curl-devel
+BuildRequires: python
+BuildRequires: ncurses-devel
 
 # In-depth description.
 %description
