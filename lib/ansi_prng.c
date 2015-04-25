@@ -85,6 +85,7 @@ static void xor_vectors(const union dvector *in1, const union dvector *in2, unio
 
 static void increment_counter(union dvector *ctr, uint32_t incr)
 {
+	uint32_t t;
 #if RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__i386__)
 	asm(
 		"addl	%2,    %1\n\t"
@@ -96,6 +97,18 @@ static void increment_counter(union dvector *ctr, uint32_t incr)
 		  /* %2 */ "r" (incr)
 	);
 #elif RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__x86_64__)
+	uint64_t l = ctr->v[0], h = ctr->v[1];
+	asm(
+		"addq	%q4, %0\n\t"
+		"adcq	$0,  %1\n\t"
+		: /* %0 */ "=r" (l),
+		  /* %1 */ "=r" (h)
+		: /* %2 */ "0" (ctr->v[0]),
+		  /* %3 */ "1" (ctr->v[1]),
+		  /* %4 */ "r" (incr)
+	);
+	ctr->v[0] = l; ctr->v[1] = h;
+#if 0
 	asm(
 		"addq	%q2,   %1\n\t"
 		"adcq	$0,  8+%1\n\t"
@@ -103,6 +116,7 @@ static void increment_counter(union dvector *ctr, uint32_t incr)
 		: /* %1 */ "m" (*ctr->v),
 		  /* %2 */ "r" (incr)
 	);
+#endif
 #else
 	unsigned i;
 # ifndef HAVE_TIMODE
@@ -121,6 +135,9 @@ static void increment_counter(union dvector *ctr, uint32_t incr)
 	}
 # endif
 #endif
+	t = ctr->u[0] ^ (ctr->u[0] << 11);
+	ctr->u[0] = ctr->u[1]; ctr->u[1] = ctr->u[2]; ctr->u[2] = ctr->u[3];
+	ctr->u[3] ^= (ctr->u[3] >> 19) ^ t ^ (t >> 8);
 }
 
 static always_inline void butterfly_one(uint32_t *d, unsigned idx)
@@ -208,17 +225,17 @@ static void more_random_bytes_rctx_int(struct rctx *rctx)
 	union dvector tmp, I;
 
 	/* encrypt counter, get intermediate I */
-	aes_ecb_encrypt(&rctx->actx, &I, &rctx->DT);
+	aes_ecb_encrypt256(&rctx->actx, &I, &rctx->DT);
 
 	/* xor I with V, encrypt to get output */
 	xor_vectors(&I, &rctx->V, &tmp);
-	aes_ecb_encrypt(&rctx->actx, &rctx->rand_data, &tmp);
+	aes_ecb_encrypt256(&rctx->actx, &rctx->rand_data, &tmp);
 
 	butterfly(&rctx->rand_data, rctx->V.u[0]);
 	butterfly(&rctx->DT, rctx->V.u[1]);
 	/* xor random data with I, encrypt to get new V */
 	xor_vectors(&rctx->rand_data, &I, &tmp);
-	aes_ecb_encrypt(&rctx->actx, &rctx->V, &tmp);
+	aes_ecb_encrypt256(&rctx->actx, &rctx->V, &tmp);
 
 	/*
 	 * update counter
@@ -309,7 +326,7 @@ void random_bytes_rekey(const char data[RAND_BLOCK_BYTE * 2])
 	/* seed adler from a little bit sbox data */
 	rctx->adler = adler32(1, get_text() - (ctx.ne[2].u[1] % 8192), 4096);
 	/* create a new random key */
-	aes_encrypt_key128(&rctx->actx, &ctx.ne[0]);
+	aes_encrypt_key256(&rctx->actx, &ctx.ne[0]);
 
 	/* fuzz internal vectors */
 	/* set the initial vector state to some random value */
@@ -336,7 +353,10 @@ void random_bytes_rekey(const char data[RAND_BLOCK_BYTE * 2])
 	 * from the random output, the random data entropy
 	 * for the next rekeying is not simply guessable
 	 */
-	aes_encrypt_key128(&rctx->actx, &rctx->rand_data);
+	memcpy(&ni[0], rctx->rand_data.c, sizeof(ni[0]));
+	more_random_bytes_rctx(rctx);
+	memcpy(&ni[1], rctx->rand_data.c, sizeof(ni[1]));
+	aes_encrypt_key256(&rctx->actx, ni);
 
 	memset(&ni[0], 0, sizeof(*ni) * 4);
 

@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, arm implementation
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -102,6 +102,7 @@ static const struct
 
 static inline uint8x16_t pshufb(uint8x16_t x, uint8x16_t idx)
 {
+#if 1
 	uint8x16_t ret;
 	asm ("vtbl.8 %e0, %h1, %e2"
 		: /* %0 */ "=w" (ret)
@@ -114,13 +115,7 @@ static inline uint8x16_t pshufb(uint8x16_t x, uint8x16_t idx)
 	 *
 	 * scheduling still sucks, because the compiler does not know
 	 * that this are expensive instructions (2 cycles, 3 to result,
-	 * 7 to writeback (whatever that means...)), but otherwise the
-	 * compiler would totaly f*** it up:
-	 * gcc is to stupid to exploit that d & q regs alias,
-	 * this vget_* and vcombine_* stuff generates aweful
-	 * instruction sequences...
-	 *
-	 * return vcombine_u8(vtbl2_u8(x, vget_low_u8(idx)), vtbl2_u8(x, vget_high_u8(idx)));
+	 * 7 to writeback (whatever that means...)), ...
 	 */
 	asm ("vtbl.8 %f0, %h1, %f2"
 		: /* %0 */ "=w" (ret)
@@ -129,13 +124,192 @@ static inline uint8x16_t pshufb(uint8x16_t x, uint8x16_t idx)
 		  /* %3 */ "0" (ret)
 	);
 	return ret;
+#else
+	/*
+	 * ... but otherwise the compiler would totaly f*** it up:
+	 * gcc is to stupid to exploit that d & q regs alias, this vget_*
+	 * and vcombine_* stuff generates aweful instruction sequences.
+	 *
+	 * Result is spills and moves all over the place, because he runs
+	 * out of regs, because he wants to move stuff around, because he
+	 * can't keep an uint8x16 in a proper pair but instead really emits
+	 * an instruction on combine or get_low/high instead of simply aliasing.
+	 *
+	 * If the compiler would just keep it in his pants, code would be
+	 * nice, clean, short and mostly spill free, then proper sheduling
+	 * could be done.
+	 *
+	 * Example, code above:
+	 *  vrshr.u8        q11, q11, #4
+	 *  vand    q12, q12, q14
+	 *  subs    ip, ip, #1
+	 *  veor    q9, q12, q11
+	 *  add     r3, r5, r2, lsl #4
+	 *  vtbl.8  d20, {d26-d27}, d24
+	 *  vtbl.8  d0, {d16-d17}, d18
+	 *  vtbl.8  d21, {d26-d27}, d25
+	 *  vtbl.8  d1, {d16-d17}, d19
+	 *  vtbl.8  d24, {d16-d17}, d22
+	 *  veor    q0, q10, q0
+	 *  vtbl.8  d25, {d16-d17}, d23
+	 *  add     r4, r2, #1
+	 *  veor    q10, q10, q12
+	 *  vtbl.8  d22, {d16-d17}, d0
+	 *  vtbl.8  d24, {d16-d17}, d20
+	 *  vtbl.8  d23, {d16-d17}, d1
+	 *  vtbl.8  d25, {d16-d17}, d21
+	 *  veor    q11, q9, q11
+	 *  mov     r6, r3
+	 *  veor    q9, q9, q12
+	 *
+	 * only loads from the constant pool (pc relative).
+	 *
+	 * have the compiler have it's way:
+	 *  vrshr.u8        q1, q1, #4
+	 *  vand    q3, q3, q5
+	 *  vorr    d8, d16, d16
+	 *  add     r3, sp, #48     ; 0x30
+	 *  vorr    d9, d17, d17
+	 *  veor    q5, q3, q1
+	 *  vtbl.8  d28, {d8-d9}, d3
+	 *  vtbl.8  d29, {d16-d17}, d2
+	 *  vorr    d0, d18, d18
+	 *  vstr    d16, [sp, #48]  ; 0x30
+	 *  vorr    d1, d19, d19
+	 *  vstr    d17, [sp, #56]  ; 0x38
+	 *  vld1.64 {d2-d3}, [r3 :64]
+	 *  add     r3, sp, #64     ; 0x40
+	 *  vtbl.8  d30, {d0-d1}, d7
+	 *  vtbl.8  d27, {d2-d3}, d10
+	 *  vstr    d16, [sp, #64]  ; 0x40
+	 *  vstr    d17, [sp, #72]  ; 0x48
+	 *  vtbl.8  d31, {d18-d19}, d6
+	 *  vld1.64 {d2-d3}, [r3 :64]
+	 *  vswp    d30, d31
+	 *  vtbl.8  d26, {d2-d3}, d11
+	 *  add     r3, sp, #16
+	 *  vswp    d28, d29
+	 *  veor    q14, q15, q14
+	 *  vstr    d16, [sp, #16]
+	 *  vswp    d26, d27
+	 *  vstr    d17, [sp, #24]
+	 *  vld1.64 {d2-d3}, [r3 :64]
+	 *  add     r3, sp, #32
+	 *  veor    q13, q15, q13
+	 *  vtbl.8  d7, {d2-d3}, d28
+	 *  vstr    d16, [sp, #32]
+	 *  vorr    d14, d16, d16
+	 *  vorr    d12, d8, d8
+	 *  vstr    d17, [sp, #40]  ; 0x28
+	 *  vorr    d15, d17, d17
+	 *  vld1.64 {d2-d3}, [r3 :64]
+	 *  vorr    d13, d17, d17
+	 *  vtbl.8  d29, {d2-d3}, d29
+	 *  vtbl.8  d28, {d14-d15}, d26
+	 *  subs    ip, ip, #1
+	 *  vtbl.8  d26, {d12-d13}, d27
+	 *  vorr    d30, d7, d7
+	 *  vorr    d31, d29, d29
+	 *  vorr    d2, d28, d28
+	 *  vorr    d3, d26, d26
+	 *  veor    q15, q5, q15
+	 *  veor    q1, q5, q
+	 *
+	 * Silly much?
+	 * And that is just a short excerpt, it is even worse in the
+	 * rest of the code.
+	 */
+	#define uint8x16_to_8x8x2(v) ((uint8x8x2_t){{vget_low_u8(v), vget_high_u8(v)}})
+	return vcombine_u8(vtbl2_u8(uint8x16_to_8x8x2(x), vget_low_u8(idx)),
+	                   vtbl2_u8(uint8x16_to_8x8x2(x), vget_high_u8(idx)));
+#endif
+}
+
+static inline uint8x16_t aes_schedule_round_low(uint8x16_t key, uint8x16_t kt)
+{
+	uint8x16_t v_0 = (uint8x16_t){0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	uint8x16_t klo, khi, klinv, khinv, khlinv;
+
+	/* smear kt */
+	kt     = veorq_u8(vextq_u8(v_0, kt, 16 - 4), kt);
+	kt     = veorq_u8(vextq_u8(v_0, kt, 16 - 8), kt);
+	kt     = veorq_u8(kt, aes_consts.s63);
+	/* subbytes */
+	khi    = vrshrq_n_u8(vbicq_u8(key, aes_consts.s0f), 4);
+	klo    = vandq_u8(key, aes_consts.s0f);
+	klinv  = pshufb(aes_consts.invhi, klo);
+	klo    = veorq_u8(klo, khi);
+	khinv  = pshufb(aes_consts.invlo, khi);
+	khinv  = veorq_u8(khinv, klinv);
+	khlinv = pshufb(aes_consts.invlo, klo);
+	khlinv = veorq_u8(khlinv, klinv);
+	khinv  = pshufb(aes_consts.invlo, khinv);
+	khinv  = veorq_u8(khinv, klo);
+	khlinv = pshufb(aes_consts.invlo, khlinv);
+	khlinv = veorq_u8(khlinv, khi);
+	khinv  = pshufb(aes_consts.sb1lo, khinv);
+	khlinv = pshufb(aes_consts.sb1hi, khlinv);
+	key    = veorq_u8(khinv, khlinv);
+	/* add in smeared stuff */
+	return   veorq_u8(key, kt);
+}
+
+static inline uint8x16_t aes_schedule_round(uint8x16_t key, uint8x16_t kt, uint8x16_t *rcon)
+{
+	uint8x16_t v_0 = (uint8x16_t){0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+	/* extract rcon */
+	kt      = veorq_u8(vextq_u8(*rcon, v_0, 15), kt);
+	*rcon   = vextq_u8(*rcon, *rcon, 15);
+	/* rotate */
+	key    = (uint8x16_t)vdupq_lane_u32((uint32x2_t)vget_high_u8(key), 1);
+	key    = vextq_u8(key, key, 1);
+	return   aes_schedule_round_low(key, kt);
+}
+
+static inline uint8x16_t aes_schedule_transform(uint8x16_t key)
+{
+	uint8x16_t khi, klo;
+
+	/* shedule transform */
+	khi = vrshrq_n_u8(vbicq_u8(key, aes_consts.s0f), 4);
+	klo = vandq_u8(key, aes_consts.s0f);
+	klo = pshufb(aes_consts.iptlo, klo);
+	khi = pshufb(aes_consts.ipthi, khi);
+	return veorq_u8(khi, klo);
+}
+
+static inline uint8x16_t aes_schedule_mangle(uint8x16_t key, unsigned *n)
+{
+	uint8x16_t klo, khi;
+
+	/* write output */
+	klo = key;
+	klo = veorq_u8(aes_consts.s63, klo);
+	klo = pshufb(aes_consts.mcf[0], klo);
+	khi = klo;
+	klo = pshufb(aes_consts.mcf[0], klo);
+	khi = veorq_u8(khi, klo);
+	klo = pshufb(aes_consts.mcf[0], klo);
+	khi = veorq_u8(khi, klo);
+	khi = pshufb(khi, aes_consts.sr[*n--]);
+	*n &= 2;
+	return khi;
+}
+
+static inline uint8x16_t aes_schedule_mangle_last(uint8x16_t key, unsigned n)
+{
+	/* schedule last round key */
+	key = pshufb(key, aes_consts.sr[n]);
+	key = veorq_u8(aes_consts.s63, key);
+
+	return aes_schedule_transform(key);
 }
 
 void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 {
-	uint8x16_t v_0;
-	uint8x16_t key, klo, khi, kt, klinv, khinv, khlinv, *key_target, rcon;
-	int rounds = 10, n = 1;
+	uint8x16_t key, kt, *key_target, rcon;
+	unsigned rounds = 10, n = 1;
 
 	key_target = (uint8x16_t *)ctx->k;
 	prefetchw(key_target);
@@ -144,82 +318,57 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 	prefetch(aes_consts.mcf);
 	prefetch(aes_consts.sr);
 
-	v_0   = (uint8x16_t){0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	rcon  = aes_consts.rcon;
 	memcpy(&key, in, sizeof(key)); /* load key */
 	/* input transform */
-	/* shedule transform */
-	khi = vrshrq_n_u8(vbicq_u8(key, aes_consts.s0f), 4);
-	klo = vandq_u8(key, aes_consts.s0f);
-	klo = pshufb(aes_consts.iptlo, klo);
-	khi = pshufb(aes_consts.ipthi, khi);
-	key = veorq_u8(khi, klo);
-	kt  = key;
+	kt = aes_schedule_transform(key);
 	/* output zeroth round key */
 	*key_target = key;
 	do
 	{
-		/* extract rcon */
-		kt     = veorq_u8(vextq_u8(rcon, v_0, 15), kt);
-		rcon   = vextq_u8(rcon, rcon, 15);
-		/* rotate */
-		key    = (uint8x16_t)vdupq_lane_u32((uint32x2_t)vget_high_u8(key), 1);
-		key    = vextq_u8(key, key, 1);
-		/* smear kt */
-		kt     = veorq_u8(vextq_u8(v_0, kt, 16 - 4), kt);
-		kt     = veorq_u8(vextq_u8(v_0, kt, 16 - 8), kt);
-		kt     = veorq_u8(kt, aes_consts.s63);
-		/* subbytes */
-		khi    = vrshrq_n_u8(vbicq_u8(key, aes_consts.s0f), 4);
-		klo    = vandq_u8(key, aes_consts.s0f);
-		klinv  = pshufb(aes_consts.invhi, klo);
-		klo    = veorq_u8(klo, khi);
-		khinv  = pshufb(aes_consts.invlo, khi);
-		khinv  = veorq_u8(khinv, klinv);
-		khlinv = pshufb(aes_consts.invlo, klo);
-		khlinv = veorq_u8(khlinv, klinv);
-		khinv  = pshufb(aes_consts.invlo, khinv);
-		khinv  = veorq_u8(khinv, klo);
-		khlinv = pshufb(aes_consts.invlo, khlinv);
-		khlinv = veorq_u8(khlinv, khi);
-		khinv  = pshufb(aes_consts.sb1lo, khinv);
-		khlinv = pshufb(aes_consts.sb1hi, khlinv);
-		key    = veorq_u8(khinv, khlinv);
-		/* add in smeared stuff */
-		key    = veorq_u8(key, kt);
-		kt     = key;
+		key = aes_schedule_round(key, kt, &rcon);
 		if(--rounds == 0)
 			break;
-		/* write output */
-		klo = key;
-		klo = veorq_u8(aes_consts.s63, klo);
-		klo = pshufb(aes_consts.mcf[0], klo);
-		khi = klo;
-		klo = pshufb(aes_consts.mcf[0], klo);
-		khi = veorq_u8(khi, klo);
-		klo = pshufb(aes_consts.mcf[0], klo);
-		khi = veorq_u8(khi, klo);
-		khi = pshufb(khi, aes_consts.sr[n--]);
-		n  &= 2;
-		*++key_target = khi;
+		*++key_target = aes_schedule_mangle(key, &n);
 	} while(1);
-	/* schedule last round key */
-	key = pshufb(key, aes_consts.sr[n]);
-	key = veorq_u8(aes_consts.s63, key);
-	khi = vrshrq_n_u8(vbicq_u8(key, aes_consts.s0f), 4);
-	klo = vandq_u8(key, aes_consts.s0f);
-	klo = pshufb(aes_consts.optlo, klo);
-	khi = pshufb(aes_consts.opthi, khi);
-	key = veorq_u8(khi, klo);
-	*++key_target = key;
+	*++key_target = aes_schedule_mangle_last(key, n);
 }
 
-void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+void aes_encrypt_key256(struct aes_encrypt_ctx *ctx, const void *in)
 {
-	uint8x16_t v_0;
+	uint8x16_t key_lo, key_hi, *key_target, rcon;
+	unsigned rounds = 7, n = 1;
+
+	key_target = (uint8x16_t *)ctx->k;
+	prefetchw(key_target);
+	prefetch(&aes_consts);
+	prefetch(&aes_consts.iptlo);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	rcon  = aes_consts.rcon;
+	memcpy(&key_hi, in, sizeof(key_hi)); /* load key */
+	memcpy(&key_lo, ((const char *)in)+sizeof(key_hi), sizeof(key_lo)); /* load key */
+
+	key_hi = aes_schedule_transform(key_hi);
+	key_lo = aes_schedule_transform(key_lo);
+	do
+	{
+		*++key_target = aes_schedule_mangle(key_lo, &n);
+		key_hi = aes_schedule_round(key_lo, key_hi, &rcon);
+		if(--rounds == 0)
+			break;
+		*++key_target = aes_schedule_mangle(key_hi, &n);
+		key_lo = aes_schedule_round_low((uint8x16_t)vdupq_lane_u32((uint32x2_t)vget_high_u8(key_hi), 1), key_lo);
+	} while(1);
+	*++key_target = aes_schedule_mangle_last(key_hi, n);
+}
+
+static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
+{
 	const uint8x16_t *key_store;
 	uint8x16_t in, ilo, ihi, ilhinv, ihlinv, ihllinv;
-	int rounds = 10 - 1, n = 1;
+	int rounds = mrounds, n = 1;
 
 	key_store = (const uint8x16_t *)ctx->k;
 
@@ -229,7 +378,6 @@ void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *
 	prefetch(aes_consts.mcf);
 	prefetch(aes_consts.sr);
 
-	v_0   = (uint8x16_t){0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	memcpy(&in, din, sizeof(in));
 
 	ihi = vrshrq_n_u8(vbicq_u8(in, aes_consts.s0f), 4);
@@ -279,6 +427,16 @@ start_round:
 	ilo     = veorq_u8(ilo, ihllinv);
 	in      = pshufb(ilo, aes_consts.sr[n]);
 	memcpy(dout, &in, sizeof(in));
+}
+
+void aes_ecb_encrypt128(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+{
+	aes_ecb_encrypt(ctx, dout, din, 10-1);
+}
+
+void aes_ecb_encrypt256(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+{
+	aes_ecb_encrypt(ctx, dout, din, 14-1);
 }
 
 /*@unused@*/

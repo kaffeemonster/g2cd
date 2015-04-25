@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, generic implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -133,6 +133,48 @@ F_NAME(void, aes_encrypt_key128, _generic) (struct aes_encrypt_ctx *ctx, const v
 	}
 }
 
+F_NAME(void, aes_encrypt_key256, _generic) (struct aes_encrypt_ctx *ctx, const void *in)
+{
+	const uint32_t *key = in;
+	unsigned i;
+	uint32_t t;
+
+	memcpy(ctx->k, key, 32);
+
+	t = ctx->k[7];
+	for (i = 0; i < 6; ++i)
+	{
+		t = ror32(t, 8);
+		t = ls_box(t) ^ rco_tab[i];
+		t ^= ctx->k[8 * i];
+		ctx->k[8 * i + 8] = t;
+		t ^= ctx->k[8 * i + 1];
+		ctx->k[8 * i + 9] = t;
+		t ^= ctx->k[8 * i + 2];
+		ctx->k[8 * i + 10] = t;
+		t ^= ctx->k[8 * i + 3];
+		ctx->k[8 * i + 11] = t;
+		t  = ctx->k[8 * i + 4] ^ ls_box(t);
+		ctx->k[8 * i + 12] = t;
+		t ^= ctx->k[8 * i + 5];
+		ctx->k[8 * i + 13] = t;
+		t ^= ctx->k[8 * i + 6];
+		ctx->k[8 * i + 14] = t;
+		t ^= ctx->k[8 * i + 7];
+		ctx->k[8 * i + 15] = t;
+	}
+	t = ror32(t, 8);
+	t = ls_box(t) ^ rco_tab[i];
+	t ^= ctx->k[8 * i];
+	ctx->k[8 * i + 8] = t;
+	t ^= ctx->k[8 * i + 1];
+	ctx->k[8 * i + 9] = t;
+	t ^= ctx->k[8 * i + 2];
+	ctx->k[8 * i + 10] = t;
+	t ^= ctx->k[8 * i + 3];
+	ctx->k[8 * i + 11] = t;
+}
+
 #define f_rn(bo, bi, n, k) \
 	do { \
 		bo[n] = aes_ft_tab[0][byte(bi[n], 0)] ^ \
@@ -166,7 +208,7 @@ F_NAME(void, aes_encrypt_key128, _generic) (struct aes_encrypt_ctx *ctx, const v
 		f_rl(bo, bi, 3, k); \
 	} while (0)
 
-F_NAME(void, aes_ecb_encrypt, _generic) (const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+static noinline void aes_ecb_encrypt_generic(const struct aes_encrypt_ctx *ctx, void *out, const void *in, unsigned key_len)
 {
 	uint32_t b0[4], b1[4];
 	const uint32_t *kp = ctx->k + 4;
@@ -176,6 +218,16 @@ F_NAME(void, aes_ecb_encrypt, _generic) (const struct aes_encrypt_ctx *ctx, void
 	b0[1] ^= ctx->k[1];
 	b0[2] ^= ctx->k[2];
 	b0[3] ^= ctx->k[3];
+
+	if (key_len > 24) {
+		f_nround(b1, b0, kp);
+		f_nround(b0, b1, kp);
+	}
+
+	if (key_len > 16) {
+		f_nround(b1, b0, kp);
+		f_nround(b0, b1, kp);
+	}
 
 	f_nround(b1, b0, kp);
 	f_nround(b0, b1, kp);
@@ -189,6 +241,16 @@ F_NAME(void, aes_ecb_encrypt, _generic) (const struct aes_encrypt_ctx *ctx, void
 	f_lround(b0, b1, kp);
 
 	memcpy(out, b0, 16);
+}
+
+F_NAME(void, aes_ecb_encrypt128, _generic) (const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_generic(ctx, out, in, 16);
+}
+
+F_NAME(void, aes_ecb_encrypt256, _generic) (const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_generic(ctx, out, in, 32);
 }
 
 /*@unused@*/

@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, ppc implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -134,11 +134,107 @@ static const struct
 # endif
 };
 
+static inline vector unsigned char aes_schedule_round_low(vector unsigned char key, vector unsigned char kt)
+{
+	vector unsigned char v_0 = vec_splat_u8(0), v_4 = vec_splat_u8(4);
+	vector unsigned char l_4 = vec_lvsl( 4, (unsigned char *)NULL);
+	vector unsigned char l_8 = vec_lvsl( 8, (unsigned char *)NULL);
+	vector unsigned char klo, khi, klinv, khinv, khlinv;
+
+	/* smear kt */
+// TODO: left shift for big endian?
+	kt     = vec_xor(vec_perm(kt, v_0, l_4), kt);
+	kt     = vec_xor(vec_perm(kt, v_0, l_8), kt);
+	kt     = vec_xor(kt, aes_consts.s63);
+	/* subbytes */
+	khi    = vec_sr(key, v_4);
+	klo    = vec_and(key, aes_consts.s0f);
+	klinv  = vec_perm(aes_consts.invhi, v_0, klo);
+	klo    = vec_xor(klo, khi);
+	khinv  = vec_perm(aes_consts.invlo, v_0, khi);
+	khinv  = vec_xor(khinv, klinv);
+	khlinv = vec_perm(aes_consts.invlo, v_0, klo);
+	khlinv = vec_xor(khlinv, klinv);
+	khinv  = vec_perm(aes_consts.invlo, v_0, khinv);
+	khinv  = vec_xor(khinv, klo);
+	khlinv = vec_perm(aes_consts.invlo, v_0, khlinv);
+	khlinv = vec_xor(khlinv, khi);
+	khinv  = vec_perm(aes_consts.sb1lo, v_0, khinv);
+	khlinv = vec_perm(aes_consts.sb1hi, v_0, khlinv);
+	key    = vec_xor(khinv, khlinv);
+	/* add in smeared stuff */
+	return   vec_xor(key, kt);
+}
+
+static inline vector unsigned char aes_schedule_round(vector unsigned char key, vector unsigned char kt, vector unsigned char *rcon)
+{
+	vector unsigned char v_0  = vec_splat_u8(0);
+	vector unsigned char r_1  = vec_lvsr( 1, (unsigned char *)NULL);
+	vector unsigned char r_15 = vec_lvsr(15, (unsigned char *)NULL);
+
+// TODO: what's endian dependent in all this extract/rotate/foo?
+	/* extract rcon */
+// TODO: the highest element for big endian?
+	kt     = vec_xor(vec_perm(v_0, *rcon, r_15), kt);
+// TODO: rotating right for big endian?
+	*rcon  = vec_perm(*rcon, *rcon, r_15);
+	/* rotate */
+// TODO: is this the element to splat?
+	/* endianess + funny counting by powerpc... */
+	key    = (vector unsigned char)vec_splat((vector unsigned int)key, 0);
+// TODO: rotating right for big endian?
+	key    = vec_perm(key, key, r_1);
+	return aes_schedule_round_low(key, kt);
+}
+
+static inline vector unsigned char aes_schedule_transform(vector unsigned char key)
+{
+	vector unsigned char khi, klo;
+	vector unsigned char v_0 = vec_splat_u8(0), v_4 = vec_splat_u8(4);
+
+	/* shedule transform */
+	khi  = vec_sr(key, v_4);
+	klo  = vec_and(key, aes_consts.s0f);
+	klo  = vec_perm(aes_consts.optlo, v_0, klo);
+	khi  = vec_perm(aes_consts.opthi, v_0, khi);
+	return vec_xor(khi, klo);
+}
+
+static inline vector unsigned char aes_schedule_mangle(vector unsigned char key, unsigned *n)
+{
+	vector unsigned char khi, klo;
+	vector unsigned char v_0 = vec_splat_u8(0);
+
+	/* write output */
+	klo = key;
+	klo = vec_xor(aes_consts.s63, klo);
+	klo = vec_perm(aes_consts.mcf[0], v_0, klo);
+	khi = klo;
+	klo = vec_perm(aes_consts.mcf[0], v_0, klo);
+	khi = vec_xor(khi, klo);
+	klo = vec_perm(aes_consts.mcf[0], v_0, klo);
+	khi = vec_xor(khi, klo);
+	khi = vec_perm(khi, v_0, aes_consts.sr[*n--]);
+	*n  &= 2;
+	return khi;
+}
+
+static inline vector unsigned char aes_schedule_mangle_last(vector unsigned char key, unsigned n)
+{
+	vector unsigned char v_0 = vec_splat_u8(0);
+
+	/* schedule last round key */
+	key = vec_perm(key, v_0, aes_consts.sr[n]);
+	key = vec_xor(aes_consts.s63, key);
+
+	return aes_schedule_transform(key);
+}
+
 void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 {
-	vector unsigned char v_0, v_4, r_1, r_15, l_4, l_8;
-	vector unsigned char key, klo, khi, kt, klinv, khinv, khlinv, *key_target, rcon;
-	int rounds = 10, n = 1;
+	vector unsigned char key, *key_target, rcon;
+	int rounds = 10;
+	unsigned n = 1;
 
 	key_target = (vector unsigned char *)ctx->k;
 	prefetchw(key_target);
@@ -152,7 +248,7 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 		key = vec_ldl(0, (const unsigned char *)in);
 	else
 	{
-		vector unsigned char vperm;
+		vector unsigned char vperm, klo, khi;
 		if(HOST_IS_BIGENDIAN)
 			vperm = vec_lvsl(0, (const unsigned char *)in);
 		else
@@ -164,92 +260,77 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 		else
 			key = vec_perm(khi, klo, vperm);
 	}
-	v_0  = vec_splat_u8(0);
-	v_4  = vec_splat_u8(4);
-	r_1  = vec_lvsr( 1, (unsigned char *)NULL);
-	r_15 = vec_lvsr(15, (unsigned char *)NULL);
-	l_4  = vec_lvsl( 4, (unsigned char *)NULL);
-	l_8  = vec_lvsl( 8, (unsigned char *)NULL);
 	/* input transform */
-	/* shedule transform */
-	khi = vec_sr(key, v_4);
-	klo = vec_and(key, aes_consts.s0f);
-	klo = vec_perm(aes_consts.iptlo, v_0, klo);
-	khi = vec_perm(aes_consts.ipthi, v_0, khi);
-	key = vec_xor(khi, klo);
-	kt  = key;
+	key = aes_schedule_transform(key);
 	/* output zeroth round key */
 	*key_target = key;
 	do
 	{
-// TODO: what's endian dependent in all this extract/rotate/foo?
-		/* extract rcon */
-// TODO: the highest element for big endian?
-		kt     = vec_xor(vec_perm(v_0, rcon, r_15), kt);
-// TODO: rotating right for big endian?
-		rcon   = vec_perm(rcon, rcon, r_15);
-		/* rotate */
-// TODO: is this the element to splat?
-		/* endianess + funny counting by powerpc... */
-		key    = (vector unsigned char)vec_splat((vector unsigned int)key, 0);
-// TODO: rotating right for big endian?
-		key    = vec_perm(key, key, r_1);
-		/* smear kt */
-// TODO: left shift for big endian?
-		kt     = vec_xor(vec_perm(kt, v_0, l_4), kt);
-		kt     = vec_xor(vec_perm(kt, v_0, l_8), kt);
-		kt     = vec_xor(kt, aes_consts.s63);
-		/* subbytes */
-		khi    = vec_sr(key, v_4);
-		klo    = vec_and(key, aes_consts.s0f);
-		klinv  = vec_perm(aes_consts.invhi, v_0, klo);
-		klo    = vec_xor(klo, khi);
-		khinv  = vec_perm(aes_consts.invlo, v_0, khi);
-		khinv  = vec_xor(khinv, klinv);
-		khlinv = vec_perm(aes_consts.invlo, v_0, klo);
-		khlinv = vec_xor(khlinv, klinv);
-		khinv  = vec_perm(aes_consts.invlo, v_0, khinv);
-		khinv  = vec_xor(khinv, klo);
-		khlinv = vec_perm(aes_consts.invlo, v_0, khlinv);
-		khlinv = vec_xor(khlinv, khi);
-		khinv  = vec_perm(aes_consts.sb1lo, v_0, khinv);
-		khlinv = vec_perm(aes_consts.sb1hi, v_0, khlinv);
-		key    = vec_xor(khinv, khlinv);
-		/* add in smeared stuff */
-		key    = vec_xor(key, kt);
-		kt     = key;
+		key = aes_schedule_round(key, key, &rcon);
 		if(--rounds == 0)
 			break;
-		/* write output */
-		klo = key;
-		klo = vec_xor(aes_consts.s63, klo);
-		klo = vec_perm(aes_consts.mcf[0], v_0, klo);
-		khi = klo;
-		klo = vec_perm(aes_consts.mcf[0], v_0, klo);
-		khi = vec_xor(khi, klo);
-		klo = vec_perm(aes_consts.mcf[0], v_0, klo);
-		khi = vec_xor(khi, klo);
-		khi = vec_perm(khi, v_0, aes_consts.sr[n--]);
-		n  &= 2;
-		*++key_target = khi;
+		*++key_target = aes_schedule_mangle(key, &n);
 	} while(1);
-	/* schedule last round key */
-	key = vec_perm(key, v_0, aes_consts.sr[n]);
-	key = vec_xor(aes_consts.s63, key);
-	khi = vec_sr(key, v_4);
-	klo = vec_and(key, aes_consts.s0f);
-	klo = vec_perm(aes_consts.optlo, v_0, klo);
-	khi = vec_perm(aes_consts.opthi, v_0, khi);
-	key = vec_xor(khi, klo);
-	*++key_target = key;
+	*++key_target = aes_schedule_mangle_last(key, n);
 }
 
-void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+void aes_encrypt_key256(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	vector unsigned char key_lo, key_hi, *key_target, rcon;
+	int rounds = 10;
+	unsigned n = 1;
+
+	key_target = (vector unsigned char *)ctx->k;
+	prefetchw(key_target);
+	prefetch(&aes_consts);
+	prefetch(&aes_consts.iptlo);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	rcon = aes_consts.rcon;
+	if(IS_ALIGN(in, SOVUC)) {
+		key_hi = vec_ldl(0, (const unsigned char *)in);
+		key_lo = vec_ldl(16, (const unsigned char *)in);
+	}
+	else
+	{
+		vector unsigned char vperm, kl, km, kh;
+		if(HOST_IS_BIGENDIAN)
+			vperm = vec_lvsl(0, (const unsigned char *)in);
+		else
+			vperm = vec_lvsr(0, (const unsigned char *)in);
+		kl = vec_ldl(      0, (const unsigned char *)in);
+		km = vec_ldl(  SOVUC, (const unsigned char *)in);
+		kh = vec_ldl(2*SOVUC, (const unsigned char *)in);
+		if(HOST_IS_BIGENDIAN) {
+			key_hi = vec_perm(kl, km, vperm);
+			key_lo = vec_perm(km, kh, vperm);
+		} else {
+			key_hi = vec_perm(kh, km, vperm);
+			key_lo = vec_perm(km, kl, vperm);
+		}
+	}
+	/* input transform */
+	key_hi = aes_schedule_transform(key_hi);
+	key_lo = aes_schedule_transform(key_lo);
+	do
+	{
+		*++key_target = aes_schedule_mangle(key_lo, &n);
+		key_hi = aes_schedule_round(key_lo, key_hi, &rcon);
+		if(--rounds == 0)
+			break;
+		*++key_target = aes_schedule_mangle(key_hi, &n);
+		key_lo = aes_schedule_round_low((vector unsigned char)vec_splat((vector unsigned int)key_hi, 0), key_lo);
+	} while(1);
+	*++key_target = aes_schedule_mangle_last(key_hi, n);
+}
+
+static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
 {
 	vector unsigned char v_0, v_4;
 	const vector unsigned char *key_store;
 	vector unsigned char in, ilo, ihi, ilhinv, ihlinv, ihllinv;
-	int rounds = 10 - 1, n = 1;
+	int rounds = mrounds, n = 1;
 
 	key_store = (const vector unsigned char *)ctx->k;
 
@@ -331,6 +412,16 @@ start_round:
 // TODO: unaligned vector store
 		memcpy(dout, &in, sizeof(in));
 	}
+}
+
+void aes_ecb_encrypt128(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+{
+	aes_ecb_encrypt(ctx, dout, din, 10-1);
+}
+
+void aes_ecb_encrypt256(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
+{
+	aes_ecb_encrypt(ctx, dout, din, 14-1);
 }
 
 /*@unused@*/

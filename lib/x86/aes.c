@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, x86 implementation
  *
- * Copyright (c) 2009-2012 Jan Seiffert
+ * Copyright (c) 2009-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -28,8 +28,11 @@
 #include "x86_features.h"
 
 static void aes_encrypt_key128_generic(struct aes_encrypt_ctx *, const void *);
-static void aes_ecb_encrypt_generic(const struct aes_encrypt_ctx *, void *, const void *);
-static void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *, void *, const void *);
+static void aes_encrypt_key256_generic(struct aes_encrypt_ctx *, const void *);
+static void aes_ecb_encrypt128_generic(const struct aes_encrypt_ctx *, void *, const void *);
+static void aes_ecb_encrypt256_generic(const struct aes_encrypt_ctx *, void *, const void *);
+static void aes_ecb_encrypt128_padlock(const struct aes_encrypt_ctx *, void *, const void *);
+static void aes_ecb_encrypt256_padlock(const struct aes_encrypt_ctx *, void *, const void *);
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
@@ -66,7 +69,7 @@ static void aes_encrypt_key128_AVXAES(struct aes_encrypt_ctx *ctx, const void *i
 #endif
 			"vlddqu	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
 			"vmovdqa	%%xmm0, (%"PTRP"0)\n\t"
-			"add	0x10, %0\n\t"	/* key addr */
+			"add	$0x10, %0\n\t"	/* key addr */
 			"vpxor	%%xmm4, %%xmm4, %%xmm4\n\t" /* init xmm4 */
 			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
 			"vaeskeygenassist $0x1, %%xmm0, %%xmm1\n\t" /* round 1 */
@@ -98,6 +101,85 @@ static void aes_encrypt_key128_AVXAES(struct aes_encrypt_ctx *ctx, const void *i
 #  endif
 	);
 }
+
+static void aes_encrypt_key256_AVXAES(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t k;
+
+	asm(
+#ifdef HAVE_SUBSECTION
+			".subsection 2\n\t"
+#else
+			"jmp	1f\n\t"
+#endif
+			".align 16\n"
+			"_key_expansion_256a_avx:\n\t"
+			"vpshufd	$0xff, %%xmm1, %%xmm1\n\t"
+			"vshufps	$0x10, %%xmm0, %%xmm4, %%xmm4\n\t"
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"
+			"vshufps	$0x8c, %%xmm0, %%xmm4, %%xmm4\n\t"
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, (%"PTRP"0)\n\t"
+			"add	$0x10, %0\n\t"
+			"ret\n\t"
+			".align 4\n"
+			"_key_expansion_256b_avx:\n\t"
+			"vpshufd $0xAA, %%xmm1, %%xmm1\n\t"
+			"vshufps $0x10, %%xmm2, %%xmm4, %%xmm4\n\t"
+			"vpxor %%xmm4, %%xmm2, %%xmm2\n\t"
+			"vshufps $0x8c, %%xmm2, %%xmm4, %%xmm4\n\t"
+			"vpxor %%xmm4, %%xmm2, %%xmm2\n\t"
+			"vpxor %%xmm1, %%xmm2, %%xmm2\n\t"
+			"vmovdqa %%xmm2, (%"PTRP"0)\n\t"
+			"add $0x10, %0\n\t"
+			"ret\n\t"
+#ifdef HAVE_SUBSECTION
+			".previous\n\t"
+#else
+			"1:\n\t"
+#endif
+			"vlddqu	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
+			"vlddqu	0x10 %2, %%xmm2\n\t"	/* user key (second 16 bytes) */
+			"vmovdqa	%%xmm0, (%"PTRP"0)\n\t"
+			"vmovdqa	%%xmm2, 0x10(%"PTRP"0)\n\t"
+			"add	$0x20, %0\n\t"	/* key addr */
+			"vpxor	%%xmm4, %%xmm4, %%xmm4\n\t" /* init xmm4 */
+			"vaeskeygenassist $0x1, %%xmm2, %%xmm1\n\t" /* round 1 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x1, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x2, %%xmm2, %%xmm1\n\t" /* round 2 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x2, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x4, %%xmm2, %%xmm1\n\t" /* round 3 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x4, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x8, %%xmm2, %%xmm1\n\t" /* round 4 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x8, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x10, %%xmm2, %%xmm1\n\t" /* round 5 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x10, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x20, %%xmm2, %%xmm1\n\t" /* round 6 */
+			"call	_key_expansion_256a_avx\n\t"
+			"vaeskeygenassist $0x20, %%xmm0, %%xmm1\n\t"
+			"call	_key_expansion_256b_avx\n\t"
+			"vaeskeygenassist $0x40, %%xmm2, %%xmm1\n\t" /* round 7 */
+			"call	_key_expansion_256a_avx\n\t"
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*ctx->k)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm4"
+#  endif
+	);
+}
 # endif
 
 # if HAVE_BINUTILS >= 217
@@ -111,12 +193,12 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #else
 			"jmp	1f\n\t"
 #endif
-			".align 16\n"
+			".align 4\n"
 			"_key_expansion_128:\n\t"
 			"pshufd	$0xff, %%xmm1, %%xmm1\n\t"
 			"shufps	$0x10, %%xmm0, %%xmm4\n\t"
 			"pxor	%%xmm4, %%xmm0\n\t"
-			"shufps	$0b10001100, %%xmm0, %%xmm4\n\t"
+			"shufps	$0x8c, %%xmm0, %%xmm4\n\t"
 			"pxor	%%xmm4, %%xmm0\n\t"
 			"pxor	%%xmm1, %%xmm0\n\t"
 			"movaps	%%xmm0, (%"PTRP"0)\n\t"
@@ -129,7 +211,7 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 #endif
 			"movups	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
 			"movaps	%%xmm0, (%"PTRP"0)\n\t"
-			"add	0x10, %0\n\t"	/* key addr */
+			"add	$0x10, %"PTRP"0\n\t" /* key addr */
 			"pxor	%%xmm4, %%xmm4\n\t" /* init xmm4 */
 			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
 			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x01\n\t" /* round 1 */
@@ -155,9 +237,90 @@ static void aes_encrypt_key128_SSEAES(struct aes_encrypt_ctx *ctx, const void *i
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*ctx->k)
 		: /* %2 */ "m" (*(const char *)in),
-		  /* %3 */ "0" (&ctx->k)
+		  /* %3 */ "0" (ctx->k)
 #  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm4"
+#  endif
+	);
+}
+
+static void aes_encrypt_key256_SSEAES(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t k;
+
+	asm(
+#ifdef HAVE_SUBSECTION
+			".subsection 2\n\t"
+#else
+			"jmp	1f\n\t"
+#endif
+			".align 4\n"
+			"_key_expansion_256a:\n\t"
+			"pshufd	$0xff, %%xmm1, %%xmm1\n\t"
+			"shufps	$0x10, %%xmm0, %%xmm4\n\t"
+			"pxor	%%xmm4, %%xmm0\n\t"
+			"shufps	$0x8c, %%xmm0, %%xmm4\n\t"
+			"pxor	%%xmm4, %%xmm0\n\t"
+			"pxor	%%xmm1, %%xmm0\n\t"
+			"movaps	%%xmm0, (%"PTRP"0)\n\t"
+			"add	$0x10, %0\n\t"
+			"ret\n\t"
+			".align 4\n"
+			"_key_expansion_256b:\n\t"
+			"pshufd $0xAA, %%xmm1, %%xmm1\n\t"
+			"shufps $0x10, %%xmm2, %%xmm4\n\t"
+			"pxor %%xmm4, %%xmm2\n\t"
+			"shufps $0x8c, %%xmm2, %%xmm4\n\t"
+			"pxor %%xmm4, %%xmm2\n\t"
+			"pxor %%xmm1, %%xmm2\n\t"
+			"movaps %%xmm2, (%"PTRP"0)\n\t"
+			"add $0x10, %0\n\t"
+			"ret\n\t"
+#ifdef HAVE_SUBSECTION
+			".previous\n\t"
+#else
+			"1:\n\t"
+#endif
+			"movups	%2, %%xmm0\n\t"	/* user key (first 16 bytes) */
+			"movups	0x10 %2, %%xmm2\n\t"	/* user key (second 16 bytes) */
+			"movaps	%%xmm0, (%"PTRP"0)\n\t"
+			"movaps	%%xmm2, 0x10(%"PTRP"0)\n\t"
+			"add	$0x20, %"PTRP"0\n\t" /* key addr */
+			"pxor	%%xmm4, %%xmm4\n\t" /* init xmm4 */
+			/* aeskeygenassist $0x1, %xmm2, %xmm1 */
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x01\n\t" /* round 1 */
+			"call	_key_expansion_256a\n\t"
+			/* aeskeygenassist $0x1, %xmm0, %xmm1 */
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x01\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x02\n\t" /* round 2 */
+			"call	_key_expansion_256a\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x02\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x04\n\t" /* round 3 */
+			"call	_key_expansion_256a\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x04\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x08\n\t" /* round 4 */
+			"call	_key_expansion_256a\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x08\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x10\n\t" /* round 5 */
+			"call	_key_expansion_256a\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x10\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x20\n\t" /* round 6 */
+			"call	_key_expansion_256a\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xc8, 0x20\n\t"
+			"call	_key_expansion_256b\n\t"
+			".byte	0x66, 0x0f, 0x3a, 0xdf, 0xca, 0x40\n\t" /* round 7 */
+			"call	_key_expansion_256a\n\t"
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*ctx->k)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (ctx->k)
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm4"
 #  endif
 	);
 }
@@ -247,6 +410,23 @@ static const struct
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
  */
+#   ifndef __i386__
+#    define AVX_M2OP(op, src1, src2, dest) op "	" src1 ", " src2 ", " dest "\n\t"
+#    define AVX_S0F "%%xmm9"
+#    define AVX_INVHI "%%xmm11"
+#    define AVX_S63 "%%xmm12"
+#    define AVX_SB1LO "%%xmm13"
+#    define AVX_SB1HI "%%xmm14"
+#    define AVX_MCF "%%xmm15"
+#   else
+#    define AVX_M2OP(op, src1, src2, dest) "vmovdqa " src2 ", " dest "\n\t" op " " src1 ", " dest ", " dest "\n\t"
+#    define AVX_INVHI str_it(INVHI)"(%"PTRP"4)"
+#    define AVX_S0F str_it(S0F)"(%"PTRP"4)"
+#    define AVX_S63 str_it(S63)"(%"PTRP"4)"
+#    define AVX_SB1LO str_it(SB1LO)"(%"PTRP"4)"
+#    define AVX_SB1HI str_it(SB1HI)"(%"PTRP"4)"
+#    define AVX_MCF "%%xmm1"
+#   endif
 static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	size_t rounds, n;
@@ -262,25 +442,20 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"vlddqu	    %5, %%xmm0\n\t"	/* load key */
 			"vmovdqa	"str_it(INVLO)"(%"PTRP"4), %%xmm5\n\t"	/* inv */
 #   ifndef __i386__
-			"vmovdqa	"str_it(S0F)"(%"PTRP"4), %%xmm9\n\t"	/* 0F */
-			"vmovdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm11\n\t"	/* inva */
+			"vmovdqa	"str_it(S0F)"(%"PTRP"4), "AVX_S0F"\n\t"	/* 0F */
+			"vmovdqa	"str_it(INVHI)"(%"PTRP"4), "AVX_INVHI"\n\t"	/* inva */
+			"vmovdqa	"str_it(S63)"(%"PTRP"4), "AVX_S63"\n\t"	/* S63 */
+			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), "AVX_SB1LO"\n\t"	/* inva */
+			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), "AVX_SB1HI"\n\t"	/* inva */
+			"vmovdqa	"str_it(MCF)"(%"PTRP"4), "AVX_MCF"\n\t"	/* inva */
 #   endif
 			"vmovdqa	"str_it(RCON)"(%"PTRP"4), %%xmm6\n\t"
 			/* input transform */
 			"vmovdqa	%%xmm0, %%xmm3\n\t"
 			/* shedule transform */
-#   ifndef __i386__
-			"vpandn	%%xmm0, %%xmm9, %%xmm1\n\t"
-#   else
-			"vmovdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-			"vpandn	%%xmm0, %%xmm1, %%xmm1\n\t"
-#   endif
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
 			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
-#   ifndef __i386__
-			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"
-#   else
-			"vpand	"str_it(S0F)"(%"PTRP"4), %%xmm0, %%xmm0\n\t"
-#   endif
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"
 			"vmovdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
 			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
 			"vmovdqa	"str_it(IPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* ipthi */
@@ -305,26 +480,12 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
 			"vpslldq	     $8, %%xmm7, %%xmm1\n\t"
 			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
-			"vpxor	"str_it(S63)"(%"PTRP"4), %%xmm7, %%xmm7\n\t"
+			"vpxor	"AVX_S63", %%xmm7, %%xmm7\n\t"
 			/* subbytes */
-#   ifndef __i386__
-			"vpandn	 %%xmm0, %%xmm9, %%xmm1\n\t"
-#   else
-			"vmovdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-			"vpandn	 %%xmm0, %%xmm1, %%xmm1\n\t"
-#   endif
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
 			"vpsrld	     $4, %%xmm1, %%xmm1\n\t"	/* 1 = i */
-#   ifndef __i386__
-			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"	/* 0 = k */
-#   else
-			"vpand	"str_it(S0F)"(%"PTRP"4), %%xmm0, %%xmm0\n\t"	/* 0 = k */
-#   endif
-#   ifndef __i386__
-			"vpshufb	 %%xmm0, %%xmm11, %%xmm2\n\t"	/* 2 = a/k */
-#   else
-			"vmovdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm2\n\t"	/* 2 : a/k */
-			"vpshufb	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = a/k */
-#   endif
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"	/* 0 = k */
+			AVX_M2OP("vpshufb", "%%xmm0", AVX_INVHI, "%%xmm2")
 			"vpxor	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = j */
 			"vpshufb	 %%xmm1, %%xmm5, %%xmm3\n\t"	/* 3 = 1/i */
 			"vpxor	 %%xmm2, %%xmm3, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
@@ -334,10 +495,8 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"vpxor	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = io */
 			"vpshufb	 %%xmm4, %%xmm5, %%xmm3\n\t"	/* 3 = 1/jak */
 			"vpxor	 %%xmm1, %%xmm3, %%xmm3\n\t"	/* 3 = jo */
-			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sbou */
-			"vpshufb  %%xmm2, %%xmm4, %%xmm4\n\t"		/* 4 = sbou */
-			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm0\n\t"	/* 0 : sbot */
-			"vpshufb  %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = sb1t */
+			AVX_M2OP("vpshufb", "%%xmm2", AVX_SB1LO, "%%xmm4")		/* 4 = sbou */
+			AVX_M2OP("vpshufb", "%%xmm3", AVX_SB1HI, "%%xmm0")		/* 0 = sb1t */
 			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"	/* 0 = sbox output */
 			/* add in smeared stuff */
 			"vpxor	%%xmm7, %%xmm0, %%xmm0\n\t"
@@ -345,13 +504,15 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"jz 	2f\n\t"
 			"vmovdqa	%%xmm0, %%xmm7\n\t"
 			/* write output */
-			"vmovdqa	"str_it(MCF)"(%"PTRP"4),%%xmm1\n\t"
+#   ifdef __i386__
+			"vmovdqa	"str_it(MCF)"(%"PTRP"4), "AVX_MCF"\n\t"
+#   endif
 			"add	$16, %2\n\t"
-			"vpxor	"str_it(S63)"(%"PTRP"4), %%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
-			"vpshufb	%%xmm1, %%xmm2, %%xmm3\n\t"
-			"vpshufb	%%xmm1, %%xmm3, %%xmm2\n\t"
+			"vpxor	"AVX_S63", %%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
+			"vpshufb	"AVX_MCF", %%xmm2, %%xmm3\n\t"
+			"vpshufb	"AVX_MCF", %%xmm3, %%xmm2\n\t"
 			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
-			"vpshufb	%%xmm1, %%xmm2, %%xmm2\n\t"
+			"vpshufb	"AVX_MCF", %%xmm2, %%xmm2\n\t"
 			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
 			"vpshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm3, %%xmm3\n\t"
 			"add	  $-16, %1\n\t"
@@ -362,19 +523,10 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			/* schedule last round key from xmm0 */
 			"vpshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm0, %%xmm0\n\t"	/* output permute */
 			"add	$16, %2\n\t"
-			"vpxor	"str_it(S63)"(%"PTRP"4), %%xmm0, %%xmm0\n\t"
-#   ifndef __i386__
-			"vpandn	%%xmm0, %%xmm9, %%xmm1\n\t"
-#   else
-			"vmovdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-			"vpandn	%%xmm0, %%xmm1, %%xmm1\n\t"
-#   endif
+			"vpxor	"AVX_S63", %%xmm0, %%xmm0\n\t"
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
 			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
-#   ifndef __i386__
-			"vpand	%%xmm9, %%xmm0, %%xmm0\n\t"	/* 0 = k */
-#   else
-			"vpand	"str_it(S0F)"(%"PTRP"4), %%xmm0, %%xmm0\n\t"	/* 0 = k */
-#   endif
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"	/* 0 = k */
 			"vmovdqa	"str_it(OPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* optlo */
 			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
 			"vmovdqa	"str_it(OPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* opthi */
@@ -393,13 +545,164 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 #   ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #    ifndef __i386__
-		  , "xmm9", "xmm11"
+		  , "xmm9", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
 #    endif
 #   endif
 	);
 }
+
+#   ifndef __i386__
+#    define AVX_INVLO "%%xmm8"
+#   else
+#    define AVX_INVLO str_it(INVLO)"(%"PTRP"4)"
+#   endif
+
+static void aes_encrypt_key256_AVX(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t rounds, n;
+	void *k;
+
+	prefetch(in);
+	prefetchw(ctx->k);
+	prefetch(&aes_consts);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	asm volatile (
+			"vlddqu	    %5, %%xmm0\n\t"	/* load key */
+#   ifndef __i386__
+			"vmovdqa	"str_it(INVLO)"(%"PTRP"4), "AVX_INVLO"\n\t"	/* inv */
+			"vmovdqa	"str_it(S0F)"(%"PTRP"4), "AVX_S0F"\n\t"	/* 0F */
+			"vmovdqa	"str_it(INVHI)"(%"PTRP"4), "AVX_INVHI"\n\t"	/* inva */
+			"vmovdqa	"str_it(S63)"(%"PTRP"4), "AVX_S63"\n\t"	/* S63 */
+			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), "AVX_SB1LO"\n\t"	/* inva */
+			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), "AVX_SB1HI"\n\t"	/* inva */
+			"vmovdqa	"str_it(MCF)"(%"PTRP"4), "AVX_MCF"\n\t"	/* inva */
+#   endif
+			"vmovdqa	"str_it(RCON)"(%"PTRP"4), %%xmm6\n\t"
+			/* input transform */
+			"vmovdqa	%%xmm0, %%xmm3\n\t"
+			/* shedule transform */
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
+			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"
+			"vmovdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
+			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
+			"vmovdqa	"str_it(IPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* ipthi */
+			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm2, %%xmm0, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, %%xmm7\n\t"
+			/* output zeroth round key */
+			"vmovdqa	%%xmm0, (%"PTRP"2)\n\t"
+			"jmp	1f\n\t"
+			".p2align 3\n"
+			"1:\n\t"
+			/* extract rcon from xmm8 */
+			"vpxor	%%xmm1, %%xmm1, %%xmm1\n\t"
+			"vpalignr	$15, %%xmm6, %%xmm1, %%xmm1\n\t"
+			"vpalignr	$15, %%xmm6, %%xmm6, %%xmm6\n\t"
+			"vpxor	%%xmm1, %%xmm7, %%xmm1\n\t"
+			/* rotate */
+			"vpshufd	$0xFF, %%xmm0, %%xmm0\n\t"
+			"vpalignr	$1, %%xmm0, %%xmm0, %%xmm0\n\t"
+			/* smear xmm7 */
+			"vpslldq	     $4, %%xmm1, %%xmm7\n\t"
+			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
+			"vpslldq	     $8, %%xmm7, %%xmm1\n\t"
+			"vpxor	 %%xmm1, %%xmm7, %%xmm7\n\t"
+			"vpxor	"AVX_S63", %%xmm7, %%xmm7\n\t"
+			/* subbytes */
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
+			"vpsrld	     $4, %%xmm1, %%xmm1\n\t"	/* 1 = i */
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"	/* 0 = k */
+			AVX_M2OP("vpshufb", "%%xmm0", AVX_INVHI, "%%xmm2")
+			"vpxor	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = j */
+			AVX_M2OP("vpshufb", "%%xmm1", AVX_INVLO, "%%xmm3")	/* 3 = 1/i */
+			"vpxor	 %%xmm2, %%xmm3, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
+			AVX_M2OP("vpshufb", "%%xmm0", AVX_INVLO, "%%xmm4")	/* 4 = 1/j */
+			"vpxor	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = jak = 1/j + a/k */
+			AVX_M2OP("vpshufb", "%%xmm3", AVX_INVLO, "%%xmm2")	/* 2 = 1/iak */
+			"vpxor	 %%xmm0, %%xmm2, %%xmm2\n\t"	/* 2 = io */
+			AVX_M2OP("vpshufb", "%%xmm4", AVX_INVLO, "%%xmm3")	/* 3 = 1/jak */
+			"vpxor	 %%xmm1, %%xmm3, %%xmm3\n\t"	/* 3 = jo */
+			AVX_M2OP("vpshufb", "%%xmm2", AVX_SB1LO, "%%xmm4")		/* 4 = sbou */
+			AVX_M2OP("vpshufb", "%%xmm3", AVX_SB1HI, "%%xmm0")		/* 0 = sb1t */
+			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"	/* 0 = sbox output */
+			/* add in smeared stuff */
+			"vpxor	%%xmm7, %%xmm0, %%xmm0\n\t"
+			"dec	%0\n\t"
+			"jz 	2f\n\t"
+			"vmovdqa	%%xmm0, %%xmm7\n\t"
+			/* write output */
+#   ifdef __i386__
+			"vmovdqa	"str_it(MCF)"(%"PTRP"4), "AVX_MCF"\n\t"
+#   endif
+			"add	$16, %2\n\t"
+			"vpxor	"AVX_S63", %%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
+			"vpshufb	"AVX_MCF", %%xmm2, %%xmm3\n\t"
+			"vpshufb	"AVX_MCF", %%xmm3, %%xmm2\n\t"
+			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
+			"vpshufb	"AVX_MCF", %%xmm2, %%xmm2\n\t"
+			"vpxor	%%xmm2, %%xmm3, %%xmm3\n\t"
+			"vpshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm3, %%xmm3\n\t"
+			"add	  $-16, %1\n\t"
+			"and	   $48, %1\n\t"
+			"vmovdqa	%%xmm3, (%"PTRP"2)\n\t"
+			"jmp 	1b\n"
+			"2:\n\t"
+			/* schedule last round key from xmm0 */
+			"vpshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm0, %%xmm0\n\t"	/* output permute */
+			"add	$16, %2\n\t"
+			"vpxor	"AVX_S63", %%xmm0, %%xmm0\n\t"
+			AVX_M2OP("vpandn", "%%xmm0", AVX_S0F, "%%xmm1")
+			"vpsrld	    $4, %%xmm1, %%xmm1\n\t"
+			"vpand	"AVX_S0F", %%xmm0, %%xmm0\n\t"	/* 0 = k */
+			"vmovdqa	"str_it(OPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* optlo */
+			"vpshufb	%%xmm0, %%xmm2, %%xmm2\n\t"
+			"vmovdqa	"str_it(OPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* opthi */
+			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vpxor	%%xmm0, %%xmm2, %%xmm0\n\t"
+			"vmovdqa	%%xmm0, (%"PTRP"2)\n\t"	/* save last key */
+		: /* %0 */ "=&r" (rounds),
+		  /* %1 */ "=&r" (n),
+		  /* %2 */ "=&r" (k),
+		  /* %3 */ "=m" (ctx->k[0])
+		: /* %4 */ "r" (AES_CONSTS_0MEMBER),
+		  /* %5 */ "m" (*(const int *)in),
+		  /* %6 */ "0" (10),
+		  /* %7 */ "1" (16),
+		  /* %8 */ "2" (&ctx->k[0])
+#   ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#    ifndef __i386__
+		  , "xmm9", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
+#    endif
+#   endif
+	);
+}
+#   undef AVX_S0F
+#   undef AVX_INVHI
+#   undef AVX_S63
+#   undef AVX_SB1LO
+#   undef AVX_SB1HI
+#   undef AVX_MCF
 #  endif
 
+#  ifndef __i386__
+#   define SSSE3_S0F "%%xmm9"
+#   define SSSE3_INVHI "%%xmm11"
+#   define SSSE3_S63 "%%xmm12"
+#   define SSSE3_SB1LO "%%xmm13"
+#   define SSSE3_SB1HI "%%xmm14"
+#   define SSSE3_MCF "%%xmm15"
+#  else
+#   define SSSE3_S0F str_it(S0F)"(%"PTRP"4)"
+#   define SSSE3_INVHI str_it(INVHI)"(%"PTRP"4)"
+#   define SSSE3_S63 str_it(S63)"(%"PTRP"4)"
+#   define SSSE3_SB1LO str_it(SB1LO)"(%"PTRP"4)"
+#   define SSSE3_SB1HI str_it(SB1HI)"(%"PTRP"4)"
+#   define SSSE3_MCF "%%xmm1"
+#  endif
 static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in)
 {
 	size_t rounds, n;
@@ -415,25 +718,21 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			"lddqu	    %5, %%xmm0\n\t"	/* load key */
 			"movdqa	"str_it(INVLO)"(%"PTRP"4), %%xmm5\n\t"	/* inv */
 #  ifndef __i386__
-			"movdqa	"str_it(S0F)"(%"PTRP"4), %%xmm9\n\t"	/* 0F */
-			"movdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm11\n\t"	/* inva */
+			"movdqa	"str_it(S0F)"(%"PTRP"4), "SSSE3_S0F"\n\t"	/* 0F */
+			"movdqa	"str_it(INVHI)"(%"PTRP"4), "SSSE3_INVHI"\n\t"	/* inva */
+			"movdqa	"str_it(S63)"(%"PTRP"4), "SSSE3_S63"\n\t"	/* S63 */
+			"movdqa	"str_it(SB1LO)"(%"PTRP"4), "SSSE3_SB1LO"\n\t"	/* SB1LO */
+			"movdqa	"str_it(SB1HI)"(%"PTRP"4), "SSSE3_SB1HI"\n\t"	/* SB1HI */
+			"movdqa	"str_it(MCF)"(%"PTRP"4), "SSSE3_MCF"\n\t"	/* MCF */
 #  endif
 			"movdqa	"str_it(RCON)"(%"PTRP"4), %%xmm6\n\t"
 			/* input transform */
 			"movdqa	%%xmm0, %%xmm3\n\t"
 			/* shedule transform */
-#  ifndef __i386__
-			"movdqa	%%xmm9, %%xmm1\n\t"
-#  else
-			"movdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-#  endif
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
 			"pandn	%%xmm0, %%xmm1\n\t"
 			"psrld	    $4, %%xmm1\n\t"
-#  ifndef __i386__
-			"pand	%%xmm9, %%xmm0\n\t"
-#  else
-			"pand	"str_it(S0F)"(%"PTRP"4), %%xmm0\n\t"
-#  endif
+			"pand	"SSSE3_S0F", %%xmm0\n\t"
 			"movdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
 			"pshufb	%%xmm0, %%xmm2\n\t"
 			"movdqa	"str_it(IPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* ipthi */
@@ -460,25 +759,13 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			"movdqa	 %%xmm7, %%xmm1\n\t"
 			"pslldq	     $8, %%xmm7\n\t"
 			"pxor	 %%xmm1, %%xmm7\n\t"
-			"pxor	"str_it(S63)"(%"PTRP"4), %%xmm7\n\t"
+			"pxor	"SSSE3_S63", %%xmm7\n\t"
 			/* subbytes */
-#  ifndef __i386__
-			"movdqa	%%xmm9, %%xmm1\n\t"
-#  else
-			"movdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-#  endif
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
 			"pandn	 %%xmm0, %%xmm1\n\t"
 			"psrld	     $4, %%xmm1\n\t"	/* 1 = i */
-#  ifndef __i386__
-			"pand	%%xmm9, %%xmm0\n\t"	/* 0 = k */
-#  else
-			"pand	"str_it(S0F)"(%"PTRP"4), %%xmm0\n\t"	/* 0 = k */
-#  endif
-#  ifndef __i386__
-			"movdqa	%%xmm11, %%xmm2\n\t"	/* 2 : a/k */
-#  else
-			"movdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm2\n\t"	/* 2 : a/k */
-#  endif
+			"pand	"SSSE3_S0F", %%xmm0\n\t"	/* 0 = k */
+			"movdqa	"SSSE3_INVHI", %%xmm2\n\t"	/* 2 : a/k */
 			"pshufb	 %%xmm0, %%xmm2\n\t"	/* 2 = a/k */
 			"pxor	 %%xmm1, %%xmm0\n\t"	/* 0 = j */
 			"movdqa	 %%xmm5, %%xmm3\n\t"	/* 3 : 1/i */
@@ -493,9 +780,9 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			"movdqa	 %%xmm5, %%xmm3\n\t"	/* 3 : 1/jak */
 			"pshufb	 %%xmm4, %%xmm3\n\t"	/* 3 = 1/jak */
 			"pxor	 %%xmm1, %%xmm3\n\t"	/* 3 = jo */
-			"movdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sbou */
+			"movdqa	"SSSE3_SB1LO", %%xmm4\n\t"	/* 4 : sbou */
 			"pshufb  %%xmm2,  %%xmm4\n\t"		/* 4 = sbou */
-			"movdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm0\n\t"	/* 0 : sbot */
+			"movdqa	"SSSE3_SB1LO", %%xmm0\n\t"	/* 0 : sbot */
 			"pshufb  %%xmm3, %%xmm0\n\t"	/* 0 = sb1t */
 			"pxor	%%xmm4, %%xmm0\n\t"	/* 0 = sbox output */
 			/* add in smeared stuff */
@@ -505,14 +792,16 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			"movdqa	%%xmm0, %%xmm7\n\t"
 			/* write output */
 			"movdqa	%%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
-			"movdqa	"str_it(MCF)"(%"PTRP"4),%%xmm1\n\t"
+#  ifdef __i386__
+			"movdqa	"str_it(MCF)"(%"PTRP"4), "SSSE3_MCF"\n\t"
+#  endif
 			"add	$16, %2\n\t"
-			"pxor	"str_it(S63)"(%"PTRP"4), %%xmm2\n\t"
-			"pshufb	%%xmm1, %%xmm2\n\t"
+			"pxor	"SSSE3_S63", %%xmm2\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
 			"movdqa	%%xmm2, %%xmm3\n\t"
-			"pshufb	%%xmm1, %%xmm2\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
 			"pxor	%%xmm2, %%xmm3\n\t"
-			"pshufb	%%xmm1, %%xmm2\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
 			"pxor	%%xmm2, %%xmm3\n\t"
 			"pshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4),%%xmm3\n\t"
 			"add	  $-16, %1\n\t"
@@ -523,19 +812,11 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 			/* schedule last round key from xmm0 */
 			"pshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm0\n\t"	/* output permute */
 			"add	$16, %2\n\t"
-			"pxor	"str_it(S63)"(%"PTRP"4), %%xmm0\n\t"
-#  ifndef __i386__
-			"movdqa	%%xmm9, %%xmm1\n\t"
-#  else
-			"movdqa	"str_it(S0F)"(%"PTRP"4), %%xmm1\n\t"
-#  endif
+			"pxor	"SSSE3_S63", %%xmm0\n\t"
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
 			"pandn	%%xmm0, %%xmm1\n\t"
 			"psrld	    $4, %%xmm1\n\t"
-#  ifndef __i386__
-			"pand	%%xmm9, %%xmm0\n\t"	/* 0 = k */
-#  else
-			"pand	"str_it(S0F)"(%"PTRP"4), %%xmm0\n\t"	/* 0 = k */
-#  endif
+			"pand	"SSSE3_S0F", %%xmm0\n\t"	/* 0 = k */
 			"movdqa	"str_it(OPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* optlo */
 			"pshufb	%%xmm0, %%xmm2\n\t"
 			"movdqa	"str_it(OPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* opthi */
@@ -554,11 +835,239 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
 #  ifdef __SSE__
 		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
 #   ifndef __i386__
-		  , "xmm9", "xmm11"
+		  , "xmm9", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
 #   endif
 #  endif
 	);
 }
+
+#  ifndef __i386__
+#   define SSSE3_INVLO "%%xmm8"
+#  else
+#   define SSSE3_INVLO str_it(INVLO)"(%"PTRP"4)"
+#  endif
+static void aes_encrypt_key256_SSSE3(struct aes_encrypt_ctx *ctx, const void *in)
+{
+	size_t rounds, n;
+	void *k;
+
+	prefetch(in);
+	prefetchw(ctx->k);
+	prefetch(&aes_consts);
+	prefetch(aes_consts.mcf);
+	prefetch(aes_consts.sr);
+
+	asm volatile (
+			"lddqu	     %5, %%xmm0\n\t"	/* load key */
+#  ifndef __i386__
+			"movdqa	"str_it(INVLO)"(%"PTRP"4), "SSSE3_INVLO"\n\t"	/* inv */
+			"movdqa	"str_it(S0F)"(%"PTRP"4), "SSSE3_S0F"\n\t"	/* 0F */
+			"movdqa	"str_it(INVHI)"(%"PTRP"4), "SSSE3_INVHI"\n\t"	/* inva */
+			"movdqa	"str_it(S63)"(%"PTRP"4), "SSSE3_S63"\n\t"	/* S63 */
+			"movdqa	"str_it(SB1LO)"(%"PTRP"4), "SSSE3_SB1LO"\n\t"	/* SB1LO */
+			"movdqa	"str_it(SB1HI)"(%"PTRP"4), "SSSE3_SB1HI"\n\t"	/* SB1HI */
+			"movdqa	"str_it(MCF)"(%"PTRP"4), "SSSE3_MCF"\n\t"	/* MCF */
+#  endif
+			"movdqa	"str_it(RCON)"(%"PTRP"4), %%xmm6\n\t"
+			/* input transform */
+			"movdqa	%%xmm0, %%xmm3\n\t"
+			/* shedule transform */
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
+			"pandn	%%xmm0, %%xmm1\n\t"
+			"psrld	    $4, %%xmm1\n\t"
+			"pand	"SSSE3_S0F", %%xmm0\n\t"
+			"movdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
+			"pshufb	%%xmm0, %%xmm2\n\t"
+			"movdqa	"str_it(IPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* ipthi */
+			"pshufb	%%xmm1, %%xmm0\n\t"
+			"pxor	%%xmm2, %%xmm0\n\t"
+			"movdqa	%%xmm0, %%xmm7\n\t"
+			/* output zeroth round key */
+			"movdqa	%%xmm0, (%"PTRP"2)\n\t"
+			/* load key second part */
+			"lddqu	0x10 %5, %%xmm0\n\t"	/* key second part */
+			/* shedule transform */
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
+			"pandn	%%xmm0, %%xmm1\n\t"
+			"psrld	    $4, %%xmm1\n\t"
+			"pand	"SSSE3_S0F", %%xmm0\n\t"
+			"movdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
+			"pshufb	%%xmm0, %%xmm2\n\t"
+			"movdqa	"str_it(IPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* ipthi */
+			"pshufb	%%xmm1, %%xmm0\n\t"
+			"pxor	%%xmm2, %%xmm0\n\t"
+			"jmp	1f\n\t"
+			".p2align 3\n"
+			"1:\n\t"
+
+			/* write output */
+			"movdqa	%%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
+#  ifdef __i386__
+			"movdqa	"str_it(MCF)"(%"PTRP"4), "SSSE3_MCF"\n\t"
+#  endif
+			"add	$16, %2\n\t"
+			"pxor	"SSSE3_S63", %%xmm2\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"movdqa	%%xmm2, %%xmm3\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"pxor	%%xmm2, %%xmm3\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"pxor	%%xmm2, %%xmm3\n\t"
+			"pshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4),%%xmm3\n\t"
+			"add	  $-16, %1\n\t"
+			"and	   $48, %1\n\t"
+			"movdqa	%%xmm3, (%"PTRP"2)\n\t"
+			/* save cur_lo for later */
+			"movdqa	%%xmm0, %%xmm5\n\t"
+
+			/* high round */
+			/* extract rcon from xmm8 */
+			"pxor	%%xmm1, %%xmm1\n\t"
+			"palignr	$15, %%xmm6, %%xmm1\n\t"
+			"palignr	$15, %%xmm6, %%xmm6\n\t"
+			"pxor	%%xmm1, %%xmm7\n\t"
+			/* rotate */
+			"pshufd	$0xFF, %%xmm0, %%xmm0\n\t"
+			"palignr	$1, %%xmm0, %%xmm0\n\t"
+			/* smear xmm7 */
+			"movdqa	 %%xmm7, %%xmm1\n\t"
+			"pslldq	     $4, %%xmm7\n\t"
+			"pxor	 %%xmm1, %%xmm7\n\t"
+			"movdqa	 %%xmm7, %%xmm1\n\t"
+			"pslldq	     $8, %%xmm7\n\t"
+			"pxor	 %%xmm1, %%xmm7\n\t"
+			"pxor	"SSSE3_S63", %%xmm7\n\t"
+			/* subbytes */
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
+			"pandn	 %%xmm0, %%xmm1\n\t"
+			"psrld	     $4, %%xmm1\n\t"	/* 1 = i */
+			"pand	"SSSE3_S0F", %%xmm0\n\t"	/* 0 = k */
+			"movdqa	"SSSE3_INVHI", %%xmm2\n\t"	/* 2 : a/k */
+			"pshufb	 %%xmm0, %%xmm2\n\t"	/* 2 = a/k */
+			"pxor	 %%xmm1, %%xmm0\n\t"	/* 0 = j */
+			"movdqa	 "SSSE3_INVLO", %%xmm3\n\t"	/* 3 : 1/i */
+			"pshufb	 %%xmm1, %%xmm3\n\t"	/* 3 = 1/i */
+			"pxor	 %%xmm2, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
+			"movdqa	 "SSSE3_INVLO", %%xmm4\n\t"	/* 4 : 1/j */
+			"pshufb	 %%xmm0, %%xmm4\n\t"	/* 4 = 1/j */
+			"pxor	 %%xmm2, %%xmm4\n\t"	/* 4 = jak = 1/j + a/k */
+			"movdqa	 "SSSE3_INVLO", %%xmm2\n\t"	/* 2 : 1/iak */
+			"pshufb	 %%xmm3, %%xmm2\n\t"	/* 2 = 1/iak */
+			"pxor	 %%xmm0, %%xmm2\n\t"	/* 2 = io */
+			"movdqa	 "SSSE3_INVLO", %%xmm3\n\t"	/* 3 : 1/jak */
+			"pshufb	 %%xmm4, %%xmm3\n\t"	/* 3 = 1/jak */
+			"pxor	 %%xmm1, %%xmm3\n\t"	/* 3 = jo */
+			"movdqa	"SSSE3_SB1LO", %%xmm4\n\t"	/* 4 : sbou */
+			"pshufb  %%xmm2,  %%xmm4\n\t"		/* 4 = sbou */
+			"movdqa	"SSSE3_SB1LO", %%xmm0\n\t"	/* 0 : sbot */
+			"pshufb  %%xmm3, %%xmm0\n\t"	/* 0 = sb1t */
+			"pxor	%%xmm4, %%xmm0\n\t"	/* 0 = sbox output */
+			/* add in smeared stuff */
+			"pxor	%%xmm7, %%xmm0\n\t"
+			"dec	%0\n\t"
+			"jz 	2f\n\t"
+			"movdqa	%%xmm0, %%xmm7\n\t"
+			/* write output */
+			"movdqa	%%xmm0, %%xmm2\n\t"	/* save xmm0 for later */
+#  ifdef __i386__
+			"movdqa	"str_it(MCF)"(%"PTRP"4), "SSSE3_MCF"\n\t"
+#  endif
+			"add	$16, %2\n\t"
+			"pxor	"SSSE3_S63", %%xmm2\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"movdqa	%%xmm2, %%xmm3\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"pxor	%%xmm2, %%xmm3\n\t"
+			"pshufb	"SSSE3_MCF", %%xmm2\n\t"
+			"pxor	%%xmm2, %%xmm3\n\t"
+			"pshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4),%%xmm3\n\t"
+			"add	  $-16, %1\n\t"
+			"and	   $48, %1\n\t"
+			"movdqa	%%xmm3, (%"PTRP"2)\n\t"
+
+			/* low round */
+			"pshufd	$0xff, %%xmm0, %%xmm0\n\t"
+			/* swap low and high */
+			"movdqa	%%xmm7, %%xmm1\n\t"
+			"movdqa	%%xmm5, %%xmm7\n\t"
+			"movdqa	%%xmm1, %%xmm5\n\t"
+
+			/* smear xmm7 */
+			"movdqa	 %%xmm7, %%xmm1\n\t"
+			"pslldq	     $4, %%xmm7\n\t"
+			"pxor	 %%xmm1, %%xmm7\n\t"
+			"movdqa	 %%xmm7, %%xmm1\n\t"
+			"pslldq	     $8, %%xmm7\n\t"
+			"pxor	 %%xmm1, %%xmm7\n\t"
+			"pxor	"SSSE3_S63", %%xmm7\n\t"
+			/* subbytes */
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
+			"pandn	 %%xmm0, %%xmm1\n\t"
+			"psrld	     $4, %%xmm1\n\t"	/* 1 = i */
+			"pand	"SSSE3_S0F", %%xmm0\n\t"	/* 0 = k */
+			"movdqa	"SSSE3_INVHI", %%xmm2\n\t"	/* 2 : a/k */
+			"pshufb	 %%xmm0, %%xmm2\n\t"	/* 2 = a/k */
+			"pxor	 %%xmm1, %%xmm0\n\t"	/* 0 = j */
+			"movdqa	 "SSSE3_INVLO", %%xmm3\n\t"	/* 3 : 1/i */
+			"pshufb	 %%xmm1, %%xmm3\n\t"	/* 3 = 1/i */
+			"pxor	 %%xmm2, %%xmm3\n\t"	/* 3 = iak = 1/i + a/k */
+			"movdqa	 "SSSE3_INVLO", %%xmm4\n\t"	/* 4 : 1/j */
+			"pshufb	 %%xmm0, %%xmm4\n\t"	/* 4 = 1/j */
+			"pxor	 %%xmm2, %%xmm4\n\t"	/* 4 = jak = 1/j + a/k */
+			"movdqa	 "SSSE3_INVLO", %%xmm2\n\t"	/* 2 : 1/iak */
+			"pshufb	 %%xmm3, %%xmm2\n\t"	/* 2 = 1/iak */
+			"pxor	 %%xmm0, %%xmm2\n\t"	/* 2 = io */
+			"movdqa	 "SSSE3_INVLO", %%xmm3\n\t"	/* 3 : 1/jak */
+			"pshufb	 %%xmm4, %%xmm3\n\t"	/* 3 = 1/jak */
+			"pxor	 %%xmm1, %%xmm3\n\t"	/* 3 = jo */
+			"movdqa	"SSSE3_SB1LO", %%xmm4\n\t"	/* 4 : sbou */
+			"pshufb  %%xmm2,  %%xmm4\n\t"		/* 4 = sbou */
+			"movdqa	"SSSE3_SB1LO", %%xmm0\n\t"	/* 0 : sbot */
+			"pshufb  %%xmm3, %%xmm0\n\t"	/* 0 = sb1t */
+			"pxor	%%xmm4, %%xmm0\n\t"	/* 0 = sbox output */
+			/* add in smeared stuff */
+			"pxor	%%xmm7, %%xmm0\n\t"
+			"movdqa	%%xmm5, %%xmm7\n\t"
+			"jmp 	1b\n"
+			"2:\n\t"
+			/* schedule last round key from xmm0 */
+			"pshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm0\n\t"	/* output permute */
+			"add	$16, %2\n\t"
+			"pxor	"SSSE3_S63", %%xmm0\n\t"
+			"movdqa	"SSSE3_S0F", %%xmm1\n\t"
+			"pandn	%%xmm0, %%xmm1\n\t"
+			"psrld	    $4, %%xmm1\n\t"
+			"pand	"SSSE3_S0F", %%xmm0\n\t"	/* 0 = k */
+			"movdqa	"str_it(OPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* optlo */
+			"pshufb	%%xmm0, %%xmm2\n\t"
+			"movdqa	"str_it(OPTHI)"(%"PTRP"4), %%xmm0\n\t"	/* opthi */
+			"pshufb	%%xmm1, %%xmm0\n\t"
+			"pxor	%%xmm2, %%xmm0\n\t"
+			"movdqa	%%xmm0, (%"PTRP"2)\n\t"	/* save last key */
+		: /* %0 */ "=&r" (rounds),
+		  /* %1 */ "=&r" (n),
+		  /* %2 */ "=&r" (k),
+		  /* %3 */ "=m" (ctx->k[0])
+		: /* %4 */ "r" (AES_CONSTS_0MEMBER),
+		  /* %5 */ "m" (*(const int *)in),
+		  /* %6 */ "0" (7),
+		  /* %7 */ "1" (16),
+		  /* %8 */ "2" (&ctx->k[0])
+#  ifdef __SSE__
+		: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#   ifndef __i386__
+		  , "xmm9", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
+#   endif
+#  endif
+	);
+}
+#  undef SSSE3_INVLO
+#  undef SSSE3_S0F
+#  undef SSSE3_INVHI
+#  undef SSSE3_S63
+#  undef SSSE3_SB1LO
+#  undef SSSE3_SB1HI
+#  undef SSSE3_MCF
 # endif
 #endif
 
@@ -596,12 +1105,88 @@ static void aes_encrypt_key128_SSSE3(struct aes_encrypt_ctx *ctx, const void *in
  * levels on a function by function basis, but its fresh,
  * at least for some time...
  */
-static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt128_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	static const struct {
 		uint32_t x[4];
 	} control_word GCC_ATTR_ALIGNED(16) = {
 		{PL_R128 | PL_KEYGN | PL_K128, 0, 0, 0}
+	};
+#if _GNUC_PREREQ (4,4) || defined(__OPTIMIZE__)
+	size_t c, S, D;
+
+	asm(
+#if defined(__i386__) && defined(__PIC__)
+			"xchg	%5, %%ebx\n\t"
+#endif
+			"rep xcryptecb\n\t"
+#if defined(__i386__) && defined(__PIC__)
+			"xchg	%5, %%ebx\n"
+#endif
+		: /* %0 */ "=S" (S),
+		  /* %1 */ "=D" (D),
+		  /* %2 */ "=c" (c),
+		  /* %3 */ "=m" (*(char *)out)
+		: /* %4 */ "d" (&control_word),
+#if defined(__i386__) && defined(__PIC__)
+		  /* %5 */ "a" (&ctx->k),
+#else
+		  /* %5 */ "b" (&ctx->k),
+#endif
+		  /* %6 */ "2" (1),
+		  /* %7 */ "0" (in),
+		  /* %8 */ "1" (out),
+		  /* %9 */ "m" (*(const char *)in)
+	);
+#else
+# ifdef __i386__
+#  define REG_b "%%ebx"
+#  define REG_c "%%ecx"
+#  define REG_d "%%edx"
+#  define REG_S "%%esi"
+#  define REG_D "%%edi"
+# else
+#  define REG_b "%%rbx"
+#  define REG_c "%%rcx"
+#  define REG_d "%%rdx"
+#  define REG_S "%%rsi"
+#  define REG_D "%%rdi"
+# endif
+	const void *ptr = ctx->k;
+	asm(
+			"push	"REG_S"\n\t"
+			"push	"REG_D"\n\t"
+			"push	"REG_c"\n\t"
+			"push	"REG_d"\n\t"
+			"push	"REG_b"\n\t"
+			"mov	%3, "REG_S"\n\t"
+			"mov	%4, "REG_D"\n\t"
+			"mov	%1, "REG_d"\n\t"
+			"mov	%2, "REG_b"\n\t"
+			"xor	"REG_c", "REG_c"\n\t"
+			"add	$1, "REG_c"\n\t"
+			"rep xcryptecb\n\t"
+			"pop	"REG_b"\n\t"
+			"pop	"REG_d"\n\t"
+			"pop	"REG_c"\n\t"
+			"pop	"REG_D"\n\t"
+			"pop	"REG_S"\n\t"
+		: /* %0 */ "=m" (*(char *)out)
+		: /* %1 */ "m" (&control_word),
+		  /* %2 */ "m" (ptr),
+		  /* %3 */ "m" (in),
+		  /* %4 */ "m" (out),
+		  /* %5 */ "m" (*(const char *)in)
+	);
+#endif
+}
+
+static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt256_padlock(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	static const struct {
+		uint32_t x[4];
+	} control_word GCC_ATTR_ALIGNED(16) = {
+		{PL_R256 | PL_K256, 0, 0, 0}
 	};
 #if _GNUC_PREREQ (4,4) || defined(__OPTIMIZE__)
 	size_t c, S, D;
@@ -679,7 +1264,7 @@ static GCC_ATTR_OPTIMIZE(3) void aes_ecb_encrypt_padlock(const struct aes_encryp
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
  */
-static void aes_ecb_encrypt_AVXAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+static void aes_ecb_encrypt128_AVXAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	size_t k;
 
@@ -708,10 +1293,44 @@ static void aes_ecb_encrypt_AVXAES(const struct aes_encrypt_ctx *ctx, void *out,
 #  endif
 	);
 }
+
+static void aes_ecb_encrypt256_AVXAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	size_t k;
+
+	asm(
+			"prefetch	(%"PTRP"0)\n\t"
+			"add	$0x70, %0\n\t"	/* prime key address */
+			"vlddqu	%2, %%xmm0\n\t"	/* input */
+			"vpxor	-0x70(%"PTRP"0), %%xmm0, %%xmm0\n\t"	/* key round 0 */
+			"vaesenc	-0x60(%"PTRP"0), %%xmm0, %%xmm0\n\t"	/* key key */
+			"vaesenc	-0x40(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	-0x40(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	-0x30(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	-0x20(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	-0x10(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	     (%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x10(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x20(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x30(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x40(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x50(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenc	 0x60(%"PTRP"0), %%xmm0, %%xmm0\n\t"
+			"vaesenclast	0x70(%"PTRP"0), %%xmm0, %%xmm0\n\t"	/* last round */
+			"vmovdqu	%%xmm0, %1"	/* output */
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*(char *)out)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
+#  ifdef __SSE__
+		: "xmm0"
+#  endif
+	);
+}
 # endif
 
 # if HAVE_BINUTILS >= 217
-static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+static void aes_ecb_encrypt128_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
 {
 	size_t k;
 
@@ -722,6 +1341,56 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
 			"add	$0x30, %0\n\t"	/* prime key address */
 			"movaps	-0x20(%"PTRP"0), %%xmm1\n\t"	/* key key */
 			/* aesenc %xmm1, %xmm0 */	/* round */
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	-0x10(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x10(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x20(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x30(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x40(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x50(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x60(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	0x70(%"PTRP"0), %%xmm1\n\t"
+			/* aesenclast %xmm1, %xmm0 */	/* last round */
+			".byte	0x66, 0x0f, 0x38, 0xdd, 0xc1\n\t"
+			"movups	%%xmm0, %1"	/* output */
+		: /* %0 */ "=r" (k),
+		  /* %1 */ "=m" (*(char *)out)
+		: /* %2 */ "m" (*(const char *)in),
+		  /* %3 */ "0" (&ctx->k)
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
+#  endif
+	);
+}
+
+static void aes_ecb_encrypt256_SSEAES(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	size_t k;
+
+	asm(
+			"movups	%2, %%xmm0\n\t"	/* input */
+			"movaps	(%"PTRP"0), %%xmm1\n\t"	/* key */
+			"pxor	%%xmm1, %%xmm0\n\t"	/* round 0 */
+			"add	$0x70, %0\n\t"	/* prime key address */
+			"movaps	-0x60(%"PTRP"0), %%xmm1\n\t"	/* key key */
+			/* aesenc %xmm1, %xmm0 */	/* round */
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	-0x50(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	-0x40(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	-0x30(%"PTRP"0), %%xmm1\n\t"
+			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
+			"movaps	-0x20(%"PTRP"0), %%xmm1\n\t"
 			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
 			"movaps	-0x10(%"PTRP"0), %%xmm1\n\t"
 			".byte	0x66, 0x0f, 0x38, 0xdc, 0xc1\n\t"
@@ -766,7 +1435,18 @@ static void aes_ecb_encrypt_SSEAES(const struct aes_encrypt_ctx *ctx, void *out,
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
  */
-static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+#   ifndef __i386__
+#    define AVX_SB1LO "%%xmm13"
+#    define AVX_SB1HI "%%xmm12"
+#    define AVX_SB2LO "%%xmm15"
+#    define AVX_SB2HI "%%xmm14"
+#   else
+#    define AVX_SB1LO str_it(SB1LO)"(%"PTRP"4)"
+#    define AVX_SB1HI str_it(SB1HI)"(%"PTRP"4)"
+#    define AVX_SB2LO str_it(SB2LO)"(%"PTRP"4)"
+#    define AVX_SB2HI str_it(SB2HI)"(%"PTRP"4)"
+#   endif
+static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, const void *in, size_t mrounds)
 {
 	size_t rounds, n;
 	void *k;
@@ -784,10 +1464,10 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 			"vmovdqa	"str_it(INVLO)"(%"PTRP"4), %%xmm5\n\t"	/* inv */
 			"vmovdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm7\n\t"	/* inva */
 #   ifndef __i386__
-			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm13\n\t"	/* sb1u */
-			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm12\n\t"	/* sb1t */
-			"vmovdqa	"str_it(SB2LO)"(%"PTRP"4), %%xmm15\n\t"	/* sb2u */
-			"vmovdqa	"str_it(SB2HI)"(%"PTRP"4), %%xmm14\n\t"	/* sb2t */
+			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), "AVX_SB1LO"\n\t"	/* sb1u */
+			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), "AVX_SB1HI"\n\t"	/* sb1t */
+			"vmovdqa	"str_it(SB2LO)"(%"PTRP"4), "AVX_SB2LO"\n\t"	/* sb2u */
+			"vmovdqa	"str_it(SB2HI)"(%"PTRP"4), "AVX_SB2HI"\n\t"	/* sb2t */
 #   endif
 			"vmovdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
 			"vpandn	 %%xmm0, %%xmm6, %%xmm1\n\t"
@@ -804,32 +1484,12 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 			"1:\n\t"
 		/* middle of middle round */
 			"vmovdqa	"str_it(MCF)"(%"PTRP"1,%"PTRP"4), %%xmm1\n\t"
-#   ifndef __i386__
-			"vpshufb	 %%xmm2, %%xmm13, %%xmm4\n\t"	/* 4 = sb1u */
-#   else
-			"vmovdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sb1u */
-			"vpshufb	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = sb1u */
-#   endif
+			AVX_M2OP("vpshufb", "%%xmm2", AVX_SB1LO, "%%xmm4")	/* 4 = sb1u */
 			"vpxor	   (%"PTRP"2), %%xmm4, %%xmm4\n\t"	/* 4 = sb1u + k */
-#   ifndef __i386__
-			"vpshufb	 %%xmm3, %%xmm12, %%xmm0\n\t"	/* 0 = sb1t */
-#   else
-			"vmovdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm0\n\t"	/* 0: sb1t */
-			"vpshufb	 %%xmm3, %%xmm0, %%xmm0\n\t"	/* 0 = sb1t */
-#   endif
+			AVX_M2OP("vpshufb", "%%xmm3", AVX_SB1HI, "%%xmm0")	/* 0 = sb1t */
 			"vpxor	 %%xmm4, %%xmm0, %%xmm0\n\t"	/* 0 = A */
-#   ifndef __i386__
-			"vpshufb	 %%xmm2, %%xmm15, %%xmm4\n\t"	/* 4 = sb2u */
-#   else
-			"vmovdqa	"str_it(SB2LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sb2u */
-			"vpshufb	 %%xmm2, %%xmm4, %%xmm4\n\t"	/* 4 = sb2u */
-#   endif
-#   ifndef __i386__
-			"vpshufb	 %%xmm3, %%xmm14, %%xmm2\n\t"	/* 2 = sb2t */
-#   else
-			"vmovdqa	"str_it(SB2HI)"(%"PTRP"4), %%xmm2\n\t"	/* 2 : sb2t */
-			"vpshufb	 %%xmm3, %%xmm2, %%xmm2\n\t"	/* 2 = sb2t */
-#   endif
+			AVX_M2OP("vpshufb", "%%xmm2", AVX_SB2LO, "%%xmm4")	/* 4 = sb2u */
+			AVX_M2OP("vpshufb", "%%xmm3", AVX_SB2HI, "%%xmm2")	/* 2 = sb2t */
 			"vpxor	 %%xmm4, %%xmm2, %%xmm2\n\t"	/* 2 = 2A */
 			"vpshufb	"str_it(MCB)"(%"PTRP"1,%"PTRP"4), %%xmm0, %%xmm3\n\t"	/* 3 = D */
 			"vpshufb	 %%xmm1, %%xmm0, %%xmm0\n\t"	/* 0 = B */
@@ -872,7 +1532,7 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 		  /* %3 */ "=m" (*(int *)out)
 		: /* %4 */ "R" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
-		  /* %6 */ "0" (10 - 1),
+		  /* %6 */ "0" (mrounds),
 		  /* %7 */ "1" (16),
 		  /* %8 */ "2" (&ctx->k[0])
 #   ifdef __SSE__
@@ -883,9 +1543,35 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 #   endif
 	);
 }
+#   undef AVX_SB1LO
+#   undef AVX_SB1HI
+#   undef AVX_SB2LO
+#   undef AVX_SB2HI
+
+static void aes_ecb_encrypt128_AVX(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_AVX(ctx, out, in, 10 - 1);
+}
+
+static void aes_ecb_encrypt256_AVX(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_AVX(ctx, out, in, 14 - 1);
+}
+
 #  endif
 
-static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+#  ifndef __i386__
+#   define SSSE3_SB1LO "%%xmm13"
+#   define SSSE3_SB1HI "%%xmm12"
+#   define SSSE3_SB2LO "%%xmm15"
+#   define SSSE3_SB2HI "%%xmm14"
+#  else
+#   define SSSE3_SB1LO str_it(SB1LO)"(%"PTRP"4)"
+#   define SSSE3_SB1HI str_it(SB1HI)"(%"PTRP"4)"
+#   define SSSE3_SB2LO str_it(SB2LO)"(%"PTRP"4)"
+#   define SSSE3_SB2HI str_it(SB2HI)"(%"PTRP"4)"
+#  endif
+static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in, size_t mrounds)
 {
 	size_t rounds, n;
 	void *k;
@@ -903,10 +1589,10 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 			"movdqa	"str_it(INVLO)"(%"PTRP"4), %%xmm5\n\t"	/* inv */
 			"movdqa	"str_it(INVHI)"(%"PTRP"4), %%xmm7\n\t"	/* inva */
 #  ifndef __i386__
-			"movdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm13\n\t"	/* sb1u */
-			"movdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm12\n\t"	/* sb1t */
-			"movdqa	"str_it(SB2LO)"(%"PTRP"4), %%xmm15\n\t"	/* sb2u */
-			"movdqa	"str_it(SB2HI)"(%"PTRP"4), %%xmm14\n\t"	/* sb2t */
+			"movdqa	"str_it(SB1LO)"(%"PTRP"4), "SSSE3_SB1LO"\n\t"	/* sb1u */
+			"movdqa	"str_it(SB1HI)"(%"PTRP"4), "SSSE3_SB1HI"\n\t"	/* sb1t */
+			"movdqa	"str_it(SB2LO)"(%"PTRP"4), "SSSE3_SB2LO"\n\t"	/* sb2u */
+			"movdqa	"str_it(SB2HI)"(%"PTRP"4), "SSSE3_SB2HI"\n\t"	/* sb2t */
 #  endif
 			"movdqa	"str_it(IPTLO)"(%"PTRP"4), %%xmm2\n\t"	/* iptlo */
 			"movdqa	 %%xmm6, %%xmm1\n\t"
@@ -924,31 +1610,15 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 			"1:\n\t"
 		/* middle of middle round */
 			"movdqa	"str_it(MCF)"(%"PTRP"1,%"PTRP"4), %%xmm1\n\t"
-#  ifndef __i386__
-			"movdqa	%%xmm13, %%xmm4\n\t"	/* 4 : sb1u */
-#  else
-			"movdqa	"str_it(SB1LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sb1u */
-#  endif
+			"movdqa	"SSSE3_SB1LO", %%xmm4\n\t"	/* 4 : sb1u */
 			"pshufb	 %%xmm2, %%xmm4\n\t"	/* 4 = sb1u */
 			"pxor	   (%"PTRP"2), %%xmm4\n\t"	/* 4 = sb1u + k */
-#  ifndef __i386__
-			"movdqa	%%xmm12, %%xmm0\n\t"	/* 0 : sb1t */
-#  else
-			"movdqa	"str_it(SB1HI)"(%"PTRP"4), %%xmm0\n\t"	/* 0: sb1t */
-#  endif
+			"movdqa	"SSSE3_SB1HI", %%xmm0\n\t"	/* 0 : sb1t */
 			"pshufb	 %%xmm3, %%xmm0\n\t"	/* 0 = sb1t */
 			"pxor	 %%xmm4, %%xmm0\n\t"	/* 0 = A */
-#  ifndef __i386__
-			"movdqa	%%xmm15, %%xmm4\n\t"	/* 4 : sb2u */
-#  else
-			"movdqa	"str_it(SB2LO)"(%"PTRP"4), %%xmm4\n\t"	/* 4 : sb2u */
-#  endif
+			"movdqa	"SSSE3_SB2LO", %%xmm4\n\t"	/* 4 : sb2u */
 			"pshufb	 %%xmm2, %%xmm4\n\t"	/* 4 = sb2u */
-#  ifndef __i386__
-			"movdqa	%%xmm14, %%xmm2\n\t"	/* 2 : sb2t */
-#  else
-			"movdqa	"str_it(SB2HI)"(%"PTRP"4), %%xmm2\n\t"	/* 2 : sb2t */
-#  endif
+			"movdqa	"SSSE3_SB2HI", %%xmm2\n\t"	/* 2 : sb2t */
 			"pshufb	 %%xmm3, %%xmm2\n\t"	/* 2 = sb2t */
 			"pxor	 %%xmm4, %%xmm2\n\t"	/* 2 = 2A */
 			"movdqa	 %%xmm0, %%xmm3\n\t"	/* 3 = A */
@@ -999,7 +1669,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 		  /* %3 */ "=m" (*(int *)out)
 		: /* %4 */ "R" (AES_CONSTS_0MEMBER),
 		  /* %5 */ "m" (*(const int *)in),
-		  /* %6 */ "0" (10 - 1),
+		  /* %6 */ "0" (mrounds),
 		  /* %7 */ "1" (16),
 		  /* %8 */ "2" (&ctx->k[0])
 #  ifdef __SSE__
@@ -1010,6 +1680,20 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 #  endif
 	);
 }
+#   undef SSSE3_SB1LO
+#   undef SSSE3_SB1HI
+#   undef SSSE3_SB2LO
+#   undef SSSE3_SB2HI
+
+static void aes_ecb_encrypt128_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_SSSE3(ctx, out, in, 10 - 1);
+}
+
+static void aes_ecb_encrypt256_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, const void *in)
+{
+	aes_ecb_encrypt_SSSE3(ctx, out, in, 14 - 1);
+}
 # endif
 #endif
 
@@ -1018,7 +1702,7 @@ static void aes_ecb_encrypt_SSSE3(const struct aes_encrypt_ctx *ctx, void *out, 
 
 static __init_cdata const struct test_cpu_feature tfeat_aes_encrypt_key128[] =
 {
-	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
+	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {[7] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))aes_encrypt_key128_AVXAES,  .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
@@ -1032,24 +1716,59 @@ static __init_cdata const struct test_cpu_feature tfeat_aes_encrypt_key128[] =
 	{.func = (void (*)(void))aes_encrypt_key128_generic, .features = {}, .flags = CFF_DEFAULT},
 };
 
-static __init_cdata const struct test_cpu_feature tfeat_aes_ecb_encrypt[] =
+static __init_cdata const struct test_cpu_feature tfeat_aes_ecb_encrypt128[] =
 {
-	{.func = (void (*)(void))aes_ecb_encrypt_padlock,  .features = {[5] = CFB(CFEATURE_PL_ACE_E)}},
+	{.func = (void (*)(void))aes_ecb_encrypt128_padlock,  .features = {[7] = CFB(CFEATURE_PL_ACE_E)}},
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
-	{.func = (void (*)(void))aes_ecb_encrypt_AVXAES,   .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
-	{.func = (void (*)(void))aes_ecb_encrypt_AVX,      .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_ecb_encrypt128_AVXAES,   .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_ecb_encrypt128_AVX,      .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
 # endif
 # if HAVE_BINUTILS >= 217
-	{.func = (void (*)(void))aes_ecb_encrypt_SSEAES,   .features = {[1] = CFB(CFEATURE_AES)}},
-	{.func = (void (*)(void))aes_ecb_encrypt_SSSE3,    .features = {[1] = CFB(CFEATURE_SSSE3)}},
+	{.func = (void (*)(void))aes_ecb_encrypt128_SSEAES,   .features = {[1] = CFB(CFEATURE_AES)}},
+	{.func = (void (*)(void))aes_ecb_encrypt128_SSSE3,    .features = {[1] = CFB(CFEATURE_SSSE3)}},
 # endif
 #endif
-	{.func = (void (*)(void))aes_ecb_encrypt_generic,  .features = {}, .flags = CFF_DEFAULT},
+	{.func = (void (*)(void))aes_ecb_encrypt128_generic,  .features = {}, .flags = CFF_DEFAULT},
 };
 
 DYN_JMP_DISPATCH_NR(aes_encrypt_key128, (struct aes_encrypt_ctx *ctx, const void *in), (ctx, in))
-DYN_JMP_DISPATCH_NR(aes_ecb_encrypt, (const struct aes_encrypt_ctx *ctx, void *out, const void *in), (ctx, out, in))
+DYN_JMP_DISPATCH_NR(aes_ecb_encrypt128, (const struct aes_encrypt_ctx *ctx, void *out, const void *in), (ctx, out, in))
+
+static __init_cdata const struct test_cpu_feature tfeat_aes_encrypt_key256[] =
+{
+	{.func = (void (*)(void))aes_encrypt_key256_generic, .features = {[7] = CFB(CFEATURE_PL_ACE_E)}},
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))aes_encrypt_key256_AVXAES,  .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_encrypt_key256_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))aes_encrypt_key256_SSEAES,  .features = {[1] = CFB(CFEATURE_AES)}},
+	{.func = (void (*)(void))aes_encrypt_key256_SSSE3,   .features = {[1] = CFB(CFEATURE_SSSE3)}},
+# endif
+#endif
+	{.func = (void (*)(void))aes_encrypt_key256_generic, .features = {}, .flags = CFF_DEFAULT},
+};
+
+static __init_cdata const struct test_cpu_feature tfeat_aes_ecb_encrypt256[] =
+{
+	{.func = (void (*)(void))aes_ecb_encrypt256_padlock,  .features = {[7] = CFB(CFEATURE_PL_ACE_E)}},
+#ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 219
+	{.func = (void (*)(void))aes_ecb_encrypt256_AVXAES,   .features = {[1] = CFB(CFEATURE_AES)|CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))aes_ecb_encrypt256_AVX,      .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
+# if HAVE_BINUTILS >= 217
+	{.func = (void (*)(void))aes_ecb_encrypt256_SSEAES,   .features = {[1] = CFB(CFEATURE_AES)}},
+	{.func = (void (*)(void))aes_ecb_encrypt256_SSSE3,    .features = {[1] = CFB(CFEATURE_SSSE3)}},
+# endif
+#endif
+	{.func = (void (*)(void))aes_ecb_encrypt256_generic,  .features = {}, .flags = CFF_DEFAULT},
+};
+
+DYN_JMP_DISPATCH_NR(aes_encrypt_key256, (struct aes_encrypt_ctx *ctx, const void *in), (ctx, in))
+DYN_JMP_DISPATCH_NR(aes_ecb_encrypt256, (const struct aes_encrypt_ctx *ctx, void *out, const void *in), (ctx, out, in))
 
 /*@unused@*/
 static char const rcsid_aesx[] GCC_ATTR_USED_VAR = "$Id:$";

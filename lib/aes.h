@@ -2,7 +2,7 @@
  * aes.h
  * header for AES functions
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -39,10 +39,8 @@
  *     192           |       13
  *     256           |       15
  *
- * so for 128-bit atm we only need 11x16 byte
- * blocks
  */
-# define AES_MAX_KEY_LEN (11 * 16)
+# define AES_MAX_KEY_LEN (15 * 16)
 
 struct aes_encrypt_ctx
 {
@@ -50,5 +48,7 @@ struct aes_encrypt_ctx
 } GCC_ATTR_ALIGNED(16);
 
 LIB_AES_EXTRN(void aes_encrypt_key128(struct aes_encrypt_ctx *, const void *));
-LIB_AES_EXTRN(void aes_ecb_encrypt(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
+LIB_AES_EXTRN(void aes_encrypt_key256(struct aes_encrypt_ctx *, const void *));
+LIB_AES_EXTRN(void aes_ecb_encrypt128(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
+LIB_AES_EXTRN(void aes_ecb_encrypt256(const struct aes_encrypt_ctx *restrict, void *restrict out, const void *restrict in));
 #endif

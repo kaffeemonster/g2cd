@@ -41,7 +41,7 @@ void guid_generate(unsigned char out[GUID_SIZE])
 
 	mutex_lock(&ctx_lock);
 	/* encrypt IV with our random key */
-	aes_ecb_encrypt(&ae_ctx, &l_res, &l_res);
+	aes_ecb_encrypt256(&ae_ctx, &l_res, &l_res);
 	/* xor bytes with result, creating next IV */
 	l_res.d[0] ^= get_unaligned(((uint32_t *)out)+0);
 	l_res.d[1] ^= get_unaligned(((uint32_t *)out)+1);
@@ -78,13 +78,13 @@ void guid_generate(unsigned char out[GUID_SIZE])
 
 void guid_tick(void)
 {
-	unsigned char key[RAND_BLOCK_BYTE + sizeof(l_res)];
+	unsigned char key[RAND_BLOCK_BYTE*2 + sizeof(l_res)];
 	struct aes_encrypt_ctx t_ctx;
 
 	/* get random bytes for a key */
 	random_bytes_get(&key, sizeof(key));
 	/* create the new key */
-	aes_encrypt_key128(&t_ctx, key);
+	aes_encrypt_key256(&t_ctx, key);
 	mutex_lock(&ctx_lock);
 	/* put key in place */
 	ae_ctx = t_ctx;
