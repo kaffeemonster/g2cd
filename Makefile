@@ -191,7 +191,7 @@ AUX = \
 	g2cd.conf.in \
 	g2cd.1 \
 	COPYING \
-	README \
+	README.md \
 	autogen.sh \
 	configure \
 	configure.ac \
