@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, x86 implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2022 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -82,6 +82,8 @@ static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
+#  if 0
+/* wrong results, marginally faster */
 static size_t mempopcnt_AVX(const void *s, size_t len)
 {
 	size_t ret, cnt1, cnt2;
@@ -404,6 +406,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
 
 	return ret;
 }
+#  endif
 # endif
 
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
@@ -416,6 +419,12 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
  * On 64 Bit we should get near 8 byte/cycle, near...
  * But, the SSSE3 CSA is still faster.
  * So maybe on something like the AMD Bulldozer?
+ * And years later the results are in...
+ * It highly depends on the quality of the popcnt instr.
+ * Is it meh, or only in one pipeline, somthing like that,
+ * SSSE3 CSA wins, but is the popcnt inst good, popcnt
+ * takes the cake. Like on my ZEN3, popcnt is ~30% faster
+ * then SIMD CSA.
  */
 static inline size_t popcountst_intSSE4(size_t n)
 {
@@ -1864,8 +1873,11 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 {
 #ifdef HAVE_BINUTILS
+# if 0
+	/* only marginally faster then popcnt intr., wrong results */
 # if HAVE_BINUTILS >= 219
 	{.func = (void (*)(void))mempopcnt_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+# endif
 # endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_POPCNT)}},
