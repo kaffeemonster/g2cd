@@ -130,6 +130,8 @@
  *
  * If everthing fails we can still use a secure hash, or something
  * else, it should be invisible for our clients.
+ * MAYBE: Password hash? But they are often even MORE expensive
+ *        (for ex. 1000 rounds of SHA)
  *
  * Unfortunatly this is all fucked up by the greater internet evils:
  * NAT and UDP-Firewalls.
