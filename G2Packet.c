@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004-2015 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1395,7 +1395,7 @@ static bool handle_KHL(struct ptype_action_args *parg)
 
 	/* time to send a packet again? */
 	if(local_time_now <
-	   (parg->connec->u.handler.send_stamps.KHL + (KHL_TIMEOUT * parg->connec->flags.upeer ? 1 : 3)))
+	   (parg->connec->u.handler.send_stamps.KHL + (KHL_TIMEOUT * (parg->connec->flags.upeer ? 1 : 3))))
 		return ret_val;
 
 	/* build package */
