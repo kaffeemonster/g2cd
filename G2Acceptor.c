@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * code to accept connections and handshake G2
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -749,6 +749,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->u.accept.header_bytes_recv = str_size(GNUTELLA_CONNECT_STRING) + 2;
 			} else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* gravel over the header field as they arrive */
 		case HAS_CONNECT_STRING:
 			if(unlikely(!buffer_remaining(*to_con->recv))) {
@@ -796,10 +797,12 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				else
 					return abort_g2_400(to_con); /* go home */
 			}
+			GCC_FALL_THROUGH
 	/* the first header is comlete, give the poor soul new time */
 		case ADVANCE_TIMEOUTS:
 			timeout_advance(&to_con->aux_to, ACCEPT_HEADER_COMPLETE_TIMEOUT);
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 	/* what's up with the accept-field? */
 		case CHECK_ACCEPT:
 			/* do we have one? */
@@ -813,6 +816,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 			else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* and the remote_ip field? */
 		case CHECK_ADDR:
 			/* do we have one and there was a valid address inside? */
@@ -820,6 +824,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* how about the user-agent */
 		case CHECK_UAGENT:
 			/* even if it's empty, the field should be send */
@@ -827,12 +832,14 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* last 'must-have' field: X-UltraPeer */
 		case CHECK_UPEER:
 			if(likely(to_con->u.accept.flags.upeer_ok))
 				to_con->connect_state++;
 			else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* what's the accepted encoding? */
 		case CHECK_ENC_OUT:
 			/*
@@ -876,6 +883,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->encoding_in =
 				to_con->flags.upeer ? server.settings.hub_in_encoding : server.settings.default_in_encoding;
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 		case BUILD_ANSWER:
 			/*
 			 * it should be our first comunication, and if someone
@@ -1206,6 +1214,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->u.accept.flags.second_header = true;
 			to_con->u.accept.header_bytes_recv = str_size(GNUTELLA_STRING " 200");
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 	/* search first CRLF (maybe someone sends something like 'Welcome' behind the 200) and skip it */
 		case ANSWER_200:
 			if(unlikely(!buffer_remaining(*to_con->recv))) {
@@ -1234,6 +1243,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			to_con->recv->pos += dist + 2;
 			to_con->u.accept.header_bytes_recv += dist + 2;
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 	/* again fidel around with the header */
 		case SEARCH_CAPS_2:
 			if(unlikely(!buffer_remaining(*to_con->recv))) {
@@ -1285,12 +1295,14 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				else
 					return abort_g2_400(to_con); /* go home */
 			}
+			GCC_FALL_THROUGH
 	/* we have the second header, we are nearly finished, prevent from running out of time */
 		case CANCEL_TIMEOUTS:
 // TODO: cancel here or at end?
 			timeout_cancel(&to_con->active_to);
 			timeout_cancel(&to_con->aux_to);
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 	/* Content-Key? */
 		case CHECK_CONTENT:
 			/* do we have one? */
@@ -1304,6 +1316,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			}
 			else
 				return abort_g2_400(to_con);
+			GCC_FALL_THROUGH
 	/* what does the other likes to send as encoding */
 		case CHECK_ENC_IN:
 			/*
@@ -1346,6 +1359,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				}
 			}
 			to_con->connect_state++;
+			GCC_FALL_THROUGH
 	/* make everything ready for business */
 		case FINISH_CONNECTION:
 			/* wipe out the shared space again */

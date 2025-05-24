@@ -2,7 +2,7 @@
  * G2Handler.c
  * code to handle G2-Protocol
  *
- * Copyright (c) 2004-2015 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -205,6 +205,7 @@ retry_pack:
 				{
 				case Z_BUF_ERROR:
 					logg_devel_old("Z_BUF_ERROR\n");
+					GCC_FALL_THROUGH
 				case Z_OK:
 					w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->z_encoder->avail_in);
 					w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->z_encoder->avail_out);
@@ -314,6 +315,7 @@ retry_unpack:
 				{
 				case Z_BUF_ERROR:
 					logg_devel("Z_BUF_ERROR\n");
+					GCC_FALL_THROUGH
 				case Z_OK:
 					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder->avail_in);
 					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder->avail_out);

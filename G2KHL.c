@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008-2015 Jan Seiffert
+ * Copyright (c) 2008-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1454,6 +1454,7 @@ bool g2_khl_tick(void)
 		break;
 	case KHL_GWC_KICK:
 		gwc_kick(&act_gwc.data);
+		GCC_FALL_THROUGH
 	case KHL_GWC_CLEAN:
 		gwc_clean();
 		cache.state = KHL_IDLE;

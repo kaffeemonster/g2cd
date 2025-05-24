@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2012 Jan Seiffert
+ * Copyright (c) 2006-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -167,7 +167,7 @@ struct zpad *qht_get_zpad(void)
 }
 
 /**/
-static noinline GCC_ATTR_MALLOC unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
+static noinline GCC_ATTR_MALLOC GCC_ASSUME_ALIGNED(16) unsigned char *qht_get_scratch_intern(size_t length, pthread_key_t scratch_key)
 {
 	struct scratch *scratch = pthread_getspecific(scratch_key);
 	int res;
@@ -1139,14 +1139,18 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * as a 'LATIN CAPITAL LETTER A WITH RING ABOVE' (U+00C5) (old latin1
 		 * coding), wich can be decomposed as 'LATIN CAPITAL LETTER A' (U+0041)
 		 * and a 'COMBINING RING ABOVE' (U+030A).
-		 * So three different binary representations, for the same letter, which
-		 * will yield different hashes. In european languages we have a set of
-		 * accents above, wrinckles below, dots somewhere to make this "important",
-		 * but for example hangul, thanks to their system, can also be written
-		 * either completely decomposed (Jamo) or as composed 'fixed' graphemes.
+		 * So three different binary representations, for the same letter (not
+		 * totaly the same (Angstrom is a physical unit, 'a' with ring above a
+		 * letter in many nordic alphabets), but same visual apeal, and since a
+		 * conversions can be lossy ('ANGSTROM SIGN' -> decomposed), you are
+		 * generaly fucked), which will yield different hashes. In european languages
+		 * we have a set of accents above, wrinckles below, dots somewhere to make
+		 * this "important", but for example hangul, thanks to their system,
+		 * everything can be written either completely decomposed (Jamo) or
+		 * as composed 'fixed' graphemes.
 		 * This will mostly hurt with MacOS, because the APIs there normalize
 		 * everthing to decomposed form (filenames, etc. tranfered as one name
-		 * to the Mac, get a different hash back).
+		 * to the Mac and save the file(name), get a different hash back).
 		 *
 		 * At the end of the day this does not help us. We have to create hashes
 		 * like Shareaza or it will not blend^Wmatch the hash.
@@ -1834,6 +1838,7 @@ struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *org, const struc
 	{
 	default:
 		logg_develd("funky compression: %i\n", server.settings.qht.compression);
+		GCC_FALL_THROUGH
 	case COMP_NONE:
 		pos = 0;
 		do

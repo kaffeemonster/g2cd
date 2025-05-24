@@ -82,8 +82,8 @@ uint32_t hthash(const void *key, size_t len, uint32_t seed)
 		}
 		switch(len)
 		{
-		case 3: t |= data[2] << 16;
-		case 2: t |= data[1] <<  8;
+		case 3: t |= data[2] << 16; GCC_FALL_THROUGH
+		case 2: t |= data[1] <<  8; GCC_FALL_THROUGH
 		case 1: t |= data[0];
 				MMHASH_MIX(h, t);
 		}
@@ -208,19 +208,19 @@ uint32_t hthash(const void *key, size_t len, uint32_t seed)
 	switch (len)
 	{
 // TODO: bring into cpu endianess
-	case 12: w[2] += (uint32_t)data[11] << 24;
-	case 11: w[2] += (uint32_t)data[10] << 16;
-	case 10: w[2] += (uint32_t)data[ 9] <<  8;
-	case 9 : w[2] += (uint32_t)data[ 8];
-	case 8 : w[1] += (uint32_t)data[ 7] << 24;
-	case 7 : w[1] += (uint32_t)data[ 6] << 16;
-	case 6 : w[1] += (uint32_t)data[ 5] <<  8;
-	case 5 : w[1] +=           data[ 4];
-	case 4 : w[0] += (uint32_t)data[ 3] << 24;
-	case 3 : w[0] += (uint32_t)data[ 2] << 16;
-	case 2 : w[0] += (uint32_t)data[ 1] <<  8;
+	case 12: w[2] += (uint32_t)data[11] << 24; GCC_FALL_THROUGH
+	case 11: w[2] += (uint32_t)data[10] << 16; GCC_FALL_THROUGH
+	case 10: w[2] += (uint32_t)data[ 9] <<  8; GCC_FALL_THROUGH
+	case 9 : w[2] += (uint32_t)data[ 8]; GCC_FALL_THROUGH
+	case 8 : w[1] += (uint32_t)data[ 7] << 24; GCC_FALL_THROUGH
+	case 7 : w[1] += (uint32_t)data[ 6] << 16; GCC_FALL_THROUGH
+	case 6 : w[1] += (uint32_t)data[ 5] <<  8; GCC_FALL_THROUGH
+	case 5 : w[1] +=           data[ 4]; GCC_FALL_THROUGH
+	case 4 : w[0] += (uint32_t)data[ 3] << 24; GCC_FALL_THROUGH
+	case 3 : w[0] += (uint32_t)data[ 2] << 16; GCC_FALL_THROUGH
+	case 2 : w[0] += (uint32_t)data[ 1] <<  8; GCC_FALL_THROUGH
 	case 1 : w[0] +=           data[ 0];
-		__jhash_final(w[0], w[1], w[2]);
+		__jhash_final(w[0], w[1], w[2]); GCC_FALL_THROUGH
 	case 0 : break; /* Nothing left to add */
 	};
 
@@ -235,10 +235,10 @@ uint32_t hthash32_mod(const uint32_t *key, size_t len, uint32_t seed, uint32_t r
 	len = __hthash32(w, key, len);
 
 	switch(len) {
-	case 3: w[2] += key[2];
-	case 2: w[1] += key[1];
+	case 3: w[2] += key[2]; GCC_FALL_THROUGH
+	case 2: w[1] += key[1]; GCC_FALL_THROUGH
 	case 1: w[0] += key[0];
-		__jhash_final(w[0], w[1], w[2]);
+		__jhash_final(w[0], w[1], w[2]); GCC_FALL_THROUGH
 	case 0 : break; /* Nothing left to add */
 	};
 

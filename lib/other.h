@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2015 Jan Seiffert
+ * Copyright (c) 2004 - 2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -250,11 +250,28 @@
 # define GCC_CONSTANT_P(x) (0)
 #endif
 
+#if _GNUC_PREREQ (4,9)
+# define GCC_ASSUME_ALIGNED(x) GCC_ATTRIB(__assume_aligned__(x))
+#else
+# define GCC_ASSUME_ALIGNED(x)
+#endif
+
 /* clang could join the party */
 #if _GNUC_PREREQ (5,0)
 # define GCC_OVERFLOW_UMUL(a, b, res)  __builtin_umul_overflow(a, b, res)
 #else
 # define GCC_OVERFLOW_UMUL(a, b, res)  ({bool r = a <= (UINT_MAX / b) ? false : true; *res = !r ? a * b : 0; r;})
+#endif
+
+/* gcc now warns on implicit falltrough (better diagnostics in
+ * re goto fail). We use that feature
+ * unfortunatly the classical fallthrough-in-comment marker only works
+ * if comments are passed to cc1 with -C
+ */
+#if _GNUC_PREREQ (7,0)
+# define GCC_FALL_THROUGH  GCC_ATTRIB(fallthrough);
+#else
+# define GCC_FALL_THROUGH
 #endif
 
 #ifdef GOT_GOT

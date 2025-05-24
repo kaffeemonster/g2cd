@@ -2,7 +2,7 @@
  * gup.c
  * grand unified poller
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -474,6 +474,7 @@ static int do_the_poll(struct epoll_event eevents[NUM_EEVENT], int num_ev)
 				break;
 			}
 		/* Nothing happened (or just the Timeout) */
+			GCC_FALL_THROUGH
 		case 0:
 			repoll = true;
 			break;

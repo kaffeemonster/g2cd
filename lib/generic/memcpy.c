@@ -2,7 +2,7 @@
  * memcpy.c
  * memcpy
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -45,13 +45,13 @@ static noinline GCC_ATTR_FASTCALL void *memcpy_big(void *restrict dst, const voi
 	dst_c += i; src_c += i; len -= i;
 	switch(i & SOSTM1)
 	{
-	case 7: *(dst_c - 7) = *(src_c - 7);
-	case 6: *(dst_c - 6) = *(src_c - 6);
-	case 5: *(dst_c - 5) = *(src_c - 5);
-	case 4: *(dst_c - 4) = *(src_c - 4);
-	case 3: *(dst_c - 3) = *(src_c - 3);
-	case 2: *(dst_c - 2) = *(src_c - 2);
-	case 1: *(dst_c - 1) = *(src_c - 1);
+	case 7: *(dst_c - 7) = *(src_c - 7); GCC_FALL_THROUGH
+	case 6: *(dst_c - 6) = *(src_c - 6); GCC_FALL_THROUGH
+	case 5: *(dst_c - 5) = *(src_c - 5); GCC_FALL_THROUGH
+	case 4: *(dst_c - 4) = *(src_c - 4); GCC_FALL_THROUGH
+	case 3: *(dst_c - 3) = *(src_c - 3); GCC_FALL_THROUGH
+	case 2: *(dst_c - 2) = *(src_c - 2); GCC_FALL_THROUGH
+	case 1: *(dst_c - 1) = *(src_c - 1); GCC_FALL_THROUGH
 	case 0: break;
 	}
 

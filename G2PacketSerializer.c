@@ -2,7 +2,7 @@
  * G2PacketSerializer.c
  * Serializer for G2-packets
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -304,6 +304,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 				break;
 			else if(0 > func_ret_val)
 				return false;
+			GCC_FALL_THROUGH
 		case READ_LENGTH:
 		/*
 		 * get the up to three length-bytes
@@ -315,13 +316,14 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 				break;
 			else if(0 > func_ret_val)
 				return false;
+			GCC_FALL_THROUGH
 		case READ_TYPE:
 		/* fetch the up to eigth type-bytes */
 			if(!(func_ret_val = read_type_p(source, target)))
 				break;
 			else if(0 > func_ret_val)
 				return false;
-
+			GCC_FALL_THROUGH
 		case DECIDE_DECODE:
 			stat_packet(target, level);
 			target->data_trunk.pos      = 0;
@@ -336,6 +338,7 @@ bool g2_packet_decode(struct pointer_buff *source, g2_packet_t *target, int leve
 				target->packet_decode    = DECODE_FINISHED;
 				return true;
 			}
+			GCC_FALL_THROUGH
 		case GET_PACKET_DATA:
 			/* length is checked above (READ_LENGTH) to not exceed buffer */
 			target->data_trunk_is_freeable = false;
@@ -410,6 +413,7 @@ bool g2_packet_decode_from_packet(g2_packet_t *source, g2_packet_t *target, int 
 		{
 		case PACKET_EXTRACTION_COMPLETE:
 			source->packet_decode = DECIDE_DECODE;
+			GCC_FALL_THROUGH
 		case DECIDE_DECODE:
 			stat_packet(source, level);
 
@@ -541,6 +545,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				break;
 			else if(unlikely(0 > func_ret_val))
 				return false;
+			GCC_FALL_THROUGH
 		case READ_LENGTH:
 		/* get the up to three length-bytes */
 			func_ret_val = read_length(source, target, max_len);
@@ -548,6 +553,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				break;
 			else if(unlikely(0 > func_ret_val))
 				return false;
+			GCC_FALL_THROUGH
 		case READ_TYPE:
 		/* fetch the up to eigth type-bytes */
 		 	func_ret_val = read_type(source, target);
@@ -555,8 +561,9 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				break;
 			else if(unlikely(0 > func_ret_val))
 				return false;
+			GCC_FALL_THROUGH
 		case DECIDE_DECODE:
-// TODO: since we know the type now, we may want to play games with skipping
+// TODO: since we know the type now, we may want to play games with early skipping
 		/* we have to obay a /TO before we can skip anything! */
 			func_ret_val = 0;
 			stat_packet(target, func_ret_val);
@@ -571,6 +578,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				target->packet_decode = DECODE_FINISHED;
 				break;
 			}
+			GCC_FALL_THROUGH
 		case START_EXTRACT_PACKET_FROM_STREAM:
 		/* look what has to be done to extract the data */
 			/* use clever tricks and do we have a trunk? */
@@ -588,6 +596,15 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 	 * We are assuming, that a packet with PACKET_EXTRACTION_COMPLETE
 	 * is imideatly handeld in one go. See G2Handler.c
 	 *
+	 */
+//TODO: BUG BUG BUG BUG
+	/*
+	 * The invariance above did hold true in the begining, but with
+	 * more complex paket handling, maybe some paket data is needed
+	 * much much much later, say when forwarding or routing and shit.
+	 * Most pakets are directly consumed, so not taking a deep copy
+	 * is a win, but then specific places may need to take a deep copy
+	 * and maybe need a flag to detect the case
 	 */
 				/* all data delivered? */
 				if(likely(target->length <= buffer_remaining(*source)))
@@ -611,6 +628,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				}
 			}
 			target->packet_decode = START_EXTRACT_PACKET_FROM_STREAM_TRUNK;
+			GCC_FALL_THROUGH
 		case START_EXTRACT_PACKET_FROM_STREAM_TRUNK:
 			/* is our trunk big enough? */
 			if(target->length > target->data_trunk.capacity)
@@ -682,6 +700,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 			target->data_trunk.pos = 0;
 			target->data_trunk.limit = target->length;
 			target->packet_decode = EXTRACT_PACKET_FROM_STREAM;
+			GCC_FALL_THROUGH
 		case EXTRACT_PACKET_FROM_STREAM:
 		/* grep payload */
 			if(buffer_remaining(*source) < buffer_remaining(target->data_trunk))
@@ -703,6 +722,7 @@ bool g2_packet_extract_from_stream_b(struct big_buff *source, g2_packet_t *targe
 				source->pos += buff_remain_target;
 			}
 			target->packet_decode = PACKET_EXTRACTION_COMPLETE;
+			GCC_FALL_THROUGH
 		case PACKET_EXTRACTION_COMPLETE:
 		/* everythings fine for now, next would be the childpackets, if some */
 			buffer_flip(target->data_trunk);
@@ -973,6 +993,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 		{
 		case DECIDE_ENCODE:
 			source->packet_encode = PREPARE_SERIALIZATION_MIN;
+			GCC_FALL_THROUGH
 		case PREPARE_SERIALIZATION_MIN:
 		case PREPARE_SERIALIZATION:
 			{
@@ -981,8 +1002,10 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				if(unlikely(-1 == ret))
 					return false;
 			}
+			GCC_FALL_THROUGH
 		case SERIALIZATION_PREPARED_MIN:
 			source->packet_encode = SERIALIZE_CONTROL;
+			GCC_FALL_THROUGH
 		case SERIALIZE_CONTROL:
 			{
 				uint8_t control;
@@ -995,6 +1018,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				target->pos++;
 				source->packet_encode++;
 			}
+			GCC_FALL_THROUGH
 		case SERIALIZE_LENGTH1:
 			if(likely(source->length_length >= 1))
 			{
@@ -1017,6 +1041,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 			}
 			source->packet_encode++;
 			prefetch(&g2_ptype_names[source->type]);
+			GCC_FALL_THROUGH
 		case SERIALIZE_LENGTH2:
 			if(unlikely(source->length_length >= 2))
 			{
@@ -1035,6 +1060,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				target->pos++;
 			}
 			source->packet_encode++;
+			GCC_FALL_THROUGH
 		case SERIALIZE_LENGTH3:
 			if(unlikely(source->length_length >= 3))
 			{
@@ -1049,22 +1075,31 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				target->pos++;
 			}
 			source->packet_encode++;
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE1:
 			SERIALIZE_TYPE_ON_NUM(1, likely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE2:
 			SERIALIZE_TYPE_ON_NUM(2, likely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE3:
 			SERIALIZE_TYPE_ON_NUM(3, likely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE4:
 			SERIALIZE_TYPE_ON_NUM(4, unlikely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE5:
 			SERIALIZE_TYPE_ON_NUM(5, unlikely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE6:
 			SERIALIZE_TYPE_ON_NUM(6, unlikely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE7:
 			SERIALIZE_TYPE_ON_NUM(7, unlikely);
+			GCC_FALL_THROUGH
 		case SERIALIZE_TYPE8:
 			SERIALIZE_TYPE_ON_NUM(8, unlikely);
+			GCC_FALL_THROUGH
 		case SERIALIZATION_PREPARED:
 			/* How to continue ? */
 			if(source->is_literal || list_empty(&source->children)) {
@@ -1072,6 +1107,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				break;
 			} else
 				source->packet_encode = SERIALIZE_CHILDREN;
+			GCC_FALL_THROUGH
 		case SERIALIZE_CHILDREN:
 			{
 				struct list_head *e, *n;
@@ -1090,9 +1126,11 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				}
 				source->packet_encode = BEWARE_OF_ZERO;
 			}
+			GCC_FALL_THROUGH
 		case BEWARE_OF_ZERO:
 			/* insert zero byte between child and data, only if there is data... */
 			need_zero = true;
+			GCC_FALL_THROUGH
 		case SERIALIZE_DATA_PREP:
 			if(source->data_trunk.data && buffer_remaining(source->data_trunk))
 			{
@@ -1112,6 +1150,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 				source->packet_encode = ENCODE_FINISHED;
 				break;
 			}
+			GCC_FALL_THROUGH
 		case SERIALIZE_DATA:
 			{
 				size_t len = buffer_remaining(source->data_trunk);
@@ -1122,6 +1161,7 @@ bool g2_packet_serialize_to_buff_p(g2_packet_t *source, struct pointer_buff *tar
 			}
 			if(!buffer_remaining(source->data_trunk))
 				source->packet_encode = ENCODE_FINISHED;
+			GCC_FALL_THROUGH
 		case ENCODE_FINISHED:
 				/* Yehaa, it's done! */
 			source->more_bytes_needed = true;
