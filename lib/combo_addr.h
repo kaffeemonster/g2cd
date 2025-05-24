@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2016 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -102,6 +102,13 @@ struct sockaddr_in6
 	uint32_t sin6_scope_id;    /* IPv6 scope-id */
 }
 
+/* general match */
+#  define IN6_ARE_ADDR_EQUAL(a,b) \
+	((((const uint32_t *)(a))[0] == ((const uint32_t *)(b))[0]) && \
+	 (((const uint32_t *)(a))[1] == ((const uint32_t *)(b))[1]) && \
+	 (((const uint32_t *)(a))[2] == ((const uint32_t *)(b))[2]) &&  \
+	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
+/* special addr match */
 #  define IN6_IS_ADDR_UNSPECIFIED(a) \
 	(((const uint32_t *)(a))[0] == 0 && \
 	 ((const uint32_t *)(a))[1] == 0 && \
@@ -129,43 +136,77 @@ struct sockaddr_in6
 	 (((const uint32_t *)(a))[1] == 0) && \
 	 (((const uint32_t *)(a))[2] == 0) && \
 	 (ntohl(((const uint32_t *)(a))[3]) > 1))
-#  define IN6_ARE_ADDR_EQUAL(a,b) \
-	((((const uint32_t *)(a))[0] == ((const uint32_t *)(b))[0]) && \
-	 (((const uint32_t *)(a))[1] == ((const uint32_t *)(b))[1]) && \
-	 (((const uint32_t *)(a))[2] == ((const uint32_t *)(b))[2]) &&  \
-	 (((const uint32_t *)(a))[3] == ((const uint32_t *)(b))[3]))
 # endif /* HAVE_IPV6 */
 
-/* official documentation prefix */
-# define IN6_IS_ADDR_DOCU(a) \
-	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
 /*
- * instead to test for fc::/7 it's faster to fest for both
+ * other Special Addr matcher
+ */
+
+/* RFC4193
+ * instead to test for fc::/7 it's faster to test for both
  * possible vals, fc::/8 && fd::/8
  */
 # define IN6_IS_ADDR_UNIQUELOCAL_A(a) \
 	(((const uint8_t *)(a))[0] == 0xfc)
 # define IN6_IS_ADDR_UNIQUELOCAL_B(a) \
 	(((const uint8_t *)(a))[0] == 0xfd)
-/* IPv6 Benchmark net RFC5180 */
-# define IN6_IS_ADDR_BMWG(a) \
-	 (((const uint32_t *)(a))[0] == htonl(0x20010002) && \
-	 (((const uint32_t *)(a))[1] &  htonl(0xFFFF0000)) == 0)
-/*
- * ORCHID RFC4843, assigned till 2014
- * Some wonky non routable, but still valid IPv6 addr.
- * Like a hash to uniquely identify a host. Applications
- * can pass it into the socket API, as identifier to
- * magically address and reach the other end. But both
- * ends first have to agree on some kind of mapping,
- * so when we get such an address passed (like as an
- * KHL), we can do nothing with it, it is not reachable
- * on the pure IP level.
+# define IN6_IS_ADDR_UNIQUELOCAL(a) \
+	(IN6_IS_ADDR_UNIQUELOCAL_A(a) || \
+	 IN6_IS_ADDR_UNIQUELOCAL_B(a))
+/* RFC6666
+ * Discard-Only Addr block, this way you can anounce
+ * a remote end to discard paket, say in case of DDoS.
+ * We want to honor it.
  */
-# define IN6_IS_ADDR_ORCHID(a) \
-	((((const uint32_t *)(a))[0] & htonl(0xFFFFFFF0)) == htonl(0x20010010))
-/*
- * well known prefix for BEHAVE draft
+# define IN6_IS_ADDR_DISCARD(a) \
+	 (((const uint32_t *)(a))[0] == htonl(0x01000000) && \
+	  ((const uint32_t *)(a))[1] == 0)
+/* RFC2928
+ * IETF Protocol Assignments 2001::/23, like 192.0.0.0/24
+ * We generaly do not want to talk to these very special
+ * Networks/Services:
+ * -> 2001::/32	TEREDO RFC4380 -> Ok, this one we throw under the bus
+ * -> 2001:1::1/128	Port Control Protocol Anycast RFC7723
+ * -> 2001:2::/48	Benchmark-Network RFC5180
+ * -> 2001:3::/32	AMT RFC7450 Multicast-Unicast-Tunnel relays anycast assingment
+ * -> 2001:4:112::/48	AS112-v6 RFC7535
+ * -> 2001:5::/32	EID Space for LISP (Managed by RIPE NCC)
+ * -> 2001:10::/28	ORCHID RFC4843 Deprecated
+ * -> 2001:20::/28	ORCHIDv2 RFC7343
+ *
+ * ORCHID(v2) is some wonky non routable, but still valid IPv6
+ * addr. Like a hash to uniquely identify a host.
+ * Applications can pass it into the socket API, as identifier
+ * to magically address and reach the other end. But both
+ * ends first have to agree on some kind of mapping/translation.
+ * So when we get such an address passed plain (like as an
+ * KHL), and that way escaped the translation of the socket
+ * api, we can do nothing with it.
+ * These Addr are not reachable on the pure IP level without
+ * translation (the RFC saying "... they are expected to be routable
+ * at an overlay level. Consequently, while they are considered
+ * non-routable addresses from the IPv6-layer perspective, all
+ * existing IPv6 applications are expected to be able to use them
+ * in a manner compatible with current IPv6 addresses.").
+ * My Ass: The transaltion may only be valid/known on the orig. host.
+ */
+#  define IN6_IS_ADDR_IETFBLOCK(a) \
+	((((const uint32_t *)(a))[0] & htonl(0xfffffe00)) == \
+	  htonl(0x20010000))
+/* RFC3849
+ * official documentation prefix
+ */
+# define IN6_IS_ADDR_DOCU(a) \
+	(((const uint32_t *)(a))[0] == htonl(0x20010DB8))
+/* RFC7534
+ * AS112 delegation, local addr DNS sink hole
+ */
+# define IN6_IS_ADDR_AS112(a) \
+	((((const uint32_t *)(a))[0] == htonl(0x2620004f)) && \
+	 ((((const uint32_t *)(a))[0] & htonl(0xffff0000)) == \
+	  htonl(0x80000000)))
+/* RFC6052
+ * well known prefix for BEHAVE draft/IPv4-IPv6 Translat.
  * There can/will be provider specific prefixes for
  * BEHAVE translation, which would need similar
  * treatment...
@@ -233,8 +274,12 @@ union combo_addr
 		 * They decided it would be better to have a length in
 		 * front of all that, and it must be properly set and
 		 * so on.
+		 * A len in front is generally a good idea i support,
+		 * but in this case, idiotic:
 		 * The socklen_t arg to all those socket APIs is for
 		 * what again?
+		 * NB: should have better been the second member, fam
+		 * beeing the first to distinct the class...
 		 */
 		unsigned char       len;
 #endif
@@ -382,7 +427,7 @@ static inline bool combo_addr_is_v6(const union combo_addr *addr)
 
 static inline bool combo_addr_eq(const union combo_addr *a, const union combo_addr *b)
 {
-	bool ret = a->s.fam == a->s.fam;
+	bool ret = a->s.fam == b->s.fam;
 	if(!ret)
 		return ret;
 // TODO: when IPv6 is common, change it
@@ -397,7 +442,7 @@ static inline bool combo_addr_eq(const union combo_addr *a, const union combo_ad
 
 static inline bool combo_addr_eq_ip(const union combo_addr *a, const union combo_addr *b)
 {
-	bool ret = a->s.fam == a->s.fam;
+	bool ret = a->s.fam == b->s.fam;
 	if(!ret)
 		return ret;
 // TODO: when IPv6 is common, change it

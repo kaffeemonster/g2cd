@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address, large funcs
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2016 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -165,6 +165,7 @@ uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
 
 # define SLASH04 htonl(0xF0000000)
 # define SLASH08 htonl(0xFF000000)
+# define SLASH10 htonl(0xFFC00000)
 # define SLASH15 htonl(0xFFFE0000)
 # define SLASH16 htonl(0xFFFF0000)
 # define SLASH24 htonl(0xFFFFFF00)
@@ -172,20 +173,11 @@ uint32_t combo_addr_hash_ip(const union combo_addr *addr, uint32_t seed)
 # define SLASH32 htonl(0xFFFFFFFF)
 # define IP_CMP(a, b, m) (unlikely(htonl(b) == ((a) & (m))))
 
-//TODO: add DS-Lite well known addresses
 /*
- * When the draft gets to standard:
- * 192.0.0.0/29 is reserved for the p2p tunnel link between
- * B4 & AFTR (CPE and Carrier NAT).
- * These should not show up in the internet.
- * Only question is:
- * - ICMP messages may "come" from there
- * - A machine beeing the B4 and running a servent may output
- *   this address, even for a short period, till it finds it
- *   outside address
- * Still, we can not answer to it, this address is "not
- * reachable". Since its use is optional, some provider
- * may set up their own "dead end", undocumented...
+ *
+ * http://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml
+ * http://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml
+ *
  */
 bool combo_addr_is_public(const union combo_addr *addr)
 {
@@ -209,11 +201,13 @@ bool combo_addr_is_public(const union combo_addr *addr)
 			return false;
 		if(unlikely(IN6_IS_ADDR_UNIQUELOCAL_B(a6)))
 			return false;
+		if(unlikely(IN6_IS_ADDR_IETFBLOCK(a6)))
+			return false;
+		if(unlikely(IN6_IS_ADDR_DISCARD(a6)))
+			return false;
 		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return false;
-		if(unlikely(IN6_IS_ADDR_BMWG(a6)))
-			return false;
-		if(unlikely(IN6_IS_ADDR_ORCHID(a6)))
+		if(unlikely(IN6_IS_ADDR_AS112(a6)))
 			return false;
 		/* the compat range (::0/96) is deprecated,
 		 * do not talk to it till it gets reassigned */
@@ -230,36 +224,64 @@ bool combo_addr_is_public(const union combo_addr *addr)
 		a = addr->in.sin_addr.s_addr;
 
 	/* according to RFC 3330 & RFC 5735 */
-	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
+	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast RFC919 */
 		return false;
-	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments */
+	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments RFC6890 */
 		return false;
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+	/*
+	 * 192.000.000.000/24 is not for general consumption. Until now only special IETF allocations in this range.
+	 * -> 192.000.000.000/29 IPv4 Service Continuity Prefix RFC7335
+	 * -> 192.000.000.008/32 IPv4 dummy address RFC7600
+	 * -> 192.000.000.009/32 Port Control Protocol Anycast RFC7723
+	 * -> 192.000.000.170/32
+	 *    192.000.000.171/32 NAT64/DNS64 Discovery RFC7050
+	 * 192.0.0.0/29 is reserved for the p2p tunnel link between
+	 * B4 & AFTR (CPE and Carrier NAT).
+	 * These should not show up in the internet.
+	 * Only question is:
+	 * - ICMP messages may "come" from there
+	 * - A machine beeing the B4 and running a servent may output
+	 *   this address, even for a short period, till it finds it
+	 *   outside address
+	 * Still, we can not answer to it, this address is "not
+	 * reachable". Since its use is optional, some provider
+	 * may set up their own "dead end", undocumented...
+	 */
+//TODO: add DS-Lite well known addresses
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1 RFC5737, like example.com */
 		return false;
-	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
+	if(IP_CMP(a, 0xC01FC400, SLASH24)) /* 192.031.196.000/24  AS112-v4 allocation RFC7535, local addr DNS sink hole */
+		return false;
+	if(IP_CMP(a, 0xC034C100, SLASH24)) /* 192.052.193.000/24  AMT RFC7450, Multicast-Unicast-tunnel relay anycast allocation */
 		return false; /* only sinks, not source */
-	/* APNIC provided documentation prefixes */
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
+	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast RFC7526 */
+		return false; /* only sinks, not source */
+	if(IP_CMP(a, 0xC0AF3000, SLASH24)) /* 192.178.048.000/24  AS112 allocation RFC7534, local addr DNS sink hole */
 		return false;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
+	/* APNIC provided documentation prefixes */
+	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2 RFC5737, like example.com */
+		return false;
+	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3 RFC5737, like example.com */
 		return false;
 	/* 223.255.255.0/24 highest class C
 	   subject to allocation to RIRs  -> RFC 5735 */
 	/* 128.0.0.0/16 lowest class B net
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA auto addresses*/
+	if(IP_CMP(a, 0xA9FE0000, SLASH16)) /* 169.254.000.000/16  APIPA Link Local auto addresses RFC3927 */
 		return false;
-	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private */
+	if(IP_CMP(a, 0xAC100000, SLASH16)) /* 172.016.000.000/16  private RFC1918 */
 		return false;
-	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private */
+	if(IP_CMP(a, 0xC0A80000, SLASH16)) /* 192.168.000.000/16  private RFC1918 */
 		return false;
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network RFC2544 */
 		return false;
 	/* 191.255.0.0/16 highest class B
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
+	if(IP_CMP(a, 0x64400000, SLASH10)) /* 100.064.000.000/10   Shared Addr Space RFC6598, priv addr in routing networks, ex. between CGN and CPE, like RFC1918 */
 		return false;
-	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private */
+	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host RFC1122 */
+		return false;
+	if(IP_CMP(a, 0x0A000000, SLASH08)) /* 010.000.000.000/8   private RFC1918 */
 		return false;
 	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
 	   subject to allocation to RIRs? -> RFC 5735 */
@@ -267,11 +289,11 @@ bool combo_addr_is_public(const union combo_addr *addr)
 	   subject to allocation to RIRs  -> RFC 5735 */
 	/* 39.0.0.0/8 Class A Subnet experiment
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
+	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback RFC1122 */
 		return false;
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return false;
-	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
+	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use/Reserved RFC1112 */
 		return false;
 out:
 	return true;
@@ -291,11 +313,13 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 			return true;
 		if(unlikely(IN6_IS_ADDR_MULTICAST(a6)))
 			return true;
+		if(unlikely(IN6_IS_ADDR_IETFBLOCK(a6)))
+			return true;
+		if(unlikely(IN6_IS_ADDR_DISCARD(a6)))
+			return true;
 		if(unlikely(IN6_IS_ADDR_DOCU(a6)))
 			return true;
-		if(unlikely(IN6_IS_ADDR_BMWG(a6)))
-			return true;
-		if(unlikely(IN6_IS_ADDR_ORCHID(a6)))
+		if(unlikely(IN6_IS_ADDR_AS112(a6)))
 			return true;
 		/* the compat range (::0/96) is deprecated,
 		 * do not talk to it till it gets reassigned */
@@ -312,26 +336,42 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 		a = addr->in.sin_addr.s_addr;
 
 	/* according to RFC 3330 & RFC 5735 */
-	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast */
+	if(IP_CMP(a, 0xFFFFFFFF, SLASH32)) /* 255.255.255.255/32  Broadcast RFC919 */
 		return true;
-	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments */
+	if(IP_CMP(a, 0xC0000000, SLASH24)) /* 192.000.000.000/24  lowest class C Future protocol assignments RFC6890 */
 		return true;
-	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1, like example.com */
+	/*
+	 * 192.000.000.000/24 is not for general consumption. Until now only special allocations in this range.
+	 * -> 192.000.000.000/29 IPv4 Service Continuity Prefix RFC7335
+	 * -> 192.000.000.008/32 IPv4 dummy address RFC7600
+	 * -> 192.000.000.009/32 Port Control Protocol Anycast RFC7723
+	 * -> 192.000.000.170/32
+	 *    192.000.000.171/32 NAT64/DNS64 Discovery RFC7050
+	 */
+	if(IP_CMP(a, 0xC0000200, SLASH24)) /* 192.000.002.000/24  Test-net-1 RFC5737, like example.com */
+		return true;
+	if(IP_CMP(a, 0xC01FC400, SLASH24)) /* 192.031.196.000/24  AS112-v4 allocation RFC7535, local addr DNS sink hole */
+		return true;
+	if(IP_CMP(a, 0xC034C100, SLASH24)) /* 192.052.193.000/24  AMT RFC7450, Multicast-Unicast-tunnel relay anycast allocation */
+		return true; /* only sinks, not source */
+	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast RFC7526 */
+		return true; /* only sinks, not source */
+	if(IP_CMP(a, 0xC0AF3000, SLASH24)) /* 192.178.048.000/24  AS112 allocation RFC7534, local addr DNS sink hole */
 		return true;
 	/* APNIC provided documentation prefixes */
-	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2, like example.com */
+	if(IP_CMP(a, 0xC6336400, SLASH24)) /* 198.051.100.000/24  Test-net-2 RFC5737, like example.com */
 		return true;
-	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3, like example.com */
+	if(IP_CMP(a, 0xCB007100, SLASH24)) /* 203.000.113.000/24  Test-net-3 RFC5737, like example.com */
 		return true;
 	/* 223.255.255.0/24 highest class C
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xC0586300, SLASH24)) /* 192.088.099.000/24  6to4 relays anycast */
-		return true; /* only sinks, not source */
 	/* 128.0.0.0/16 lowest class B net
 	   subject to allocation to RIRs  -> RFC 5735 */
+	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network RFC2544 */
+		return true;
 	/* 191.255.0.0/16 highest class B
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0xC6120000, SLASH15)) /* 198.018.000.000/15  Benchmark Network */
+	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host RFC1122 */
 		return true;
 	/* 14.0.0.0/8 X25,X121 Public Data Networks, dead/empty?
 	   subject to allocation to RIRs? -> RFC 5735 */
@@ -339,13 +379,11 @@ bool combo_addr_is_forbidden(const union combo_addr *addr)
 	   subject to allocation to RIRs  -> RFC 5735 */
 	/* 39.0.0.0/8 Class A Subnet experiment
 	   subject to allocation to RIRs  -> RFC 5735 */
-	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback */
-		return true;
-	if(unlikely(IP_CMP(a, 0x00000000, SLASH08))) /* 000.000.000.000/8   "this" net, "this" host */
+	if(IP_CMP(a, 0x7F000000, SLASH08)) /* 127.000.000.000/8   loopback RFC1122 */
 		return true;
 	if(IP_CMP(a, 0xE0000000, SLASH04)) /* 224.000.000.000/4   Multicast */
 		return true;
-	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use */
+	if(IP_CMP(a, 0xF0000000, SLASH04)) /* 240.000.000.000/4   Future use/Reserved RFC1112 */
 		return true;
 out:
 	return false;
