@@ -2,7 +2,7 @@
  * G2UDP.c
  * thread to handle the UDP-part of the G2-Protocol
  *
- * Copyright (c) 2004-2015 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
