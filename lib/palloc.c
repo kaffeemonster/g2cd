@@ -2,7 +2,7 @@
  * palloc.c
  * Allocator for the pad
  *
- * Copyright (c) 2012-2015 Jan Seiffert
+ * Copyright (c) 2012-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -61,7 +61,16 @@
  * merging. And fixing it was non-tivial.
  *
  * So this is a replacement by a full allocator.
+ *
  * Any simple allocator could be used for this.
+ * This is supposed to be used for simple, temporary allocs,
+ * like an obstack, without beeing bound to the "stack" thing.
+ * Mostly an arena is spawned, some allocs made (maybe frees),
+ * sometimes by code out of our reach, so no control on alloc
+ * order, and then the whole thing is blown away.
+ * It should stay "simple", because usage is mostly alloc,
+ * alloc, alloc, alloc, blow away
+ *
  */
 
 #define PALLOC_C
@@ -74,6 +83,12 @@
 #include "palloc.h"
 
 typedef uint32_t pa_uaddress;
+
+/* stdlib abs() is only legit for int, and since ssize_t is platform dependent...  */
+static inline ssize_t ssabs(ssize_t x)
+{
+	return x >= 0 ? x : -x;
+}
 
 /* return d.s + index of segment containing address p */
 static pa_exseg blseg(struct d_heap *d, pa_address p)
@@ -125,7 +140,7 @@ static void blfix1(struct d_heap *d, pa_address p)
 			mx = 1;
 			do {
 				mx = mx < d->v[pj] ? d->v[pj] : mx;
-				pj = pj + abs(d->v[pj]);
+				pj = pj + ssabs(d->v[pj]);
 			} while(pj < pn);
 		}
 		else
@@ -180,7 +195,7 @@ static pa_address blpred(struct d_heap *d, pa_address p)
 	qn = d->pa[j - d->s];
 	do { /* follow chain until reach p */
 		q = qn;
-		qn += abs(d->v[qn]);
+		qn += ssabs(d->v[qn]);
 	} while(qn != p);
 	return q;
 }
@@ -209,7 +224,7 @@ static pa_address blnew (struct d_heap *d, size_t size)
 			j = d->st[2 * j] >= n ? 2 * j : 2 * j + 1;
 		p = d->pa[j - d->s]; /* index of control word of first block in segment j */
 		while(d->v[p] < n)
-			p = p + abs(d->v[p]);
+			p = p + ssabs(d->v[p]);
 		/* Now p is index of control word of required block */
 		vp = d->v[p];
 		d->v[p] = -n; /* flag block as allocated */
@@ -283,13 +298,15 @@ void *pa_alloc(void *opaque, unsigned int num, unsigned int size)
 {
 	struct d_heap *d;
 	size_t bsize, t;
+	unsigned int ts;
 	pa_address resa;
 
 	if(!opaque)
 		return NULL;
-	if(unlikely(GCC_OVERFLOW_UMUL(num, size, &bsize)))
+	if(unlikely(GCC_OVERFLOW_UMUL(num, size, &ts)))
 		return NULL;
 	d = opaque;
+	bsize = ts;
 	/* carefully round up */
 	t = bsize / sizeof(size_t);
 	bsize = t + !!(bsize % sizeof(size_t));
