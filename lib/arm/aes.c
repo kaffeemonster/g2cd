@@ -292,7 +292,7 @@ static inline uint8x16_t aes_schedule_mangle(uint8x16_t key, unsigned *n)
 	khi = veorq_u8(khi, klo);
 	klo = pshufb(aes_consts.mcf[0], klo);
 	khi = veorq_u8(khi, klo);
-	khi = pshufb(khi, aes_consts.sr[*n--]);
+	khi = pshufb(khi, aes_consts.sr[(*n)--]);
 	*n &= 2;
 	return khi;
 }
@@ -319,7 +319,7 @@ void aes_encrypt_key128(struct aes_encrypt_ctx *ctx, const void *in)
 	prefetch(aes_consts.sr);
 
 	rcon  = aes_consts.rcon;
-	memcpy(&key, in, sizeof(key)); /* load key */
+	key = vld1q_u8(in); /* load key */
 	/* input transform */
 	kt = aes_schedule_transform(key);
 	/* output zeroth round key */
@@ -347,8 +347,8 @@ void aes_encrypt_key256(struct aes_encrypt_ctx *ctx, const void *in)
 	prefetch(aes_consts.sr);
 
 	rcon  = aes_consts.rcon;
-	memcpy(&key_hi, in, sizeof(key_hi)); /* load key */
-	memcpy(&key_lo, ((const char *)in)+sizeof(key_hi), sizeof(key_lo)); /* load key */
+	key_hi = vld1q_u8(in); /* load key */
+	key_lo = vld1q_u8(((const unsigned char *)in)+sizeof(key_hi)); /* load key */
 
 	key_hi = aes_schedule_transform(key_hi);
 	key_lo = aes_schedule_transform(key_lo);
@@ -364,6 +364,7 @@ void aes_encrypt_key256(struct aes_encrypt_ctx *ctx, const void *in)
 	*++key_target = aes_schedule_mangle_last(key_hi, n);
 }
 
+#if !(defined(__ARM_ACLE) || defined(__ARM_FEATURE_CRYPTO))
 static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
 {
 	const uint8x16_t *key_store;
@@ -378,7 +379,7 @@ static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const
 	prefetch(aes_consts.mcf);
 	prefetch(aes_consts.sr);
 
-	memcpy(&in, din, sizeof(in));
+	in = vld1q_u8(din);
 
 	ihi = vrshrq_n_u8(vbicq_u8(in, aes_consts.s0f), 4);
 	ilo = vandq_u8(in, aes_consts.s0f);
@@ -426,8 +427,35 @@ start_round:
 	ilo     = pshufb(aes_consts.sbohi, ihlinv);
 	ilo     = veorq_u8(ilo, ihllinv);
 	in      = pshufb(ilo, aes_consts.sr[n]);
-	memcpy(dout, &in, sizeof(in));
+	vst1q_u8(dout, in);
 }
+#else
+# include <arm_acle.h>
+static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
+{
+	const uint8x16_t *key_store;
+	uint8x16_t in;
+	int rounds = mrounds-1;
+
+	key_store = (const uint8x16_t *)ctx->k;
+
+	prefetch(key_store);
+	in = vld1q_u8(din);
+
+//TODO: number of rounds
+	do
+	{
+		/* single full round */
+		in = vaeseq_u8(in, *key_store++);
+		in = vaesmcq_u8(in);
+	} while(--rounds);
+	prefetchw(dout);
+	/* last round  */
+	in = vaeseq_u8(in, *key_store++);
+	in = veorq_u8(in, *key_store);
+	vst1q_u8(dout, in);
+}
+#endif
 
 void aes_ecb_encrypt128(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
 {
