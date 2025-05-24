@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2021 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -74,7 +74,8 @@
  * but sometimes...
  * ... the string printing printf's have to generate a special
  * FILE-stream, poking deep inside the internals of this opaque
- * libc internal, redirecting the output, checking the length.
+ * libc internal, redirecting the output, checking the length,
+ * whatever.
  *
  * Unfornatly this it not very efficient if you only want to generate
  * strings (you want to /format/ one time, but /print/ several
@@ -94,15 +95,25 @@
  * And finally, this gives some portabillity, since we have a
  * "fixed" set of supported formats including the C99 z & j & ll
  * and so on, so we do not need truck loads of casts and hacks
- * through out the program to support not-C99 clean systems.
+ * and ifdefs and configure-checks and funky defined constants/
+ * makros popping up within the formant strings through out the
+ * program to support not-C99 clean systems (or generally non-GNU
+ * systems).
+ *
+ * And just to make sure we are on the same page here: point 2
+ * and 3 (own formats and supported set cleanness) are what
+ * functionally matters, point 1 (speed) is just the "Hell yeah!
+ * Lets do this"-icing on the cake, the last straw that breaks
+ * the camels back to enter this madness.
  *
  * Known limitations:
  * - Does not always return the correct needed length when truncating
- * - Can barely print floating point
  * - the maxlen is not always obeyed...
  * - Very fancy modifier/conversion options are /broken/
- * - positional argument do not work
- * - And surely not std. conform
+ * - positional arguments do not work
+ * - Can barely print floating point
+ * - long double? _Decimal? What is this whitchcraft you are talking about?
+ * - And this is surely not std. conform
  */
 
 #ifdef HAVE_TIMODE
@@ -208,10 +219,66 @@ static inline char *strncpyrev(char *dst, const char *end, const char *start, si
 	return r;
 }
 
+static noinline char *strncpyrev_th(char *dst, const char *end, const char *start, size_t n)
+{
+	char *r;
+	size_t len = (end + 1) - start, rem, slen;
+	slen = len ? len - 1 : len;
+	len += slen / 3;
+	r    = dst + len;
+	rem  = len % 4;
+	len  = len / 4;
+	switch(rem)
+	{
+		do
+		{
+	case 0:
+// TODO: locale dependend thousand grouping?
+			if(n--)
+				*dst++ = ',';
+			else
+				break;
+	case 3:
+			if(n--)
+				*dst++ = *end--;
+			else
+				break;
+	case 2:
+			if(n--)
+				*dst++ = *end--;
+			else
+				break;
+	case 1:
+			if(n--)
+				*dst++ = *end--;
+			else
+				break;
+		} while(len--);
+	}
+	return r;
+}
+
+static always_inline unsigned dec_mul_high(unsigned x)
+{
+#if 1
+	return (x * (uint64_t)0x1999999a) >> 32;
+#else
+	/* in case of compiler goes beserk... */
+	unsigned r, t;
+	asm (
+		"mul %k3\n\t"
+		: /* %0 */ "=a" (t),
+		  /* %1 */ "=d" (r)
+		: /* %2 */ "0" (x),
+		  /* %3 */ "rm" (0x1999999a)
+	);
+	return r;
+#endif
+}
+
 static GCC_ATTR_FASTCALL char *put_dec_full9(char *buf, unsigned q)
 {
 	unsigned r;
-
 	/*
 	 * this code assumes there is some sort of 64 bit multiply.
 	 * For 64 bit archs this is OK. 32 Bit archs often have a
@@ -220,15 +287,15 @@ static GCC_ATTR_FASTCALL char *put_dec_full9(char *buf, unsigned q)
 	 * If the above does not match your arch (or is < 32bit),
 	 * it sucks, plain simple.
 	 */
-	r      = (q * (uint64_t)0x1999999a) >> 32;
+	r      = dec_mul_high(q);
 	*buf++ = (q - 10 * r) + '0'; /* 1 */
-	q      = (r * (uint64_t)0x1999999a) >> 32;
+	q      = dec_mul_high(r);
 	*buf++ = (r - 10 * q) + '0'; /* 2 */
-	r      = (q * (uint64_t)0x1999999a) >> 32;
+	r      = dec_mul_high(q);
 	*buf++ = (q - 10 * r) + '0'; /* 3 */
-	q      = (r * (uint64_t)0x1999999a) >> 32;
+	q      = dec_mul_high(r);
 	*buf++ = (r - 10 * q) + '0'; /* 4 */
-	r      = (q * (uint64_t)0x1999999a) >> 32;
+	r      = dec_mul_high(q);
 	*buf++ = (q - 10 * r) + '0'; /* 5 */
 	/* Now value is under 10000, can avoid 64-bit multiply */
 	q      = (r * 0x199a) >> 16;
@@ -248,9 +315,10 @@ char GCC_ATTR_FASTCALL *put_dec_trunc(char *buf, unsigned r)
 	if(r >= 100*1000*1000) /* 1 */
 		return put_dec_full9(buf, r);
 
-	while(r >= 10000) {
+	/* law of small numbers */
+	while(unlikely(r >= 10000)) {
 		q = r + '0';
-		r = (r * (uint64_t)0x1999999a) >> 32;
+		r = dec_mul_high(r);
 		*buf++ = q - 10 * r; /* 2 */
 	}
 	if(!r)
@@ -302,9 +370,9 @@ static noinline char *put_dec(char *buf, unsigned num)
 	{
 		rem -= 1000*1000*1000;
 		num++;
-		/* most older compiler are to clever and make this a divide
+		/* most older compiler are too clever and make this a divide
 		 * again, because they detect the pattern, but don't take the trip
-		 * count into acount. So a smack on the head (a simple barrier
+		 * count into account. So a smack on the head (a simple barrier
 		 * does not help...) is needed.
 		 */
 		__asm__ ("" : "=r" (rem) : "0" (rem));
@@ -320,7 +388,7 @@ static noinline char *put_dec(char *buf, unsigned num)
 }
 
 #ifdef __x86_64__
-/* gotta love x32.... */
+/* gotta love x32.... other 32-on-64-ABI please queue in line */
 # define LONGLONG_ARITH_FINE 1
 #else
 # define LONGLONG_ARITH_FINE 0
@@ -357,8 +425,9 @@ static noinline char *put_dec_ll_large(char *buf, unsigned long long num)
 	else
 	{
 		/*
-		 * the code above needs a 64 bit devide
-		 * which is bad for some archs, so do it differently
+		 * the code above needs a 64 bit divide (or 128 Bit mul, or
+		 * 64 bit-get-high-part mul) which is bad for some archs,
+		 * so do it differently
 		 */
 		uint32_t d3, d2, d1, q, h;
 
@@ -401,8 +470,10 @@ static noinline char *put_dec_ll(char *buf, unsigned long long num)
 
 static noinline const char *decimal_finish(char *buf, const char *fmt, struct format_spec *spec)
 {
-	size_t len = spec->wptr - spec->conv_buf;
-	size_t sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
+	size_t len = spec->wptr - spec->conv_buf, sav, slen;
+	slen = len ? len - 1 : len;
+	len = unlikely(spec->u.flags.th_group) ? len + (slen / 3): len;
+	sav = likely(spec->len < spec->maxlen) ? spec->maxlen - spec->len : 0;
 	if(spec->width && spec->width > len)
 	{
 		size_t i;
@@ -430,7 +501,10 @@ static noinline const char *decimal_finish(char *buf, const char *fmt, struct fo
 		len = spec->width;
 	}
 OUT_CPY:
-	buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, sav);
+	if(unlikely(spec->u.flags.th_group))
+		buf = strncpyrev_th(buf, --spec->wptr, spec->conv_buf, sav);
+	else
+		buf = strncpyrev(buf, --spec->wptr, spec->conv_buf, sav);
 	spec->len += len;
 	return end_format(buf, fmt, spec);
 }
@@ -698,6 +772,7 @@ static noinline const char *octal_finish(char *buf, const char *fmt, struct form
 	if(spec->u.flags.alternate && '0' != *(wptr-1))
 		*wptr++ = '0';
 	spec->wptr = wptr;
+	spec->u.flags.th_group = false;
 	return decimal_finish(buf, fmt, spec);
 }
 
@@ -707,6 +782,7 @@ static noinline const char *octal_finish_ull(char *buf, const char *fmt, struct 
 	if(spec->u.flags.alternate && '0' != *(wptr-1))
 		*wptr++ = '0';
 	spec->wptr = wptr;
+	spec->u.flags.th_group = false;
 	return decimal_finish(buf, fmt, spec);
 }
 
@@ -837,6 +913,14 @@ extern const struct big_num five_tab[MAX_FIVE];
 		z_add = x_add + (y), (k) = (z_add < x_add); \
 	(z) = z_add; \
 }
+
+/*#define ADD_BIG(x, y, z, k) \
+{ \
+	big_digit x_add, z_add; \
+	x_add = (x); \
+	k = __builtin_ia32_addcarryx_u64(k, x_add, (y), &z_add); \
+	(z) = z_add; \
+}*/
 
 #define SUB_BIG(x, y, z, b) \
 { \
@@ -1207,7 +1291,7 @@ static inline bool my_simple_isinf(double x)
 	return !my_simple_isnan(x) && my_simple_isnan(x - x);
 }
 
-static const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vdtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	/* this eats stack big time! ~4k */
 	struct big_num Sbox[9], R, MP, MM;
@@ -1486,7 +1570,7 @@ static noinline const char *fp_finish(char *buf, const char *fmt, struct format_
 	return nop_finish(buf, fmt, spec);
 }
 
-static const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vldtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 #if LDBL_MANT_DIG-0 == DBL_MANT_DIG
 	/* some systems set long double to double */
@@ -1505,7 +1589,7 @@ static inline big_digit rol64(big_digit f, unsigned num)
 	return (f << num) | (f >> ((sizeof(f) * BITS_PER_CHAR) - num));
 }
 
-static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	big_digit f;
 	union dblou64 v;
@@ -1568,7 +1652,7 @@ static const char *vdtoxa(char *buf, const char *fmt, struct format_spec *spec)
 	return end_format(buf, fmt, spec);
 }
 
-static const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vldtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 #if LDBL_MANT_DIG-0 == DBL_MANT_DIG
 	/* some systems set long double to double */
@@ -1591,17 +1675,17 @@ static noinline const char *decifp_finish(char *buf, const char *fmt, struct for
 	return nop_finish(buf, fmt, spec);
 }
 
-static const char *vHtoa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vHtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned); /* _Decimal32 */
 	return decifp_finish(buf, fmt, spec);
 }
-static const char *vDtoa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vDtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal64 */
 	return decifp_finish(buf, fmt, spec);
 }
-static const char *vDDtoa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vDDtoa(char *buf, const char *fmt, struct format_spec *spec)
 {
 #ifdef COMPILER_CAN_VAARG_TIMODE
 	/* this will let the compiler barf... */
@@ -1618,17 +1702,17 @@ static const char *vDDtoa(char *buf, const char *fmt, struct format_spec *spec)
 	return decifp_finish(buf, fmt, spec);
 }
 /* Hex */
-static const char *vHtoxa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vHtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned); /* _Decimal32 */
 	return decifp_finish(buf, fmt, spec);
 }
-static const char *vDtoxa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vDtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 	unsigned long long n GCC_ATTRIB_UNUSED = va_arg(spec->ap, unsigned long long); /* _Decimal64 */
 	return decifp_finish(buf, fmt, spec);
 }
-static const char *vDDtoxa(char *buf, const char *fmt, struct format_spec *spec)
+static GCC_ATTR_COLD const char *vDDtoxa(char *buf, const char *fmt, struct format_spec *spec)
 {
 #ifdef COMPILER_CAN_VAARG_TIMODE
 	/* this will let the compiler barf... */
@@ -1826,6 +1910,7 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	if(unlikely('S' == *(fmt-1)))
 		spec->mod = MOD_LONG;
 
+//TODO: properly handle edge case of given precision is really 0 (print nothing)
 	if(unlikely(spec->precision))
 		maxlen = maxlen < spec->precision ? maxlen : spec->precision;
 
@@ -1839,9 +1924,11 @@ static const char *f_s(char *buf, const char *fmt, struct format_spec *spec)
 	if(unlikely(!s))
 		s = "<null>";
 
-	if(unlikely(spec->u.flags.space))
+	/* space filled is only valid/usefull when a precision is given */
+	if(unlikely(spec->u.flags.space && spec->precision))
 	{
 		size_t r_len = strnlen(s, spec->precision);
+//TODO: check rlen against maxlen and precision (unsigned underflow)
 		size_t d_len = spec->precision - r_len;
 		if(d_len)
 		{
