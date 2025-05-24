@@ -5,7 +5,7 @@
 #
 # little berkeley packet filter asm -> C struct bpf_insn array converter
 #
-# Copyright (c) 2011-2012 Jan Seiffert
+# Copyright (c) 2011-2021 Jan Seiffert
 #
 # ----------------------------------------------------------------------------
 # "THE BEER-WARE LICENSE" (Revision 42):
@@ -185,7 +185,7 @@ def parse_m(args, instr):
 	return (True, instr)
 
 def parse_n(args, instr):
-	print "nibble load mode needs to be implemented"
+	print("nibble load mode needs to be implemented")
 	return (False, instr)
 
 def parse_t(args, instr):
@@ -399,7 +399,7 @@ else :
 		in_file_name = "isns"
 	out_str += in_file_name
 out_str += "[] = {"
-print >> out_file, out_str
+print (out_str, file=out_file)
 
 # for every instruction we collected
 for instr in inst_list:
@@ -458,7 +458,7 @@ for instr in inst_list:
 					if displ < 0:
 						print >> sys.stderr, "cannot jump backwards!"
 					if displ >= 256:
-						print sys.stderr, "displacement of {0} to large for jump".format(displ)
+						print >> sys.stderr, "displacement of {0} to large for jump".format(displ)
 					out_str += str(labels[instr[5]]) + " - " + str(inst_num + 1)
 		else :
 			out_str += str(instr[3])
@@ -466,9 +466,9 @@ for instr in inst_list:
 		out_str += "0"
 	out_str += "),"
 	inst_num += 1
-	print >> out_file, out_str
+	print(out_str, file=out_file)
 
 # end output
-print >> out_file, "};"
+print("};", file=out_file)
 out_file.flush()
 
