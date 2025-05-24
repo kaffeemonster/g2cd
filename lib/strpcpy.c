@@ -2,7 +2,7 @@
  * strpcpy.c
  * strpcpy for efficient concatenation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2025 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -45,6 +45,11 @@
  */
 char *strpcpy(char *restrict dst, const char *restrict src)
 {
+#if 1
+	while('\0' != (*dst++ = *src++))
+		/* nothing */;
+	return dst - 1;
+#else
 	size_t i = 0;
 
 	for(; src[i]; i++)
@@ -52,6 +57,7 @@ char *strpcpy(char *restrict dst, const char *restrict src)
 	dst += i;
 	*dst = '\0';
 	return dst;
+#endif
 }
 
 static char const rcsid_spcg[] GCC_ATTR_USED_VAR = "$Id: $";
