@@ -2,7 +2,7 @@
  * palloc.h
  * Header for pad allocator
  *
- * Copyright (c) 2012 Jan Seiffert
+ * Copyright (c) 2012-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -55,6 +55,6 @@ struct d_heap
 # endif
 
 PALLOC_EXTRN(void pa_init(struct d_heap *d));
-PALLOC_EXTRN(void *pa_alloc(void *opaque, unsigned int num, unsigned int size) GCC_ATTR_MALLOC GCC_ATTR_ALLOC_SIZE2(2, 3));
+PALLOC_EXTRN(void *pa_alloc(void *opaque, unsigned int num, unsigned int size) GCC_ATTR_MALLOC GCC_ATTR_ALLOC_SIZE2(2, 3) GCC_ASSUME_ALIGNED(sizeof(ssize_t)));
 PALLOC_EXTRN(void pa_free(void *opaque, void *addr));
 #endif
