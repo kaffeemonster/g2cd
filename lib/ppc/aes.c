@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, ppc implementation
  *
- * Copyright (c) 2010-2015 Jan Seiffert
+ * Copyright (c) 2010-2025 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -214,7 +214,7 @@ static inline vector unsigned char aes_schedule_mangle(vector unsigned char key,
 	khi = vec_xor(khi, klo);
 	klo = vec_perm(aes_consts.mcf[0], v_0, klo);
 	khi = vec_xor(khi, klo);
-	khi = vec_perm(khi, v_0, aes_consts.sr[*n--]);
+	khi = vec_perm(khi, v_0, aes_consts.sr[(*n)--]);
 	*n  &= 2;
 	return khi;
 }
@@ -325,6 +325,7 @@ void aes_encrypt_key256(struct aes_encrypt_ctx *ctx, const void *in)
 	*++key_target = aes_schedule_mangle_last(key_hi, n);
 }
 
+#if !(defined(__CRYPTO) || defined(_ARCH_PWR8) || defined(_ARCH_PWR9))
 static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
 {
 	vector unsigned char v_0, v_4;
@@ -413,6 +414,60 @@ start_round:
 		memcpy(dout, &in, sizeof(in));
 	}
 }
+#else
+static inline vector unsigned char vec_vcipher(vector unsigned char state, vector unsigned char key)
+{
+// TODO: inline asm fallback if compiler does not support the builtin
+	return (vector unsigned char) __builtin_crypto_vcipher((vector unsigned long long)state, (vector unsigned long long)key);
+}
+
+static inline vector unsigned char vec_vcipherlast(vector unsigned char state, vector unsigned char key)
+{
+	return (vector unsigned char) __builtin_crypto_vcipherlast((vector unsigned long long)state, (vector unsigned long long)key);
+}
+
+static void aes_ecb_encrypt(const struct aes_encrypt_ctx *ctx, void *dout, const void *din, int mrounds)
+{
+	const vector unsigned char *key_store;
+	vector unsigned char in;
+	int rounds = mrounds;
+
+	key_store = (const vector unsigned char *)ctx->k;
+
+	prefetch(key_store);
+	if(IS_ALIGN(din, SOVUC))
+		in = vec_ldl(0, (const unsigned char *)din);
+	else
+	{
+		vector unsigned char vperm, ilo, ihi;
+		if(HOST_IS_BIGENDIAN)
+			vperm = vec_lvsl(0, (const unsigned char *)din);
+		else
+			vperm = vec_lvsr(0, (const unsigned char *)din);
+		ilo = vec_ldl(    0, (const unsigned char *)din);
+		ihi = vec_ldl(SOVUC, (const unsigned char *)din);
+		if(HOST_IS_BIGENDIAN)
+			in = vec_perm(ilo, ihi, vperm);
+		else
+			in = vec_perm(ihi, ilo, vperm);
+	}
+
+	in = vec_xor(*++key_store, in);
+// TODO: number of rounds correct?
+	do {
+		in = vec_vcipher(in, *++key_store);
+	} while(--rounds);
+	prefetchw(dout);
+	in = vec_vcipherlast(in, *key_store);
+	if(IS_ALIGN(dout, SOVUC))
+		vec_st(in, 0, (unsigned char *)dout);
+	else
+	{
+// TODO: unaligned vector store
+		memcpy(dout, &in, sizeof(in));
+	}
+}
+#endif
 
 void aes_ecb_encrypt128(const struct aes_encrypt_ctx *ctx, void *dout, const void *din)
 {
