@@ -3,7 +3,7 @@
  * This is a server-only implementation for the G2-P2P-Protocol
  * here you will find main()
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -187,6 +187,7 @@ int main(int argc, char **args)
 				}
 			}
 			/* yes, fall through */
+			GCC_FALL_THROUGH
 		/* Nothing happened (or just the Timeout) */
 		case 0:
 			/* all abord? */
@@ -1139,8 +1140,8 @@ static inline const char *get_etext(void)
 	asm("" : "=r" (rval) : "0" (_g2_con_clear));
 	return rval; /* now we should have a pointer into the text segment */
 #else
-	extern const char __etext;
-	return &__etext - 0x1fffe;
+	extern const char *__etext;
+	return __etext - 0x1fffe;
 #endif
 }
 
