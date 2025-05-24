@@ -653,12 +653,21 @@ size_t introsort_u32(uint32_t a[], size_t n)
 	 * a radix sort first and use something else if we detect
 	 * one of the problems above.
 	 * Problem is: more complexity, and in our setup qsort
-	 * breats it anyway due to more complex logic.
+	 * beats it anyway due to more complex logic.
 	 *
 	 * A Simple 1 Bit, in place, MSB one looks like a qsort
 	 * only with different pivot selection, more complex n at
 	 * a time radix sorts suck, too complex, to much time spent
 	 * with bookkeeping when todays MHz could just get jiggy.
+	 *
+	 * I drag-raced a 4bit, in place, MSB against this code,
+	 * for 2^26 entrys the difference was 1 second.
+	 * For the much lower n we expect? Not a chance.
+	 * Yes, this ratio could be changed more in Radix-sort favor,
+	 * but at a cost. No in-place? Allocs for the workarea.
+	 * More bits at a time? The space for bookkeeping gets really large.
+	 * LSB? Would lose the ability to use insertionsort as last sort
+	 * when buckets get really small and radix-sort gets inefficient.
 	 *
 	 * All this fancy Big-O() talk drops all the other terms
 	 * to fast IMHO and seldomly looks at the costs of ops.
