@@ -3,7 +3,7 @@
  * header-file with the defaults for most server-settings, they
  * apply if no override of some kind is given
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2015 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -59,7 +59,7 @@
 #define DEFAULT_NUM_THREADS	0 /* autodetect */
 #define DEFAULT_ENTROPY_SOURCE	"/dev/urandom"
 #define DEFAULT_NICK_NAME	NULL
-#define DEFAULT_GWC_BOOT	"http://cache.trillinux.org/g2/bazooka.php"
+#define DEFAULT_GWC_BOOT	"http://dkac.trillinux.org/dkac/dkac.php"
 #define DEFAULT_GWC_DB		"gwc_cache"
 #define DEFAULT_KHL_DUMP	"khl.dump"
 #define DEFAULT_GUID_DUMP	"guid.dump"
