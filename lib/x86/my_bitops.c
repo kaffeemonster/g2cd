@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2015 Jan Seiffert
+ * Copyright (c) 2008-2021 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,12 +23,19 @@
  * $Id:$
  */
 
+#define DO_LOGG
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 #include "../other.h"
-#include "../log_facility.h"
+#ifdef DO_LOGG
+# include "../log_facility.h"
+#else
+# define str_size(x)	(sizeof(x) - 1)
+#endif
 #include "../my_bitops.h"
 #include "../my_bitopsm.h"
 #include "x86_features.h"
@@ -51,7 +58,8 @@ enum cpu_vendor
 	X86_VENDOR_UMC,
 	X86_VENDOR_RISE,
 	X86_VENDOR_VIA,
-	X86_VENDOR_VORTEX
+	X86_VENDOR_VORTEX,
+	X86_VENDOR_HYGON   /* license build of AMD Zen 1 */
 };
 
 struct cpuinfo
@@ -74,10 +82,11 @@ struct cpuinfo
 	uint32_t max_ext;
 	int count;
 	int num_cores;
-	uint32_t features[9];
+	uint32_t features[10];
 	unsigned short clflush_size;
 	bool fdiv_bug;
 	bool init_done;
+	volatile sig_atomic_t rdtsc_crashed;
 };
 
 union cpuid_regs
@@ -119,6 +128,7 @@ const char x86_cpu_feature_names[][16] =
 static void identify_vendor(struct cpuinfo *);
 static void identify_cpu(void) GCC_ATTR_CONSTRUCT;
 static void check_for_fdiv_bug(void);
+static noinline bool  check_rdtsc(void);
 
 /*
  * grity asm helper
@@ -420,7 +430,7 @@ static __init void identify_cpu(void)
 	 * in 64 bit mode.
 	 * Later gen. added it back, indicated by a cpuid flag.
 	 * Unfortunatly some AMD chips forgot to set this cpuid flag.
-	 * The AMD erratum says the BIOS sould enable it by poking some
+	 * The AMD erratum says the BIOS should enable it by poking some
 	 * MSR for the affected processors.
 	 * But no BIOS without bugs: Some BIOS _always_ enable it, even
 	 * if the underlying CPU does not support it...
@@ -559,14 +569,18 @@ __init void cpu_detect_finish(void)
 {
 	identify_cpu();
 
-	if(our_cpu.fdiv_bug)
+	if(our_cpu.fdiv_bug) {
+#ifdef DO_LOGG
 		logg_pos(LOGF_WARN, "Your CPU seems to have the Pentium FDIV Bug!\n");
+#endif
+	}
 
 	if(our_cpu.family < 5)
 	{
+#ifdef DO_LOGG
 		int ologlevel = server.settings.logging.act_loglevel;
 		server.settings.logging.act_loglevel = LOGF_WARN;
-#ifndef __x86_64__
+# ifndef __x86_64__
 		/*
 		 * old and broken enterprise-stable assembler have problems with
 		 * sahf/lahf on x86_64.
@@ -577,14 +591,16 @@ __init void cpu_detect_finish(void)
 				logg_pos(LOGF_WARN, "This seems to be some Cyrix/NSC/Geode CPU."
 				         "Please enable CPUID if possible (BIOS, whatever)\n");
 		} else
-#endif
+# endif
 		{
 			logg_pos(LOGF_WARN, "Looks like this is an CPU older Pentium I???\n");
 		}
 		server.settings.logging.act_loglevel = ologlevel;
+#endif
 		return;
 	}
 
+#ifdef DO_LOGG
 	server.settings.logging.act_loglevel = LOGF_DEVEL;
 //	puts("before deadly print");
 	logg_posd(LOGF_DEBUG,
@@ -592,11 +608,12 @@ __init void cpu_detect_finish(void)
 		our_cpu.vendor_str.s, our_cpu.family, our_cpu.model,
 		our_cpu.stepping, our_cpu.model_str.s);
 //	puts("after deadly print");
+#endif
 
 	/* basicaly that's it, we don't need any deeper view into the cpu... */
 	/* ... except it is an AMD Opteron */
 	if(our_cpu.vendor != X86_VENDOR_AMD || our_cpu.family != 0x0F)
-		return;
+		goto OUT_MM;
 
 	/*
 	 * Gosh, some weeks after the fact and you look mystified
@@ -677,7 +694,7 @@ __init void cpu_detect_finish(void)
 
 	/* if we only have 1 CPU, no problem */
 	if(1 == our_cpu.count && 1 == our_cpu.num_cores)
-		return;
+		goto OUT_MM;
 
 	/*
 	 * Early AMD Opterons and everything remotely derived from them
@@ -714,11 +731,18 @@ __init void cpu_detect_finish(void)
 		our_cpu.model  >= 32 &&
 		our_cpu.model  <= 63)
 	{
+#ifdef DO_LOGG
 		int ologlevel = server.settings.logging.act_loglevel;
 		server.settings.logging.act_loglevel = LOGF_WARN;
 		logg(LOGF_WARN, "Warning! Your specific CPU can frobnicate interlocked instruction sequences, Errata 147.\nThis may lead to errors or crashes. But there is a chance i frobnicated them myself ;-)\n");
 		server.settings.logging.act_loglevel = ologlevel;
+#endif
 	}
+
+OUT_MM:
+	/* check if rdtsc does work */
+	if(!check_rdtsc())
+		cpu_feature_clear(CFEATURE_TSC);
 }
 
 static __init int cmp_vendor(const char *str1, const char *str2)
@@ -733,6 +757,8 @@ static __init void identify_vendor(struct cpuinfo *cpu)
 	if(cmp_vendor(s, "GenuineIntel"))
 		cpu->vendor = X86_VENDOR_INTEL;
 	else if(cmp_vendor(s, "AuthenticAMD"))
+		cpu->vendor = X86_VENDOR_AMD;
+	else if(cmp_vendor(s, "AMDisbetter!")) /* alternative string? */
 		cpu->vendor = X86_VENDOR_AMD;
 	else if(cmp_vendor(s, "CentaurHauls"))
 		cpu->vendor = X86_VENDOR_CENTAUR;
@@ -756,6 +782,8 @@ static __init void identify_vendor(struct cpuinfo *cpu)
 		cpu->vendor = X86_VENDOR_VIA;
 	else if(cmp_vendor(s, "Vortex86 SoC"))
 		cpu->vendor = X86_VENDOR_VORTEX;
+	else if(cmp_vendor(s, "HygonGenuine"))
+		cpu->vendor = X86_VENDOR_HYGON;
 	else
 		cpu->vendor = X86_VENDOR_OTHER;
 }
@@ -787,6 +815,73 @@ static void check_for_fdiv_bug(void)
 		  /* %3 */ "m" (b)
 	);
 	our_cpu.fdiv_bug = !res;
+}
+
+static GCC_ATTR_COLD void sigill_rdtsc(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc)
+{
+	ucontext_t *uc = vuc;
+
+	if(signr != SIGILL) {
+		/* something went wrong.... */
+		goto OUT;
+	}
+
+#ifdef __x86_64__
+	uc->uc_mcontext.gregs[REG_RIP] += 2; /* rdtsc is two bytes, skip this many bytes */
+#else
+	uc->uc_mcontext.gregs[REG_EIP] += 2; /* rdtsc is two bytes, skip this many bytes */
+#endif
+	our_cpu.rdtsc_crashed = true;
+
+	barrier();
+
+OUT:
+	{
+		/* unregister for the signal */
+		struct sigaction sas;
+		memset(&sas, 0, sizeof(sas));
+		sas.sa_handler = SIG_DFL;
+		sigaction(signr, &sas, NULL);
+	}
+}
+
+
+static noinline bool check_rdtsc(void)
+{
+	struct sigaction sas_old, sas;
+	unsigned long a, d;
+
+	/*
+	 * the rdtsc may be advertised by the CPU, but
+	 * still not usable, it can be inhibited by the OS/Hypervisor.
+	 * Add buggy BIOS messing with microcode and undocumented MSR
+	 * to switch it off without removing the CPUID flag and...
+	 *
+	 * we have to test for it.
+	 */
+
+	/* if we didn't found the TSC advertised, we simply don't mess with it */
+	if(!cpu_feature(CFEATURE_TSC))
+		return false;
+
+	memset(&sas_old, 0, sizeof(sas_old));
+	memset(&sas, 0, sizeof(sas));
+	sas.sa_sigaction = sigill_rdtsc;
+	sas.sa_flags = SA_ONSTACK | SA_RESTART | SA_SIGINFO;
+	if(sigaction(SIGILL, &sas, &sas_old)) {
+		/* we coulnd't register the signal handler */
+		return false;
+	}
+
+	/* execute rdtsc */
+	asm volatile (".byte 0x0f, 0x31" /* hardcode rdtsc, so we know it's 2 byte */
+		: "=a" (a),
+		  "=d" (d));
+	barrier();
+
+	sigaction(SIGILL, &sas_old, NULL);
+	/* did we crash while executing rdtsc? */
+	return !our_cpu.rdtsc_crashed;
 }
 
 /*
@@ -899,7 +994,7 @@ void emit_emms(void)
  *
  * This seems to change now.
  *
- * In this hole course of actions xsave can be seen as the
+ * In this whole course of actions xsave can be seen as the
  * (typical) ultimate "once and for all" solution from Intels
  * side (first lacking, than pompous) to bring more dynamic
  * to those hardware dependencies.
@@ -936,7 +1031,7 @@ void emit_emms(void)
  * You can mask out the saving of the new stuff, but that would
  * mean: no AVX for you. (or Extension 08/15)
  *
- * And thats why this hole "does OS suppport this" test was invented
+ * And thats why this whole "does OS suppport this" test was invented
  * IMHO (and has to be done for a long time):
  * Rapid deployment to the market without any thinking while the
  * marketing droids can generate lots of hot air about new fooo
