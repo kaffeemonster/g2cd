@@ -558,18 +558,19 @@ love:
 	@$(PORT_PR) "Don't know how to make love\n"
 
 ccdrv: ccdrv.c Makefile
-	@$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lncurses || ( \
-		$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
-			$(PORT_PR) "\n *****************************************************\n" ; \
-			$(PORT_PR) " * compiling cc-driver failed, using fallback script *\n" ; \
-			$(PORT_PR) " *****************************************************\n\n" ; \
-			$(PORT_PR) "#! /bin/sh\n" > $@ ; \
-			$(PORT_PR) "shift 2\n" >> $@ ; \
-			$(PORT_PR) "echo \$${@}\n" >> $@ ; \
-			$(PORT_PR) "CC=\$${1}\n" >> $@; \
-			$(PORT_PR) "shift\n" >> $@; \
-			$(PORT_PR) "\$${CC} \"\$${@}\"\n" >> $@; \
-			chmod a+x $@ ) )
+	@$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lncurses -ltinfo || ( \
+		$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lncurses || ( \
+			$(PORT_PR) "\tCC-LD[$@]\n"; $(HOSTCC) $(HOSTCFLAGS) ccdrv.c -o $@ -lcurses || ( \
+				$(PORT_PR) "\n *****************************************************\n" ; \
+				$(PORT_PR) " * compiling cc-driver failed, using fallback script *\n" ; \
+				$(PORT_PR) " *****************************************************\n\n" ; \
+				$(PORT_PR) "#! /bin/sh\n" > $@ ; \
+				$(PORT_PR) "shift 2\n" >> $@ ; \
+				$(PORT_PR) "echo \$${@}\n" >> $@ ; \
+				$(PORT_PR) "CC=\$${1}\n" >> $@; \
+				$(PORT_PR) "shift\n" >> $@; \
+				$(PORT_PR) "\$${CC} \"\$${@}\"\n" >> $@; \
+				chmod a+x $@ ) ) )
 
 arflock: arflock.c ccdrv Makefile
 	@./ccdrv -s$(VERBOSE) "CC-LD[$@]" $(HOSTCC) $(HOSTCFLAGS) arflock.c -o $@ || ( \
