@@ -1,8 +1,8 @@
 /*
  * ansi_prng.c
- * Pseudo random number generator according to ANSI X9.31
+ * Pseudo random number generator in spirit to ANSI X9.31
  *
- * Copyright (c) 2009-2012 Jan Seiffert
+ * Copyright (c) 2009-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -27,12 +27,62 @@
  */
 
 /*
+ * Update 2017:
+ *
+ * ! ! ! DO NOT USE THIS CODE FOR ANYTHING ! ! !
+ *
+ * X9.31 was deprecated by NIST in 2011, is no longer FIPS compliant
+ * since 2016.
+ *
+ * So yes, this may not be the best PNRG, because of a long known
+ * (1998) weakness of state recovery which results in prediction of
+ * future output (and a long track record of mindbogingly bad
+ * implementations (e.g. static seed key, even sanctioned by the
+ * standard) and propably even malicius subversion in the whole X9.xx +
+ * NIST/FIPS process (Dual EC DRBG anyone?)).
+ *
+ * But for that several conditions must be met.
+ *
+ * In the scope of g2cd these conditions are not met:
+ * - no clear text direct prng output is leaked to the world
+ * - dynamically seeded on statup
+ * - constantly reseeded during operation
+ *
+ * Besides: no "real" cryptography is made with the prng output.
+ * Instead it is used for tasks normally much weaker algos are used
+ * (see rand(), random(), rand48()).
+ *
+ * Instead we can reap the percived advantages:
+ * - "strong" randomness with a, in this day and age, fast
+ *   building block (AES, aes instructions)
+ * - the concept is so simple, even i can grasp it
+ * - and from what i understand, at least the "time-back"
+ *   direction of this prng should be as strong as AES itself
+ *   (baring major compromise: seed, internal state)
+ *
+ * So for the usage warning: Do not copy this code and go like
+ * "Yay, i got a X9.31 PNGR, it's cryptographically strong,
+ * let's do crypto with it, done, ship it". That's a BAD idea.
+ *
+ * This code is only a PRNG, not a CPRNG!
+ *
+ * And yes, if you gain remote access to the memory comprising
+ * the internal state, game over. But in that case you are
+ * in a world of hurt anyways...
+ * And i really want to see a software (C)PRNG which saves
+ * your ass in that case...
+ */
+
+
+/*
  * Pseudo random number generator according to ANSI X9.31
  * Appendix A.2.4 Using AES
  * http://csrc.nist.gov/groups/STM/cavp/documents/rng/931rngext.pdf
  *
  * Recrypt something with it self with AES in CTR mode to
  * get pseudo random bytes.
+ *
+ * Except that we tweak that a little bit....
  */
 
 #include <stdlib.h>
@@ -83,9 +133,61 @@ static void xor_vectors(const union dvector *in1, const union dvector *in2, unio
 		out->s[i] = in1->s[i] ^ in2->s[i];
 }
 
+static uint32_t get_timestamp(void)
+{
+	/*
+	 * We only care for a changing bit pattern, some entropy.
+	 * We do NOT care for:
+	 * - correct time keeping
+	 * - jumps
+	 * - DST, leap years and seconds
+	 * - limited datatype range (if it overflow in 2038, pfff...)
+	 * - frequency stability/PM
+	 * - stability across cores
+	 * - cycle stealing
+	 * - exact cycle mesurement
+	 * and what ever jazz you have.
+	 *
+	 * Linux luckily has a very optimized gettimeofday as a fallback,
+	 * but we actually want something simple like RDTSC.
+	 * Unfortunatly most RISC cpus make similar funtionality hard
+	 * to use, ring0 only and stuff...
+	 */
+//TODO: since RDTSC can be flacky, check against CPUID
+#if defined(I_LIKE_ASM)
+#if  defined(__i386__)
+	uint32_t a, d;
+	asm(
+		"rdtsc\n"
+		: /*  */ "=a" (a),
+		  /*  */ "=d" (d)
+	);
+	return a;
+#elif  defined(__x86_64__)
+	uint64_t a, d;
+	asm(
+		"rdtsc\n"
+		: /*  */ "=a" (a),
+		  /*  */ "=d" (d)
+	);
+	return a;
+#else
+	struct timeval t;
+	gettimeofday(&t, NULL);
+	return (uint32_t)t.tv_usec;
+#endif
+#else
+	struct timeval t;
+	gettimeofday(&t, NULL);
+	return (uint32_t)t.tv_usec;
+#endif
+}
+
 static void increment_counter(union dvector *ctr, uint32_t incr)
 {
 	uint32_t t;
+	/* any increment value is "good", except 0 */
+	incr = incr != 0 ? incr : 1;
 #if RAND_BLOCK_BYTE == 16 && defined(I_LIKE_ASM) && defined(__i386__)
 	asm(
 		"addl	%2,    %1\n\t"
@@ -135,6 +237,7 @@ static void increment_counter(union dvector *ctr, uint32_t incr)
 	}
 # endif
 #endif
+	/* fancy ROR the counter, smeering the lowest bits into the high bits */
 	t = ctr->u[0] ^ (ctr->u[0] << 11);
 	ctr->u[0] = ctr->u[1]; ctr->u[1] = ctr->u[2]; ctr->u[2] = ctr->u[3];
 	ctr->u[3] ^= (ctr->u[3] >> 19) ^ t ^ (t >> 8);
@@ -246,7 +349,7 @@ static void more_random_bytes_rctx_int(struct rctx *rctx)
 	 * ! Don't use this to encrypt communication with other hosts !
 	 * ! ! ! ------------------------------------------------ ! ! !
 	 *
-	 * This is no problem here, since it is internal to
+	 * This is no problem here, since CTR-mode here is internal to
 	 * our prng and not part of a world facing lib function
 	 * for AES-CTR mode.
 	 * Its also no problem for the correctness, counter
@@ -254,7 +357,7 @@ static void more_random_bytes_rctx_int(struct rctx *rctx)
 	 * not said which bit pattern the counter has to have
 	 * (can be seen as a f(x) with a long period).
 	 */
-	increment_counter(&rctx->DT, rctx->adler);
+	increment_counter(&rctx->DT, rctx->adler ^ get_timestamp());
 
 	/* checksum I */
 	rctx->adler = adler32(rctx->adler, I.c, sizeof(I));
@@ -270,6 +373,46 @@ static noinline void more_random_bytes_rctx(struct rctx *rctx)
 {
 	more_random_bytes_rctx_int(rctx);
 }
+
+#if 0
+/*
+ * xorshift1024* PRNG, quite good and has a 2^1024-1 period length
+ * could be used as an inner generator, regulary re-seeded from
+ * from the big CPRNG engine
+ */
+uint64_t s[16] = {
+	0xcd03624df3d6f7ef, 0x34b30a483d346d12, 0xa76bfba260ea2923, 0xb2688dadc602732d,
+	0x14f112abfae03338, 0x8c0d322317bc6f95, 0x99c6439600bd7977, 0x255e96b46d499571,
+	0x44b5b0a63638bc2c, 0xbeff2ef6f4911c7a, 0x588bd86c03216764, 0x7c012d317844dcff,
+	0xd2ab8569a350bdc3, 0xfffcd6e0071781eb, 0x12210b17caadfb9e, 0x3320a6007f9d8d3e
+};
+int p;
+
+uint64_t next(void) {
+	uint64_t s0 = s[p];
+	uint64_t s1 = s[p = (p + 1) & 15];
+	s1 ^= s1 << 31; // a
+	s1 ^= s1 >> 11; // b
+	s0 ^= s0 >> 30; // c
+	return (s[p] = s0 ^ s1) * 1181783497276652981LL;
+}
+
+// *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
+
+typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
+
+uint32_t pcg32_random_r(pcg32_random_t* rng)
+{
+    uint64_t oldstate = rng->state;
+    // Advance internal state
+    rng->state = oldstate * 6364136223846793005ULL + (rng->inc|1);
+    // Calculate output function (XSH RR), uses old state for max ILP
+    uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+    uint32_t rot = oldstate >> 59u;
+    return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+}
+#endif
 
 void noinline random_bytes_get(void *ptr, size_t len)
 {
@@ -367,13 +510,19 @@ void random_bytes_rekey(const char data[RAND_BLOCK_BYTE * 2])
 	}
 
 	/* again scramble the state */
-	ctx.adler = adler32(rctx->adler, ni[0].c, sizeof(*ni) * 4);
+	rctx->adler = adler32(rctx->adler, ni[0].c, sizeof(*ni) * 4);
 	xor_vectors(&rctx->V, &ni[1], &rctx->V);
 	xor_vectors(&rctx->DT, &ni[2], &rctx->DT);
 
 	/* move state forward */
 	for(i = (ctx.ne[2].c[ctx.ne[0].c[3] % 16] % 32) + 8; i--;)
 		more_random_bytes_rctx(rctx);
+
+/* // no, do not fold new rand data back into entropy for next key
+	xor_vetors(&ni[0], &ctx.ne[0], &ctx.ne[0]);
+	xor_vetors(&ni[1], &ctx.ne[1], &ctx.ne[1]);
+	xor_vetors(&ni[2], &ctx.ne[2], &ctx.ne[2]);
+	*/
 
 	/* lock other out */
 	mutex_lock(&ctx.lock);
@@ -449,7 +598,7 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 	st[0].l[1] ^= now.tv_usec;
 
 	/* let the milliseconds decide where we pick the text segment */
-	sbox = get_text() + (now.tv_usec / 1000);
+	sbox = get_text() + (now.tv_usec / 1000) - data[0];
 
 	/* fill the I vector */
 	memcpy(&td, sbox - 8192, sizeof(td));
