@@ -2,7 +2,7 @@
  * print_ts.c
  * print a timestamp in fixed format
  *
- * Copyright (c) 2010-2015 Jan Seiffert
+ * Copyright (c) 2010-2022 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -166,7 +166,13 @@ static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 	f->seconds = rem % SECONDS_PER_MIN;
 	year       = 1970; /* the POSIX epoch started 1970 */
 
-	while(tdays < 0 || tdays >= (is_leap_year(year) ? 366 : 365))
+	/* just fall in, save one check at the start
+	 * worst thing is one unnecessary round of calcs which come out to 0
+	 * if you pass in a 1970 timestamp, in all other cases you have to
+	 * do the calcs anyway, but then you have done one additional round
+	 * through the conditionals
+	 */
+	do
 	{
 		/* Guess a corrected year, assuming 365 days per year.  */
 		int year_guessed = year + tdays / 365 - (tdays % 365 < 0);
@@ -174,7 +180,7 @@ static noinline bool calc_dfields(struct dfields *f, const time_t *t)
 		tdays -= ((year_guessed - year) * 365 +
 		         leaps_thru_end_of(year_guessed - 1) - leaps_thru_end_of(year - 1));
 		year = year_guessed;
-	}
+	} while(tdays < 0 || tdays >= (is_leap_year(year) ? 366 : 365));
 	f->year = year;
 
 	utdays = tdays; /* days is unsigned after the above loop */
