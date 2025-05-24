@@ -2,7 +2,7 @@
  * memcpy_rev.c
  * memcpy_rev
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2025 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -47,13 +47,13 @@ void *my_memcpy_rev(void *dst, const void *src, size_t len)
 	dst_c -= i; src_c -= i; len -= i;
 	switch(i & SOSTM1)
 	{
-	case 7: dst_c[6] = src_c[6];
-	case 6: dst_c[5] = src_c[5];
-	case 5: dst_c[4] = src_c[4];
-	case 4: dst_c[3] = src_c[3];
-	case 3: dst_c[2] = src_c[2];
-	case 2: dst_c[1] = src_c[1];
-	case 1: dst_c[0] = src_c[0];
+	case 7: dst_c[6] = src_c[6]; GCC_FALL_THROUGH
+	case 6: dst_c[5] = src_c[5]; GCC_FALL_THROUGH
+	case 5: dst_c[4] = src_c[4]; GCC_FALL_THROUGH
+	case 4: dst_c[3] = src_c[3]; GCC_FALL_THROUGH
+	case 3: dst_c[2] = src_c[2]; GCC_FALL_THROUGH
+	case 2: dst_c[1] = src_c[1]; GCC_FALL_THROUGH
+	case 1: dst_c[0] = src_c[0]; GCC_FALL_THROUGH
 	case 0: break;
 	}
 

@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer, generic implementation
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2025 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -37,52 +37,52 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest(char *dst, const char *src, unsigned i
 		switch(i)
 		{
 		case 15:
-			dst[14] = src[14];
+			dst[14] = src[14]; GCC_FALL_THROUGH
 		case 14:
 			t16 = get_unaligned(&src_w[6]);
 			put_unaligned(t16, &dst_w[6]);
 			goto C12;
 		case 13:
-			dst[12] = src[12];
+			dst[12] = src[12]; GCC_FALL_THROUGH
 		case 12:
 C12:
 			t32 = get_unaligned(&src_dw[2]);
 			put_unaligned(t32, &dst_dw[2]);
 			goto C8;
 		case 11:
-			dst[10] = src[10];
+			dst[10] = src[10]; GCC_FALL_THROUGH
 		case 10:
 			t16 = get_unaligned(&src_w[4]);
 			put_unaligned(t16, &dst_w[4]);
 			goto C8;
 		case  9:
-			dst[8] = src[8];
+			dst[8] = src[8]; GCC_FALL_THROUGH
 		case  8:
 C8:
 			t64 = get_unaligned(&src_qw[0]);
 			put_unaligned(t64, &dst_qw[0]);
 			break;
 		case  7:
-			dst[6] = src[6];
+			dst[6] = src[6]; GCC_FALL_THROUGH
 		case  6:
 			t16 = get_unaligned(&src_w[2]);
 			put_unaligned(t16, &dst_w[2]);
 			goto C4;
 		case  5:
-			dst[4] = src[4];
+			dst[4] = src[4]; GCC_FALL_THROUGH
 		case  4:
 C4:
 			t32 = get_unaligned(&src_dw[0]);
 			put_unaligned(t32, &dst_dw[0]);
 			break;
 		case  3:
-			dst[2] = src[2];
+			dst[2] = src[2]; GCC_FALL_THROUGH
 		case  2:
 			t16 = get_unaligned(&src_w[0]);
 			put_unaligned(t16, &dst_w[0]);
 			break;
 		case  1:
-			dst[0] = src[0];
+			dst[0] = src[0]; GCC_FALL_THROUGH
 		case  0:
 			break;
 		}
@@ -110,52 +110,52 @@ noinline GCC_ATTR_FASTCALL char *cpy_rest_o(char *dst, const char *src, unsigned
 		switch(i)
 		{
 		case 15:
-			dst[14] = src[14];
+			dst[14] = src[14]; GCC_FALL_THROUGH
 		case 14:
 			t16 = get_unaligned(&src_w[6]);
 			put_unaligned(t16, &dst_w[6]);
 			goto C12;
 		case 13:
-			dst[12] = src[12];
+			dst[12] = src[12]; GCC_FALL_THROUGH
 		case 12:
 C12:
 			t32 = get_unaligned(&src_dw[2]);
 			put_unaligned(t32, &dst_dw[2]);
 			goto C8;
 		case 11:
-			dst[10] = src[10];
+			dst[10] = src[10]; GCC_FALL_THROUGH
 		case 10:
 			t16 = get_unaligned(&src_w[4]);
 			put_unaligned(t16, &dst_w[4]);
 			goto C8;
 		case  9:
-			dst[8] = src[8];
+			dst[8] = src[8]; GCC_FALL_THROUGH
 		case  8:
 C8:
 			t64 = get_unaligned(&src_qw[0]);
 			put_unaligned(t64, &dst_qw[0]);
 			break;
 		case  7:
-			dst[6] = src[6];
+			dst[6] = src[6]; GCC_FALL_THROUGH
 		case  6:
 			t16 = get_unaligned(&src_w[2]);
 			put_unaligned(t16, &dst_w[2]);
 			goto C4;
 		case  5:
-			dst[4] = src[4];
+			dst[4] = src[4]; GCC_FALL_THROUGH
 		case  4:
 C4:
 			t32 = get_unaligned(&src_dw[0]);
 			put_unaligned(t32, &dst_dw[0]);
 			break;
 		case  3:
-			dst[2] = src[2];
+			dst[2] = src[2]; GCC_FALL_THROUGH
 		case  2:
 			t16 = get_unaligned(&src_w[0]);
 			put_unaligned(t16, &dst_w[0]);
 			break;
 		case  1:
-			dst[0] = src[0];
+			dst[0] = src[0]; GCC_FALL_THROUGH
 		case  0:
 			break;
 		}
