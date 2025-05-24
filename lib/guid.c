@@ -2,7 +2,7 @@
  * guid.c
  * little stuff to generate a guid
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2019 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -36,17 +36,20 @@ static union guid_fast l_res;
 
 void guid_generate(unsigned char out[GUID_SIZE])
 {
+	union guid_fast t;
+
 	/* get random bytes for our guid */
 	random_bytes_get(out, GUID_SIZE);
 
 	mutex_lock(&ctx_lock);
+//TODO: this is bullshit!! MAJOR Bullshit, whith a capital B
 	/* encrypt IV with our random key */
-	aes_ecb_encrypt256(&ae_ctx, &l_res, &l_res);
+	aes_ecb_encrypt256(&ae_ctx, &t, &l_res);
 	/* xor bytes with result, creating next IV */
-	l_res.d[0] ^= get_unaligned(((uint32_t *)out)+0);
-	l_res.d[1] ^= get_unaligned(((uint32_t *)out)+1);
-	l_res.d[2] ^= get_unaligned(((uint32_t *)out)+2);
-	l_res.d[3] ^= get_unaligned(((uint32_t *)out)+3);
+	l_res.d[0] = t.d[0] ^ get_unaligned(((uint32_t *)out)+0);
+	l_res.d[1] = t.d[1] ^ get_unaligned(((uint32_t *)out)+1);
+	l_res.d[2] = t.d[2] ^ get_unaligned(((uint32_t *)out)+2);
+	l_res.d[3] = t.d[3] ^ get_unaligned(((uint32_t *)out)+3);
 	/* create output */
 	memcpy(out, &l_res, GUID_SIZE);
 	mutex_unlock(&ctx_lock);
