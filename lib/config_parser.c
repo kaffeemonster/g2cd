@@ -2,7 +2,7 @@
  * config_parser.c
  * config file parser
  *
- * Copyright (c) 2009-2012 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -275,7 +275,7 @@ bool config_parser_handle_ip(struct list_head *head, void *data)
 bool config_parser_handle_encoding(struct list_head *head, void *data)
 {
 #define ENUM_CMD(x) {str_it(x)}
-	static const char enc_vals[][11] =
+	static const char enc_vals[][12] =
 	{
 		G2_CONNECTION_ENCODINGS
 	};
