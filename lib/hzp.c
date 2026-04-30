@@ -2,7 +2,7 @@
  * hzp.c
  * hzp internal voodoo
  *
- * Copyright (c) 2006-2012 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -364,9 +364,27 @@ int hzp_scan(int threshold)
 		if(entry->flags.used)
 		{
 			rmb();
-			for(i = 0; i < HZP_MAX; i++) {
+			for(i = 0; i < HZP_MAX; i++)
+			{
 				if(deatomic(entry->ptr[i]))
+				{
+					/* number of alloca bound by number of threads partitipating in hzp times maximum number of hzp entries (hzp subsystems, HZP_MAX), but on only on entry used */
 					hzp_fs_push(&uhead_st, alloca(sizeof(uhead_st)), deatomic(entry->ptr[i]));
+					/* yes, alloca in loop has a smell, but...
+					 *
+					 * 10000 threads with 10 HZP subsystems, all used at the same time by all threads, 2 pointer (16 bytes) = 1600k bytes
+					 * hzp_scan should be called by the main thread with full fat beafy stack
+					 *
+					 * and entry use should be very very sparse: hzp is to hold a short lived reference to a piece of mem
+					 * another thread might want to retire->free at the same time without heavy synchronisation/asynchronously
+					 *
+					 * like rcu
+					 *
+					 * If i would want to fix this better use our own palloc on a piece of thread local storage (much more code)
+					 * or pull in the qht_zpad (dependency from nearly standalone lib code to main program),
+					 * because loading the system allocator with something which is supposed to be light on the locking is counter-productive
+					 */
+				}
 			}
 			/* shut up, we want to travers the list... */
 			whead = deatomic(atomic_sread(whead));
