@@ -2,7 +2,7 @@
  * itoa.h
  * number print helper
  *
- * Copyright (c) 2008-2010 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -184,14 +184,14 @@ MAKE_UFUNC_SET( muz,          size_t)
 static inline char *maddrtoa(char *buff, const void *ptr)
 {
 	static const char hexchar[] = HEXUC_STRING;
-	char *wptr = buff + (sizeof(ptr) * 2);
+	char *wptr = buff + (sizeof(uintptr_t) * 2);
 	uintptr_t p = (uintptr_t)ptr;
 	unsigned i;
 
-	for(i = 0; i < (sizeof(ptr) * 2); i++)
+	for(i = 0; i < (sizeof(uintptr_t) * 2); i++)
 		*wptr-- = hexchar[(p >> (i  * 4)) & 0x0F];
 
-	return buff + (sizeof(ptr) * 2);
+	return buff + (sizeof(uintptr_t) * 2);
 }
 
 static inline char *mptoa(char *buff, const void *ptr)
@@ -203,11 +203,11 @@ static inline char *mptoa(char *buff, const void *ptr)
 
 	buff[0] = '0';
 	buff[1] = 'x';
-	wptr = &buff[1] + (sizeof(ptr) * 2);
-	for(i = 0; i < (sizeof(ptr) * 2); i++)
+	wptr = &buff[1] + (sizeof(uintptr_t) * 2);
+	for(i = 0; i < (sizeof(uintptr_t) * 2); i++)
 		*wptr-- = hexchar[(p >> (i  * 4)) & 0x0F];
 
-	return buff + (sizeof(ptr) * 2) + 2;
+	return buff + (sizeof(uintptr_t) * 2) + 2;
 }
 
 GCC_ATTR_FASTCALL char *put_dec_trunc(char *buf, unsigned q) GCC_ATTR_VIS("hidden");
