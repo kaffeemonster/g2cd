@@ -336,7 +336,7 @@ static noinline uint32_t g2_qht_search_number_word(const tchar_t *s, size_t star
 		 * Pass around and create winblow UTF-16, like shareaza,
 		 * to throw it against an ASCII tolower (here coded explicit
 		 * to prevent funny things), like shareaza, and cut away
-		 * everthing outside ASCII, like shareaza.
+		 * everthing outside ASCII (or more like ANSI), like shareaza.
 		 * ????
 		 * What are they doing?
 		 */
@@ -1076,7 +1076,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * and type in searches in their own language.
 		 * And word splitting is a PITA on languages from Asia. Other languages
 		 * also have their bumps (e.g. arabic: articels ligature into the word).
-		 * Did i mention BIDI, in which direction should we take hashes?
+		 * Did i mention BIDI? In which direction should we take hashes?
 		 *
 		 * Since we get our stuff as UTF-8, we can express everything that is
 		 * in UNICODE, which should be anything on this Planet (mostly...).
@@ -1108,7 +1108,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * Great tennis!
 		 * Switching trough 4 locales (with locking, multithreading is a GNU
 		 * extension) for every character, which may not be installed (do you
-		 * have the korean locale on your machine?)...
+		 * have the korean locale on your (server) machine?)...
 		 *
 		 * l10n, fuck yeah!
 		 *
@@ -1131,7 +1131,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * With n = 2 (because the avarge chinese word has 1.54 chars...) this
 		 * is quite successful.
 		 *
-		 * And there is another problem:
+		 * And there is another ugly problem:
 		 * Normalization.
 		 * You can express one character sometimes as a direct code point, and
 		 * also as a composed construct. For example an angstrom (an 'a' with a
@@ -1148,9 +1148,11 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * this "important", but for example hangul, thanks to their system,
 		 * everything can be written either completely decomposed (Jamo) or
 		 * as composed 'fixed' graphemes.
-		 * This will mostly hurt with MacOS, because the APIs there normalize
-		 * everthing to decomposed form (filenames, etc. tranfered as one name
-		 * to the Mac and save the file(name), get a different hash back).
+		 * Extra painpoint in this is MacOS, because the APIs there apperantly
+		 * normalize everthing to decomposed form (filenames, etc. tranfered as
+		 * one bytesheme to the Mac and save the file(name), get a different
+		 * bytesheme and with that different hash back). (I witnessed the pains
+		 * of source code versioning system programmers with this MacOs behavior)
 		 *
 		 * At the end of the day this does not help us. We have to create hashes
 		 * like Shareaza or it will not blend^Wmatch the hash.
@@ -1158,6 +1160,7 @@ bool g2_qht_search_drive(char *metadata, size_t metadata_len, char *dn, size_t d
 		 * Which is ugly, bug prone and...
 		 * ... will have similaryties to Shareaza code and includes defines from
 		 * the winapi.
+		 * And it will be similarily limited/buggy.
 		 *
 		 */
 		if(metadata && metadata_len)
