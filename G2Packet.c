@@ -2,7 +2,7 @@
  * G2Packet.c
  * helper-functions for G2-packets
  *
- * Copyright (c) 2004-2019 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -3574,44 +3574,64 @@ static bool handle_QHT(struct ptype_action_args *parg)
 
 	do
 	{
-		struct packet_data_store *pds;
-
 		/*
 		 * Dirty Dirty Dirty
 		 * We got frags from the qht stuff. They left us some space
-		 * at the start for a qht fragment header.
+		 * at the start of data buffer for a qht fragment header.
 		 * But to free the fragments, by being data_trunk->data, we
 		 * have to set up stuff right.
 		 * First it was enough to set the raw fragment as ->data
-		 * and advance ->pos over the struct fragment.
+		 * and advance ->pos over the normal struct fragment members.
 		 * Now, since the data store is refcounted, we have to move
-		 * the start about a sizeof(pds).
+		 * the start about a sizeof(pds) to have storage for the refcount.
+		 *
 		 * So this is ugly pointer foo and aliasing.
+		 *
+		 * but to keep it zero copy and min-alloc
 		 *
 		 * May the compiler be with us...
 		 */
+		union cthulhus_unicorns
+		{
+			struct packet_data_store pds;
+			struct qht_fragment frag;
+		} *pds;
+
+		/* save next for list traversal */
 		nfrag = frags->next;
+		/* alloc packet  */
 		qht = g2_packet_calloc();
 		if(!qht)
 			goto out_fail_frags;
 		qht->type = PT_QHT;
+		/* remove frag from list */
 		frags->next = NULL;
 
-		pds = (struct packet_data_store *)frags;
-		qht->data_trunk.capacity = (sizeof(*frags) - sizeof(*pds)) + frags->length;
+		/* stamp QHT patch header at start of fragment data, space is specifically left there for this */
+		frags->data[0] = 1; /* command */
+		frags->data[1] = frags->nr; /* fragment no */
+		frags->data[2] = frags->count; /* fragment count */
+		frags->data[3] = frags->compressed; /* compresion */
+		frags->data[4] = 1; /* bits */
+
+		/* fill in packet data trunk numbers derived from memory that will be attached */
+		qht->data_trunk.capacity = (sizeof(struct qht_fragment) - sizeof(struct packet_data_store)) + frags->length;
+		/*****************
+		 * normal struct qht_fragment member memory except the data at the end are now unused/evicted after this
+		 * TODO: compiler barrier?
+		 *****************/
 		qht->data_trunk.limit = qht->data_trunk.capacity;
+		/* advance data position to skip struct qht_fragment members minus the refcount in a struct packet_data_store  */
 		qht->data_trunk.pos =
 			offsetof(struct qht_fragment, data) - offsetof(struct packet_data_store, data);
 		qht->data_trunk_is_freeable = true;
-		qht->data_trunk.data = pds->data;
-		atomic_set(&pds->refcnt, 1);
 
-		*buffer_start(qht->data_trunk) = 1; /* command */
-		*(buffer_start(qht->data_trunk)+1) = frags->nr; /* fragment no */
-		*(buffer_start(qht->data_trunk)+2) = frags->count; /* fragment count */
-		*(buffer_start(qht->data_trunk)+3) = frags->compressed; /* compresion */
-		*(buffer_start(qht->data_trunk)+4) = 1; /* bits */
+		/* fudge fragment memory in place as packet storage */
+		pds = (union cthulhus_unicorns *)frags;
+		qht->data_trunk.data = pds->pds.data;
+		atomic_set(&pds->pds.refcnt, 1);
 
+		/* aaaaand ship it */
 		g2_packet_add2target(qht, parg->target, parg->target_lock);
 		frags = nfrag;
 	} while(frags);
