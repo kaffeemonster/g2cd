@@ -71,6 +71,10 @@
  * in a world of hurt anyways...
  * And i really want to see a software (C)PRNG which saves
  * your ass in that case...
+ * An hardening option would be to move the PRNG into a
+ * different process you only receive the random bytes via pipe
+ * or socket, but thats implementation, not algo, and with
+ * all the funky cross sec boundery timing attacks these days...
  */
 
 
