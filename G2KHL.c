@@ -989,15 +989,22 @@ static bool gwc_curl_prepare(void)
 # ifdef DEBUG_DEVEL_OLD
 	do_an_setopt(CURLOPT_VERBOSE, 1l);
 # endif
-#if LIBCURL_VERSION_NUM >= 0x073200
+# if LIBCURL_VERSION_NUM >= 0x073200
 	do_an_setopt(CURLOPT_XFERINFOFUNCTION, gwc_curl_meterfunc);
-#else
+# else
 	do_an_setopt(CURLOPT_PROGRESSFUNCTION, gwc_curl_meterfunc);
-#endif
+# endif
 	do_an_setopt(CURLOPT_WRITEFUNCTION, gwc_curl_writefunc);
 	do_an_setopt(CURLOPT_READFUNCTION, gwc_curl_readfunc);
+# if LIBCURL_VERSION_NUM >= 0x71904
+#  if LIBCURL_VERSION_NUM >= 0x078500
+	do_an_setopt(CURLOPT_PROTOCOLS_STR, "https,http");
+	do_an_setopt(CURLOPT_REDIR_PROTOCOLS_STR, "https,http");
+#  else
 	do_an_setopt(CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
 	do_an_setopt(CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
+#  endif
+# endif
 	do_an_setopt(CURLOPT_AUTOREFERER, 1l);
 	do_an_setopt(CURLOPT_FOLLOWLOCATION, 1l);
 	do_an_setopt(CURLOPT_MAXREDIRS, 30l);
