@@ -2,7 +2,7 @@
  * G2KHL.c
  * known hublist foo
  *
- * Copyright (c) 2008-2019 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -919,9 +919,15 @@ static size_t gwc_curl_writefunc(char *ptr, size_t size, size_t nmemb, void *use
 }
 
 /* the progressmeter callback */
+#if LIBCURL_VERSION_NUM >= 0x073200
+static int gwc_curl_meterfunc(void *clientp GCC_ATTR_UNUSED_PARAM,
+                              curl_off_t dltotal GCC_ATTR_UNUSED_PARAM, curl_off_t dlnow GCC_ATTR_UNUSED_PARAM,
+                              curl_off_t ultotal GCC_ATTR_UNUSED_PARAM, curl_off_t ulnow GCC_ATTR_UNUSED_PARAM)
+#else
 static int gwc_curl_meterfunc(void *clientp GCC_ATTR_UNUSED_PARAM,
                               double dltotal GCC_ATTR_UNUSED_PARAM, double dlnow GCC_ATTR_UNUSED_PARAM,
                               double ultotal GCC_ATTR_UNUSED_PARAM, double ulnow GCC_ATTR_UNUSED_PARAM)
+#endif
 {
 	/*
 	 * should not be called, we do not want a progress
@@ -983,7 +989,11 @@ static bool gwc_curl_prepare(void)
 # ifdef DEBUG_DEVEL_OLD
 	do_an_setopt(CURLOPT_VERBOSE, 1l);
 # endif
+#if LIBCURL_VERSION_NUM >= 0x073200
+	do_an_setopt(CURLOPT_XFERINFOFUNCTION, gwc_curl_meterfunc);
+#else
 	do_an_setopt(CURLOPT_PROGRESSFUNCTION, gwc_curl_meterfunc);
+#endif
 	do_an_setopt(CURLOPT_WRITEFUNCTION, gwc_curl_writefunc);
 	do_an_setopt(CURLOPT_READFUNCTION, gwc_curl_readfunc);
 	do_an_setopt(CURLOPT_PROTOCOLS, CURLPROTO_HTTP|CURLPROTO_HTTPS);
