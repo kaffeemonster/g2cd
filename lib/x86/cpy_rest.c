@@ -2,7 +2,7 @@
  * cpy_rest.c
  * copy a byte trailer, x86 impl
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -23,6 +23,55 @@
  * $Id: $
  */
 
+/* Check if CET is enabled, not only for call/rets (shadow stack)
+ * but also Indirect Branch Tracking (IBT) is enabled
+ */
+#if defined(__CET__) && (__CET__ & 2)
+/*
+ * And here goes a nice piece of code the way of the dodo....
+ *
+ * Intel CET (Control-Flow Enforcement Technology) is instructions
+ * and processor circuits to help the processor detect control flow
+ * high jack via indirect jumps (or rets -> ROP).
+ * When the processors arrives at an address after a ret or indirect
+ * jump (function pointer), and he doesn't find the right instruction
+ * (endbr64/endbr32, encodes to nops for older processors), he throws
+ * a security exception (#CP or #GP). (if its enabled top to bottom
+ * (kernel/runtime/libs/commpiler/linker/programms/security profile)).
+ * This reduces the risk of an attacker jumping to whatever/wherever
+ * they want, totally bending controlflow to their will with random bytes
+ * (or instructions) representing usefull code snippets/gadgets doing
+ * their bidding (done to bypass code injecction prevention like NX).
+ *
+ * The CPU now only accepts predefined static jump targets even for
+ * dynamic jumps.
+ *
+ * And this is some laudable goal. And besides the 4 byte bloat on
+ * all function entry or indirect jump target (i-cache), somewhat
+ * elegant minus ruining hand rolled assembly.
+ *
+ * But Problem right here is endbr64 with its 4 bytes doesn't fit in
+ * our tight 8 byte codeblock budget making up the computed jump tagets.
+ * lea maximum scale is 8, shoehorning in a times 16 in the already
+ * convoluted code with all the compat stuff with even more
+ * conditional compilation is something for a very rainy, very long,
+ * very boring time....
+ * In the end the goal of this was to have some tight code doing the
+ * job (~200 bytes vs. >3k for one of two), with data access hopefully
+ * cache warm, this is the oposit.
+ *
+ * So just fall back on compat implementation.
+ */
+// TODO: simple fix is a notrack prefix for indirect jumps, wtf?
+// 0x3e == DS segment prefix
+// and the compiler generates it because it sometimes feals its to hard to get its
+// jumptable targets straight? even one of those within a programm can defeats the
+// whole protection IMHO....
+// there is also the bnd prefix 0xf2 (orig REPNE prefix), to use the MPX (disco.)
+// bounds register(s)? (disco because so bad/undercoocked, slower/worse than software)
+// there is cet.h? __CET_NOTRACK or something like that?
+# include "../generic/cpy_rest.c"
+#else
 /*
  * I confess, its slower than the generic version,
  * but a computet goto looks so nice in kcachegrind
@@ -225,6 +274,6 @@ char GCC_ATTR_FASTCALL *cpy_rest0(char *dst, const char *src, unsigned i)
 	dst[i] = '\0';
 	return cpy_rest(dst, src, i);
 }
-
+#endif
 static char const rcsid_cprx[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */
