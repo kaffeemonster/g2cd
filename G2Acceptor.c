@@ -2,7 +2,7 @@
  * G2Acceptor.c
  * code to accept connections and handshake G2
  *
- * Copyright (c) 2004-2019 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -691,6 +691,104 @@ out_fixup:
 	return;
 }
 
+static enum g2_connection_encodings mediate_enc_out(g2_connection_t *to_con)
+{
+	enum g2_connection_encodings ret = to_con->encoding_out;
+
+//TODO: some comlicated choosing with fallback
+
+	/* reset set encoding to none, if we could not agree about it */
+	if(ret !=
+	   (to_con->flags.upeer ? server.settings.hub_out_encoding : server.settings.default_out_encoding))
+	{
+		ret = ENC_NONE;
+	}
+
+	return ret;
+}
+
+static bool mediate_enc_in(g2_connection_t *to_con)
+{
+//TODO: some comlicated choosing with fallback
+
+	/* abbort if we could not agree about it */
+	if(to_con->encoding_in != ENC_NONE &&
+	   (to_con->encoding_in !=
+	    (to_con->flags.upeer ? server.settings.hub_in_encoding : server.settings.default_in_encoding)))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+static void *get_zstd_cstream(void)
+{
+#ifdef HAVE_ZSTD
+//TODO: zstd context pooling
+	ZSTD_CStream *ret = NULL;
+	size_t res;
+
+	ret = ZSTD_createCStream();
+	if(!ret) {
+		logg_devel("failed to create ZSTD_CCtx\n");
+		return NULL;
+	}
+//TODO: handshake and use dict...
+	res = ZSTD_CCtx_setParameter(ret, ZSTD_c_compressionLevel, G2_CONNECTION_ZSZD_LEVEL);
+	if(ZSTD_isError(res)) {
+		logg_develd("failed to set zstd compression level: %s\n", ZSTD_getErrorName(res));
+		ZSTD_freeCStream(ret);
+		return NULL;
+	}
+
+	res = ZSTD_CCtx_setParameter(ret, ZSTD_c_windowLog, G2_CONNECTION_ZSZD_WINDOW);
+	if(ZSTD_isError(res)) {
+		logg_develd("failed to set zstd window log: %s\n", ZSTD_getErrorName(res));
+		ZSTD_freeCStream(ret);
+		return NULL;
+	}
+
+	return ret;
+#else
+	return NULL;
+#endif
+}
+
+static void *get_zstd_dstream(void)
+{
+#ifdef HAVE_ZSTD
+//TODO: zstd context pooling
+	ZSTD_DStream *ret = NULL;
+	size_t res;
+
+	ret = ZSTD_createDStream();
+	if(!ret) {
+		logg_devel("failed to create ZSTD_DCtx\n");
+		return NULL;
+	}
+
+//TODO: handshake and use dict...
+/*	res = ZSTD_DCtx_setParameter(ret, ZSTD_c_compressionLevel, G2_CONNECTION_ZSZD_LEVEL);
+	if(ZSTD_isError(res)) {
+		logg_develd("failed to set zstd compression level: %s\n", ZSTD_getErrorName(res));
+		ZSTD_freeDStream(ret);
+		return NULL;
+	}*/
+
+	res = ZSTD_DCtx_setParameter(ret, ZSTD_d_windowLogMax, G2_CONNECTION_ZSZD_WINDOW);
+	if(ZSTD_isError(res)) {
+		logg_develd("failed to set zstd window log: %s\n", ZSTD_getErrorName(res));
+		ZSTD_freeDStream(ret);
+		return NULL;
+	}
+
+	return ret;
+#else
+	return NULL;
+#endif
+}
+
 /*
  * This function handshakes a G2Connection from data in the recv-buffer
  * supplied by a g2_connect_t.
@@ -850,33 +948,53 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 				to_con->encoding_out = ENC_NONE;
 			else
 			{
-				/* reset set encoding to none, if we could not agree about it */
-				if(to_con->encoding_out !=
-				   (to_con->flags.upeer ? server.settings.hub_out_encoding : server.settings.default_out_encoding))
-					to_con->encoding_out = ENC_NONE;
+				to_con->encoding_out = mediate_enc_out(to_con);
+				/* already prepare uncompressed send buffer, because if we don't have one, fallback to none */
 				if((ENC_NONE != to_con->encoding_out) && (!to_con->send_u)) {
-					to_con->send_u = recv_buff_alloc();
+					to_con->send_u = recv_buff_local_get();
 					if(!to_con->send_u)
 						to_con->encoding_out = ENC_NONE;
 				}
 
+				if(ENC_ZSTD == to_con->encoding_out)
+				{
+# ifdef HAVE_ZSTD
+					to_con->encoder.zstd = get_zstd_cstream();
+					if(!to_con->encoder.zstd) {
+// TODO: gracefully fallback to DEFLATE if possible?
+						to_con->encoding_out = ENC_NONE;
+						recv_buff_local_ret(to_con->send_u);
+						to_con->send_u = NULL;
+					}
+# else
+					/* gracefully fallback to DEFLATE? this should not happen */
+					to_con->encoding_out = ENC_NONE;
+					logg_devel("zstd out encoding handshaked without zstd support? wtf?");
+					recv_buff_local_ret(to_con->send_u);
+					to_con->send_u = NULL;
+# endif
+				}
 				if(ENC_DEFLATE == to_con->encoding_out)
 				{
-					to_con->z_encoder = malloc(sizeof(*to_con->z_encoder));
-					if(to_con->z_encoder)
+					to_con->encoder.zlib = malloc(sizeof(*to_con->encoder.zlib));
+					if(to_con->encoder.zlib)
 					{
-						memset(to_con->z_encoder, 0, sizeof(*to_con->z_encoder));
-						if(Z_OK != deflateInit(to_con->z_encoder, Z_DEFAULT_COMPRESSION))
+						memset(to_con->encoder.zlib, 0, sizeof(*to_con->encoder.zlib));
+						if(Z_OK != deflateInit(to_con->encoder.zlib, Z_DEFAULT_COMPRESSION))
 						{
-							if(to_con->z_encoder->msg)
-								logg_posd(LOGF_DEBUG, "%s\n", to_con->z_encoder->msg);
-							free(to_con->z_encoder);
-							to_con->z_encoder = NULL;
+							if(to_con->encoder.zlib->msg)
+								logg_posd(LOGF_DEBUG, "%s\n", to_con->encoder.zlib->msg);
+							free(to_con->encoder.zlib);
+							to_con->encoder.zlib = NULL;
 							to_con->encoding_out = ENC_NONE;
+							recv_buff_local_ret(to_con->send_u);
+							to_con->send_u = NULL;
 						}
-					}
-					else
+					} else {
 						to_con->encoding_out = ENC_NONE;
+						recv_buff_local_ret(to_con->send_u);
+						to_con->send_u = NULL;
+					}
 				}
 			}
 			/* set our desired ingress encoding */
@@ -1328,9 +1446,7 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 			else
 			{
 				/* abort, if we could not agree about it */
-				if(to_con->encoding_in != ENC_NONE &&
-				   (to_con->encoding_in !=
-				    (to_con->flags.upeer ? server.settings.hub_in_encoding : server.settings.default_in_encoding)))
+				if(!mediate_enc_in(to_con))
 					return abort_g2_400(to_con);
 
 				if((ENC_NONE != to_con->encoding_in) && (!to_con->recv_u)) {
@@ -1339,18 +1455,40 @@ static noinline bool initiate_g2(g2_connection_t *to_con)
 						return abort_g2_501(to_con);
 				}
 
+				if(ENC_ZSTD == to_con->encoding_in)
+				{
+# ifdef HAVE_ZSTD
+					to_con->decoder.zstd = get_zstd_dstream();
+					if(!to_con->decoder.zstd) {
+// TODO: gracefully fallback to DEFLATE if possible?
+						to_con->encoding_in = ENC_NONE;
+						recv_buff_local_ret(to_con->recv_u);
+						to_con->recv_u = NULL;
+						return abort_g2_500(to_con);
+					}
+# else
+					/* gracefully fallback to DEFLATE? this should not happen */
+					to_con->encoding_in = ENC_NONE;
+					logg_devel("zstd in encoding handshaked without zstd support? wtf?");
+					recv_buff_local_ret(to_con->recv_u);
+					to_con->recv_u = NULL;
+					return abort_g2_500(to_con);
+# endif
+				}
 				if(ENC_DEFLATE == to_con->encoding_in)
 				{
-					to_con->z_decoder = malloc(sizeof(*to_con->z_decoder));
-					if(to_con->z_decoder)
+					to_con->decoder.zlib = malloc(sizeof(*to_con->decoder.zlib));
+					if(to_con->decoder.zlib)
 					{
-						memset(to_con->z_decoder, 0, sizeof(*to_con->z_decoder));
-						if(Z_OK != inflateInit(to_con->z_decoder))
+						memset(to_con->decoder.zlib, 0, sizeof(*to_con->decoder.zlib));
+						if(Z_OK != inflateInit(to_con->decoder.zlib))
 						{
-							if(to_con->z_decoder->msg)
-								logg_posd(LOGF_DEBUG, "%s\n", to_con->z_decoder->msg);
-							free(to_con->z_decoder);
-							to_con->z_decoder = NULL;
+							if(to_con->decoder.zlib->msg)
+								logg_posd(LOGF_DEBUG, "%s\n", to_con->decoder.zlib->msg);
+							free(to_con->decoder.zlib);
+							to_con->decoder.zlib = NULL;
+							recv_buff_local_ret(to_con->recv_u);
+							to_con->recv_u = NULL;
 							return abort_g2_500(to_con);
 						}
 					}

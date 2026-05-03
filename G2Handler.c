@@ -130,7 +130,7 @@ static g2_connection_t *handle_socket_io_h(struct epoll_event *p_entry, int epol
 		struct norm_buff *d_target = NULL;
 		bool compact_ubuff = false, old_flush = false, genuie_buf_full = false;
 
-		if(ENC_DEFLATE == w_entry->encoding_out)
+		if(ENC_NONE != w_entry->encoding_out)
 			d_target = w_entry->send_u;
 		else
 			d_target = w_entry->send;
@@ -184,61 +184,133 @@ more_packet_encode:
 			shortlock_unlock(&w_entry->pts_lock);
 
 no_pfill_before_write:
-		if(ENC_DEFLATE == w_entry->encoding_out)
+		if(ENC_DEFLATE == w_entry->encoding_in || ENC_ZSTD == w_entry->encoding_in)
 		{
 			if(buffer_remaining(*w_entry->send) > 6)
 			{
+#ifdef HAVE_ZSTD
+				ZSTD_inBuffer zstd_in;
+				ZSTD_outBuffer zstd_out;
+#endif
 				buffer_flip(*w_entry->send_u);
 retry_pack:
 				logg_develd_old("++++ cbytes:\t%zu\n", buffer_remaining(*w_entry->send));
 				logg_develd_old("**** space:\t%zu\n", buffer_remaining(*w_entry->send_u));
-				w_entry->z_encoder->next_in = (Bytef *)buffer_start(*w_entry->send_u);
-				w_entry->z_encoder->avail_in = buffer_remaining(*w_entry->send_u);
-				w_entry->z_encoder->next_out = (Bytef *)buffer_start(*w_entry->send);
-				w_entry->z_encoder->avail_out = buffer_remaining(*w_entry->send);
+				if(ENC_DEFLATE == w_entry->encoding_out) {
+					w_entry->encoder.zlib->next_in = (Bytef *)buffer_start(*w_entry->send_u);
+					w_entry->encoder.zlib->avail_in = buffer_remaining(*w_entry->send_u);
+					w_entry->encoder.zlib->next_out = (Bytef *)buffer_start(*w_entry->send);
+					w_entry->encoder.zlib->avail_out = buffer_remaining(*w_entry->send);
+				}
+				else if(ENC_ZSTD == w_entry->encoding_out) {
+#ifdef HAVE_ZSTD
+					zstd_in.src   = buffer_start(*w_entry->send_u);
+					zstd_in.size  = buffer_remaining(*w_entry->send_u);
+					zstd_in.pos   = 0;
+					zstd_out.dst  = buffer_start(*w_entry->send);
+					zstd_out.size = buffer_remaining(*w_entry->send);
+					zstd_out.pos  = 0;
+#else
+					logg_develd("connec with zstd out encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_out);
+					return w_entry;
+#endif
+				}
 
 				old_flush = w_entry->u.handler.z_flush;
 				w_entry->u.handler.z_flush = false;
 				mb();
 				logg_develd_old("z_flush:\t%c\n", old_flush ? 't' : 'f');
-				switch(deflate(w_entry->z_encoder, old_flush ?  Z_SYNC_FLUSH : Z_NO_FLUSH))
+				if(ENC_DEFLATE == w_entry->encoding_out)
 				{
-				case Z_BUF_ERROR:
-					logg_devel_old("Z_BUF_ERROR\n");
-					GCC_FALL_THROUGH
-				case Z_OK:
-					w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->z_encoder->avail_in);
-					w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->z_encoder->avail_out);
-					if(0 == w_entry->z_encoder->avail_out) {
+					switch(deflate(w_entry->encoder.zlib, old_flush ?  Z_SYNC_FLUSH : Z_NO_FLUSH))
+					{
+					case Z_BUF_ERROR:
+						logg_devel_old("Z_BUF_ERROR\n");
+						GCC_FALL_THROUGH
+					case Z_OK:
+						w_entry->send_u->pos += (buffer_remaining(*w_entry->send_u) - w_entry->encoder.zlib->avail_in);
+						w_entry->send->pos += (buffer_remaining(*w_entry->send) - w_entry->encoder.zlib->avail_out);
+						if(0 == w_entry->encoder.zlib->avail_out) {
+							genuie_buf_full = true;
+							 /* if we filled the buffer, make sure we reuse the same flush setting */
+							w_entry->u.handler.z_flush = old_flush;
+						}
+						break;
+					case Z_STREAM_END:
+						logg_devel("Z_STREAM_END\n");
+						return w_entry;
+					case Z_NEED_DICT:
+						logg_devel("Z_NEED_DICT\n");
+						return w_entry;
+					case Z_DATA_ERROR:
+						logg_devel("Z_DATA_ERROR\n");
+						return w_entry;
+					case Z_STREAM_ERROR:
+						logg_devel("Z_STREAM_ERROR\n");
+						return w_entry;
+					case Z_MEM_ERROR:
+						logg_devel("Z_MEM_ERROR\n");
+						return w_entry;
+					default:
+						logg_devel("deflate was not Z_OK\n");
+						return w_entry;
+					}
+				}
+				else if(ENC_ZSTD == w_entry->encoding_out)
+				{
+					size_t zstd_res = ZSTD_compressStream2(w_entry->encoder.zstd, &zstd_out, &zstd_in, old_flush ? ZSTD_e_flush : ZSTD_e_continue);
+					if(ZSTD_isError(zstd_res))
+					{
+#ifdef HAVE_ZSTD
+						ZSTD_ErrorCode zstd_errc = ZSTD_getErrorCode(zstd_res);
+						switch(zstd_errc)
+						{
+						case ZSTD_error_no_error:
+							break; /* we shouldn't get this here */
+						case ZSTD_error_noForwardProgress_destFull:
+							GCC_FALL_THROUGH
+						case ZSTD_error_noForwardProgress_inputEmpty:
+							/* dest full or input empty are not really an error, but we might
+							 * need to flush something, problem is when for ex. dest isn't full
+							 * but zstd does not whant to copy a fraction (out buff empty, 4k avail,
+							 * but block is 4k + 1 and its mimimi picky) or 2 byte input isn't "worth"
+							 * zstd time
+							 * so check real space in buffer and compare to error code?
+							 */
+							break;
+						case ZSTD_error_dstSize_tooSmall:
+							/* see above, what is it - mimimi picky, or buffer simply full */
+							break;
+						case ZSTD_error_srcSize_wrong:
+							/* ok, what ??? */
+							GCC_FALL_THROUGH
+						case ZSTD_error_cannotProduce_uncompressedBlock:
+							/* well well well .... and WHY? At least this should not happen on compress  */
+							GCC_FALL_THROUGH
+						default: /* everthing else sounds like a non-correctable error */
+							logg_develd("compressing connec Ip: %p#I\t\"%s\"\n", &w_entry->remote_host, ZSTD_getErrorName(zstd_res));
+							return w_entry;
+						}
+					}
+					w_entry->send_u->pos += zstd_in.pos;
+					w_entry->send->pos += zstd_out.pos;
+					if(zstd_out.pos == zstd_out.size) {
 						genuie_buf_full = true;
 						 /* if we filled the buffer, make sure we reuse the same flush setting */
 						w_entry->u.handler.z_flush = old_flush;
 					}
-					break;
-				case Z_STREAM_END:
-					logg_devel("Z_STREAM_END\n");
+#else
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
 					return w_entry;
-				case Z_NEED_DICT:
-					logg_devel("Z_NEED_DICT\n");
-					return w_entry;
-				case Z_DATA_ERROR:
-					logg_devel("Z_DATA_ERROR\n");
-					return w_entry;
-				case Z_STREAM_ERROR:
-					logg_devel("Z_STREAM_ERROR\n");
-					return w_entry;
-				case Z_MEM_ERROR:
-					logg_devel("Z_MEM_ERROR\n");
-					return w_entry;
-				default:
-					logg_devel("deflate was not Z_OK\n");
-					return w_entry;
+#endif
 				}
 				compact_ubuff = true;
 			}
 			logg_develd_old("++++ cpos:\t%zu\n", w_entry->send->pos);
 			logg_develd_old("**** space:\t%zu\n", buffer_remaining(*w_entry->send_u));
 		}
+		else
+			return w_entry;  /* this should not happen */
 
 		if(!do_write(p_entry, epoll_fd))
 			return w_entry;
@@ -295,7 +367,7 @@ retry_pack:
 
 		if(ENC_NONE == w_entry->encoding_in)
 			d_source = w_entry->recv;
-		else if(ENC_DEFLATE == w_entry->encoding_in)
+		else if(ENC_DEFLATE == w_entry->encoding_in || ENC_ZSTD == w_entry->encoding_in)
 		{
 			buffer_flip(*w_entry->recv);
 retry_unpack:
@@ -303,41 +375,106 @@ retry_unpack:
 			d_source = w_entry->recv_u;
 			if(buffer_remaining(*w_entry->recv))
 			{
-				w_entry->z_decoder->next_in = (Bytef *)buffer_start(*w_entry->recv);
-				w_entry->z_decoder->avail_in = buffer_remaining(*w_entry->recv);
-				w_entry->z_decoder->next_out = (Bytef *)buffer_start(*d_source);
-				w_entry->z_decoder->avail_out = buffer_remaining(*d_source);
+#ifdef HAVE_ZSTD
+				ZSTD_inBuffer zstd_in;
+				ZSTD_outBuffer zstd_out;
+#endif
+				if(ENC_DEFLATE == w_entry->encoding_in) {
+					w_entry->decoder.zlib->next_in = (Bytef *)buffer_start(*w_entry->recv);
+					w_entry->decoder.zlib->avail_in = buffer_remaining(*w_entry->recv);
+					w_entry->decoder.zlib->next_out = (Bytef *)buffer_start(*d_source);
+					w_entry->decoder.zlib->avail_out = buffer_remaining(*d_source);
+				}
+				else if(ENC_ZSTD == w_entry->encoding_in) {
+#ifdef HAVE_ZSTD
+					zstd_in.src   = buffer_start(*w_entry->recv);
+					zstd_in.size  = buffer_remaining(*w_entry->recv);
+					zstd_in.pos   = 0;
+					zstd_out.dst  = buffer_start(*d_source);
+					zstd_out.size = buffer_remaining(*d_source);
+					zstd_out.pos  = 0;
+#else
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
+					return w_entry;
+#endif
+				}
 
 				logg_develd_old("++++ cbytes: %u\n", buffer_remaining(*w_entry->recv));
 				logg_develd_old("**** space: %u\n", buffer_remaining(*d_source));
 
-				switch(inflate(w_entry->z_decoder, Z_SYNC_FLUSH))
+				if(ENC_DEFLATE == w_entry->encoding_in)
 				{
-				case Z_BUF_ERROR:
-					logg_devel("Z_BUF_ERROR\n");
-					GCC_FALL_THROUGH
-				case Z_OK:
-					w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->z_decoder->avail_in);
-					d_source->pos += (buffer_remaining(*d_source) - w_entry->z_decoder->avail_out);
-					break;
-				case Z_STREAM_END:
-					logg_devel("Z_STREAM_END\n");
+					switch(inflate(w_entry->decoder.zlib, Z_SYNC_FLUSH))
+					{
+					case Z_BUF_ERROR:
+						logg_devel("Z_BUF_ERROR\n");
+						GCC_FALL_THROUGH
+					case Z_OK:
+						w_entry->recv->pos += (buffer_remaining(*w_entry->recv) - w_entry->decoder.zlib->avail_in);
+						d_source->pos += (buffer_remaining(*d_source) - w_entry->decoder.zlib->avail_out);
+						break;
+					case Z_STREAM_END:
+						logg_devel("Z_STREAM_END\n");
+						return w_entry;
+					case Z_NEED_DICT:
+						logg_devel("Z_NEED_DICT\n");
+						return w_entry;
+					case Z_DATA_ERROR:
+						logg_devel("Z_DATA_ERROR\n");
+						return w_entry;
+					case Z_STREAM_ERROR:
+						logg_devel("Z_STREAM_ERROR\n");
+						return w_entry;
+					case Z_MEM_ERROR:
+						logg_devel("Z_MEM_ERROR\n");
+						return w_entry;
+					default:
+						logg_devel("inflate was not Z_OK\n");
+						return w_entry;
+					}
+				}
+				else if(ENC_ZSTD == w_entry->encoding_in)
+				{
+#ifdef HAVE_ZSTD
+					size_t zstd_res = ZSTD_decompressStream(w_entry->decoder.zstd, &zstd_out, &zstd_in);
+					if(ZSTD_isError(zstd_res))
+					{
+						ZSTD_ErrorCode zstd_errc = ZSTD_getErrorCode(zstd_res);
+						switch(zstd_errc)
+						{
+						case ZSTD_error_no_error:
+							break; /* we shouldn't get this here */
+						case ZSTD_error_noForwardProgress_destFull:
+							GCC_FALL_THROUGH
+						case ZSTD_error_noForwardProgress_inputEmpty:
+							/* dest full or input empty are not really an error, but we might
+							 * need to flush something, problem is when for ex. dest isn't full
+							 * but zstd does not whant to copy a fraction (out buff empty, 4k avail,
+							 * but block is 4k + 1 and its mimimi picky) or 2 byte input isn't "worth"
+							 * zstd time
+							 * so check real space in buffer and compare to error code?
+							 */
+							break;
+						case ZSTD_error_dstSize_tooSmall:
+							/* see above, what is it - mimimi picky, or buffer simply full */
+							break;
+						case ZSTD_error_srcSize_wrong:
+							/* ok, what ??? */
+							GCC_FALL_THROUGH
+						case ZSTD_error_cannotProduce_uncompressedBlock:
+							/* well well well .... and WHY? At least this should not happen on compress  */
+							GCC_FALL_THROUGH
+						default: /* everthing else sounds like a non-correctable error */
+							logg_develd("compressing connec Ip: %p#I\t\"%s\"\n", &w_entry->remote_host, ZSTD_getErrorName(zstd_res));
+							return w_entry;
+						}
+					}
+					w_entry->recv->pos += zstd_in.pos;
+					d_source->pos += zstd_out.pos;
+#else
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
 					return w_entry;
-				case Z_NEED_DICT:
-					logg_devel("Z_NEED_DICT\n");
-					return w_entry;
-				case Z_DATA_ERROR:
-					logg_devel("Z_DATA_ERROR\n");
-					return w_entry;
-				case Z_STREAM_ERROR:
-					logg_devel("Z_STREAM_ERROR\n");
-					return w_entry;
-				case Z_MEM_ERROR:
-					logg_devel("Z_MEM_ERROR\n");
-					return w_entry;
-				default:
-					logg_devel("inflate was not Z_OK\n");
-					return w_entry;
+#endif
 				}
 			}
 			compact_cbuff = true;

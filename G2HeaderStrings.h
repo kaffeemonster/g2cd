@@ -2,7 +2,7 @@
  * G2HeaderStrings.h
  * definitions of the G2 header strings
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -41,8 +41,8 @@
 /* encoding */
 # define ENC_NONE_S        "none"
 # define ENC_DEFLATE_S     "deflate"
-# define ENC_LZO_S         "lzo"
-# define ENC_MAX_S           ENC_DEFLATE_S
+# define ENC_ZSTD_S        "zstd"
+# define ENC_MAX_S         ENC_DEFLATE_S
 
 # define LONGEST_HEADER_FIELD     25
 /* headerfields */

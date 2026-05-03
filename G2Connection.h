@@ -2,7 +2,7 @@
  * G2Connection.h
  * home of g2_connection_t and header-file for G2Connection.c
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,6 +31,9 @@
 # include <time.h>
 # include <sys/types.h>
 # include <zlib.h>
+# ifdef HAVE_ZSTD
+#  include <zstd.h>
+# endif
 
 /* Own */
 # include "lib/other.h"
@@ -60,7 +63,11 @@ enum g2_connection_states
 #define G2_CONNECTION_ENCODINGS \
 	ENUM_CMD(ENC_NONE   ), \
 	ENUM_CMD(ENC_DEFLATE), \
-	ENUM_CMD(ENC_LZO    )
+	ENUM_CMD(ENC_ZSTD    )
+
+#define G2_CONNECTION_ZSZD_LEVEL 6
+/* power of 2, 16 = 64kb 17 = 128kb 18 = 256kb, 19 = 512kb */
+#define G2_CONNECTION_ZSZD_WINDOW 17
 
 #define ENUM_CMD(x) x
 enum g2_connection_encodings
@@ -160,8 +167,18 @@ typedef struct g2_connection
 	char             uagent[40+1];
 	char             vendor_code[4+1];
 	uint8_t          guid[16];
-	z_stream         *z_decoder;
-	z_stream         *z_encoder;
+	union {
+		z_stream     *zlib;
+# ifdef HAVE_ZSTD
+		ZSTD_DStream *zstd;
+# endif
+	} decoder;
+	union {
+		z_stream     *zlib;
+# ifdef HAVE_ZSTD
+		ZSTD_CStream *zstd;
+# endif
+	} encoder;
 /* ----- Everthing above this gets simply wiped ------ */
 	struct norm_buff *recv;
 	struct norm_buff *send;
@@ -169,8 +186,6 @@ typedef struct g2_connection
 	struct norm_buff *send_u;
 	struct qhtable   *qht;
 	struct qhtable   *sent_qht;
-// TODO: WTF these arrays where supossed to? zlib buffer?
-//	char             tmp1[32000], tmp2[32000];
 
 	struct timeout   active_to;
 	struct timeout   aux_to;

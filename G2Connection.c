@@ -2,7 +2,7 @@
  * G2Connection.c
  * helper-function for G2-Connections
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -79,7 +79,7 @@ static atomicptra_t free_cons[FC_CAP_START];
 	/* encoding */
 static const action_string enc_as00 = {NULL, str_size(ENC_NONE_S),    ENC_NONE_S};
 static const action_string enc_as01 = {NULL, str_size(ENC_DEFLATE_S), ENC_DEFLATE_S};
-static const action_string enc_as02 = {NULL, str_size(ENC_LZO_S),     ENC_LZO_S};
+static const action_string enc_as02 = {NULL, str_size(ENC_ZSTD_S),     ENC_ZSTD_S};
 
 const action_string * const KNOWN_ENCODINGS[] GCC_ATTR_VIS("hidden") =
 {
@@ -201,23 +201,53 @@ void GCC_ATTR_FASTCALL _g2_con_clear(g2_connection_t *work_entry, int new)
 		DESTROY_TIMEOUT(&work_entry->aux_to);
 
 		g2_conreg_remove(work_entry);
-		if(work_entry->z_decoder)
+		/* we check one pointer in the union to hopefully detect there is something */
+		if(work_entry->decoder.zlib)
 		{
-			int res = inflateEnd(work_entry->z_decoder);
-			if(Z_OK != res && Z_DATA_ERROR != res) {
-				if(work_entry->z_decoder->msg)
-					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_decoder->msg);
+			/* now the encoding has to be set right */
+			if(ENC_DEFLATE == work_entry->encoding_in)
+			{
+				int res = inflateEnd(work_entry->decoder.zlib);
+				if(Z_OK != res && Z_DATA_ERROR != res) {
+					if(work_entry->decoder.zlib->msg)
+						logg_posd(LOGF_DEBUG, "%s\n", work_entry->decoder.zlib->msg);
+				}
+				free(work_entry->decoder.zlib);
+			} else if(ENC_ZSTD == work_entry->encoding_in) {
+# ifdef HAVE_ZSTD
+				size_t res = ZSTD_freeDStream(work_entry->decoder.zstd);
+				if(ZSTD_isError(res)) {
+					logg_posd(LOGF_DEBUG, "%s\n", ZSTD_getErrorName(res));
+				}
+# else
+				logg_posd(LOGF_DEBUG, "decoder pointer with zstd encoding without zstd support?? p: %p\n", work_entry->decoder.zlib);
+# endif
+			} else {
+				logg_posd(LOGF_DEBUG, "decoder pointer and unknown encoding?? p: %p e: %i\n", work_entry->decoder.zlib, work_entry->encoding_in);
 			}
-			free(work_entry->z_decoder);
 		}
-		if(work_entry->z_encoder)
+		/* same for the encoder */
+		if(work_entry->encoder.zlib)
 		{
-			int res = deflateEnd(work_entry->z_encoder);
-			if(Z_OK != res && Z_DATA_ERROR != res) {
-				if(work_entry->z_encoder->msg)
-					logg_posd(LOGF_DEBUG, "%s\n", work_entry->z_encoder->msg);
+			if(ENC_DEFLATE == work_entry->encoding_out) {
+				int res = deflateEnd(work_entry->encoder.zlib);
+				if(Z_OK != res && Z_DATA_ERROR != res) {
+					if(work_entry->encoder.zlib->msg)
+						logg_posd(LOGF_DEBUG, "%s\n", work_entry->encoder.zlib->msg);
+				}
+				free(work_entry->encoder.zlib);
+			} else if(ENC_ZSTD == work_entry->encoding_out) {
+# ifdef HAVE_ZSTD
+				size_t res = ZSTD_freeCStream(work_entry->encoder.zstd);
+				if(ZSTD_isError(res)) {
+					logg_posd(LOGF_DEBUG, "%s\n", ZSTD_getErrorName(res));
+				}
+# else
+				logg_posd(LOGF_DEBUG, "encoder pointer with zstd encoding without zstd support?? p: %p\n", work_entry->encoder.zlib);
+# endif
+			} else {
+				logg_posd(LOGF_DEBUG, "encoder pointer and unknown encoding?? p: %p e: %i\n", work_entry->encoder.zlib, work_entry->encoding_out);
 			}
-			free(work_entry->z_encoder);
 		}
 	}
 	/*
@@ -312,22 +342,54 @@ static void g2_con_free_internal(g2_connection_t *to_free)
 	timeout_cancel(&to_free->aux_to);
 	DESTROY_TIMEOUT(&to_free->aux_to);
 
-	/* zlib */
-	if(to_free->z_decoder)
+	/* zlib/zstd */
+	/* we check one pointer in the union to hopefully detect there is something */
+	if(to_free->decoder.zlib)
 	{
-		if(Z_OK != inflateEnd(to_free->z_decoder)) {
-			if(to_free->z_decoder->msg)
-				logg_posd(LOGF_DEBUG, "%s\n", to_free->z_decoder->msg);
+		/* now the encoding has to be set right */
+		if(ENC_DEFLATE == to_free->encoding_in)
+		{
+			int res = inflateEnd(to_free->decoder.zlib);
+			if(Z_OK != res && Z_DATA_ERROR != res) {
+				if(to_free->decoder.zlib->msg)
+					logg_posd(LOGF_DEBUG, "%s\n", to_free->decoder.zlib->msg);
+			}
+			free(to_free->decoder.zlib);
+		} else if(ENC_ZSTD == to_free->encoding_in) {
+# ifdef HAVE_ZSTD
+			size_t res = ZSTD_freeDStream(to_free->decoder.zstd);
+			if(ZSTD_isError(res)) {
+				logg_posd(LOGF_DEBUG, "%s\n", ZSTD_getErrorName(res));
+			}
+# else
+			logg_posd(LOGF_DEBUG, "decoder pointer with zstd encoding without zstd support?? p: %p\n", to_free->decoder.zlib);
+# endif
+		} else {
+			logg_posd(LOGF_DEBUG, "decoder pointer and unknown encoding?? p: %p e: %i\n", to_free->decoder.zlib, to_free->encoding_in);
 		}
-		free(to_free->z_decoder);
 	}
-	if(to_free->z_encoder)
+	/* same for the encoder */
+	if(to_free->encoder.zlib)
 	{
-		if(Z_OK != deflateEnd(to_free->z_encoder)) {
-			if(to_free->z_encoder->msg)
-				logg_posd(LOGF_DEBUG, "%s\n", to_free->z_encoder->msg);
+		if(ENC_DEFLATE == to_free->encoding_out) {
+			int res = deflateEnd(to_free->encoder.zlib);
+			if(Z_OK != res && Z_DATA_ERROR != res) {
+				if(to_free->encoder.zlib->msg)
+					logg_posd(LOGF_DEBUG, "%s\n", to_free->encoder.zlib->msg);
+			}
+			free(to_free->encoder.zlib);
+		} else if(ENC_ZSTD == to_free->encoding_out) {
+# ifdef HAVE_ZSTD
+			size_t res = ZSTD_freeCStream(to_free->encoder.zstd);
+			if(ZSTD_isError(res)) {
+				logg_posd(LOGF_DEBUG, "%s\n", ZSTD_getErrorName(res));
+			}
+# else
+			logg_posd(LOGF_DEBUG, "encoder pointer with zstd encoding without zstd support?? p: %p\n", to_free->encoder.zlib);
+# endif
+		} else {
+			logg_posd(LOGF_DEBUG, "encoder pointer and unknown encoding?? p: %p e: %i\n", to_free->encoder.zlib, to_free->encoding_out);
 		}
-		free(to_free->z_encoder);
 	}
 
 	/* buffer */
@@ -515,6 +577,7 @@ static bool uagent_what(g2_connection_t *to_con, size_t distance)
 	return false;
 }
 
+// TODO: limit zstd handshaking
 static bool a_encoding_what(g2_connection_t *to_con, size_t distance)
 {
 	size_t i;
