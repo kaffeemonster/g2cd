@@ -2,7 +2,7 @@
 # configure.ac
 # autoconf input for our foo
 #
-# Copyright (c) 2010-2015 Jan Seiffert
+# Copyright (c) 2010-2026 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -21,8 +21,8 @@
 # If not, see <http://www.gnu.org/licenses/>.
 #
 
-AC_PREREQ([2.65])
-AC_INIT([g2cd], [0.0.00.11], [kaffeemonster@googlemail.com])
+AC_PREREQ([2.72])
+AC_INIT([g2cd],[0.0.00.11],[kaffeemonster@googlemail.com])
 AC_CANONICAL_HOST
 AC_CONFIG_SRCDIR([G2MainServer.c])
 AC_CONFIG_HEADERS([config_auto.h])
@@ -36,6 +36,7 @@ disable_dyndispatch=no
 disable_backtraces=no
 disable_dbus=no
 disable_libcurl=no
+disable_zstd=no
 disable_hw_mult=no
 disable_smp=no
 disable_asm=no
@@ -110,8 +111,11 @@ AC_ARG_WITH([dbus], [AS_HELP_STRING([--without-dbus],
             [do you want a dbus interface])],
             [disable_dbus="$witheval"], [])
 AC_ARG_WITH([libcurl], [AS_HELP_STRING([--without-libcurl],
-            [do you want to use libcurl (advised)])],
+            [do you want to use libcurl (VERY advised)])],
             [disable_libcurl="$witheval"], [])
+AC_ARG_WITH([zstd], [AS_HELP_STRING([--with-zstd],
+            [do you want support for zstd compression])],
+            [disable_zstd="witheval"], [])
 AC_ARG_ENABLE([debug], [AS_HELP_STRING([--enable-debug],
               [make a debug build])],
               [my_enable_debug=yes], [])
@@ -343,7 +347,6 @@ case "$host" in
 esac
 # now check the rest
 AC_PROG_CPP
-AC_PROG_CC_C99
 # actually we don't wan't real C99, because cygwin excludes some
 # essential function if __STRICT_ANSI is defined, luckily autoconf
 # enables gnu99 mode
@@ -561,6 +564,7 @@ if test x"$as_tst_needed" != xno; then
 		fi
 	fi
 	AS_CHECK_FEATURE(.subsection, as_cv_subsection_tst, [-c], [.subsection 2], [AC_DEFINE(HAVE_SUBSECTION, 1, we have the subsection directive)])
+	AS_CHECK_FEATURE(notrack jmp *(%reg), as_cv_cetnotrack_tst, [-c], [notrack jmp *(%rbx)], [AC_DEFINE(HAVE_CETNOTRACK 1, assembler knows CET notrack prefix)])
 fi
 AC_DEFINE_UNQUOTED([HAVE_BINUTILS], [$susp_binutils], [set to the version of you AS])
 
@@ -579,7 +583,9 @@ esac
 
 # Checks for header files.
 AC_FUNC_ALLOCA
-AC_HEADER_STDC
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_CHECK_HEADERS([arpa/inet.h byteswap.h fcntl.h malloc.h malloc_np.h netdb.h netinet/in.h netinet/tcp.h stdint.h strings.h sys/param.h sys/socket.h sys/time.h sys/sysctl.h sys/uio.h sys/mman.h valgrind/valgrind.h syslog.h wchar.h winsock2.h ws2tcpip.h pcap-bpf.h link.h])
 
 AC_CHECK_HEADERS([ctype.h inttypes.h limits.h stddef.h stdlib.h string.h signal.h errno.h unistd.h], [], [AC_MSG_ERROR(an important system header was not found!)])
@@ -684,6 +690,55 @@ if test x"$disable_libcurl" = xno; then
                [AC_MSG_RESULT([no])])
 			if test x"$libcurl_working" = xyes; then
 				AC_DEFINE(HAVE_LIBCURL, 1, Define to 1 if we have libcurl)
+			else
+				CFLAGS="$oCFLAGS"
+				LIBS="$oLIBS"
+			fi
+		else
+			CFLAGS="$oCFLAGS"
+			LIBS="$oLIBS"
+		fi
+		CPPFLAGS="$oCPPFLAGS"
+	fi
+fi
+
+# test for zstd
+if test "x$disable_zstd" = "xno"; then
+	libzstd_on_machine=no
+	oCPPFLAGS="$CPPFLAGS"
+	oCFLAGS="$CFLAGS"
+	oLIBS="$LIBS"
+
+	PKG_CHECK_EXISTS([libzstd], [libzstd_on_machine=yes], [])
+
+	if test x"$libzstd_on_machine" = xyes; then
+		PKG_CHECK_MODULES([ZSTD], [libzstd])
+		CPPFLAGS="$ZSTD_CPPFLAGS $CPPFLAGS"
+		CFLAGS="$ZSTD_CFLAGS $CFLAGS"
+		LIBS="$ZSTD_LIBS $LIBS"
+	fi
+
+	if test x"$libzstd_on_machine" = xyes; then
+		libzstd_header=no
+		AC_CHECK_HEADER(zstd.h, [libzstd_header=yes], [], [])
+		if test x"$libzstd_header" = xyes; then
+			libzstd_working=no
+			AC_MSG_CHECKING([if libzstd is new enough])
+			AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+                [
+#include <zstd.h>
+                ],
+                [
+#if ZSTD_VERSION_NUMBER < 10200
+# error "zstd version to low"
+#endif
+                ]
+               )],
+               [AC_MSG_RESULT([yes])
+                libzstd_working=yes],
+               [AC_MSG_RESULT([no])])
+			if test x"$libzstd_working" = xyes; then
+				AC_DEFINE(HAVE_ZSTD, 1, Define to 1 if we have zstd)
 			else
 				CFLAGS="$oCFLAGS"
 				LIBS="$oLIBS"
