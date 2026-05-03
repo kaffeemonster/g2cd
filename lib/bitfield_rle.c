@@ -2,7 +2,7 @@
  * bitfield_rle.c
  * run length encoding for bitfields, esp. QHTs
  *
- * Copyright (c) 2009-2010 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -167,7 +167,8 @@
  * have fixed scanlines, but compress a far as we get.
  */
 // TODO: is this bug free?
-// TODO: more than 4 syncblocks?
+// TODO: more than 4 syncblocks? Deminishing returns, more RAM
+
 
 /*
  * bitfield_encode - run length encode a bit field
@@ -272,10 +273,11 @@ static const uint8_t index_twos[] =
 	0x81, 0x82, 0x84, 0x88, 0x90, 0xA0, 0xC0,
 };
 
+/* maybe usefull one day */
 static const struct
 {
 	uint8_t a, b;
-} index_twos_bits[] =
+} index_twos_bits[] GCC_ATTRIB_UNUSED =
 {
 	{0, 1}, {0, 2}, {1, 2}, {0, 3}, {1, 3}, {2, 3}, {0, 4},
 	{1, 4}, {2, 4}, {3, 4}, {0, 5}, {1, 5}, {2, 5}, {3, 5},

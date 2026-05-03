@@ -502,9 +502,10 @@ void g2_packet_find_type(g2_packet_t *packet, const uint32_t type[2])
 
 /*
  * prebuild packets
+ * maybe usefull one day
  */
-static const char packet_po[]    = { 0x08, 'P', 'O', };
-static const char packet_uproc[] = { 0x20, 'U', 'P', 'R', 'O', 'C' };
+static const char packet_po[]    GCC_ATTRIB_UNUSED = { 0x08, 'P', 'O', };
+static const char packet_uproc[] GCC_ATTRIB_UNUSED = { 0x20, 'U', 'P', 'R', 'O', 'C' };
 
 #define logg_packet(x, ...) logg_develd("\t"x, __VA_ARGS__)
 #define logg_packet_old(x, ...) logg_develd_old("\t"x, __VA_ARGS__)
