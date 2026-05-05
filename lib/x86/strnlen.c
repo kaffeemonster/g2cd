@@ -2,7 +2,7 @@
  * strnlen.c
  * strnlen for non-GNU platforms, x86 implementation
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -107,7 +107,7 @@ static size_t strnlen_AVX2(const char *s, size_t maxlen)
 		"vptest	%%ymm0, %%ymm1\n\t"
 		"jc	2b\n"
 		"3:\n\t"
-		"vpmovmskb	%%xmm0, %0\n\t"
+		"vpmovmskb	%%ymm0, %0\n\t"
 		"mov	%2, %3\n\t"
 		"sub	$32, %3\n\t"
 		"jae	4f\n\t"

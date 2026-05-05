@@ -2,7 +2,7 @@
  * strlen.c
  * strlen, x86 implementation
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
