@@ -2,7 +2,7 @@
  * my_bitops.h
  * header-file for some global usefull bitbanging functions
  *
- * Copyright (c) 2004-2015 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -166,6 +166,7 @@ struct test_cpu_feature
 
 LIB_MY_BITOPS_EXTRN(void *test_cpu_feature(const struct test_cpu_feature *, size_t));
 LIB_MY_BITOPS_EXTRN(void patch_instruction(void *where, const struct test_cpu_feature *t, size_t l));
+LIB_MY_BITOPS_EXTRN(void patch_got(uintptr_t *where, const struct test_cpu_feature *t, size_t l));
 LIB_MY_BITOPS_EXTRN(void emit_emms(void));
 LIB_MY_BITOPS_EXTRN(unsigned get_cpus_online(void));
 LIB_MY_BITOPS_EXTRN(void cpu_detect_finish(void));

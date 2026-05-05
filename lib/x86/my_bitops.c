@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops, x86 implementation
  *
- * Copyright (c) 2008-2021 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1219,8 +1219,40 @@ __init void patch_instruction(void *where, const struct test_cpu_feature *t, siz
 	VALGRIND_DISCARD_TRANSLATIONS(where, 8);
 # endif
 }
+
+__init void patch_got(uintptr_t *where, const struct test_cpu_feature *t, size_t l)
+{
+	char *of_addr = (char *)where;
+	char *nf_addr = (char *)test_cpu_feature(t, l);
+	char *page;
+	size_t len;
+	size_t pagesize = (size_t)sysconf(_SC_PAGESIZE);
+
+	page  = (char *)ALIGN_DOWN(of_addr, pagesize);
+	len   = ALIGN_DOWN_DIFF(of_addr, pagesize);
+	len   = (len + 8);
+	len   = len < pagesize ? pagesize : 2 * pagesize;
+	if((size_t)-1 == pagesize)
+		abort();
+	/*
+	 * If this fails, which is likely, we are screwed.
+	 * And it will fail since we have no influence how the runtime
+	 * linker opened the underlying executable (O_READONLY).
+	 */
+	mprotect(page, len, PROT_READ|PROT_WRITE);
+	*where = (uintptr_t)nf_addr;
+	mprotect(page, len, PROT_READ);
+# ifdef HAVE_VALGRIND_VALGRIND_H
+	VALGRIND_DISCARD_TRANSLATIONS(where, 8);
+# endif
+}
+
 #else
 __init void patch_instruction(void *where GCC_ATTR_UNUSED_PARAM, const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM, size_t l GCC_ATTR_UNUSED_PARAM)
+{
+}
+
+__init void patch_got(uintptr_t *where GCC_ATTR_UNUSED_PARAM, const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM, size_t l GCC_ATTR_UNUSED_PARAM)
 {
 }
 #endif

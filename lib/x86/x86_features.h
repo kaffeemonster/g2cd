@@ -2,7 +2,7 @@
  * x86_features.h
  * x86 feature bits
  *
- * Copyright (c) 2008-2014 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -200,10 +200,13 @@ enum x86_cpu_features
 };
 # undef ENUM_CMD
 
+# define DONT_DO_IFUNCS
+
 extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 
 # ifdef __ELF__
 #  define _DYN_JMP_SECTION_NAME ".plt"
+#  define _DYN_JMP_ADDR_SECTION_NAME ".got"
 #  ifdef __arm__
 #   define _DYN_JMP_DBG_START(name) ".type	" #name ", #function\n"
 #  else
@@ -212,6 +215,7 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 #  define _DYN_JMP_DBG_END(name) ".size	" #name ", . - " #name "\n\t"
 # else
 #  define _DYN_JMP_SECTION_NAME ".text.jmp"
+#  define _DYN_JMP_ADDR_SECTION_NAME "\n"
 #  define _DYN_JMP_DBG_START(name) "\n"
 #  define _DYN_JMP_DBG_END(name) "\n\t"
 # endif
@@ -234,7 +238,20 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 		patch_instruction(name, tfeat_##name, anum(tfeat_##name)); \
 	}
 #  else
-#   define _DYN_JMP_CONSTRUCTOR(name)
+#   ifndef DONT_DO_IFUNCS
+#    define _DYN_JMP_CONSTRUCTOR(name)
+#   else
+#   define _DYN_JMP_CONSTRUCTOR(name) \
+	GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_select(uintptr_t *in_got); \
+	GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_select(uintptr_t *in_got) { \
+		patch_got(in_got, tfeat_##name, anum(tfeat_##name)); \
+	} \
+	extern uintptr_t name##_in_got; \
+	GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_construct(void); \
+	GCC_ATTR_CONSTRUCT GCC_ATTR_USED __init GCC_ATTRIB(externally_visible) void name##_construct(void) { \
+		name##_select(&name##_in_got); \
+	}
+#   endif
 #  endif
 # endif
 
@@ -263,7 +280,11 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 		"push	%rcx\n\t" \
 		"push	%r8\n\t" \
 		"push	%r9\n\t" \
+		"push	%r10\n\t" \
+		"push	%r11\n\t" \
 		"call	" #name "_select\n\t" \
+		"pop	%r11\n\t" \
+		"pop	%r10\n\t" \
 		"pop	%r9\n\t" \
 		"pop	%r8\n\t" \
 		"pop	%rcx\n\t" \
@@ -289,10 +310,41 @@ extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
 	);
 #   endif
 #  else
+#   ifndef DONT_DO_IFUNCS
 #    define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
 static GCC_ATTR_USED void * name##_ifunc (void) { \
 	return test_cpu_feature(tfeat_##name, anum(tfeat_##name)); \
 }
+#   else
+#    define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
+	asm( \
+		".pushsection .text.unlikely\n\t" \
+		_DYN_JMP_DBG_START(name##_runtime_sw) \
+		#name "_runtime_sw:\n\t" \
+		".byte 0xf3, 0x0f, 0x1e, 0xfa\n\t" \
+		"push	%rdi\n\t" \
+		"push	%rsi\n\t" \
+		"push	%rdx\n\t" \
+		"push	%rcx\n\t" \
+		"push	%r8\n\t" \
+		"push	%r9\n\t" \
+		"push	%r10\n\t" \
+		"push	%r11\n\t" \
+		"lea	"#name"_in_got(%rip), %rdi\n\t" \
+		"call	" #name "_select\n\t" \
+		"pop	%r11\n\t" \
+		"pop	%r10\n\t" \
+		"pop	%r9\n\t" \
+		"pop	%r8\n\t" \
+		"pop	%rcx\n\t" \
+		"pop	%rdx\n\t" \
+		"pop	%rsi\n\t" \
+		"pop	%rdi\n\t" \
+		"jmp	"#name"\n\t" \
+		_DYN_JMP_DBG_END(name##_runtime_sw) \
+		".popsection" \
+	);
+#   endif
 #  endif
 #  define _DYN_JMP_RT_SWITCH_NR(name, prot, call) _DYN_JMP_RT_SWITCH(void, name, prot, call)
 # endif
@@ -328,7 +380,8 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 		".popsection" \
 	);
 #  else
-#   define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
+#   ifndef DONT_DO_IFUNCS
+#    define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
 	asm ( \
 		".pushsection .text\n\t" \
 		name_export \
@@ -338,6 +391,31 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 		alias \
 		".popsection" \
 	);
+#   else
+/* endbr64, CET nop on older cpu */
+#    define _DYN_JMP_INSTRUCTION(name) \
+	".byte 0xf3, 0x0f, 0x1e, 0xfa\n\t" \
+	"jmpq	*"#name"_in_got(%rip)\n\t" \
+	"1: jmp	"#name"_runtime_sw\n\t" \
+	_DYN_JMP_DBG_END(name) \
+	".p2align 4\n\t"
+#    define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
+	asm ( \
+		".pushsection "_DYN_JMP_ADDR_SECTION_NAME"\n\t" \
+		".type	" #name"_in_got, @object\n\t" \
+		#name "_in_got:\n\t" \
+		".quad 1f\n\t" \
+		".popsection\n\t" \
+		".pushsection "_DYN_JMP_SECTION_NAME"\n\t" \
+		name_export \
+		_DYN_JMP_DBG_START(name) \
+		#name ":\n\t" \
+		_DYN_JMP_INSTRUCTION(name) \
+		alias_export \
+		alias \
+		".popsection" \
+	);
+#   endif
 #  endif
 #  define _DYN_JMP_REST(rtype, name, prot, call) _DYN_JMP_REST_GEN(name, ".globl " #name "\n\t", , )
 #  define _DYN_JMP_REST_NR(name, prot, call) _DYN_JMP_REST(void, name, prot, call)
