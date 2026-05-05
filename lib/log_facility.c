@@ -460,6 +460,8 @@ realloc:
 			 */
 			const char *s = strerror(old_errno);
 #  endif
+			/* we expect the system error string to be NUL-reminated,
+			 * and use the max buffer remaining to limit the following memcpy */
 			if(s)
 				err_str_len = strnlen(s, buffer_remaining(*logg_buff)-2);
 			else {
