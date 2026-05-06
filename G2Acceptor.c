@@ -103,10 +103,11 @@ bool init_accept(some_fd epoll_fd)
 			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip4.a[i]);
 			ipv4_ready = ipv4_ready && res;
 		}
-		if(!ipv4_ready)
+		if(!ipv4_ready) /* when we could not start up all ipv4 addr, close them */
 		{
 			while(i--) {
-				my_epoll_closesocket(accept_sos[--idx].fd);
+				if(-1 != accept_sos[--idx]) /* don't create more failure prints */
+					my_epoll_closesocket(accept_sos[idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
@@ -118,10 +119,11 @@ bool init_accept(some_fd epoll_fd)
 			bool res = init_con_a(&accept_sos[idx].fd, &server.settings.bind.ip6.a[i]);
 			ipv6_ready = ipv6_ready && res;
 		}
-		if(!ipv6_ready)
+		if(!ipv6_ready) /* same for ipv6, but only close the ipv6 sockets */
 		{
 			while(i--) {
-				my_epoll_closesocket(accept_sos[--idx].fd);
+				if(-1 != accept_sos[--idx]) /* don't create more failure prints */
+					my_epoll_closesocket(accept_sos[idx].fd);
 				accept_sos[idx].fd = -1;
 			}
 		}
