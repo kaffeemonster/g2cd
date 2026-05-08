@@ -2,7 +2,7 @@
  * tstrchrnul.c
  * tstrchrnul, x86 implementation
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -113,7 +113,8 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"vptest	%%ymm0, %%ymm1\n\t"
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
-		"2:"
+		"2:\n\t"
+		"veroupper\n\t"
 		"tzcnt	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
@@ -127,9 +128,9 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		  /* %4 */ "r" (c)
 #  endif
 #  ifdef __AVX__
-		: "ymm0", "ymm1", "ymm2", "ymm3"
+		: "ymm0", "ymm1", "ymm2", "ymm3","cc"
 #  elif defined(__SSE__)
-		: "xmm0", "xmm1", "xmm2", "xmm3"
+		: "xmm0", "xmm1", "xmm2", "xmm3", "cc"
 #  endif
 	);
 	return ret;
@@ -141,6 +142,7 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
  * This code does not use any AVX feature, it only uses the new
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
+ * Unfortunatly we still need a vzeroupper to clean the VEX state
  */
 static tchar_t *tstrchrnul_AVX(const tchar_t *s, tchar_t c)
 {
@@ -183,7 +185,8 @@ static tchar_t *tstrchrnul_AVX(const tchar_t *s, tchar_t c)
 		/*             6543210 */
 		"vpcmpestri	$0b0000001, (%3), %%xmm1\n\t"
 		"ja	1b\n\t"
-		"2:"
+		"2:\n\t"
+		"vzeroupper\n\t"
 		"lea	(%3,%2),%0\n\t"
 		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=&d" (z),
@@ -197,7 +200,7 @@ static tchar_t *tstrchrnul_AVX(const tchar_t *s, tchar_t c)
 		  /* %5 */ "r" (c)
 #  endif
 #  ifdef __SSE2__
-		: "xmm0", "xmm1"
+		: "xmm0", "xmm1", "cc"
 #  endif
 	);
 	return ret;
@@ -260,7 +263,7 @@ static tchar_t *tstrchrnul_SSE42(const tchar_t *s, tchar_t c)
 		  /* %5 */ "r" (c)
 #  endif
 #  ifdef __SSE2__
-		: "xmm0", "xmm1"
+		: "xmm0", "xmm1", "cc"
 #  endif
 	);
 	return ret;
@@ -329,7 +332,7 @@ static tchar_t *tstrchrnul_SSE2(const tchar_t *s, tchar_t c)
 		  /* %4 */ "r" (c)
 #endif
 #ifdef __SSE2__
-		: "xmm0", "xmm1", "xmm2", "xmm3"
+		: "xmm0", "xmm1", "xmm2", "xmm3", "cc"
 #endif
 	);
 	return ret;
@@ -381,7 +384,7 @@ static tchar_t *tstrchrnul_SSE(const tchar_t *s, tchar_t c)
 		: /* %3 */ "m" (s),
 		  /* %4 */ "2" (c)
 #ifdef __SSE__
-		: "mm0", "mm1", "mm2", "mm3"
+		: "mm0", "mm1", "mm2", "mm3", "cc"
 #endif
 	);
 	return ret;
@@ -487,6 +490,7 @@ static tchar_t *tstrchrnul_x86(const tchar_t *s, tchar_t c)
 	  /* %9 */ "r"  (0x8000800080008000LL),
 	  /* %10 */ "r" (0x0001000100010001LL)
 #endif
+	: "cc"
 	);
 	return ret;
 }
