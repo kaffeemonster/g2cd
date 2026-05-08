@@ -106,7 +106,7 @@ bool init_accept(some_fd epoll_fd)
 		if(!ipv4_ready) /* when we could not start up all ipv4 addr, close them */
 		{
 			while(i--) {
-				if(-1 != accept_sos[--idx]) /* don't create more failure prints */
+				if(-1 != accept_sos[--idx].fd) /* don't create more failure prints */
 					my_epoll_closesocket(accept_sos[idx].fd);
 				accept_sos[idx].fd = -1;
 			}
@@ -122,7 +122,7 @@ bool init_accept(some_fd epoll_fd)
 		if(!ipv6_ready) /* same for ipv6, but only close the ipv6 sockets */
 		{
 			while(i--) {
-				if(-1 != accept_sos[--idx]) /* don't create more failure prints */
+				if(-1 != accept_sos[--idx].fd) /* don't create more failure prints */
 					my_epoll_closesocket(accept_sos[idx].fd);
 				accept_sos[idx].fd = -1;
 			}

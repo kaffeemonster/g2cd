@@ -114,7 +114,7 @@ static tchar_t *tstrchrnul_AVX2(const tchar_t *s, tchar_t c)
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"2:\n\t"
-		"veroupper\n\t"
+		"vzeroupper\n\t"
 		"tzcnt	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
