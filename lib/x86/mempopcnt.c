@@ -2,7 +2,7 @@
  * mempopcnt.c
  * popcount a mem region, x86 implementation
  *
- * Copyright (c) 2009-2022 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -28,9 +28,14 @@
 #define CSA_SETUP 1
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
+static size_t mempopcnt_AVX2(const void *s, size_t len);
+# endif
+#if 0
 # if HAVE_BINUTILS >= 219
 static size_t mempopcnt_AVX(const void *s, size_t len);
 # endif
+#endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 static size_t mempopcnt_SSE4A(const void *s, size_t len);
 # endif
@@ -81,6 +86,141 @@ static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 //TODO: using popcnt && SSE parallel?
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
+#  include <immintrin.h>
+
+/* 256-Bit Popcount: 32x8bit popcounts  */
+static GCC_TARGET("avx2") inline __m256i popcount_256(__m256i v) {
+	const __m256i lookup = _mm256_setr_epi8(
+			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
+			);
+	const __m256i low_mask = _mm256_set1_epi8(0x0F);
+
+	__m256i lo = _mm256_and_si256(v, low_mask);
+	__m256i hi = _mm256_and_si256(_mm256_srli_epi16(v, 4), low_mask);
+
+	__m256i popcnt1 = _mm256_shuffle_epi8(lookup, lo);
+	__m256i popcnt2 = _mm256_shuffle_epi8(lookup, hi);
+
+	return _mm256_add_epi8(popcnt1, popcnt2);
+}
+
+/* Horizontal add vector of 4x64bit to scalar 64bit */
+static GCC_TARGET("avx2") inline uint64_t sum_uint64_256(__m256i v)
+{
+	/* an equivalent what gcc generates for a _mm256_reduce_add_epi256 */
+	__m128i vx = _mm_add_epi64(_mm256_extracti128_si256(v, 0), _mm256_extracti128_si256(v, 1));
+	vx = _mm_add_epi64(vx, _mm_srli_si128(vx, 8));
+	return _mm_cvtsi128_si64(vx);
+}
+
+/* Horizontal add 32x8Bit vector to scalar 64bit */
+static GCC_TARGET("avx2") inline uint64_t sum_bytes_256(__m256i v)
+{
+	__m256i sum_64 = _mm256_sad_epu8(v, _mm256_setzero_si256());
+	return sum_uint64_256(sum_64);
+}
+
+#define SOV256 (sizeof(__m256))
+
+static GCC_TARGET("avx2") size_t mempopcnt_AVX2(const void *s, size_t len)
+{
+	const uint8_t *p = (const uint8_t *)s;
+	uint64_t total_popcnt = 0;
+
+	__m256i v_ones   = _mm256_setzero_si256();
+	__m256i v_twos   = _mm256_setzero_si256();
+	__m256i v_fours  = _mm256_setzero_si256();
+	__m256i v_sum_eights = _mm256_setzero_si256();
+
+	while (len >= 8*SOV256)
+	{
+		/* limit to 31 passes à 256 Bytes at once */
+		size_t r = len / (8*SOV256);
+		if (r > 31) r = 31;
+		len -= r * (8*SOV256);
+
+		__m256i v_sumb = _mm256_setzero_si256();
+
+		for (; r > 0; r--, p += 8*SOV256)
+		{
+			__m256i v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2, v_eights;
+
+			/* CSA macro */
+#define CSA(h, l, a, b, c) do { \
+	__m256i u = _mm256_xor_si256((a), (b)); \
+	(h) = _mm256_or_si256(_mm256_and_si256((a), (b)), _mm256_and_si256(u, (c))); \
+	(l) = _mm256_xor_si256(u, (c)); } while(0)
+			/* built CSA tree Baum for 8 vektors (256 Bytes) */
+			/* Level 1 */
+			c1 = _mm256_loadu_si256((const __m256i*)(p + 0*32));
+			c2 = _mm256_loadu_si256((const __m256i*)(p + 1*32));
+			CSA(v_twos_l, v_ones, v_ones, c1, c2);
+
+			c1 = _mm256_loadu_si256((const __m256i*)(p + 2*32));
+			c2 = _mm256_loadu_si256((const __m256i*)(p + 3*32));
+			CSA(v_twos_h, v_ones, v_ones, c1, c2);
+
+			/* Ebene 2 */
+			CSA(v_fours_l, v_twos, v_twos, v_twos_l, v_twos_h);
+
+			c1 = _mm256_loadu_si256((const __m256i*)(p + 4*32));
+			c2 = _mm256_loadu_si256((const __m256i*)(p + 5*32));
+			CSA(v_twos_l, v_ones, v_ones, c1, c2);
+
+			c1 = _mm256_loadu_si256((const __m256i*)(p + 6*32));
+			c2 = _mm256_loadu_si256((const __m256i*)(p + 7*32));
+			CSA(v_twos_h, v_ones, v_ones, c1, c2);
+
+			/* combine level 1 and 2 to level 3 */
+			CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h);
+			CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h);
+#undef CSA
+			/* finally popcount lvl 3 and accumulate into bytes */
+			v_sumb = _mm256_add_epi8(v_sumb, popcount_256(v_eights));
+		}
+		/* every 31 rounds (or at tail) transfer 32xbyte sums to 64-bit accumulators */
+		v_sum_eights = _mm256_add_epi64(v_sum_eights, _mm256_sad_epu8(v_sumb, _mm256_setzero_si256()));
+	}
+
+	/* final weighting */
+	{
+		__m256i tmp = _mm256_slli_epi64(v_sum_eights, 3); /* x8 sum eights */
+		tmp = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_fours), _mm256_setzero_si256()), 2)); /* x4 sum fours */
+		tmp = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_twos), _mm256_setzero_si256()), 1)); /* x2 sum twos */
+		tmp = _mm256_add_epi64(tmp, _mm256_sad_epu8(popcount_256(v_ones), _mm256_setzero_si256())); /* x1 sum ones */
+		total_popcnt += sum_uint64_256(tmp);
+	}
+	/* Tail (max 255 Bytes) */
+	if (len >= SOV256) {
+		__m256i v_sumb = _mm256_setzero_si256();
+		for (; len >= SOV256; len -= SOV256, p += SOV256) {
+			v_sumb = _mm256_add_epi8(v_sumb, popcount_256(_mm256_loadu_si256((const __m256i*)(p))));
+		}
+		total_popcnt += sum_bytes_256(v_sumb);
+	}
+	for (;len >= 8; len -= 8, p += 8)
+		total_popcnt += __builtin_popcountll(*(const uint64_t *)p);
+	if (len >= 4) {
+		len -= 4;
+		p += 4;
+		total_popcnt += __builtin_popcountl(*(const uint32_t *)p);
+	}
+	if (len >= 2) {
+		len -= 2;
+		p += 2;
+		total_popcnt += __builtin_popcount(*(const uint16_t *)p);
+	}
+	if(len > 0) {
+		total_popcnt += __builtin_popcount(*p);
+		p++;
+		len--;
+	}
+
+	return total_popcnt;
+}
+# endif
 # if HAVE_BINUTILS >= 219
 #  if 0
 /* wrong results, marginally faster */
@@ -1873,6 +2013,9 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
+	{.func = (void (*)(void))mempopcnt_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+# endif
 # if 0
 	/* only marginally faster then popcnt intr., wrong results */
 # if HAVE_BINUTILS >= 219
