@@ -2,7 +2,7 @@
  * other.h
  * some C-header-magic-glue
  *
- * Copyright (c) 2004 - 2019 Jan Seiffert
+ * Copyright (c) 2004 - 2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -267,12 +267,20 @@
  * re goto fail). We use that feature
  * unfortunatly the classical fallthrough-in-comment marker only works
  * if comments are passed to cc1 with -C
+ * glib has this in 6.0?
  */
-#if _GNUC_PREREQ (7,0)
+#if _GNUC_PREREQ (6,0)
 # define GCC_FALL_THROUGH  GCC_ATTRIB(fallthrough);
 #else
 # define GCC_FALL_THROUGH
 #endif
+
+#if _GNUC_PREREQ (11,1)
+# define GCC_TARGET(x) GCC_ATTRIB(__target__(x))
+#else
+# define GCC_TARGET(x)
+#endif
+
 
 #ifdef GOT_GOT
 # define SECTION_GOT GCC_ATTR_SECTION(".got")
