@@ -106,7 +106,7 @@ union cpuid_regs
  */
 static struct cpuinfo our_cpu;
 #define ENUM_CMD(x,y) [y] = str_it(x)
-const char x86_cpu_feature_names[][16] =
+const char x86_cpu_feature_names[][17] =
 {
 	X86_CPU_FEATURE_ENUM
 };

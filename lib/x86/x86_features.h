@@ -204,7 +204,7 @@ enum x86_cpu_features
 
 # define DONT_DO_IFUNCS
 
-extern const char x86_cpu_feature_names[][16] GCC_ATTR_VIS("hidden");
+extern const char x86_cpu_feature_names[][17] GCC_ATTR_VIS("hidden");
 
 # ifdef __ELF__
 #  define _DYN_JMP_SECTION_NAME ".plt"
