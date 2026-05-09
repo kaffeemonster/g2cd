@@ -179,6 +179,8 @@
 	FEATURE5( AVX512BW  , 30, "AVX512 Byte/Word Instr."           ), \
 	FEATURE5( AVXVL     , 31, "AVX Vec. Length Ext.(512 on 128)"  ), \
 	FEATURE6( PFTCHWT1  ,  0, "PREFETCHWT1"                       ), \
+	FEATURE6( AVXV512BITALG, 12, "AVX512 Bitinstructions"         ), \
+	FEATURE6( AVXV512VPOPCNTDQ, 14, "AVX512 Vector Popcount"      ), \
 	FEATURE8( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE8( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE8( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
