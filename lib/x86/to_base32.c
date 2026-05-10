@@ -2,7 +2,7 @@
  * to_base32.c
  * convert binary string to base 32, x86 implementation
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -31,6 +31,12 @@
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 219
+static unsigned char *to_base32_BMI2AVX(unsigned char *dst, const unsigned char *src, unsigned len);
+#endif
+# if HAVE_BINUTILS >= 219
+static unsigned char *to_base32_BMI2(unsigned char *dst, const unsigned char *src, unsigned len);
+#endif
+# if HAVE_BINUTILS >= 219
 static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src, unsigned len);
 # endif
 # if HAVE_BINUTILS >= 218
@@ -58,31 +64,180 @@ static const union
 	{{0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF,0x00,0x00,0xFF,0xFF}},
 	{{0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF}},
 	{{0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F,0x1F}},
+	/* lower case output */
 	{{0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61}},
 	{{0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A,0x7A}},
 	{{0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49,0x49}},
+	/* upper case output, just for reference, we want to create lower case */
+/*	{{0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41}},
+	{{0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A,0x5A}},
+	{{0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29,0x29}}, */
 };
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 222
 #  ifndef __i386__
+static unsigned char *do_80bit_BMI2AVX(unsigned char *dst, uint64_t d1, uint64_t d2)
+{
+	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "r" (vals[4].v[0]));
+	asm ("pdep %2, %1, %0" : "=r" (d2) : "r" (d2), "r" (vals[4].v[0]));
+
+	d1 = __swab64(d1);
+	d2 = __swab64(d2);
+
+	/* convert full 16 Bytes o-bytes (10 i-bytes) at once  */
+	asm (
+			"vmovq    %1, %%xmm0\n\t"
+			"vpinsrq  $1, %2, %%xmm0, %%xmm0\n\t"
+			"vpaddb   %5, %%xmm0, %%xmm0\n\t"
+			"vpcmpgtb %3, %%xmm0, %%xmm1\n\t"
+			"vpand    %4, %%xmm1, %%xmm1\n\t"
+			"vpsubb   %%xmm1, %%xmm0, %%xmm0\n\t"
+			"vmovdqu  %%xmm0, %0"
+		: /* %0 */ "=m" (*(char (*)[16])dst) /* help compiler see where we write */
+		: /* %1 */ "r" (d1),
+		  /* %2 */ "r" (d2),
+		  /* %3 */ "m" (vals[6].c[0]),
+		  /* %4 */ "m" (vals[7].c[0]),
+		  /* %5 */ "m" (vals[5].c[0])
+		: "xmm0", "xmm1"
+	);
+	return dst + 16;
+}
+
+static unsigned char *do_40bit_BMI2AVX(unsigned char *dst, uint64_t d1)
+{
+	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "r" (vals[4].v[0]));
+	d1 = __swab64(d1);
+
+	/* convert */
+	asm (
+			"vmovq	%1, %%xmm0\n\t"
+			"vpaddb	%4, %%xmm0, %%xmm0\n\t" /* if we load the i-cache with a large constant or load it out of the pool... */
+			"vpcmpgtb	%2, %%xmm0, %%xmm1\n\t"
+			"vpand	%3, %%xmm1, %%xmm1\n\t"
+			"vpsubb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vmovq	%%xmm0, %0"
+		: /* %0 */ "=m" (*(char (*)[8])dst) /* better alias analysis */
+		: /* %1 */ "r" (d1),
+		  /* %2 */ "m" (vals[6].c[0]),
+		  /* %3 */ "m" (vals[7].c[0]),
+		  /* %4 */ "m" (vals[5].c[0])
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return dst + 8;
+}
+# else
+static unsigned char *do_40bit_BMI2AVX(unsigned char *dst, uint32_t a1, uint32_t a2)
+{
+	asm ("pdep %2, %1, %0" : "=r" (a1) : "r" (a1), "m" (vals[4].u[0]));
+	asm ("pdep %2, %1, %0" : "=r" (a2) : "r" (a2), "m" (vals[4].u[0]));
+	a1 = __swab32(a1);
+	a2 = __swab32(a2);
+
+	/* convert */
+	asm (
+			"vmovd	%1, %%xmm0\n\t"
+			"vpinsrd	$1, %2, %%xmm0, %%xmm0\n\t"
+			"vpaddb	%3, %%xmm0, %%xmm0\n\t"
+			"vpcmpgtb	%4, %%xmm0, %%xmm1\n\t"
+			"vpand	%5, %%xmm1, %%xmm1\n\t"
+			"vpsubb	%%xmm1, %%xmm0, %%xmm0\n\t"
+			"vmovq	%%xmm0, %0"
+		: /* %0 */ "=m" (*(char (*)[8])dst) /* better alias analysis */
+		: /* %1 */ "r" (a1),
+		  /* %2 */ "r" (a2),
+		  /* %3 */ "m" (vals[5].c[0]),
+		  /* %4 */ "m" (vals[6].c[0]),
+		  /* %5 */ "m" (vals[7].c[0])
+#  ifdef __SSE__
+		: "xmm0", "xmm1"
+#  endif
+	);
+	return dst + 8;
+}
+#  endif
+
+
+static unsigned char *to_base32_BMI2AVX(unsigned char *dst, const unsigned char *src, unsigned len)
+{
+	if(len >= 5)
+	{
+#  ifndef __i386__
+		/* i386 does not have the register to juggle around so "much" data.
+		 * peeps, its 2026, compile it in 64 bit, because a cpu with BMI
+		 * and AVX – why is it in 32 mode, what is this? Another crazy Atom/e-core
+		 * offspring for embedded use? Someone performing necromancy on Cyrix et al?
+		 */
+		while(len >= 13)
+		{
+			uint64_t d1 = get_unaligned_be64(src) >> 24;
+			uint64_t d2 = get_unaligned_be64(src + 5) >> 24;
+			src += 10;
+			len -= 10;
+			dst = do_80bit_BMI2AVX(dst, d1, d2);
+		}
+		if(len >= 10)
+		{
+			uint64_t d1 = get_unaligned_be64(src) >> 24;
+			uint64_t d2 = ((uint64_t)get_unaligned_be16(src + 5)) << 32;
+			src += 10;
+			len -= 10;
+			dst = do_80bit_BMI2AVX(dst, d1, d2);
+		}
+		if(len >= sizeof(uint64_t))
+		{
+			uint64_t d = get_unaligned_be64(src);
+			src += 5;
+			len -= 5;
+			dst = do_40bit_BMI2AVX(dst, d >> (64-40));
+		}
+#  endif
+		while(len >= 5)
+		{
+#  ifndef __i386__
+			uint64_t d = ((uint64_t)get_unaligned_be32(src) << 8) |
+			              (uint64_t)src[4];
+			dst = do_40bit_BMI2AVX(dst, d);
+#  else
+			uint32_t a1 = get_unaligned_be32(src);
+			uint32_t a2 = src[4];
+			dst = do_40bit_BMI2AVX(dst, a1 >> (32 - 20), a2 | (a1 << 8));
+#  endif
+			src += 5;
+			len -= 5;
+		}
+		asm ("vzeroupper");
+	}
+	if(len)
+		return to_base32_generic(dst, src, len);
+	return dst;
+}
+# endif
+
+# if HAVE_BINUTILS >= 222
+#  ifndef __i386__
 static unsigned char *do_40bit_BMI2(unsigned char *dst, uint64_t d1)
 {
 	asm ("pdep %2, %1, %0" : "=r" (d1) : "r" (d1), "r" (vals[4].v[0]));
-	d1 = __swab64(d1) + vals[5].v[0];
+	d1 = __swab64(d1);
 
 	/* convert */
 	asm (
 			"movq	%1, %%xmm0\n\t"
+			"paddb	%4, %%xmm0\n\t"
 			"movdqa	%%xmm0, %%xmm1\n\t"
 			"pcmpgtb	%2, %%xmm1\n\t"
 			"pand	%3, %%xmm1\n\t"
 			"psubb	%%xmm1, %%xmm0\n\t"
 			"movq	%%xmm0, %0"
-		: /* %0 */ "=m" (*dst)
+		: /* %0 */ "=m" (*(char (*)[8])dst) /* better alias analysis */
 		: /* %1 */ "r" (d1),
 		  /* %2 */ "m" (vals[6].c[0]),
-		  /* %3 */ "m" (vals[7].c[0])
+		  /* %3 */ "m" (vals[7].c[0]),
+		  /* %4 */ "m" (vals[5].c[0])
 #  ifdef __SSE__
 		: "xmm0", "xmm1"
 #  endif
@@ -107,7 +262,7 @@ static unsigned char *do_40bit_BMI2(unsigned char *dst, uint32_t a1, uint32_t a2
 			"pand	%5, %%xmm1\n\t"
 			"psubb	%%xmm1, %%xmm0\n\t"
 			"movq	%%xmm0, %0"
-		: /* %0 */ "=m" (*dst)
+		: /* %0 */ "=m" (*(char (*)[8])dst) /* better alias analysis */
 		: /* %1 */ "r" (a1),
 		  /* %2 */ "r" (a2),
 		  /* %3 */ "m" (vals[5].c[0]),
@@ -121,6 +276,9 @@ static unsigned char *do_40bit_BMI2(unsigned char *dst, uint32_t a1, uint32_t a2
 }
 #  endif
 
+/* BMI and no AVX is a possible case, but very very unlikely (some weired cpu or broken userland)
+ * This collapses to an okay small function, so let it be just in case
+ */
 static unsigned char *to_base32_BMI2(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 #  ifndef __i386__
@@ -157,18 +315,19 @@ static unsigned char *to_base32_BMI2(unsigned char *dst, const unsigned char *sr
  * This code does not use any AVX feature, it only uses the new
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
+ * It still needs a vzeroupper at the end to clear the vex state...
  */
 static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src, unsigned len)
 {
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
-			"vmovdqa	-64+%3, %%xmm3\n\t"
-			"vmovdqa	-16+%3, %%xmm0\n\t"
-			"vmovdqa	%3, %%xmm7\n\t"
-			"vmovdqa	16+%3, %%xmm6\n\t"
-			"vmovdqa	32+%3, %%xmm4\n\t"
-			"vmovdqa	48+%3, %%xmm5\n\t"
+			"vmovdqa	-64+%4, %%xmm3\n\t"
+			"vmovdqa	-16+%4, %%xmm0\n\t"
+			"vmovdqa	%4, %%xmm7\n\t"
+			"vmovdqa	16+%4, %%xmm6\n\t"
+			"vmovdqa	32+%4, %%xmm4\n\t"
+			"vmovdqa	48+%4, %%xmm5\n\t"
 			"cmp	$16, %2\n\t"
 			"jb	3f\n\t"
 			".p2align 2\n"
@@ -243,11 +402,13 @@ static unsigned char *to_base32_AVX(unsigned char *dst, const unsigned char *src
 			"5:\n\t"
 			"cmp	$7, %2\n\t"
 			"ja	3b\n"
-			"2:"
+			"2:\n\t"
+			"vzeroupper\n\t"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
-		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4].c[0]),
+		  /* %2 */ "=r" (len),
+		  /* %3 */ "=m" (*(char (*)[(len*8)/5])dst) /* tell the compiler we touch this mem */
+		: /* %4 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -267,12 +428,12 @@ static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *s
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
-			"movdqa	-64+%3, %%xmm3\n\t"
-			"movdqa	-16+%3, %%xmm0\n\t"
-			"movdqa	%3, %%xmm7\n\t"
-			"movdqa	16+%3, %%xmm6\n\t"
-			"movdqa	32+%3, %%xmm4\n\t"
-			"movdqa	48+%3, %%xmm5\n\t"
+			"movdqa	-64+%4, %%xmm3\n\t"
+			"movdqa	-16+%4, %%xmm0\n\t"
+			"movdqa	%4, %%xmm7\n\t"
+			"movdqa	16+%4, %%xmm6\n\t"
+			"movdqa	32+%4, %%xmm4\n\t"
+			"movdqa	48+%4, %%xmm5\n\t"
 			"cmp	$16, %2\n\t"
 			"jb	3f\n\t"
 			".p2align 2\n"
@@ -360,8 +521,9 @@ static unsigned char *to_base32_SSE41(unsigned char *dst, const unsigned char *s
 			"2:"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
-		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4].c[0]),
+		  /* %2 */ "=r" (len),
+		  /* %3 */ "=m" (*(char (*)[(len*8)/5])dst) /* tell the compiler we touch this mem */
+		: /* %4 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -381,15 +543,15 @@ static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *sr
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
-			"movdqa	-48+%3, %%xmm7\n\t"
-			"movdqa	-32+%3, %%xmm6\n\t"
-			"movdqa	-16+%3, %%xmm5\n\t"
+			"movdqa	-48+%4, %%xmm7\n\t"
+			"movdqa	-32+%4, %%xmm6\n\t"
+			"movdqa	-16+%4, %%xmm5\n\t"
 #   ifdef __x86_64__
-			"movdqa	%3, %%xmm8\n\t"
-			"movdqa	16+%3, %%xmm9\n\t"
+			"movdqa	%4, %%xmm8\n\t"
+			"movdqa	16+%4, %%xmm9\n\t"
 #   endif
-			"movdqa	32+%3, %%xmm3\n\t"
-			"movdqa	48+%3, %%xmm4\n\t"
+			"movdqa	32+%4, %%xmm3\n\t"
+			"movdqa	48+%4, %%xmm4\n\t"
 			"cmp	$16, %2\n\t"
 			"jb	3f\n\t"
 			".p2align 2\n"
@@ -427,11 +589,11 @@ static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *sr
 			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
 			"pandn	%%xmm0, %%xmm2\n\t"
 #   ifndef __x86_64__
-			"movdqa	%3, %%xmm0\n\t"
+			"movdqa	%4, %%xmm0\n\t"
 #   endif
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #   ifndef __x86_64__
-			"movdqa	16+%3, %%xmm2\n\t"
+			"movdqa	16+%4, %%xmm2\n\t"
 #   endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #   ifdef __x86_64__
@@ -501,11 +663,11 @@ static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *sr
 			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
 			"pandn	%%xmm0, %%xmm2\n\t"
 #   ifndef __x86_64__
-			"movdqa	%3, %%xmm0\n\t"
+			"movdqa	%4, %%xmm0\n\t"
 #   endif
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #   ifndef __x86_64__
-			"movdqa	16+%3, %%xmm2\n\t"
+			"movdqa	16+%4, %%xmm2\n\t"
 #   endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #   ifdef __x86_64__
@@ -547,8 +709,9 @@ static unsigned char *to_base32_SSE3(unsigned char *dst, const unsigned char *sr
 			"2:"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
-		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4].c[0]),
+		  /* %2 */ "=r" (len),
+		  /* %3 */ "=m" (*(char (*)[(len*8)/5])dst) /* tell the compiler we touch this mem */
+		: /* %4 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -571,15 +734,15 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
-			"movdqa	-48+%3, %%xmm7\n\t"
-			"movdqa	-32+%3, %%xmm6\n\t"
-			"movdqa	-16+%3, %%xmm5\n\t"
+			"movdqa	-48+%4, %%xmm7\n\t"
+			"movdqa	-32+%4, %%xmm6\n\t"
+			"movdqa	-16+%4, %%xmm5\n\t"
 #ifdef __x86_64__
-			"movdqa	%3, %%xmm8\n\t"
-			"movdqa	16+%3, %%xmm9\n\t"
+			"movdqa	%4, %%xmm8\n\t"
+			"movdqa	16+%4, %%xmm9\n\t"
 #endif
-			"movdqa	32+%3, %%xmm3\n\t"
-			"movdqa	48+%3, %%xmm4\n\t"
+			"movdqa	32+%4, %%xmm3\n\t"
+			"movdqa	48+%4, %%xmm4\n\t"
 			"cmp	$16, %2\n\t"
 			"jb	3f\n\t"
 			".p2align 2\n"
@@ -617,11 +780,11 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
 			"pandn	%%xmm0, %%xmm2\n\t"
 #ifndef __x86_64__
-			"movdqa	%3, %%xmm0\n\t"
+			"movdqa	%4, %%xmm0\n\t"
 #endif
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #ifndef __x86_64__
-			"movdqa	16+%3, %%xmm2\n\t"
+			"movdqa	16+%4, %%xmm2\n\t"
 #endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #ifdef __x86_64__
@@ -691,11 +854,11 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 			"psrlw	$0x3, %%xmm0\n\t"      /* shift copy */
 			"pandn	%%xmm0, %%xmm2\n\t"
 #ifndef __x86_64__
-			"movdqa	%3, %%xmm0\n\t"
+			"movdqa	%4, %%xmm0\n\t"
 #endif
 			"por	%%xmm2, %%xmm1\n\t"       /* join */
 #ifndef __x86_64__
-			"movdqa	16+%3, %%xmm2\n\t"
+			"movdqa	16+%4, %%xmm2\n\t"
 #endif
 			"psrlw	$0x3, %%xmm1\n\t"      /* bring it down */
 #ifdef __x86_64__
@@ -737,8 +900,9 @@ static unsigned char *to_base32_SSE2(unsigned char *dst, const unsigned char *sr
 			"2:"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
-		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4].c[0]),
+		  /* %2 */ "=r" (len),
+		  /* %3 */ "=m" (*(char (*)[(len*8)/5])dst) /* tell the compiler we touch this mem */
+		: /* %4 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -760,11 +924,11 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 	asm (
 			"cmp	$8, %2\n\t"
 			"jb	2f\n\t"
-			"movq	-48+%3, %%mm7\n\t"
-			"movq	-32+%3, %%mm6\n\t"
-			"movq	-16+%3, %%mm5\n\t"
-			"movq	32+%3, %%mm3\n\t"
-			"movq	48+%3, %%mm4\n\t"
+			"movq	-48+%4, %%mm7\n\t"
+			"movq	-32+%4, %%mm6\n\t"
+			"movq	-16+%4, %%mm5\n\t"
+			"movq	32+%4, %%mm3\n\t"
+			"movq	48+%4, %%mm4\n\t"
 			".p2align 2\n"
 			"1:\n\t"
 			"movq	(%1), %%mm0\n\t"       /* fetch input data */
@@ -794,9 +958,9 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 			"pand	%%mm5, %%mm1\n\t"      /* eliminate */
 			"psrlw	$0x3, %%mm0\n\t"    /* shift copy */
 			"pandn	%%mm0, %%mm2\n\t"
-			"movq	%3, %%mm0\n\t"
+			"movq	%4, %%mm0\n\t"
 			"por	%%mm2, %%mm1\n\t"      /* join */
-			"movq	16+%3, %%mm2\n\t"
+			"movq	16+%4, %%mm2\n\t"
 			"psrlw	$0x3, %%mm1\n\t"    /* bring it down */
 			"pand	%%mm0, %%mm1\n\t"      /* eliminate */
 			/* convert */
@@ -818,8 +982,9 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 			"2:"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
-		  /* %2 */ "=r" (len)
-		: /* %3 */ "m" (vals[4].c[0]),
+		  /* %2 */ "=r" (len),
+		  /* %3 */ "=m" (*(char (*)[(len*8)/5])dst) /* tell the compiler we touch this mem */
+		: /* %4 */ "m" (vals[4].c[0]),
 		  /*    */ "0" (dst),
 		  /*    */ "1" (src),
 		  /*    */ "2" (len)
@@ -834,6 +999,19 @@ static unsigned char *to_base32_SSE(unsigned char *dst, const unsigned char *src
 static __init_cdata const struct test_cpu_feature tfeat_to_base32[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 222
+	{.func = (void (*)(void))to_base32_BMI2AVX,    .features = {
+#  ifdef __i386__
+			[1] = CFB(CFEATURE_SSE4_1) | CFB(CFEATURE_AVX),
+#  else
+			[0] = CFB(CFEATURE_SSE2),
+			[1] = CFB(CFEATURE_AVX),
+#  endif
+			[4] = CFB(CFEATURE_BMI2)
+		},
+		.flags = CFF_AVX_TST
+	},
+# endif
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))to_base32_BMI2,    .features = {
 #  ifdef __i386__
