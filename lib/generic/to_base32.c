@@ -2,7 +2,7 @@
  * to_base32.c
  * convert binary string to base32, generic impl.
  *
- * Copyright (c) 2010 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -59,11 +59,14 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 	d1 >>= 3;                     /* bring it down */
 	d1  &= 0x1F1F1F1F1F1F1F1FULL; /* eliminate */
 
-	/* convert */
+	/* convert, we want to create lower case, upper case commented out */
 	d1  += 0x6161616161616161ULL;
-	m1   = has_greater(d1, 0x7A);
+	m1   = has_greater(d1, 075A);
+//	d1  += 0x4141414141414141ULL;
+//	m1   = has_greater(d1, 0x5A);
 	m1 >>= 7;
 	m1   = 0x49 * m1;
+//	m1   = 0x29 * m1;
 	d1  -= m1;
 	/* write out */
 	put_unaligned_be64(d1, dst);
@@ -89,11 +92,14 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 	a1 >>= 3;            a2 >>= 3;             /* bring bits down */
 	a1  &= 0x1F1F1F1FUL; a2  &= 0x1F1F1F1FUL;  /* eliminate */
 
-	/* convert */
+	/* convert, we want to create lower case, upper case commented out */
 	a1  += 0x61616161UL;          a2  += 0x61616161UL;
 	m1   = has_greater(a1, 0x7A); m2   = has_greater(a2, 0x7A);
+//	a1  += 0x41414141UL;          a2  += 0x41414141UL;
+//	m1   = has_greater(a1, 0x5A); m2   = has_greater(a2, 0x5A);
 	m1 >>= 7;                     m2 >>= 7;
 	m1   = 0x49 * m1;             m2   = 0x49 * m2;
+//	m1   = 0x29 * m1;             m2   = 0x29 * m2;
 	a1  -= m1;                    a2  -= m2;
 	/* write out */
 	put_unaligned_be32(a1, dst);
@@ -103,9 +109,52 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 }
 #endif
 
-static inline uint32_t rol32(uint32_t word, unsigned int shift)
+/* only for last 0 to 4 bytes */
+static noinline unsigned char *to_base32_tail_generic(unsigned char *dst, const unsigned char *src, unsigned len)
 {
-	return (word << shift) | (word >> (32 - shift));
+	uint64_t d = 0;
+	if (!len)
+		return dst;
+
+	/* try to load the remaining data in a machine register */
+	if (len >= 4)      d = get_unaligned_be32(src);
+	else if (len == 3) d = (get_unaligned_be16(src) << 8) | src[2];
+	else if (len == 2) d = get_unaligned_be16(src);
+	else               d = src[0];
+
+	/* get to top of 64bit var */
+	d = d << ((sizeof(uint64_t) - len) * BITS_PER_CHAR);
+
+	/* convert all at once */
+	dst = do_40bit(dst, d);
+
+	/* overwrite end with padding */
+	switch (len)
+	{
+		case 4: /* 7 valid char */
+			dst[-1] = '=';
+			return dst;
+		case 3: /* 24 Bit -> 5 valid char + 3 Padding */
+			dst[-3] = '=';
+			dst[-2] = '=';
+			dst[-1] = '=';
+			return dst;
+		case 2: /* 16 Bit -> 4 valid char + 4 Padding */
+			dst[-4] = '=';
+			dst[-3] = '=';
+			dst[-2] = '=';
+			dst[-1] = '=';
+			return dst;
+		case 1: /* 8 Bit -> 2 valid char + 6 Padding */
+			dst[-6] = '=';
+			dst[-5] = '=';
+			dst[-4] = '=';
+			dst[-3] = '=';
+			dst[-2] = '=';
+			dst[-1] = '=';
+			return dst;
+	}
+	return dst;
 }
 
 F_NAME(unsigned char *, to_base32, _generic)(unsigned char *dst, const unsigned char *src, unsigned len)
@@ -127,29 +176,8 @@ F_NAME(unsigned char *, to_base32, _generic)(unsigned char *dst, const unsigned 
 		len -= 5;
 		dst = do_40bit(dst, d);
 	}
-	/* less than 32 bit left */
-	if(len)
-	{
-		static const unsigned char base32c[] = "abcdefghijklmnopqrstuvwxyz234567=";
-		unsigned b32chars = B32_LEN(len);
-		uint32_t d;
-		unsigned i;
-
-		/* collect the bytes */
-		for(i = len, d = 0; i; i--)
-			d = (d << 8) | *src++;
-
-		/* bring to start position */
-		d = rol32(d, (sizeof(d) - len) * BITS_PER_CHAR + 5);
-		i = 0;
-		/* write out */
-		do
-		{
-			*dst++ = base32c[d & 0x1F];
-			d = rol32(d, 5);
-		} while(++i < b32chars);
-	}
-	return dst;
+	/* less than 32 bit left, tail call it */
+	return to_base32_tail_generic(dst, src, len);
 }
 #undef F_NAME
 

@@ -2,7 +2,7 @@
  * G2QHT.c
  * helper-functions for G2-QHTs
  *
- * Copyright (c) 2006-2019 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -448,7 +448,9 @@ void g2_qht_search_add_ttr(const unsigned char *h)
 #define URN_TTR "urn:tree:tiger/:"
 	unsigned char ih[str_size(URN_TTR) + B32_LEN(24)]; /* base 32 encoding */
 	unsigned char *wptr = mempcpy(ih, URN_TTR, str_size(URN_TTR));
-	wptr = to_base32(wptr, h, 24);
+	/* tiger tree are 192 bit, 24 byte, which are not a multible of 5,
+	 * so there is 1 byte padding, but in URLs we don't use padding */
+	wptr = to_base32(wptr, h, 24) - 1;
 	g2_qht_search_add_word_luc(ih, wptr - ih);
 }
 
