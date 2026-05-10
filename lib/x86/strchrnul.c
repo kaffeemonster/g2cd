@@ -2,7 +2,7 @@
  * strchrnul.c
  * strchrnul for non-GNU platform, x86 implementation
  *
- * Copyright (c) 2009-2011 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -114,6 +114,7 @@ static char *strchrnul_AVX2(const char *s, int c)
 		"jc	1b\n\t"
 		"vpmovmskb	%%ymm0, %0\n\t"
 		"2:"
+		"vzeroupper\n\t"
 		"tzcnt	%0, %0\n\t"
 		"add	%1, %0\n\t"
 		: /* %0 */ "=&r" (ret),
@@ -141,6 +142,7 @@ static char *strchrnul_AVX2(const char *s, int c)
  * This code does not use any AVX feature, it only uses the new
  * v* opcodes, so the upper half of the register gets 0-ed,
  * and the CPU is not caught with lower/upper half merges
+ * It still needs a vzeroupper to clear the VEX state...
  */
 static char *strchrnul_AVX(const char *s, int c)
 {
@@ -183,6 +185,7 @@ static char *strchrnul_AVX(const char *s, int c)
 		"vpcmpestri	$0b0000000, (%3), %%xmm1\n\t"
 		"ja	1b\n\t"
 		"2:"
+		"vzeroupper\n\t"
 		"lea	(%3,%2),%0\n\t"
 		: /* %0 */ "=&a" (ret),
 		  /* %1 */ "=&d" (z),
