@@ -2075,7 +2075,7 @@ static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 	{.func = (void (*)(void))mempopcnt_AVX512,  .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_AVXV512BITALG)}, .flags = CFF_AVX512_TST},
 # endif
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
-	{.func = (void (*)(void))mempopcnt_AVX2,    .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
+	{.func = (void (*)(void))mempopcnt_AVX2,    .features = {[1] = CFB(CFEATURE_AVX), [4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
 # if 0
 	/* only marginally faster then popcnt intr., wrong results */
