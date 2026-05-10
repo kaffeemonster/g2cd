@@ -115,7 +115,12 @@ LIB_MY_BITOPS_EXTRN_I(char *strrchr(const char *s, int c) GCC_ATTR_PURE);
 # define strplitcpy(x, y)	(mempcpy((x), (y), str_size(y)))
 
 LIB_MY_BITOPS_EXTRN(unsigned char *to_base16(unsigned char *dst, const unsigned char *src, unsigned len));
-#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
+
+//#define B32_LEN(x) (((x) * BITS_PER_CHAR + 4) / 5)
+/* round to complete 5 byte input blocks (40 bit) == 8 byte output,
+ * because normally base32 is padded to 8 byte output blocks
+ * you don't want padding? cut it */
+#define B32_LEN(x) (DIV_ROUNDUP(x, 5) * 8)
 LIB_MY_BITOPS_EXTRN(unsigned char *to_base32(unsigned char *dst, const unsigned char *src,  unsigned len));
 
 static inline void strreverse(char *begin, char *end)
