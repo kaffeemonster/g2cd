@@ -2,7 +2,7 @@
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   x86 implementation
  * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2015 Jan Seiffert
+ * Copyright (C) 2009-2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -230,6 +230,132 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 		"paddd	%%xmm1, %%xmm3\n\t"
 		"movd	%%xmm2, %2\n\t"
 		"movd	%%xmm3, %1\n\t"
+#endif
+
+/* ========================================================================= */
+#if (HAVE_BINUTILS-0) >= 219
+static uint32_t adler32_AVX(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	uint32_t s1 = adler & 0xffff;
+	uint32_t s2 = (adler >> 16) & 0xffff;
+	unsigned k;
+
+	k    = ALIGN_DIFF(buf, 16);
+	len -= k;
+	if(k)
+		buf = adler32_jumped(buf, &s1, &s2, k);
+
+	asm volatile (
+		"mov	%6, %3\n\t"		/* get max. byte count VNMAX till v1_round_sum overflows */
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"		/* k = len >= VNMAX ? k : len */
+		"sub	%3, %4\n\t"		/* len -= k */
+		"cmp	$16, %3\n\t"
+		"jb	8f\n\t"			/* if(k < 16) goto OUT */
+#if HAVE_SUBSECTION
+		".subsection 2\n\t"
+#else
+		"jmp	7f\n\t"
+#endif
+		".p2align 2\n"
+		"avx_chop:\n\t"
+		"vpslld	$16, %%xmm0, %%xmm1\n\t"	/* y = x << 16 */
+		"vpsrld	$16, %%xmm0, %%xmm0\n\t"	/* x >>= 16 */
+		"vpsrld	$16, %%xmm1, %%xmm1\n\t"	/* y >>= 16 */
+		"vpsubd	%%xmm0, %%xmm1, %%xmm1\n\t"	/* y -= x */
+		"vpslld	$4, %%xmm0, %%xmm0\n\t"		/* x <<= 4 */
+		"vpaddd	%%xmm1, %%xmm0, %%xmm0\n\t"	/* x += y */
+		"ret\n\t"
+#if HAVE_SUBSECTION
+		".previous\n\t"
+#else
+		"7:\n\t"
+#endif
+		"vmovdqa	%5, %%xmm5\n\t"		/* get vord_b */
+		"prefetchnta	0x70(%0)\n\t"
+		"vmovd %2, %%xmm2\n\t"		/* init vector sum vs2 with s2 */
+		"vmovd %1, %%xmm3\n\t"		/* init vector sum vs1 with s1 */
+		"vpxor	%%xmm4, %%xmm4, %%xmm4\n"	/* zero */
+		"3:\n\t"
+		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"	/* zero vs1_round_sum */
+		".p2align 3,,3\n\t"
+		".p2align 2\n"
+		"2:\n\t"
+		"mov	$128, %1\n\t"		/* inner_k = 128 bytes till vs2_i overflows */
+		"cmp	%1, %3\n\t"
+		"cmovb	%3, %1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
+		"and	$-16, %1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
+		"sub	%1, %3\n\t"		/* k -= inner_k */
+		"shr	$4, %1\n\t"		/* inner_k /= 16 */
+		"vpxor	%%xmm6, %%xmm6, %%xmm6\n\t"	/* zero vs2_i */
+		".p2align 4,,7\n"
+		".p2align 3\n"
+		"1:\n\t"
+		"vmovdqa	(%0), %%xmm0\n\t"	/* fetch input data */
+		"prefetchnta	0x70(%0)\n\t"
+		"vpaddd	%%xmm3, %%xmm7, %%xmm7\n\t"	/* vs1_round_sum += vs1 */
+		"add	$16, %0\n\t"		/* advance input pointer */
+		"vpmaddubsw %%xmm5, %%xmm0, %%xmm1\n\t"	/* xmm1 = in * vorder_b */
+		"vpsadbw	%%xmm4, %%xmm0, %%xmm0\n\t"	/* xmm0 = sum(in) */
+		"vpaddw	%%xmm1, %%xmm6, %%xmm6\n\t"	/* vs2_i += xmm1 */
+		"vpaddd	%%xmm0, %%xmm3, %%xmm3\n\t"	/* vs1 += xmm0 */
+		"dec	%1\n\t"			/* decrement inner_k */
+		"jnz	1b\n\t"			/* repeat if inner_k != 0 */
+		"vpunpckhwd	%%xmm4, %%xmm6, %%xmm0\n\t"	/* extract vs2_i upper */
+		"vpunpcklwd	%%xmm4, %%xmm6, %%xmm6\n\t"	/* extract vs2_i lower */
+		"vpaddd	%%xmm0, %%xmm2, %%xmm2\n\t"	/* vs2 += vs2_i.upper */
+		"vpaddd	%%xmm6, %%xmm2, %%xmm2\n\t"	/* vs2 += vs2_i.lower */
+		"cmp	$15, %3\n\t"
+		"jg	2b\n\t"				/* if(k > 15) repeat */
+		"vmovdqa	%%xmm7, %%xmm0\n\t"	/* move vs1_round_sum */
+		"call	avx_chop\n\t"	/* chop vs1_round_sum */
+		"vpslld	$4, %%xmm0, %%xmm0\n\t"		/* vs1_round_sum *= 16 */
+		"vpaddd	%%xmm2, %%xmm0, %%xmm0\n\t"	/* vs2 += vs1_round_sum */
+		"call	avx_chop\n\t"	/* chop again */
+		"vmovdqa	%%xmm0, %%xmm2\n\t"	/* move vs2 back in place */
+		"vmovdqa	%%xmm3, %%xmm0\n\t"	/* move vs1 */
+		"call	avx_chop\n\t"	/* chop */
+		"vmovdqa	%%xmm0, %%xmm3\n\t"	/* move vs1 back in place */
+		"add	%3, %4\n\t"		/* len += k */
+		"mov	%6, %3\n\t"		/* get max. byte count VNMAX till v1_round_sum overflows */
+		"cmp	%3, %4\n\t"
+		"cmovb	%4, %3\n\t"		/* k = len >= VNMAX ? k : len */
+		"sub	%3, %4\n\t"		/* len -= k */
+		"cmp	$15, %3\n\t"
+		"jg	3b\n\t"				/* if(k > 15) repeat */
+		"vpshufd	$0xEE, %%xmm3, %%xmm1\n\t"	/* collect vs1 & vs2 */
+		"vpshufd	$0xEE, %%xmm2, %%xmm0\n\t"
+		"vpaddd	%%xmm3, %%xmm1, %%xmm1\n\t"
+		"vpaddd	%%xmm2, %%xmm0, %%xmm0\n\t"
+		"vpshufd	$0xE5, %%xmm0, %%xmm2\n\t"
+		"vpaddd	%%xmm0, %%xmm2, %%xmm2\n\t"
+		"vmovd	%%xmm1, %1\n\t"		/* mov vs1 to s1 */
+		"vmovd	%%xmm2, %2\n"		/* mov vs2 to s2 */
+		"8:\n\t"
+		"vzeroupper\n\t"			/* Clean up state */
+	: /* %0 */ "=r" (buf),
+	  /* %1 */ "=r" (s1),
+	  /* %2 */ "=r" (s2),
+	  /* %3 */ "=r" (k),
+	  /* %4 */ "=r" (len)
+	: /* %5 */ "m" (vord_b),
+	  /* %6 */ "i" (5*NMAX),
+	  /* */ "0" (buf),
+	  /* */ "1" (s1),
+	  /* */ "2" (s2),
+	  /* */ "4" (len)
+	: "cc", "memory"
+#ifdef __SSE__
+	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
+#endif
+	);
+
+	if(unlikely(k))
+		buf = adler32_jumped(buf, &s1, &s2, k);
+	MOD28(s1);
+	MOD28(s2);
+	return (s2 << 16) | s1;
+}
 #endif
 
 /* ========================================================================= */
@@ -1033,6 +1159,9 @@ static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsign
 
 static __init_cdata const struct test_cpu_feature tfeat_adler32_vec[] =
 {
+#if (HAVE_BINUTILS-0) >= 219
+	{.func = (void (*)(void))adler32_AVX,   .features = {[1] = CFB(CFEATURE_SSSE3) | CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
+#endif
 	{.func = (void (*)(void))adler32_SSSE3, .features = {[1] = CFB(CFEATURE_SSSE3), [0] = CFB(CFEATURE_CMOV)}},
 	{.func = (void (*)(void))adler32_SSE2,  .features = {[0] = CFB(CFEATURE_SSE2)|CFB(CFEATURE_CMOV)}},
 #ifndef __x86_64__
