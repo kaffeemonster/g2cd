@@ -61,7 +61,7 @@ static unsigned char *do_40bit(unsigned char *dst, uint64_t d1)
 
 	/* convert, we want to create lower case, upper case commented out */
 	d1  += 0x6161616161616161ULL;
-	m1   = has_greater(d1, 075A);
+	m1   = has_greater(d1, 0x75A);
 //	d1  += 0x4141414141414141ULL;
 //	m1   = has_greater(d1, 0x5A);
 	m1 >>= 7;
