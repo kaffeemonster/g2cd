@@ -4,7 +4,7 @@
 # uhm, and a nice example how a Makefile can look like, when
 # not autogerated
 #
-# Copyright (c) 2004 - 2015 Jan Seiffert
+# Copyright (c) 2004 - 2026 Jan Seiffert
 #
 # This file is part of g2cd.
 #
@@ -604,6 +604,8 @@ sbox.bin: $(TARED_FILES)
 
 calltree: calltree.c Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@
+mpc: $(TARED_FILES)
+	npx gitnexus analyze
 
 hardcopy: $(TARED_FILES)
 	for file in $(TARED_FILES) ; do expand -t 3 $$file | fold -s | lpr ; done;
