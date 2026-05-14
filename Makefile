@@ -192,6 +192,7 @@ AUX = \
 	g2cd.1 \
 	COPYING \
 	README.md \
+	AGENTS.md \
 	autogen.sh \
 	configure \
 	configure.ac \
@@ -215,14 +216,30 @@ AUX = \
 	obs_build/debian.control \
 	obs_build/debian.rules \
 	obs_build/g2cd.dsc \
-	obs_build/g2cd.spec
+	obs_build/g2cd.spec \
+	.agents/skills/gitnexus/gitnexus-cli/SKILL.md \
+	.agents/skills/gitnexus/gitnexus-debugging/SKILL.md \
+	.agents/skills/gitnexus/gitnexus-exploring/SKILL.md \
+	.agents/skills/gitnexus/gitnexus-guide/SKILL.md \
+	.agents/skills/gitnexus/gitnexus-impact-analysis/SKILL.md \
+	.agents/skills/gitnexus/gitnexus-refactoring/SKILL.md
 
 #
 #	files to be included in a package
 #
 TARED_FILES = $(HEADS) $(SRCS) $(AUX)
-# normaly we would set it here, derived vom the mod-dirs, but..
-TARED_DIRS = m4 obs_build
+
+TARED_SKILLS = \
+	.agents/skills/gitnexus \
+	.agents/skills/gitnexus/gitnexus-cli \
+	.agents/skills/gitnexus/gitnexus-debugging \
+	.agents/skills/gitnexus/gitnexus-exploring \
+	.agents/skills/gitnexus/gitnexus-guide \
+	.agents/skills/gitnexus/gitnexus-impact-analysis \
+	.agents/skills/gitnexus/gitnexus-refactoring
+
+# normaly we would set it here, derived from the mod-dirs, but..
+TARED_DIRS = m4 obs_build .agents .agents/skills $(TARED_SKILLS)
 
 AUXS = \
 	g2cd.conf \

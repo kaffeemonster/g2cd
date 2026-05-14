@@ -19,13 +19,17 @@ TCHAR_TABS = \
 	$(MPL)/tchar_c1table.bin \
 	$(MPL)/tchar_c3table.bin
 
+LIBDOCS = \
+	$(MPL)/HZP_REFERENCE.md
+
 TARED_FILES += \
 	$(MPL)/module.make \
 	$(MPL)/aes_tab_gen.c \
 	$(MPL)/five_tab_gen.c \
 	$(TCHAR_TABS_BE) \
 	$(LIBHEADS) \
-	$(LIBASRCS)
+	$(LIBASRCS) \
+	$(LIBDOCS)
 
 TARED_DIRS += \
 	$(MPL) \
