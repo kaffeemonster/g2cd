@@ -2,7 +2,7 @@
  * atomic.h
  * atomic primitves
  *
- * Copyright (c) 2006-2012 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,6 +26,8 @@
  *
  */
 
+// TODO: Refactor to stdatomic.h when C11 is available
+
 #ifndef LIB_ATOMIC_H
 # define LIB_ATOMIC_H
 # ifdef HAVE_CONFIG_H
@@ -38,6 +40,7 @@
 #  include <inttypes.h>
 # endif
 
+/* array padding needed for load-linked-and-store architectures to prevent thrashing */
 /* powerpc is implimentation defined ... sigh ... doc say some 2**4 */
 # if defined(__alpha__) || defined(__powerpc__) || defined(__powerpc64__)
 #  define ARCH_NEEDED_APAD 16
