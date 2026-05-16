@@ -217,6 +217,8 @@ AUX = \
 	obs_build/debian.rules \
 	obs_build/g2cd.dsc \
 	obs_build/g2cd.spec \
+	.agents/references/SECURITY.md \
+	.agents/references/PERFORMANCE.md \
 	.agents/skills/gitnexus/gitnexus-cli/SKILL.md \
 	.agents/skills/gitnexus/gitnexus-debugging/SKILL.md \
 	.agents/skills/gitnexus/gitnexus-exploring/SKILL.md \
@@ -238,8 +240,15 @@ TARED_SKILLS = \
 	.agents/skills/gitnexus/gitnexus-impact-analysis \
 	.agents/skills/gitnexus/gitnexus-refactoring
 
+TARED_DOTAGENT = \
+	.agents \
+	.agent \
+	.agents/references \
+	.agents/skills \
+	$(TARED_SKILLS)
+
 # normaly we would set it here, derived from the mod-dirs, but..
-TARED_DIRS = m4 obs_build .agents .agents/skills $(TARED_SKILLS)
+TARED_DIRS = m4 obs_build $(TARED_DOTAGENT)
 
 AUXS = \
 	g2cd.conf \
@@ -622,7 +631,7 @@ sbox.bin: $(TARED_FILES)
 calltree: calltree.c Makefile ccdrv
 	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@
 mpc: $(TARED_FILES)
-	npx gitnexus analyze
+	npx gitnexus analyze --skip-agents-md
 
 hardcopy: $(TARED_FILES)
 	for file in $(TARED_FILES) ; do expand -t 3 $$file | fold -s | lpr ; done;

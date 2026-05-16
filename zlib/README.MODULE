@@ -1,3 +1,22 @@
+
+TODO: bring this up to modern day
+
+THIS IS OLD AND BROKEN
+
+this was originally to aid development/testing on systems without even zlib
+(notably the old solaris/sparc setup i had access to, one reason i wanted to
+keep external hard dependencies minimal).
+
+zlib was a veeery slow moving target.
+But now there is much more activity.
+Todays zlib releases have changed meaningfull, even use cmake?
+
+And this here hasn't kept up.
+
+So no, you can not include zlib.
+
+--------- orig ---------
+
 You can directly compile in the zlib into G2CD.
 
 Just drop the zlib source into this directory and then use "make withzlib" or

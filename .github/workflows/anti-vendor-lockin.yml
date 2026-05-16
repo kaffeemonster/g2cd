@@ -1,0 +1,51 @@
+name: "Anti-Vendor Lockin/Trademark Firewall"
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  audit-repository:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Fetch repository history
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Fetches enough history to read the diff accurately
+
+      # Step 2: Extract modified files and evaluate patterns
+      - name: Scan Commit for Trademark Signatures/funky Vendor files
+        run: |
+          echo "🔍 Auditing commit for vendor-branded dot-folders/files..."
+
+          # Target patterns to reject
+          FORBIDDEN_PATTERNS="$REPO_FORBIDDEN_PATTERNS"
+
+          # Isolate file names introduced in this push/PR
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # If a PR, check files relative to target branch base
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
+          else
+          # If a direct push, look at files changed in the latest commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+
+          # Scan file listing against regex signatures
+          VIOLATIONS=$(echo "$CHANGED_FILES" | grep -E "$FORBIDDEN_PATTERNS" || true)
+
+          if [ ! -z "$VIOLATIONS" ]; then
+        echo "❌ CRITICAL ERROR: Vendor files detected"
+        echo "--------------------------------------------------------"
+        echo "$VIOLATIONS" | sed 's/^/  - /'
+        echo "--------------------------------------------------------"
+        echo "ERR: Public open-source codebases where these files schould propably not be commited!"
+        echo "Action Required: Clean the directories locally. Ensure configurations"
+        echo "reside in global user directories."
+        exit 1
+        fi
+
+        echo "✅ Audit Complete: No suspicious files found."
