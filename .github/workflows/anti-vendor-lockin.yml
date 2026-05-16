@@ -22,7 +22,7 @@ jobs:
           echo "🔍 Auditing commit for vendor-branded dot-folders/files..."
 
           # Target patterns to reject
-          FORBIDDEN_PATTERNS="$REPO_FORBIDDEN_PATTERNS"
+          FORBIDDEN_PATTERNS="${{ vars.$REPO_FORBIDDEN_PATTERNS }}"
 
           echo "DEBUG: FORBIDDEN_PATTERNS = $FORBIDDEN_PATTERNS"
 
