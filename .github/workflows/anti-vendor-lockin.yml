@@ -12,7 +12,7 @@ jobs:
     steps:
       # Step 1: Fetch repository history
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 2 # Fetches enough history to read the diff accurately
 
@@ -24,8 +24,6 @@ jobs:
           # Target patterns to reject
           FORBIDDEN_PATTERNS="${{ vars.REPO_FORBIDDEN_PATTERNS }}"
 
-          echo "DEBUG: FORBIDDEN_PATTERNS = $FORBIDDEN_PATTERNS"
-
           # Isolate file names introduced in this push/PR
           if [ "${{ github.event_name }}" = "pull_request" ]; then
           # If a PR, check files relative to target branch base
@@ -36,12 +34,8 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
           fi
 
-          echo "DEBUG: CHANGED_FILES = $CHANGED_FILES"
-
           # Scan file listing against regex signatures
           VIOLATIONS=$(echo "$CHANGED_FILES" | grep -E "$FORBIDDEN_PATTERNS" || true)
-
-          echo "DEBUG: VIOLATIONS = $VIOLATIONS"
 
           if [ ! -z "$VIOLATIONS" ]; then
           echo "❌ CRITICAL ERROR: Vendor files detected"
