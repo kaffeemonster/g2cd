@@ -24,6 +24,8 @@ jobs:
           # Target patterns to reject
           FORBIDDEN_PATTERNS="$REPO_FORBIDDEN_PATTERNS"
 
+          echo "DEBUG: FORBIDDEN_PATTERNS = $FORBIDDEN_PATTERNS"
+
           # Isolate file names introduced in this push/PR
           if [ "${{ github.event_name }}" = "pull_request" ]; then
           # If a PR, check files relative to target branch base
@@ -34,15 +36,19 @@ jobs:
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
           fi
 
+          echo "DEBUG: CHANGED_FILES = $CHANGED_FILES"
+
           # Scan file listing against regex signatures
           VIOLATIONS=$(echo "$CHANGED_FILES" | grep -E "$FORBIDDEN_PATTERNS" || true)
+
+          echo "DEBUG: VIOLATIONS = $VIOLATIONS"
 
           if [ ! -z "$VIOLATIONS" ]; then
           echo "❌ CRITICAL ERROR: Vendor files detected"
           echo "--------------------------------------------------------"
           echo "$VIOLATIONS" | sed 's/^/  - /'
           echo "--------------------------------------------------------"
-          echo "ERR: Public open-source codebases where these files schould propably not be commited!"
+          echo "ERR: Public open-source codebases where these files should propably not be commited!"
           echo "Action Required: Clean the directories locally. Ensure configurations"
           echo "reside in global user directories."
           exit 1
