@@ -38,14 +38,14 @@ jobs:
           VIOLATIONS=$(echo "$CHANGED_FILES" | grep -E "$FORBIDDEN_PATTERNS" || true)
 
           if [ ! -z "$VIOLATIONS" ]; then
-        echo "❌ CRITICAL ERROR: Vendor files detected"
-        echo "--------------------------------------------------------"
-        echo "$VIOLATIONS" | sed 's/^/  - /'
-        echo "--------------------------------------------------------"
-        echo "ERR: Public open-source codebases where these files schould propably not be commited!"
-        echo "Action Required: Clean the directories locally. Ensure configurations"
-        echo "reside in global user directories."
-        exit 1
-        fi
+          echo "❌ CRITICAL ERROR: Vendor files detected"
+          echo "--------------------------------------------------------"
+          echo "$VIOLATIONS" | sed 's/^/  - /'
+          echo "--------------------------------------------------------"
+          echo "ERR: Public open-source codebases where these files schould propably not be commited!"
+          echo "Action Required: Clean the directories locally. Ensure configurations"
+          echo "reside in global user directories."
+          exit 1
+          fi
 
-        echo "✅ Audit Complete: No suspicious files found."
+          echo "✅ Audit Complete: No suspicious files found."
