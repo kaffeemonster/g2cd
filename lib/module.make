@@ -20,7 +20,9 @@ TCHAR_TABS = \
 	$(MPL)/tchar_c3table.bin
 
 LIBDOCS = \
-	$(MPL)/HZP_REFERENCE.md
+	$(MPL)/reference/HZP_REFERENCE.md \
+	$(MPL)/reference/ATOMIC_REFERENCE.md \
+	$(MPL)/reference/OTHER_REFERENCE.md
 
 TARED_FILES += \
 	$(MPL)/module.make \
@@ -33,6 +35,7 @@ TARED_FILES += \
 
 TARED_DIRS += \
 	$(MPL) \
+	$(MPL)/reference \
 	$(MPL)/generic \
 	$(MPL)/unaligned \
 	$(MPL)/x86 \

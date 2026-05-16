@@ -268,7 +268,9 @@ add a new named key to the `enum hzps` in `lib/hzp.h` before the HZP_MAX entry.
 
 ## References
 - **Hazard Pointers Paper:** "Hazard Pointers: Safe Memory Reclamation for Lock-Free Objects" by Michael (2004)
-- **Your Implementation:** `src/lib/hzp.c`, `src/lib/hzp.h`
+- **Your Implementation:** `lib/hzp.c`, `lib/hzp.h`
+- **Atomic operations:** `lib/reference/ATOMIC_REFERENCE.md` — used by HZP for safe memory reclamation
+- **Compiler helpers:** `lib/reference/OTHER_REFERENCE.md` — compiler compatibility macros
 - **License:** GPL v3 (see `AGENTS.md` for full license details)
 
 ---

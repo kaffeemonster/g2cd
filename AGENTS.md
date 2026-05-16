@@ -74,16 +74,18 @@ This project is indexed by GitNexus as **g2cd** (5884 symbols, 12470 relationshi
 -- **Install:** `make install`.
 -- **Run:** `./g2cd`.
 -- **Developer Tools:**
--- `make todo`: Generate TODO list from source.
+-- `make todo`: Extracts `// TODO:` comments from source into `TODO` file. Contains many long-standing observations, open questions, and speculative notes — not all entries are actionable. Review for actionability before pursuing.
 -- `make callgraph`: Generate Graphviz callgraph.
 -- **Clean:** `make clean` or `make distclean`.
 --** **Distribute:** `make dist`
+-- **New files/directories:** Any new file (code, docs, headers, etc) needed in a src distribution MUST be manually added to the distribution tarball via its module's `module.make` — add to `TARED_FILES`, `HEADS`, `LIBHEADS`, `SRCS`, `LIBSRCS`, `LIBDOCS`, `AUX`, etc. as appropriate. Directories go in `TARED_DIRS`, mind the directorie order.
 
 # Coding style
 - real tabs for indent, visual align with spaces
 - braces on new line, except for very short blocks (3 to 4 lines)
 - snake_case, no camelCase
 - /\* \*/ comments, except TODO:, put in first column to put in `make todo`
+- C preprocessor directives are also indented, # has to stay on first coloumn, but then 1 space per level until keyword
 
 # Performance Constraint: C10k with Heavy State
 - Use `.agents/references/PERFORMANCE.md` for detailed guidiance
@@ -97,5 +99,20 @@ This project is indexed by GitNexus as **g2cd** (5884 symbols, 12470 relationshi
 # Hazard Pointer
 - **DO NOT MODIFY:** `hzp_scan()` function in `lib/hzp.c` is highly optimized lock-free logic.
 - **Usage:** Agents should **only** use the `hzp_ref`/`hzp_unref`/`hzp_deferfree` API.
-    - Use `lib/HZP_REFERENCE.md` for correct usage patterns.
+    - Use `lib/reference/HZP_REFERENCE.md` for correct usage patterns.
     - Never access hazard pointer protected shared data without `hzp_ref()`/`hzp_unref()`.
+
+# Atomic Operations
+- **Custom pre-C11 library** — do NOT use `<stdatomic.h>` or other platform atomics.
+- **Only use cross-platform portable API** (see `lib/reference/ATOMIC_REFERENCE.md`).
+- **Key types:** `atomic_t`, `atomicptr_t`, `atomicst_t` (stack nodes), `atomicptra_t`/`atomica_t` (padded for arrays on LL/SC archs).
+- **`atomic_pop` is non-deterministic under contention** — it may return any top-level element, not strictly LIFO.
+- **`atomic_cmpx`/`atomic_cmppx` return the old value** — check success by comparing return against expected old value.
+- **Pair with HZP** for safe memory reclamation of shared pointers.
+
+# Compiler Helpers
+- **`lib/other.h` is the compiler compatibility layer** — all GCC attributes, barriers, and inline control go through it.
+- **Use `GCC_ATTR_*` macros, never raw `__attribute__`** — they degrade to no-ops on older compilers.
+- `likely()`/`unlikely()` for branch prediction hints is available**, use in CAS loops and hot paths, or to mark unlikely error paths.
+- **Use `always_inline`/`noinline` for inline control** — never write `inline __attribute__((always_inline))` directly.
+- **See `lib/reference/OTHER_REFERENCE.md`** for full macro reference, version gates, and fallback behavior.
