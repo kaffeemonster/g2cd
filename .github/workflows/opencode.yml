@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Run opencode
-        uses: anomalyco/opencode/github@latest
+        uses: anomalyco/opencode/github@37f89b742907c43b20d38b68eabe65981a59690a # latest
         env:
           GITHUB_TOKEN: ${{ secrets.MODEL_TOKEN_GITHUB }}
         with:
