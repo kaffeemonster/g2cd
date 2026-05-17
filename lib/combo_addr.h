@@ -3,7 +3,7 @@
  *
  * combined IPv4 & IPv6 address
  *
- * Copyright (c) 2008-2016 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -25,6 +25,9 @@
  */
 
 #ifndef LIB_COMBO_ADDR_H
+# ifdef HAVE_CONFIG_H
+#  include "../config.h"
+# endif
 # define LIB_COMBO_ADDR_H
 # include <stdbool.h>
 # include <string.h>

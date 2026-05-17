@@ -391,9 +391,9 @@ static inline int isgraph_a(unsigned int c)
 
 /* compiler LART */
 #ifdef __GNUC__
-# define barrier()	asm volatile ("")
-# define mbarrier()	asm volatile ("" ::: "memory")
-# define mem_barrier(x)	asm volatile ("": "=m" (*(x)))
+# define barrier()	__asm__ volatile ("")
+# define mbarrier()	__asm__ volatile ("" ::: "memory")
+# define mem_barrier(x)	__asm__ volatile ("": "=m" (*(x)))
 #else
 # define barrier()	do {} while (0)
 # define mbarrier(x)	do {} while (0)
@@ -402,13 +402,13 @@ static inline int isgraph_a(unsigned int c)
 
 # ifdef I_LIKE_ASM
 #  if defined(__i386__) || defined(__x86_64__)
-#   define CPU_RELAX_CONTENT asm volatile("pause");
+#   define CPU_RELAX_CONTENT __asm__ volatile("pause");
 #  elif defined(__powerpc64__)
-#   define CPU_RELAX_CONTENT asm volatile("or 1,1,1\n\tor 2,2,2");
+#   define CPU_RELAX_CONTENT __asm__ volatile("or 1,1,1\n\tor 2,2,2");
 #  elif defined(__ia64__)
-#   define CPU_RELAX_CONTENT asm volatile ("hint @pause" ::: "memory");
+#   define CPU_RELAX_CONTENT __asm__ volatile ("hint @pause" ::: "memory");
 #  elif defined(__sparc) || defined(__sparc__)
-#   define CPU_RELAX_CONTENT asm volatile ("rd %%ccr, %%g0" : : : "memory");
+#   define CPU_RELAX_CONTENT __asm__ volatile ("rd %%ccr, %%g0" : : : "memory");
 #  else
 #   define CPU_RELAX_CONTENT barrier();
 #  endif

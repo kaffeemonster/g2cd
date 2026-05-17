@@ -659,7 +659,7 @@ static void *memchr_x86(const void *s, int c, size_t n)
 #else
 		"lea	-1(%1), %0\n\t"
 #endif
-		"je	1f\n\f" /* a cmov would need processor support */
+		"je	1f\n\t" /* a cmov would need processor support */
 		"mov	%2, %0\n"
 		"1:"
 	: /* %0 */ "=a" (ret),

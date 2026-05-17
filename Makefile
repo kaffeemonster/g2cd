@@ -382,7 +382,7 @@ LINK.c = @./ccdrv -s$(VERBOSE) "LD[$<]" $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $
 #
 #
 #	make clean-target always work
-.PHONY: $(MAKECMDGOALS) all eclean clean distclean zlibclean libclean alll allz help love hardcopy print print_pretty scope todo strip-all strip install once final withzlib oncewithzlib686 finalwithzlib686 oncewithzlib finalwithzlib
+.PHONY: $(MAKECMDGOALS) all eclean clean distclean zlibclean libclean alll allz help love hardcopy print print_pretty scope todo strip-all strip install once final withzlib oncewithzlib686 finalwithzlib686 oncewithzlib finalwithzlib .clangd
 
 #	what are the all-targets derived from
 #	this command is EXTRA written out since it allows us to
@@ -430,7 +430,9 @@ config.sub:
 install-sh:
 	-automake -c -f -a
 .clangd: config_auto.make config_auto.h.in configure
-	@$(PORT_PR) "CompileFlags:\n  Add: [$(CFLAGS)]\n" > $@
+	@$(PORT_PR) "\tCREATE[$@]\n"
+	@$(PORT_PR) "CompileFlags:\n  Add: [%s, -std=gnu11]\n"  "`echo $(CFLAGS) | sed 's/ -/, -/g'`" > $@
+	@$(PORT_PR) "If:\n  PathMatch: '.*\.h\$$'\nCompileFlags:  Add: [-x, c-header, -std=gnu11]\n" >> $@
 
 #
 #	Install
@@ -578,6 +580,7 @@ help: Makefile
 	$(PORT_PR) "\tmake scope\tor\n" ; \
 	$(PORT_PR) "\tmake cscope\tto build a cscope.out file for your $$(if [[ -n $$EDITOR ]] ; then $(PORT_PR) $$(basename $$EDITOR) ; else $(PORT_PR) '\$$EDITOR' ; fi)\n" ; \
 	$(PORT_PR) "\tmake callgraph\tbuild a callgraph in graphviz format, needs gcc & graphviz\n\t\t\tvery basic, functons called via lookup tables are missing,\n\t\t\tlogging-calls left out for clarity\n" ; \
+	$(PORT_PR) "\tmake .clangd\tto create/update .clangd file, so LSP compiler options\n" ; \
 	$(PORT_PR) "\tmake todo\tor\n" ; \
 	$(PORT_PR) "\tmake TODO\tto build a TODO list\n" ; \
 	$(PORT_PR) "\nSee COPYING for the license\n\n" ;
