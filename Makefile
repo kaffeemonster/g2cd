@@ -429,6 +429,8 @@ config.sub:
 	-automake -c -f -a
 install-sh:
 	-automake -c -f -a
+.clangd: config_auto.make config_auto.h.in configure
+	@$(PORT_PR) "CompileFlags:\n  Add: [$(CFLAGS)]\n" > $@
 
 #
 #	Install

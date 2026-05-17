@@ -42,6 +42,7 @@ zlib/contrib
 .finalwithzlib686
 .files
 .arflockgate
+.clangd
 lib/aes_tab_gen
 lib/five_tab_gen
 lib/libcommon.a
