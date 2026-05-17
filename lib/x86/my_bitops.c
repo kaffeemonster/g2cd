@@ -1186,6 +1186,7 @@ __init void *test_cpu_feature(const struct test_cpu_feature *t, size_t l)
  */
 # include <sys/mman.h>
 # include <unistd.h>
+# include <fcntl.h>
 
 # ifdef HAVE_VALGRIND_VALGRIND_H
 #  include <valgrind/valgrind.h>
@@ -1220,31 +1221,172 @@ __init void patch_instruction(void *where, const struct test_cpu_feature *t, siz
 # endif
 }
 
+static __init void *memchr_x86(const void *s, int c, size_t n)
+{
+	void *ret;
+	asm (
+#ifndef __x86_64__
+		"xchg	%1, %%edi\n\t"
+#endif
+		"repne	scasb\n\t"
+#ifndef __x86_64__
+		"lea	-1(%%edi), %0\n\t"
+		"mov	%1, %%edi\n\t"
+#else
+		"lea	-1(%1), %0\n\t"
+#endif
+		"je	1f\n\t" /* a cmov would need processor support */
+		"mov	%2, %0\n"
+		"1:"
+	: /* %0 */ "=a" (ret),
+#ifndef __x86_64__
+	  /* %1 */ "=r" (s),
+#else
+	  /* %1 */ "=D" (s),
+#endif
+	  /* %2 */ "=c" (n)
+	: /* %3 */ "0" (c),
+	  /* %4 */ "1" (s),
+	  /* %5 */ "2" (n)
+	);
+	return ret;
+}
+
+static struct {
+	bool is_ro;
+	bool have_checked;
+} got_status;
+
+static __init noinline void check_got_maping(uintptr_t place_in_got)
+{
+	char buf[256];
+	ssize_t nread;
+	int fd;
+
+//TODO: There could be a difference between before constructor and in constructor
+	/* before constructor, ld.so is working and maybe/propably, keeping
+	 * .got RW, but after all is linked, it gets RO */
+	if(got_status.have_checked)
+		return;
+	/*
+	 * imidiatly prevent other calls to go trough this function.
+	 *
+	 * This function is not thread save, but that is not our problem.
+	 * This function may use lib funcs because the compiler thought
+	 * it would be clever to use a memcpy or such thing somewhere.
+	 *
+	 * Problem: These functions may want to patch the .got and up here...
+	 * To prevent infinite recursion, just kick them out.
+	 * but this will crash and burn
+	 */
+	got_status.have_checked = true;
+	/* prevent the compiler from moving this around */
+	mbarrier();
+
+	/* default, kinda save not save */
+	got_status.is_ro = true;
+	fd = open("/proc/self/maps", O_RDONLY);
+	if(fd < 0)
+		return;
+	/*
+	 * /proc/self/maps format per line:
+	 * start_addr-end_addr perms offset dev inode pathname
+	 * Example: 00600000-00601000 r--p 00000000 00:00 0
+	 */
+	size_t buf_off = 0;
+	while((nread = read(fd, buf + buf_off, sizeof(buf) - 1 - buf_off)) > 0)
+	{
+		buf[buf_off + nread] = '\0'; /* to be save */
+
+		/* scan for newline-delimited lines */
+		char *line = buf;
+		char *eol = buf + buf_off + nread;
+		/* the info we want should be in the first 39 chars */
+		if(40 > (eol - line))
+			break; /* get out of here if we don't have 39 even after read */
+		while(line < eol)
+		{
+			/* the info we want should be in the first 39 chars */
+			if(40 > (eol - line))
+				break; /* read more */
+			char *nl = memchr_x86(line, '\n', (size_t)(eol - line));
+			if(nl)
+				*nl = '\0';
+
+			/* line should start with a hex number */
+			char *dash;
+			uintptr_t start = (uintptr_t)strtoull(line, (void *)&dash, 16);
+			/* find delimiter between addr */
+			if(unlikely((ULLONG_MAX == start && ERANGE == errno) || line == dash || '-' != dash[0])) { /* (x < 1 || x > 31) */
+				if(nl) {
+					line = nl + 1;
+					continue; /* next line */
+				} else
+					break; /* line is incomplete, compact, more */
+			}
+			/* the dash has to be in the first  */
+			char *sp;
+			uintptr_t end   = (uintptr_t)strtoull(dash + 1, &sp, 16);
+			if(unlikely((ULLONG_MAX == start && ERANGE == errno) || dash == sp || ' ' != sp[0] || sp + 3 > eol)) { /* (x < 1 || x > 31) */
+				if(nl) {
+					line = nl + 1;
+					continue; /* next line */
+				} else
+					break; /* line is incomplete, compact, more */
+			}
+			/* perms field: skip hex address, dash, space after end addr */
+			if(place_in_got >= start && place_in_got < end) {
+				got_status.is_ro = (sp[2] != 'w');
+				goto got_found;
+			}
+
+			if(nl)
+				line = nl + 1;
+			else
+				break;
+		}
+
+		/* slide unconsumed bytes (partial line) to front for next read */
+		if(line < eol) {
+			buf_off = (size_t)(eol - line);
+			if(buf_off)
+				memmove(buf, line, buf_off);
+		} else
+			buf_off = 0;
+	}
+
+got_found:
+	close(fd);
+}
+
 __init void patch_got(uintptr_t *where, const struct test_cpu_feature *t, size_t l)
 {
-	char *of_addr = (char *)where;
-	char *nf_addr = (char *)test_cpu_feature(t, l);
-	char *page;
-	size_t len;
-	size_t pagesize = (size_t)sysconf(_SC_PAGESIZE);
+	uintptr_t nf_addr;
+	check_got_maping((uintptr_t)where); /* first check the mapping */
+	nf_addr = (uintptr_t)test_cpu_feature(t, l); /* then test cpu */
 
-	page  = (char *)ALIGN_DOWN(of_addr, pagesize);
-	len   = ALIGN_DOWN_DIFF(of_addr, pagesize);
-	len   = (len + 8);
-	len   = len < pagesize ? pagesize : 2 * pagesize;
-	if((size_t)-1 == pagesize)
-		abort();
-	/*
-	 * If this fails, which is likely, we are screwed.
-	 * And it will fail since we have no influence how the runtime
-	 * linker opened the underlying executable (O_READONLY).
-	 */
-	mprotect(page, len, PROT_READ|PROT_WRITE);
-	*where = (uintptr_t)nf_addr;
-	mprotect(page, len, PROT_READ);
-# ifdef HAVE_VALGRIND_VALGRIND_H
-	VALGRIND_DISCARD_TRANSLATIONS(where, 8);
-# endif
+	if(!got_status.is_ro)
+		*where = nf_addr;
+	else
+	{
+		char *page, *of_addr = (char *)where;
+		size_t len, pagesize = (size_t)sysconf(_SC_PAGESIZE);
+
+		if((size_t)-1 == pagesize)
+			abort();
+		page  = (char *)ALIGN_DOWN(of_addr, pagesize);
+		len   = ALIGN_DOWN_DIFF(of_addr, pagesize);
+		len   = (len + 8);
+		len   = len < pagesize ? pagesize : 2 * pagesize;
+		/*
+		 * If this fails, which is likely, we are screwed.
+		 * And it will fail since we have no influence how the runtime
+		 * linker opened the underlying executable (O_READONLY).
+		 */
+		mprotect(page, len, PROT_READ|PROT_WRITE);
+		*where = nf_addr;
+		mprotect(page, len, PROT_READ);
+	}
 }
 
 #else
