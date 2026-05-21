@@ -22,7 +22,8 @@ TCHAR_TABS = \
 LIBDOCS = \
 	$(MPL)/reference/HZP_REFERENCE.md \
 	$(MPL)/reference/ATOMIC_REFERENCE.md \
-	$(MPL)/reference/OTHER_REFERENCE.md
+	$(MPL)/reference/OTHER_REFERENCE.md \
+	$(MPL)/reference/ENDIAN_UNALIGNED_REFERENCE.md
 
 TARED_FILES += \
 	$(MPL)/module.make \
