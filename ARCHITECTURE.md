@@ -228,8 +228,14 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `strpcpy.c` | strcpy returning pointer past the copied region, for efficient concatenation |
 | `strncasecmp_a.c` | ASCII-only case-insensitive string comparison |
 | `str_spn_space.c` | Counts consecutive whitespace characters at start of string |
+| `mem_searchrn.c` | Searches memory for `\r\n` sequence, returns pointer or NULL |
+| `mem_spn_ff.c` | Counts consecutive 0xff bytes at start of memory region |
+| `memand.c` | ANDs two memory regions, result written to dst (optimized for large chunks) |
+| `memneg.c` | NOT (bitwise negation) of a memory region, inplace or src to dst |
+| `mempcpy.c` | memcpy returning pointer past the last copied byte (GNU extension compatibility) |
+| `mempopcnt.c` | Counts set bits (population count) in a memory region |
+| `memxorcpy.c` | XORs two memory regions and copies result to dst (optimized for large chunks) |
 | `backtrace.*` | Stack trace generation |
-| Various `mem*.c` / `str*.c` | Portable memory and string operations |
 | `bitfield_rle.c` | Run-length encoding for sparse bitfields, especially QHT bloom filter compression |
 | `entities.c` | HTML named entity ↔ UTF-8 conversion funtions |
 | `introsort.c` | Introsort for `uint32_t` arrays with duplicate removal — avoids qsort worst-case on crafted input |
