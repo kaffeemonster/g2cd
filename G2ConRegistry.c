@@ -47,6 +47,7 @@
 #include "lib/combo_addr.h"
 #include "lib/my_bitops.h"
 #include "lib/hzp.h"
+#include "lib/ansi_prng.h"
 
 /* WARNING, long prosa ahead...
  * Reading this will not make you a better whatever, surely waste
