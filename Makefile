@@ -193,6 +193,7 @@ AUX = \
 	COPYING \
 	README.md \
 	AGENTS.md \
+	ARCHITECTURE.md \
 	autogen.sh \
 	configure \
 	configure.ac \
