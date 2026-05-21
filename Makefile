@@ -432,7 +432,7 @@ install-sh:
 .clangd: config_auto.make config_auto.h.in configure
 	@$(PORT_PR) "\tCREATE[$@]\n"
 	@$(PORT_PR) "CompileFlags:\n  Add: [%s, -std=gnu11]\n"  "`echo $(CFLAGS) | sed 's/ -/, -/g'`" > $@
-	@$(PORT_PR) "If:\n  PathMatch: '.*\.h\$$'\nCompileFlags:  Add: [-x, c-header, -std=gnu11]\n" >> $@
+	@$(PORT_PR) "If:\n  PathMatch: '.*\.h\$$'\nCompileFlags:\n  Add: [-x, c-header, -std=gnu11]\n" >> $@
 
 #
 #	Install
