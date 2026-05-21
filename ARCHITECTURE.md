@@ -97,7 +97,8 @@ epoll event (gup worker) → handle_socket_io_h → g2_packet_decode_from_packet
 **Serialization** (`G2PacketSerializer.*`):
 - `create_control_byte()` — G2 packet control byte construction
 - `g2_packet_serialize_to_buff_p()` — Packet-to-buffer serialization
-- `g2_packet_decode_from_packet()` — Buffer-to-packet deserialization
+- `g2_packet_extract_from_stream()` — Buffer-to-packet deserialization
+- `g2_packet_decode_from_packet()` — Childpacket deserialization
 
 ### Query Hash Table (`G2QHT.*`)
 
@@ -192,10 +193,11 @@ These files contain `main()` functions but are **not** part of the runtime serve
 
 Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/`, `parisc/`, `riscv/`, `generic/` contain optimized implementations of:
 - Atomic operations (CAS, fetch-add)
-- Vectorized Adler32 checksums
 - Unaligned memory access helpers
 - Bit manipulation routines
 - AES primitves
+- Vectorized Adler32 checksums
+- optmized/vetorized str* / mem* / tchar* / to_base* functions
 
 ### Data Structures
 
@@ -205,7 +207,7 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `hlist.h` | Headless hash list |
 | `rbtree.*` / `rbtree_augmented.h` | Red-black tree with augmentation support |
 | `hthash.*` | Hash table with MurmurHash/jhash |
-| `palloc.*` | Pool allocator |
+| `palloc.*` | Scratch-pad arena allocator — lock-free, TLS-only, first-fit (Brent 1989); reset via `pa_init()` each session; primarily serves zlib inflate/deflate |
 | `sec_buffer.h` | Buffer management types (`norm_buff`, `big_buff`, `pointer_buff`) with macros for position tracking, flipping, compacting, and boundary checks |
 | `recv_buff.*` | Thread-local receive buffer allocator with global free pool, TLS caching, and atomic fallback |
 | `combo_addr.*` | IPv4/IPv6 combined storage and handling |
@@ -217,7 +219,7 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `aes.*` | AES encryption (128/256-bit key schedules) |
 | `hthash.*` | Hash table hashing (MurmurHash, jhash mix/final) |
 | `adler32.*` | Vectorized Adler32 checksum |
-| `ansi_prng.*` | ANSI random number generator |
+| `ansi_prng.*` | **NON-Conforming** ANSI random number generator |
 | `guid.*` | GUID generation and manipulation |
 
 ### Utility
@@ -226,7 +228,7 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 |--------|---------|
 | `log_facility.*` | Logging infrastructure (`logg_pos`, `logg_posd`, `logg_errno`, `logg_packet`) |
 | `config_parser.*` | Configuration file parser |
-| `tchar.*` | Character classification and conversion tables |
+| `tchar.*` | tchar-aware Character classification and conversions / tables |
 | `tstr*.c` | tchar-aware string operations (`tstrlen`, `tstrchrnul`, `tstrncmp`) |
 | `my_bitops.h` / `my_bitopsm.h` | Central bit-banging function suite with per-architecture SIMD paths (generic, x86, PPC, SPARC, ARM, etc.) |
 | | **Memory operations:** `memxorcpy` (XOR two regions to dst), `memand` (AND two regions), `memneg` (NOT), `mempopcnt` (population count), `mem_searchrn` (find `\r\n`), `mem_spn_ff` (count 0xff span), `mempcpy`/`my_mempcpy` (memcpy returning end pointer), `my_memcpy`/`my_memmove`/`my_memcpy_fwd`/`my_memcpy_rev` (portable copy/move), `my_memchr` |
@@ -254,12 +256,8 @@ main (G2MainServer.c)
     → cpu_detect_finish
     → clutch_logfile — initialize logging
     → g2_con_init — initialize connection subsystem
-      → g2_con_alloc → _g2_con_clear
-      → INIT_LIST_HEAD, Atomic_set operations
     → my_epoll_create — create event loop
-      → Hzp_deferfree, Vfcntl
     → handle_config — parse configuration
-      → INIT_LIST_HEAD, List_add, List_entry
     → signal handler setup
     → set_master_time
     → pthread_create(THREAD_GUP, gup) — spawn multi-core poller
@@ -278,8 +276,11 @@ gup worker thread (gup.c)
     → handshake validation
     → handle_con (G2Handler.c) — dispatch to state machine
       → handle_con_a — active connection handling
-        → My_epoll_recv, My_epoll_send
-        → Buffer_flip, Logg_posd
+        → My_epoll_send
+          → send Buffer_flip
+        → My_epoll_recv
+          → recv Buffer_flip
+            → recvied data processing
 ```
 
 ### 3. G2 Packet Processing (e.g., Q2 Query)
@@ -287,15 +288,17 @@ gup worker thread (gup.c)
 ```
 gup worker thread (gup.c)
   → handle_socket_io_h (G2Handler.c)
-    → Atomic_pread, Atomic_pxa — read from socket
-    → handle_Q2_UDP (G2Packet.c)
-      → skip_unexpected_child → skip_child — parse G2 tree structure
-      → g2_packet_decode_from_packet (G2PacketSerializer.c)
-        → g2_packet_decode
-          → read_type_p — read packet type
-          → g2_packet_find_type
-            → find_type_outline_print
-      → Logg_posd — log packet
+    → read from socket
+    → g2_packet_extract_from_stream (G2PacketSerializer.c)
+    → g2_packet_decide_spec (G2Packet.c)
+      → g2_packet_decide_spec_int (G2Packet.c)
+        → handle_Q2_UDP (G2Packet.c)
+          → g2_packet_decode_from_packet (G2PacketSerializer.c)
+          → skip_unexpected_child → skip_child — parse G2 tree structure
+            → g2_packet_decode
+              → read_type_p — read packet type
+                → g2_packet_find_type
+                  → find_type_outline_print
 ```
 
 ### 4. Query Hash Table Search
@@ -319,10 +322,6 @@ g2_con_deinit (G2Connection.c)
   → g2_conreg_remove (G2ConRegistry.c)
     → __hlist_del — remove from registry
     → Hzp_deferfree — schedule lock-free deferred free
-g2_conreg_cleanup (G2ConRegistry.c)
-  → Hzp_deferfree — process deferred frees
-  → Atomic_read — check reference state
-  → __hlist_del — finalize removal
 ```
 
 ## Architecture Diagram
