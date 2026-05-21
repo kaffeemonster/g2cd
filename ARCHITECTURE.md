@@ -183,6 +183,8 @@ These files contain `main()` functions but are **not** part of the runtime serve
 | `my_epoll.*` | Portable event notification (7 backend implementations) |
 | `my_pthread.*` | pthread abstraction with DBM compatibility |
 | `udpfromto.*` | Portable UDP send/recv with source and destination address capture (multihomed hosts) |
+| `swab.h` | Byte-swapping macros (`__swab16/32/64`, `__swab*p`) with constant-folding and per-architecture fallback |
+| `unaligned.h` | Safe unaligned memory access (`get_unaligned`, `put_unaligned`, endian-aware variants) with per-architecture implementations |
 | `other.h` | Compiler compatibility layer (GCC attributes, barriers, inline control) |
 
 ### Architecture-Specific Optimizations
@@ -203,7 +205,8 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `rbtree.*` / `rbtree_augmented.h` | Red-black tree with augmentation support |
 | `hthash.*` | Hash table with MurmurHash/jhash |
 | `palloc.*` | Pool allocator |
-| `recv_buff.*` | Receive buffer management |
+| `sec_buffer.h` | Buffer management types (`norm_buff`, `big_buff`, `pointer_buff`) with macros for position tracking, flipping, compacting, and boundary checks |
+| `recv_buff.*` | Thread-local receive buffer allocator with global free pool, TLS caching, and atomic fallback |
 | `combo_addr.*` | IPv4/IPv6 combined storage and handling |
 
 ### Cryptography & Hashing
