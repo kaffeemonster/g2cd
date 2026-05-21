@@ -2,7 +2,7 @@
  * G2ConRegistry.c
  * Central G2Connection registry
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -330,7 +330,8 @@ void __init g2_conreg_init(void)
 	     g2_conreg_level_count, count_b, count_c, server.settings.max_connection_sum, (count_b + count_c) * 128);
 	tc = raw_chain_storage;
 	init_alloc_bucket(&ht_root, raw_bucket_storage, &tc, 0);
-	ht_seed = (uint32_t) time(NULL);
+	/* use our fancy randomness */
+	random_bytes_get(&ht_seed, sizeof(ht_seed));
 
 	/* our ht_root carries the global master QHT */
 	if(g2_qht_reset(&ht_root.qht, 1 << QHT_DEFAULT_BITS, false))
