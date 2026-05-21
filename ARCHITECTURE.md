@@ -171,6 +171,7 @@ These files contain `main()` functions but are **not** part of the runtime serve
 | `arflock.c` | Proxy lock for `ar` archiver — enables parallel `make` by serializing `.a` writes |
 | `lib/five_tab_gen.c` | Generates five-table lookup data at build time |
 | `lib/aes_tab_gen.c` | Generates AES lookup table data at build time |
+| `bpfasm.py` | BPF assembler — converts Berkeley Packet Filter assembly to C `struct bpf_insn` arrays |
 
 ## Foundation Library (`lib/`)
 
