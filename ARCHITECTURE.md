@@ -232,6 +232,7 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `to_base16.c` / `to_base32.c` | Binary-to-hex and binary-to-base32 encoders with per-architecture SIMD paths |
 | `itoa.h` | Header-only integer-to-string conversion with signed/unsigned and width-limited variants |
 | `vsnprintf.c` | Portable and Extended `{v}snprintf`, but bare bones floating-point formatting |
+| `print_ts.*` | Lightweight UTC timestamp printer, replaces expensive `strftime`/`gmtime` calls |
 
 ## Key Execution Flows
 
