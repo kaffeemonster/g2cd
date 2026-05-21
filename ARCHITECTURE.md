@@ -224,6 +224,10 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `config_parser.*` | Configuration file parser |
 | `tchar.*` | Character classification and conversion tables |
 | `tstr*.c` | tchar-aware string operations (`tstrlen`, `tstrchrnul`, `tstrncmp`) |
+| `strreverse_l.c` | In-place reversal of long strings |
+| `strpcpy.c` | strcpy returning pointer past the copied region, for efficient concatenation |
+| `strncasecmp_a.c` | ASCII-only case-insensitive string comparison |
+| `str_spn_space.c` | Counts consecutive whitespace characters at start of string |
 | `backtrace.*` | Stack trace generation |
 | Various `mem*.c` / `str*.c` | Portable memory and string operations |
 | `bitfield_rle.c` | Run-length encoding for sparse bitfields, especially QHT bloom filter compression |
