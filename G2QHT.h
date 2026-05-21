@@ -2,7 +2,7 @@
  * G2QHT.h
  * Header for the G2 QHT
  *
- * Copyright (c) 2006-2012 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -107,7 +107,6 @@ struct qht_search_walk
 _G2QHT_EXTRN(struct zpad *qht_get_zpad(void));
 
 _G2QHT_EXTRN(void g2_qht_clean(struct qhtable *));
-_G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(bool g2_qht_search_prepare(void));
 _G2QHT_EXTRN(void g2_qht_search_add_word(const tchar_t *s, size_t start, size_t len));
 _G2QHT_EXTRN(void g2_qht_search_add_hash(uint32_t h));
@@ -125,7 +124,10 @@ _G2QHT_EXTRN(void g2_qht_global_search_chain(struct qht_search_walk *, void *));
 _G2QHT_EXTRN(const char *g2_qht_patch(struct qhtable *, struct qht_fragment *));
 _G2QHT_EXTRN(void g2_qht_aggregate(struct qhtable *, struct qhtable *));
 _G2QHT_EXTRN(int g2_qht_add_frag(struct qhtable *, struct qht_fragment *, uint8_t *data));
+/* _reset is the alloc interface, pass in a pointer to a variable initialized with NULL */
 _G2QHT_EXTRN(bool g2_qht_reset(struct qhtable **, uint32_t qht_ent, bool try_compress));
+/* and use put to free them */
+_G2QHT_EXTRN(void g2_qht_put(struct qhtable *));
 _G2QHT_EXTRN(struct qht_fragment *g2_qht_diff_get_frag(const struct qhtable *, const struct qhtable *) GCC_ATTR_MALLOC);
 _G2QHT_EXTRN(struct qht_fragment *g2_qht_frag_alloc(size_t len) GCC_ATTR_MALLOC);
 _G2QHT_EXTRN(void g2_qht_frag_free(struct qht_fragment *));

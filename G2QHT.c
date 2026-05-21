@@ -265,6 +265,24 @@ static void g2_qht_data_free(uint8_t *tof)
 	hzp_deferfree(&d->hzp, d, free);
 }
 
+static struct qhtable *g2_qht_alloc(void)
+{
+// TODO: pool/slab allocator
+	struct qhtable *res = malloc(sizeof(*res));
+	if(!res)
+		return NULL;
+	/* tmp_table->fragments = NULL;
+	tmp_table->data = NULL;
+	tmp_table->data_length = 0; */
+	return memset(res, 0, sizeof(*res));
+}
+
+static void g2_qht_free(struct qhtable *qtable)
+{
+// TODO: return to pool/slab allocator
+	free(qtable);
+}
+
 static void g2_qht_free_hzp(void *qtable)
 {
 	struct qhtable *to_free;
@@ -278,7 +296,7 @@ static void g2_qht_free_hzp(void *qtable)
 	}
 	g2_qht_frag_free(to_free->fragments);
 	g2_qht_data_free(to_free->data);
-	free(to_free);
+	g2_qht_free(to_free);
 }
 
 void g2_qht_put(struct qhtable *to_free)
@@ -1617,13 +1635,17 @@ static bool qht_compress_table(struct qhtable *table, uint8_t *data, size_t qht_
 		return false;
 	}
 	my_memcpy(t_data->data, ndata, res);
+	/* first put a NULL atomicly in place */
 	if(table->data) {
 		t_x = atomic_px(t_x, (atomicptr_t *)(uintptr_t)&table->data);
 		g2_qht_data_free(t_x);
 	}
+	/* then change config */
 	table->compressed = tcomp;
 	table->data_length = res;
+	/* then put new data in place */
 	t_x = atomic_px(t_data->data, (atomicptr_t *)(uintptr_t)&table->data);
+	/* we hopefully got our NULL back, but in case not... */
 	g2_qht_data_free(t_x);
 	return true;
 }
@@ -2037,15 +2059,15 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 
 	w_size = DIV_ROUNDUP((size_t)qht_ent, BITS_PER_CHAR);
 	if(!qht_ent || w_size > MAX_BYTES_QHT) {
-		logg_devel("illegal number of elements\n");
+		logg_develd("illegal number of elements: %lu\n", (unsigned long)qht_ent);
 		return true;
 	}
 
 	/* qht_ent is zero-checked, we need the power, not the index, so -1 */
 	bits = flsst(qht_ent) - 1;
 	if((1 << bits) ^ qht_ent)
-		logg_develd("TODO: %lu bits, %lu entries, can handle this, but hashes will be bogus\n",
-			(unsigned long) bits, (unsigned long) qht_ent);
+		logg_develd("TODO: %zu bits, %lu entries, non power of 2? Can handle this, but hashes will be bogus\n",
+			bits, (unsigned long) qht_ent);
 
 	/*
 	 * set the master table NULL, someone could traverse it,
@@ -2056,15 +2078,12 @@ bool g2_qht_reset(struct qhtable **ttable, uint32_t qht_ent, bool try_compress)
 	wmb();
 	if(!tmp_table)
 	{
-		tmp_table = malloc(sizeof(*tmp_table));
+		tmp_table = g2_qht_alloc();
 		if(!tmp_table) {
 			logg_errno(LOGF_DEBUG, "allocating qh-table");
 			return true;
 		}
 		atomic_set(&tmp_table->refcnt, 1);
-		tmp_table->fragments = NULL;
-		tmp_table->data = NULL;
-		tmp_table->data_length = 0;
 	}
 // TODO: new data is not initialised
 	/* try with this early reset_needed. membar? */
