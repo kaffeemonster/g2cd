@@ -635,7 +635,7 @@ sbox.bin: $(TARED_FILES)
 	@tar -cf - `find . -name zlib -prune -o -type f -a \( -name '*.c' -o -name '*.h' \) -print` | bzip2 -c9 - > sbox.bin.tmp && mv -f sbox.bin.tmp sbox.bin
 
 calltree: calltree.c Makefile ccdrv
-	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCFLAGS) calltree.c -o $@
+	@./ccdrv -s$(VERBOSE) "LD[$@]" $(HOSTCC) $(HOSTCFLAGS) calltree.c -o $@
 mpc: $(TARED_FILES)
 	npx gitnexus analyze --skip-agents-md
 
