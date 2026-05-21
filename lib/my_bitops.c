@@ -2,7 +2,7 @@
  * my_bitops.c
  * some nity grity bitops
  *
- * Copyright (c) 2008-2015 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -105,7 +105,7 @@
 # endif
 #endif
 
-unsigned get_cpus_online(void)
+unsigned GCC_ATTR_COLD get_cpus_online(void)
 {
 #ifdef _WIN32
 	SYSTEM_INFO info;
