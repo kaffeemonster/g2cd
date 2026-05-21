@@ -223,6 +223,7 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `log_facility.*` | Logging infrastructure (`logg_pos`, `logg_posd`, `logg_errno`, `logg_packet`) |
 | `config_parser.*` | Configuration file parser |
 | `tchar.*` | Character classification and conversion tables |
+| `tstr*.c` | tchar-aware string operations (`tstrlen`, `tstrchrnul`, `tstrncmp`) |
 | `backtrace.*` | Stack trace generation |
 | Various `mem*.c` / `str*.c` | Portable memory and string operations |
 | `bitfield_rle.c` | Run-length encoding for sparse bitfields, especially QHT bloom filter compression |
