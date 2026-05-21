@@ -224,23 +224,18 @@ Directories `x86/`, `arm/`, `ppc/`, `sparc/`, `mips/`, `ia64/`, `alpha/`, `tile/
 | `config_parser.*` | Configuration file parser |
 | `tchar.*` | Character classification and conversion tables |
 | `tstr*.c` | tchar-aware string operations (`tstrlen`, `tstrchrnul`, `tstrncmp`) |
-| `strreverse_l.c` | In-place reversal of long strings |
-| `strpcpy.c` | strcpy returning pointer past the copied region, for efficient concatenation |
-| `strncasecmp_a.c` | ASCII-only case-insensitive string comparison |
-| `str_spn_space.c` | Counts consecutive whitespace characters at start of string |
-| `mem_searchrn.c` | Searches memory for `\r\n` sequence, returns pointer or NULL |
-| `mem_spn_ff.c` | Counts consecutive 0xff bytes at start of memory region |
-| `memand.c` | ANDs two memory regions, result written to dst (optimized for large chunks) |
-| `memneg.c` | NOT (bitwise negation) of a memory region, inplace or src to dst |
-| `mempcpy.c` | memcpy returning pointer past the last copied byte (GNU extension compatibility) |
-| `mempopcnt.c` | Counts set bits (population count) in a memory region |
-| `memxorcpy.c` | XORs two memory regions and copies result to dst (optimized for large chunks) |
+| `my_bitops.h` / `my_bitopsm.h` | Central bit-banging function suite with per-architecture SIMD paths (generic, x86, PPC, SPARC, ARM, etc.) |
+| | **Memory operations:** `memxorcpy` (XOR two regions to dst), `memand` (AND two regions), `memneg` (NOT), `mempopcnt` (population count), `mem_searchrn` (find `\r\n`), `mem_spn_ff` (count 0xff span), `mempcpy`/`my_mempcpy` (memcpy returning end pointer), `my_memcpy`/`my_memmove`/`my_memcpy_fwd`/`my_memcpy_rev` (portable copy/move), `my_memchr` |
+| | **String operations:** `strpcpy`/`strlpcpy` (strcpy returning end pointer), `strncasecmp_a` (ASCII-only case-insensitive compare), `strnlen`/`strlen`/`strchrnul`/`strrchr` (portable fallbacks), `strreverse_l` (in-place reversal of long strings), `str_spn_space`/`str_skip_space` (whitespace helpers), `cpy_rest*` (string copy with offset) |
+| | **Bit operations:** `popcountst` (count set bits), `flsst` (find least significant set bit), `roundup_power_of_2` (inline) |
+| | **Bitfield RLE:** `bitfield_encode`/`decode`/`and`/`lookup` (run-length encoding for sparse bitfields, QHT bloom filter compression) |
+| | **Encoders:** `to_base16` (hex), `to_base32` (base32) |
+| | **Sorting:** `introsort_u32` (introsort for uint32 arrays with duplicate removal) |
+| | **HTML:** `decode_html_entities_utf8` (named entity to UTF-8 conversion) |
+| | **CPU features:** `test_cpu_feature`, `patch_instruction`, `patch_got`, `emit_emms`, `get_cpus_online`, `cpu_detect_finish` (runtime CPU feature detection and self-patching) |
+| | **Macros (my_bitopsm.h):** `SOST`, `ALIGN*`, `DIV_ROUNDUP`, `has_nul_byte*`, `has_greater`, `has_between`, `nul_byte_index*`, `packedmask_*`, alignment and bit manipulation utilities |
 | `backtrace.*` | Stack trace generation |
-| `bitfield_rle.c` | Run-length encoding for sparse bitfields, especially QHT bloom filter compression |
-| `entities.c` | HTML named entity ↔ UTF-8 conversion funtions |
-| `introsort.c` | Introsort for `uint32_t` arrays with duplicate removal — avoids qsort worst-case on crafted input |
-| `inet_ntop.c` / `inet_pton.c` | Portable IPv4/IPv6 address string conversion (for systems lacking them) + extentions |
-| `to_base16.c` / `to_base32.c` | Binary-to-hex and binary-to-base32 encoders with per-architecture SIMD paths |
+| `inet_ntop.c` / `inet_pton.c` | Portable IPv4/IPv6 address string conversion (for systems lacking them) + extensions |
 | `itoa.h` | Header-only integer-to-string conversion with signed/unsigned and width-limited variants |
 | `vsnprintf.c` | Portable and Extended `{v}snprintf`, but bare bones floating-point formatting |
 | `print_ts.*` | Lightweight UTC timestamp printer, replaces expensive `strftime`/`gmtime` calls |
