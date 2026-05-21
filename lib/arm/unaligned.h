@@ -7,11 +7,17 @@
  * (if the bits are set right...).
  * They also have the rev instruction (like the
  * x86 bswap).
- * access_ok.h should be fine, but to give the
- * compiler a heads up, we use the packed struct
+ * access_ok.h should be fine, but since there
+ * seems to be exceptions, to give the compiler
+ * a heads up, we use the packed struct/shift combo
  */
-#  include "../unaligned/le_struct.h"
-#  include "../unaligned/be_struct.h"
+#  ifndef __ARMEB__
+#   include "../unaligned/le_struct.h"
+#   include "../unaligned/be_byteshift.h"
+#  else
+#   include "../unaligned/be_struct.h"
+#   include "../unaligned/le_byteshift.h"
+#  endif
 # else
 #  include "../unaligned/le_byteshift.h"
 #  include "../unaligned/be_byteshift.h"
