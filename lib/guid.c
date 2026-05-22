@@ -2,7 +2,7 @@
  * guid.c
  * little stuff to generate a guid
  *
- * Copyright (c) 2010-2019 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -106,5 +106,51 @@ uint32_t guid_hash(const union guid_fast *g, uint32_t seed)
 {
 	return hthash_4words(g->d[0], g->d[1], g->d[2], g->d[3], seed);
 }
+
+static inline int get_xnum_a(int c)
+{
+	int t = c;
+	if((unsigned)(t - '0') < 10u)
+		return  (t - '0');
+	else if((unsigned)(t - 'A') < 6u )
+		return (t - 'A' + 10u);
+	else if((unsigned)(t - 'a') < 6u )
+		return (t - 'a' + 10u);
+	else
+		return -1;
+}
+
+// TODO: check for well-formned ness
+/* this just bangs some hex to bin and ignores dash
+ * no check for places of dash, no check if "sane"/clean
+ */
+bool guid_read(union guid_fast *res, const char *src, size_t len)
+{
+	unsigned i = 0, acc = 0;
+	if(unlikely(!res || !src || GUID_STR_SIZE > len))
+		return false;
+	while(i < (GUID_SIZE*2) && len > 0)
+	{
+		int t;
+		char c = *src++;
+		len--;
+		if(unlikely('-' == c))
+			continue;
+		t = get_xnum_a(c);
+		if(unlikely(0 > t))
+			break;
+		acc |= t;
+		if(i % 2) {
+			res->g[i/2] = acc;
+			acc = 0;
+		} else
+			acc <<= 4;
+		i++;
+	}
+	if(((GUID_SIZE * 2)+1) > i)
+		return false;
+	return true;
+}
+
 
 static char const rcsid_gu[] GCC_ATTR_USED_VAR = "$Id:$";
