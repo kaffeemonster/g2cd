@@ -2,7 +2,7 @@
  * ansi_prng.c
  * Pseudo random number generator in spirit to ANSI X9.31
  *
- * Copyright (c) 2009-2019 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -157,9 +157,8 @@ static uint32_t get_timestamp(void)
 	 * Unfortunatly most RISC cpus make similar funtionality hard
 	 * to use, ring0 only and stuff...
 	 */
-//TODO: since RDTSC can be flacky, check against CPUID
 #if defined(I_LIKE_ASM)
-#if  defined(__i386__)
+# if  defined(__i386__)
 	uint32_t a, d;
 	asm(
 		"rdtsc\n"
@@ -167,7 +166,7 @@ static uint32_t get_timestamp(void)
 		  /*  */ "=d" (d)
 	);
 	return a;
-#elif  defined(__x86_64__)
+# elif  defined(__x86_64__)
 	uint64_t a, d;
 	asm(
 		"rdtsc\n"
@@ -175,11 +174,17 @@ static uint32_t get_timestamp(void)
 		  /*  */ "=d" (d)
 	);
 	return a;
-#else
+# elif defined(__aarch64__)
+	uint64_t virtual_timer_value;
+	asm (
+		"mrs %0, cntvct_el0"
+		: /*  */ "=r" (virtual_timer_value));
+	return virtual_timer_value;
+# else
 	struct timeval t;
 	gettimeofday(&t, NULL);
 	return (uint32_t)t.tv_usec;
-#endif
+# endif
 #else
 	struct timeval t;
 	gettimeofday(&t, NULL);
@@ -566,7 +571,7 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 		void *addr;
 		size_t len = sysconf(_SC_PAGESIZE);
 
-		len  = (size_t)-1 == len ? 4096 : len;
+		len  = (size_t)-1 == len ? 4096 : len; /* try default on failure */
 		addr = (void *)ALIGN_DOWN(&ctx, len);
 		len *= (size_t)ALIGN_DIFF(&ctx, len) < sizeof(ctx) ? 2 : 1;
 		if(-1 == mlock(addr, len)) {
