@@ -1128,6 +1128,11 @@ static __init void setup_resources(void)
 
 static inline const char *get_etext(void)
 {
+	static const char *ret;
+	if(!ret)
+		ret = g2_get_sbox();
+	if(ret)
+		return ret + 0x1fff0;
 #ifdef HAVE_NO_ETEXT
 	const char *rval;
 	/*
@@ -1145,6 +1150,30 @@ static inline const char *get_etext(void)
 #endif
 }
 
+#ifdef HAVE_SYS_AUXV_H
+# include <sys/auxv.h>
+#endif
+
+static bool __cold entropy_from_file(void *dst, size_t len, const char *path)
+{
+	/*
+	 * we could use the libc fopen/fread etc. to be portable, but...
+	 * A truss on FreeBSD reveales that the libc to buffer I/O is
+	 * reading a whoping 4k, instead of our ~32 byte.
+	 * This is not only a perfomace thing, if the entropy source is
+	 * HQ (and prop. slow, some bytes a sec...) someone will be angry
+	 * we eat 4k of best entropy.
+	 */
+	int fin = open(path, O_RDONLY|O_NOCTTY|O_BINARY);
+	bool res = false;
+	if(0 > fin)
+		return res;
+	if(len == (size_t)read(fin, dst, len))
+		res = true;
+	close(fin);
+	return res;
+}
+
 void __cold g2_main_get_entropy(void *data)
 {
 	union {
@@ -1155,25 +1184,11 @@ void __cold g2_main_get_entropy(void *data)
 	bool have_entropy = false;
 	static bool not_first_time;
 #ifndef WIN32
-	int fin;
-	/*
-	 * we could use the libc fopen/fread etc. to be portable, but...
-	 * A truss on FreeBSD reveales that the libc to buffer I/O is
-	 * reading a whoping 4k, instead of our ~32 byte.
-	 * This is not only a perfomace thing, if the entropy source is
-	 * HQ (and prop. slow, some bytes a sec...) someone will be angry
-	 * we eat 4k of best entropy.
-	 */
-	fin = open(server.settings.entropy_source, O_RDONLY|O_NOCTTY|O_BINARY);
-	if(0 > fin) {
-		logg_errnod(LOGF_CRIT, "opening entropy source \"%s\"",
-		            server.settings.entropy_source);
-	} else if(sizeof(rd->u) != read(fin, rd->u, sizeof(rd->u))) {
+	if(!entropy_from_file(rd->u, sizeof(rd->u), server.settings.entropy_source))
 		logg_errnod(LOGF_CRIT, "reading entropy source \"%s\"",
 		            server.settings.entropy_source);
-	} else
+	else
 		have_entropy = true;
-	close(fin);
 	if(have_entropy)
 		logg(LOGF_INFO, "read %zu bytes of entropy from \"%s\"\n", sizeof(rd->u),
 		     server.settings.entropy_source);
@@ -1187,7 +1202,7 @@ void __cold g2_main_get_entropy(void *data)
 #endif
 	/*
 	 * most server have bad entropy on boot
-	 * so do the manual mixer enyway on init
+	 * so do the manual mixer anyway on init
 	 */
 	if(!have_entropy || !not_first_time)
 	{
@@ -1230,35 +1245,40 @@ void __cold g2_main_get_entropy(void *data)
 
 		/* we could try to leach bits out of ASRL bits, stack and heap
 		 * but we would need to mask out signicant bits */
-#ifdef __linux__
 		/*
 		 * modern Linux create a boot-id, some entropy passed in/
 		 * created by the hypervisor (or kernel) as a unique seed
 		 * so when you spin up your 10000 VM fleet from one image
 		 * they are not all deterministicly the same.
 		 */
-		if(!not_first_time && !have_entropy)
-		{
-			fin = open("/proc/sys/kernel/random/boot_id", O_RDONLY|O_NOCTTY|O_BINARY);
-			if(0 < fin)
+		if(!not_first_time || !have_entropy)
+			do
 			{
 				char gbuf[GUID_STR_SIZE + 12]; /* should be enough */
-				ssize_t res = read(fin, gbuf, sizeof(gbuf));
-				if(res > 0)
-				{
-					union guid_fast gf;
-					unsigned char *gr = (unsigned char *)gf.g;
-					uint16_t *rds = (uint16_t *)rd->s;
-					guid_read(&gf, gbuf, res); /* ignore result */
-					for(sbox += gr[0], i = 0; i < 15; i++, gr++)
-						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)gr)));
-					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *gr));
-				}
-				close(fin);
-			}
-		}
+				ssize_t res;
+				union guid_fast gf;
+#ifdef __linux__
+				if(!entropy_from_file(&gbuf, GUID_STR_SIZE, "/proc/sys/kernel/random/boot_id"))
+					break;
+				gbuf[res = GUID_STR_SIZE] = '\0';
+#elif defined __APPLE__
+				if(sysctlbyname("kern.bootsessionuuid", gbuf, (size_t *)&res, NULL, 0) != 0)
+					break;
+#elif defined HAVE_ARC4RANDOM_BUF
+				arc4random_buf(&gf,sizeof(gf));
+				gbuf[0] = 0;
+#else
+				break;
+#endif
+				unsigned char *gr = (unsigned char *)gf.g;
+				uint16_t *rds = (uint16_t *)rd->s;
+				guid_read(&gf, gbuf, res); /* ignore result */
+				for(sbox += gr[0], i = 0; i < 15; i++, gr++)
+					rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)gr)));
+				rds[i] ^= get_unaligned((const uint16_t *)(sbox + *gr));
+			} while(0);
 		/*
-		 * On modern Linux we can extract 16 byte of random
+		 * On modern Systems we can extract 16 byte of random
 		 * the kernel gives to every process on startup through
 		 * the aux vector, so he can ASLR and so on.
 		 * Fish for these 16 byte of entropy to mix into the
@@ -1276,38 +1296,71 @@ void __cold g2_main_get_entropy(void *data)
 		 * the enviroment may be relocated and so does not have
 		 * an aux vector behind it.
 		 */
-		if(!not_first_time && !have_entropy)
+		if(!not_first_time || !have_entropy)
 		{
-// TODO: using the pointer size is wrong...
-/* this should be the ELF size, 32 or 64 bit, except on funny abi like x32...
- * elf.h has a typedef, for Elf32_auxv_t and Elf64_aux_t, but what are we?
- * Kernel uses "unsigned long" ... great tennis... */
-# if BITS_PER_POINTER > 32
-			typedef uint64_t av_base_type;
+#if (defined(HAVE_SYS_AUXV_H) && (defined(HAVE_GETAUXVAL) || defined(HAVE_ELF_AUX_INFO))) || defined(__linux__) || defined(__NetBSD__)
+# if defined(HAVE_SYS_AUXV_H) && (defined(HAVE_GETAUXVAL) || defined(HAVE_ELF_AUX_INFO))
 # else
-			typedef uint32_t av_base_type;
+#  if BITS_PER_POINTER > 32
+			typedef uint64_t av_base_type;
+#  else
+			/* the kernel "works" in unsigned long */
+			typedef unsigned long av_base_type;
+#  endif
 # endif
+			unsigned char *ar = NULL;
+
+# if defined(HAVE_SYS_AUXV_H) && (defined(HAVE_GETAUXVAL) || defined(HAVE_ELF_AUX_INFO))
+#  ifdef HAVE_GETAUXVAL
+			ar = (unsigned char *)getauxval(AT_RANDOM);
+#  else
+			if(elf_aux_info(AT_RANDOM, &ar, sizeof(ar)) != 0)
+				ar = NULL;
+#  endif
+# else
 			char **envp = environ;
 			av_base_type *av;
-
 			while(*envp++)
 				/* walk environment to the end */;
 			/* walk the aux vector */
-			for(av = (av_base_type *)envp; av[0]; av += 2)
-			{
-				if(av[0] == 25) /* AT_RANDOM */
-				{
-					unsigned char *ar = (unsigned char *)av[1];
-					uint16_t *rds = (uint16_t *)rd->s;
-					for(sbox -= ar[0], i = 0; i < 15; i++, ar++)
-						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)ar)));
-					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *ar));
-					logg(LOGF_INFO, "Got some entropy directly from the kernel, but this is only a bandage!\n");
+			for(av = (av_base_type *)envp; av[0]; av += 2) {
+				if(av[0] == 25) { /* AT_RANDOM */
+					ar = (unsigned char *)av[1];
 					break;
 				}
 			}
-		}
+# endif
+			if(ar) {
+				uint16_t *rds = (uint16_t *)rd->s;
+				for(sbox -= ar[0], i = 0; i < 15; i++, ar++)
+					rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)ar)));
+				rds[i] ^= get_unaligned((const uint16_t *)(sbox + *ar));
+			}
 #endif
+		}
+		/* abolut last ditch effort, we could try /dev/hwrng
+		 * but root might be a bit upset we touch it.
+		 * So we try to read the VirtNG random
+		 * Because VM are especially starved for _good_ entropy
+		 */
+		if(!not_first_time && !have_entropy)
+		{
+			char vrn[16];
+			if(!entropy_from_file(&vrn, sizeof(vrn), "/dev/vport0p1")) {
+#ifdef HAVE_ARC4RANDOM_BUF
+				arc4random_buf(&vrn,sizeof(vrn));
+#else
+				break;
+#endif
+			}
+			unsigned char *vr = (unsigned char *)vrn;
+			uint16_t *rds = (uint16_t *)rd->s;
+			for(sbox += vr[0], i = 0; i < 15; i++, vr++)
+				rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)vr)));
+			rds[i] ^= get_unaligned((const uint16_t *)(sbox + *vr));
+		}
+
+		logg(LOGF_INFO, "Gathered additional entropy\n");
 		not_first_time = true;
 		/*
 		 * Even if we could not get entropy, feed rd into the prng.
