@@ -4,7 +4,7 @@
  * helper-macros, which hopefully make working safe with this
  * buffers
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -71,7 +71,7 @@ struct big_buff
 	size_t pos;
 	size_t limit;
 	size_t capacity;
-	char data[DYN_ARRAY_LEN];
+	char data[DYN_ARRAY_LEN] GCC_COUNTED_BYF(capacity);
 };
 
 struct pointer_buff
@@ -79,7 +79,7 @@ struct pointer_buff
 	size_t pos;
 	size_t limit;
 	size_t capacity;
-	char *data;
+	char *data GCC_COUNTED_BYP(capacity);
 };
 
 # ifndef ASSERT_BUFFERS
