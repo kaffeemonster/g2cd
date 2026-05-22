@@ -479,14 +479,14 @@ static intptr_t check_con_health(g2_connection_t *con, void *carg)
 }
 
 #ifndef WIN32
-static void sig_reopen_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
+static void __cold sig_reopen_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGUSR2 == signr)
 		reopen_logfile = true;
 }
 #endif
 
-static void sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
+static void __cold sig_stop_func(int signr, siginfo_t *si GCC_ATTR_UNUSED_PARAM, void *vuc GCC_ATTR_UNUSED_PARAM)
 {
 	if(SIGINT == signr
 #ifndef WIN32
@@ -923,7 +923,7 @@ static __init void change_the_user(void)
 }
 
 #ifdef HAVE_DL_ITERATE_PHDR
-static int tls_iter_callback(struct dl_phdr_info *info, size_t size GCC_ATTRIB_UNUSED, void *data)
+static int __init tls_iter_callback(struct dl_phdr_info *info, size_t size GCC_ATTRIB_UNUSED, void *data)
 {
 	size_t *total = data, i;
 	for(i = 0; i < info->dlpi_phnum; i++) {
@@ -1145,7 +1145,7 @@ static inline const char *get_etext(void)
 #endif
 }
 
-void g2_main_get_entropy(void *data)
+void __cold g2_main_get_entropy(void *data)
 {
 	union {
 		unsigned u[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
@@ -1193,7 +1193,7 @@ void g2_main_get_entropy(void *data)
 	{
 		struct timeval now;
 		unsigned i, t;
-		unsigned magic = 0x5BD1E995;
+		unsigned const magic = 0x5BD1E995;
 		const char *sbox;
 
 		if(!have_entropy)
@@ -1210,7 +1210,6 @@ void g2_main_get_entropy(void *data)
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
 		t ^= now.tv_sec << 3;
 		t ^= ((t >> 13) ^ (t << 7)) * magic;
-// TODO: some more entropy sources for the mix?
 		/* Something from the filesystem? The Kernel?
 		 * The Enviroment?
 		 */
@@ -1228,7 +1227,36 @@ void g2_main_get_entropy(void *data)
 			t ^= o_rd ^ get_unaligned((const unsigned *)(sbox + (t & 0xffff)));
 			t ^= ((t >> 13) ^ (t << 7)) * magic;
 		}
+
+		/* we could try to leach bits out of ASRL bits, stack and heap
+		 * but we would need to mask out signicant bits */
 #ifdef __linux__
+		/*
+		 * modern Linux create a boot-id, some entropy passed in/
+		 * created by the hypervisor (or kernel) as a unique seed
+		 * so when you spin up your 10000 VM fleet from one image
+		 * they are not all deterministicly the same.
+		 */
+		if(!not_first_time && !have_entropy)
+		{
+			fin = open("/proc/sys/kernel/random/boot_id", O_RDONLY|O_NOCTTY|O_BINARY);
+			if(0 < fin)
+			{
+				char gbuf[GUID_STR_SIZE + 12]; /* should be enough */
+				ssize_t res = read(fin, gbuf, sizeof(gbuf));
+				if(res > 0)
+				{
+					union guid_fast gf;
+					unsigned char *gr = (unsigned char *)gf.g;
+					uint16_t *rds = (uint16_t *)rd->s;
+					guid_read(&gf, gbuf, res); /* ignore result */
+					for(sbox += gr[0], i = 0; i < 15; i++, gr++)
+						rds[i] ^= get_unaligned((const uint16_t *)(sbox + get_unaligned((uint16_t *)gr)));
+					rds[i] ^= get_unaligned((const uint16_t *)(sbox + *gr));
+				}
+				close(fin);
+			}
+		}
 		/*
 		 * On modern Linux we can extract 16 byte of random
 		 * the kernel gives to every process on startup through
@@ -1251,7 +1279,9 @@ void g2_main_get_entropy(void *data)
 		if(!not_first_time && !have_entropy)
 		{
 // TODO: using the pointer size is wrong...
-/* this should be the ELF size, 32 or 64 bit */
+/* this should be the ELF size, 32 or 64 bit, except on funny abi like x32...
+ * elf.h has a typedef, for Elf32_auxv_t and Elf64_aux_t, but what are we?
+ * Kernel uses "unsigned long" ... great tennis... */
 # if BITS_PER_POINTER > 32
 			typedef uint64_t av_base_type;
 # else
@@ -1294,11 +1324,13 @@ static __init void init_prng(void)
 	 * Do NOT memset/init rd!
 	 */
 	unsigned u[DIV_ROUNDUP(RAND_BLOCK_BYTE * 2, sizeof(unsigned))];
+	/* prevent compiler going into full UD panic and removing code */
+	mem_barrier(u);
 	g2_main_get_entropy(u);
 	random_bytes_init((char *)u);
 }
 
-static void read_uprofile(void)
+static __init void read_uprofile(void)
 {
 	static const char *prof_str =
 		"<?xml version=\"1.0\"?>"
@@ -1576,7 +1608,7 @@ static noinline __init bool startup(int argc, char **args)
 	return true;
 }
 
-static noinline void clean_up_m(void)
+static noinline __fini void clean_up_m(void)
 {
 	/* Try to clean up as much as possible.
 	 * Normally, if a process dies/terminates, the OS should
@@ -1614,7 +1646,7 @@ static noinline void clean_up_m(void)
 
 #if defined(__linux__) && HAVE_DECL_PR_SET_NAME == 1
 #include <sys/prctl.h>
-void g2_set_thread_name(const char *name)
+void __init g2_set_thread_name(const char *name)
 {
 	/*
 	 * we don't care for the result, either it works, nice,
@@ -1623,7 +1655,7 @@ void g2_set_thread_name(const char *name)
 	prctl(PR_SET_NAME, name, 0, 0, 0);
 }
 #else
-void g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
+void __init g2_set_thread_name(const char *name GCC_ATTRIB_UNUSED)
 {
 	/* NOP */
 }

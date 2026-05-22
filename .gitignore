@@ -43,6 +43,7 @@ zlib/contrib
 .files
 .arflockgate
 .clangd
+.gcourer
 lib/aes_tab_gen
 lib/five_tab_gen
 lib/libcommon.a
