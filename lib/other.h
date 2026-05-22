@@ -281,6 +281,17 @@
 # define GCC_TARGET(x)
 #endif
 
+#if _GNUC_PREREQ (15,1)
+# define GCC_COUNTED_BYF(x) GCC_ATTRIB(__counted_by__(x))
+#else
+# define GCC_COUNTED_BYF(x)
+#endif
+
+#if _GNUC_PREREQ (16,1)
+# define GCC_COUNTED_BYP(x) GCC_ATTRIB(__counted_by__(x))
+#else
+# define GCC_COUNTED_BYP(x)
+#endif
 
 #ifdef GOT_GOT
 # define SECTION_GOT GCC_ATTR_SECTION(".got")
@@ -300,9 +311,29 @@
  * But for now, wimply mark it cold, because it is run exactly
  * one time
  */
-#define __init GCC_ATTR_COLD
-#define __init_data
-#define __init_cdata
+#if 1
+# define __init GCC_ATTR_COLD GCC_ATTR_SECTION(".text.unlikely")
+# define __init_data
+# define __init_cdata
+#else
+# define __init GCC_ATTR_COLD
+# define __init_data
+# define __init_cdata
+#endif
+
+#define __cold GCC_ATTR_COLD
+#define __cold_data
+#define __cold_cdata
+
+#if 1
+# define __fini GCC_ATTR_COLD GCC_ATTR_SECTION(".text.unlikely")
+# define __fini_data
+# define __fini_cdata
+#else
+# define __fini GCC_ATTR_COLD
+# define __fini_data
+# define __fini_cdata
+#endif
 
 #ifndef HAVE_SIGHANDLER_T
 # ifdef __FreeBSD__
@@ -409,6 +440,8 @@ static inline int isgraph_a(unsigned int c)
 #   define CPU_RELAX_CONTENT __asm__ volatile ("hint @pause" ::: "memory");
 #  elif defined(__sparc) || defined(__sparc__)
 #   define CPU_RELAX_CONTENT __asm__ volatile ("rd %%ccr, %%g0" : : : "memory");
+#  elif defined(__riscv) && defined(__riscv_zihintpause)
+#   define CPU_RELAX_CONTENT __asm__ volatile ("PAUSE" : : : "memory");
 #  else
 #   define CPU_RELAX_CONTENT barrier();
 #  endif
