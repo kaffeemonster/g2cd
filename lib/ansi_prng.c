@@ -574,9 +574,17 @@ void __init random_bytes_init(const char data[RAND_BLOCK_BYTE * 2])
 		len  = (size_t)-1 == len ? 4096 : len; /* try default on failure */
 		addr = (void *)ALIGN_DOWN(&ctx, len);
 		len *= (size_t)ALIGN_DIFF(&ctx, len) < sizeof(ctx) ? 2 : 1;
-		if(-1 == mlock(addr, len)) {
+		if(-1 == mlock(addr, len)){
 			/* we are only a prng, if it fails, the world will continue to turn... */ ;
 		}
+# ifdef HAVE_MADVISE
+#  if defined(HAVE_DECL_MADV_DONTDUMP) && HAVE_DECL_MADV_DONTDUMP > 0
+		if(-1 == madvise(addr, len, MADV_DONTDUMP)) {
+			/* again... */
+		}
+#  endif
+		/* MADV_DONTFORK??? */
+# endif
 	}
 #endif
 	ctx.bytes_used = RAND_BLOCK_BYTE;
