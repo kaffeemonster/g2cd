@@ -91,7 +91,7 @@ Pseudo-random number generator inspired by ANSI X9.31 Appendix A.2.4 (AES varian
 
 ### Architecture
 
-Three AES keys (`ne[0]`, `ne[1]`, `ne[2]`) with three state vectors:
+One AES key with three state vectors:
 - `DT` — data encryption value (counter, advances each cycle)
 - `V` — value state (updated each cycle)
 - `rand_data` — output buffer (16 bytes per cycle)
