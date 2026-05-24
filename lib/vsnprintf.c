@@ -2,7 +2,7 @@
  * vsnprintf.c
  * {v}snprintf with extensions
  *
- * Copyright (c) 2008-2021 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -1040,10 +1040,23 @@ static inline void print_big(struct big_num *x)
 
 static int estimate(int n)
 {
+#if 0
 	if(n < 0)
 		return (int)(n * 0.3010299956639812);
 	else
 		return 1 + (int)(n * 0.3010299956639811);
+#else
+	/* 0.3010299956639812 is the log10(2) */
+	/* 1292913986 is approximately log10(2) * 2^32 */
+    	int64_t scaled = (int64_t)n * 1292913986LL;
+
+	/* Divide by 2^32. Integer division correctly truncates toward zero,
+	 * exactly matching the behavior of a float-to-int cast. */
+	int res = (int)(scaled / 4294967296LL);
+
+    	/* Add 1 if n is positive or zero, add 0 if it is negative. */
+	return res + (n >= 0);
+#endif
 }
 
 static void one_shift_left(int y, struct big_num *z)
