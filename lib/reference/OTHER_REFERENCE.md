@@ -148,6 +148,7 @@ See `lib/reference/ATOMIC_REFERENCE.md` for hardware memory barriers (`mb()`, `r
 | PowerPC64 | `or 1,1,1; or 2,2,2` (HMT idle hint) |
 | IA-64 | `hint @pause` |
 | SPARC | `rd %%ccr, %%g0` |
+| RISCV | `pause` |
 | Other / `I_LIKE_ASM` disabled | `barrier()` |
 
 Use `cpu_relax()` inside CAS retry loops to yield to other cores:
