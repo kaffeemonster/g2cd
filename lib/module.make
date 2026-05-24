@@ -26,7 +26,8 @@ LIBDOCS = \
 	$(MPL)/reference/ENDIAN_UNALIGNED_REFERENCE.md \
 	$(MPL)/reference/CRYPTO_HASH_REFERENCE.md \
 	$(MPL)/reference/BUILD_TIME_UTILITIES_REFERENCE.md \
-	$(MPL)/reference/TCHAR_REFERENCE.md
+	$(MPL)/reference/TCHAR_REFERENCE.md \\
+	$(MPL)/reference/UTILITIES_REFERENCE.md
 
 TARED_FILES += \
 	$(MPL)/module.make \
