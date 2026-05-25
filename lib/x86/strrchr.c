@@ -2,7 +2,7 @@
  * strrchr.c
  * strrchr, x86 implementation
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -153,6 +153,7 @@ static char *strrchr_AVX2(const char *s, int c)
 		"test	%3, %3\n\t"
 		"jz	6b\n\t"
 		"bsr	%3, %0\n\t"
+		"vzeroupper\n" /* clear state */
 		"9:\n\t"
 		"add	%1, %0\n"
 		"10:"
