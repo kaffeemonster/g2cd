@@ -221,7 +221,7 @@ alignment_size_t:
 			"2:\n\t"
 			"test	$32, %4\n\t"
 			"je	3f\n\t"
-			AVX_MOVE(   (%2), %%ymm0)
+			AVX_LOAD(   (%2), %%ymm0)
 			"add	$32, %1\n\t"
 			AVX_AND(    (%1), %%ymm0, %%ymm2)
 			AVX_STORE(%%ymm2,  (%2))
@@ -229,7 +229,7 @@ alignment_size_t:
 			"3:\n\t"
 			"test	$16, %4\n\t"
 			"je	4f\n\t"
-			AVX_MOVE(   (%2), %%xmm0)
+			AVX_LOAD(   (%2), %%xmm0)
 			"add	$16, %1\n\t"
 			AVX_AND(    (%1), %%xmm0, %%xmm2)
 			AVX_STORE(%%xmm2,  (%2))
