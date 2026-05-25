@@ -2,7 +2,7 @@
  * aes.c
  * AES routines, x86 implementation
  *
- * Copyright (c) 2009-2015 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -60,6 +60,7 @@ static void aes_encrypt_key128_AVXAES(struct aes_encrypt_ctx *ctx, const void *i
 			"vpxor	%%xmm4, %%xmm0, %%xmm0\n\t"
 			"vpxor	%%xmm1, %%xmm0, %%xmm0\n\t"
 			"vmovdqa	%%xmm0, (%"PTRP"0)\n\t"
+			"vzeroupper\n\t"	/* clean up state */
 			"add	$0x10, %0\n\t"
 			"ret\n\t"
 #ifdef HAVE_SUBSECTION
@@ -132,6 +133,7 @@ static void aes_encrypt_key256_AVXAES(struct aes_encrypt_ctx *ctx, const void *i
 			"vpxor %%xmm4, %%xmm2, %%xmm2\n\t"
 			"vpxor %%xmm1, %%xmm2, %%xmm2\n\t"
 			"vmovdqa %%xmm2, (%"PTRP"0)\n\t"
+			"vzeroupper\n\t"	/* clean up state */
 			"add $0x10, %0\n\t"
 			"ret\n\t"
 #ifdef HAVE_SUBSECTION
@@ -533,6 +535,7 @@ static void aes_encrypt_key128_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
 			"vpxor	%%xmm0, %%xmm2, %%xmm0\n\t"
 			"vmovdqa	%%xmm0, (%"PTRP"2)\n\t"	/* save last key */
+			"vzeroupper\n\t"	/* clean up state */
 		: /* %0 */ "=&r" (rounds),
 		  /* %1 */ "=&r" (n),
 		  /* %2 */ "=&r" (k),
@@ -663,6 +666,7 @@ static void aes_encrypt_key256_AVX(struct aes_encrypt_ctx *ctx, const void *in)
 			"vpshufb	%%xmm1, %%xmm0, %%xmm0\n\t"
 			"vpxor	%%xmm0, %%xmm2, %%xmm0\n\t"
 			"vmovdqa	%%xmm0, (%"PTRP"2)\n\t"	/* save last key */
+			"vzeroupper\n\t"	/* clean up state */
 		: /* %0 */ "=&r" (rounds),
 		  /* %1 */ "=&r" (n),
 		  /* %2 */ "=&r" (k),
@@ -1283,7 +1287,8 @@ static void aes_ecb_encrypt128_AVXAES(const struct aes_encrypt_ctx *ctx, void *o
 			"vaesenc	 0x50(%"PTRP"0), %%xmm0, %%xmm0\n\t"
 			"vaesenc	 0x60(%"PTRP"0), %%xmm0, %%xmm0\n\t"
 			"vaesenclast	0x70(%"PTRP"0), %%xmm0, %%xmm0\n\t"	/* last round */
-			"vmovdqu	%%xmm0, %1"	/* output */
+			"vmovdqu	%%xmm0, %1\n\t"	/* output */
+			"vzeroupper\n\t"	/* clean up state */
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*(char *)out)
 		: /* %2 */ "m" (*(const char *)in),
@@ -1317,7 +1322,8 @@ static void aes_ecb_encrypt256_AVXAES(const struct aes_encrypt_ctx *ctx, void *o
 			"vaesenc	 0x50(%"PTRP"0), %%xmm0, %%xmm0\n\t"
 			"vaesenc	 0x60(%"PTRP"0), %%xmm0, %%xmm0\n\t"
 			"vaesenclast	0x70(%"PTRP"0), %%xmm0, %%xmm0\n\t"	/* last round */
-			"vmovdqu	%%xmm0, %1"	/* output */
+			"vmovdqu	%%xmm0, %1\n\t"	/* output */
+			"vzeroupper\n\t"	/* clean up state */
 		: /* %0 */ "=r" (k),
 		  /* %1 */ "=m" (*(char *)out)
 		: /* %2 */ "m" (*(const char *)in),
@@ -1526,6 +1532,7 @@ static void aes_ecb_encrypt_AVX(const struct aes_encrypt_ctx *ctx, void *out, co
 			"vpxor	%%xmm0, %%xmm4, %%xmm0\n\t"	/* 0 = A */
 			"vpshufb	"str_it(SR)"(%"PTRP"1,%"PTRP"4), %%xmm0, %%xmm0\n\t"
 			"vmovdqu	%%xmm0, %3\n\t"
+			"vzeroupper\n\t"	/* clean up state */
 		: /* %0 */ "=&r" (rounds),
 		  /* %1 */ "=&R" (n),
 		  /* %2 */ "=&r" (k),
