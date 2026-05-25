@@ -2,7 +2,7 @@
  * x86.h
  * some x86 defines
  *
- * Copyright (c) 2006-2015 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -26,6 +26,7 @@
 #undef AVX_MOVE
 #undef AVX_XOR
 #undef AVX_STORE
+#undef AVX_STOP
 #undef SSE_PREFETCH
 #undef SSE_PREFETCHW
 #undef SSE_FENCE
@@ -47,10 +48,12 @@
 #define MAKE_PREFETCH(x, y) x #y "\n\t"
 
 #ifdef HAVE_AVX
+# define AVX_LOAD(s, d)	"vlddqu	" #s ", " #d "\n\t"
 # define AVX_MOVE(s, d)	"vmovdqa	" #s ", " #d "\n\t"
 # define AVX_STORE(s, d)	"vmovdqa	" #s ", " #d "\n\t"
 # define AVX_AND(sa, sb, d)	"vandpd	" #sa ", " #sb ", " #d "\n\t"
 # define AVX_XOR(sa, sb, d)	"vxorpd	" #sa ", " #sb ", " #d "\n\t"
+# define AVX_STOP	"vzeroupper\n\t"
 #endif
 #ifdef HAVE_SSE
 # define SSE_PREFETCH(x)	MAKE_PREFETCH("prefetchnta	", x)
