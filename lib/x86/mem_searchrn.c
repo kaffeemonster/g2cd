@@ -130,10 +130,10 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		"sub	%2, %4\n\t" /* k -= align diff */
 		"vpcmpeqb	%%ymm2, %%ymm0, %%ymm3\n\t"
 		"vpcmpeqb	%%ymm2, %%ymm1, %%ymm2\n\t"
-		"vpsrldq	$1, %%ymm3, %%ymm3\n\t" /* shift '\n' one down */
+		"vpmovmskb	%%ymm3, %3\n\t" /* shift in scaler, AVX2 does no crosslane shift  */
+		"shr	$1, %3\n\t" /* shift '\n' one down */
 		"sub	%7, %4\n\t" /* k -= len */
 		"vpmovmskb	%%ymm2, %0\n\t"
-		"vpmovmskb	%%ymm3, %3\n\t"
 		"ja	6f\n\t" /* k > 0 ? -> we are done */
 		"shr	%b2, %0\n\t" /* mask out lower stuff */
 		"shl	%b2, %0\n\t"
@@ -216,7 +216,7 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 #  ifdef __AVX__
 	: "ymm0", "ymm1", "ymm2", "ymm3"
 #  elif defined(__SSE__)
-	: "xmm0", "xmm1", "xmm2", "xmm3"
+	: "xmm0", "xmm1", "xmm2", "xmm3", "xmm4"
 #  endif
 	);
 
