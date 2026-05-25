@@ -87,6 +87,9 @@ static const struct {
   '\n', '\n', '\n', '\n', '\n', '\n', '\n', '\n'}};
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+static void *mem_searchrn_AVX512(const void *s, size_t len);
+# endif
 # if HAVE_BINUTILS >= 222
 static void *mem_searchrn_AVX2(void *src, size_t len);
 # endif
@@ -104,6 +107,83 @@ static void *mem_searchrn_SSE(void *src, size_t len);
 static void *mem_searchrn_x86(void *src, size_t len);
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+static void *mem_searchrn_AVX512(const void *s, size_t len)
+{
+	char *p;
+	asm (
+		"test	%[src], %[src]\n\t"	/* NULL pointer check */
+		"je	5f\n\t"
+		"cmp	$2, %[rem]\n\t"	/* check for enough length, with 1 byte we can't match */
+		"jb	5f\n\t"
+		"kxorq	%%k4, %%k4, %%k4\n\t"	/* zero carry */
+		"mov	%[r_val], %k[out]\n\t"
+		"vpbroadcastd	%k[out], %%zmm1\n\t" /* broadcast constants to zmm */
+		"mov	%[n_val], %k[out]\n\t"
+		"vpbroadcastd	%k[out], %%zmm2\n\t"
+		"cmp	$64, %[rem]\n\t"	/* at least 64 byte? */
+		"jb	4f\n\t"	/* no? goto masked Tail-Handling */
+		"jmp	1f\n\t"	/* goto loop start */
+		"5:\n\t"
+		"xor	%[out], %[out]\n\t" /* found nothing */
+		"jmp	7f\n\t"	/* out */
+		".p2align 2\n"
+		"1:\n\t"
+		"vmovdqu64 (%[src]), %%zmm0\n\t"	/* load 64 input bytes */
+		"vpcmpeqb %%zmm1, %%zmm0, %%k3\n\t"	/* k6 = mask for '\r' */
+		"vpcmpeqb %%zmm2, %%zmm0, %%k2\n\t"	/* k2 = mask for '\n' */
+		"kshiftlq	$1, %%k3, %%k1\n\t"	/* shift mask_r up for match */
+		"korq	%%k4, %%k1, %%k1\n\t"	/* add carry from last round */
+		"ktestq	%%k1, %%k2\n\t"
+		"jnz	3f\n\t"	/* match! out */
+		"kshiftrq	$63, %%k3, %%k4\n\t"	/* save carry, get high bit down */
+		"add	$64, %[src]\n\t"	/* move loop vars forward */
+		"sub	$64, %[rem]\n\t"
+		"cmp	$64, %[rem]\n\t"
+		"jae	1b\n"
+		"4:\n\t" /* --- Tail Handling for short remainder (< 64 Byte) --- */
+		"test	%[rem], %[rem]\n\t"	/* nothing left */
+		"je	5b\n\t"	/* get outa here */
+		"mov	$1, %[out]\n\t"	/* create mask for remaining bytes (1 << rem) - 1 */
+		"shl	%b[rem], %[out]\n\t"
+		"dec	%[out]\n\t"
+		"kmovq	%[out], %%k3\n\t"	/* k3 = mask for valid lanes */
+		"vmovdqu8	(%[src]), %%zmm0%{%%k3%}%{z%}\n\t"	/* only load mask bytes */
+		"vpcmpeqb	%%zmm1, %%zmm0, %%k1%{%%k3%}\n\t"	/* only compare masked bytes */
+		"vpcmpeqb	%%zmm2, %%zmm0, %%k2%{%%k3%}\n\t"
+		"kshiftlq	$1, %%k1, %%k1\n\t"	/* shift mask_r up for match */
+		"korq	%%k4, %%k1, %%k1\n\t"	/* add carry from last round */
+		"ktestq	%%k1, %%k2\n\t"
+		"jz	5b\n"	/* no match -> out */
+		"3:\n\t"	/* check the match */
+		"kandq	%%k1, %%k2, %%k2\n\t"
+		"kmovq	%%k2, %[out]\n\t"
+		"tzcnt	%[out], %[out]\n\t"	/* Index of '\r' (BMI1!) */
+		"lea	-1(%[src],%[out]), %[out]\n" /* add match index to src, subtract 1 because we are tzcnting the \n */
+		"7:\n\t"
+		"vzeroupper\n\t"
+		: /* 0 */ [out] "=a" (p),
+		  /* 1 */ [rem] "=c" (len),
+		  /* 2 */ [src] "=r" (s)
+		: [r_val] "i" (0x0D0D0D0D), /* \r */
+		  [n_val] "i" (0x0A0A0A0A),  /* \n */
+		  "1" (len),
+		  "2" (s)
+		:
+# ifdef __AVX512__
+		 "zmm0", "zmm1", "zmm2", "k1", "k2", "k3", "k4",
+# elif defined __AVX__
+		 "ymm0", "ymm1", "ymm2",
+# elif defined __SSE__
+		 "xmm0", "xmm1", "xmm2",
+# endif
+		 "cc"
+	);
+
+	return (void *)p;
+}
+# endif
+
 # if HAVE_BINUTILS >= 222
 static void *mem_searchrn_AVX2(void *s, size_t len)
 {
@@ -727,6 +807,9 @@ void *mem_searchrn_x86(void *s, size_t len)
 static __init_cdata const struct test_cpu_feature tfeat_mem_searchrn[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+	{.func = (void (*)(void))mem_searchrn_AVX512, .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_BMI)}, .flags = CFF_AVX512_TST},
+# endif
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))mem_searchrn_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
