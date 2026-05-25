@@ -3,7 +3,7 @@
  * xor two memory region efficient and cpy to dest, x86 implementation,
  * template
  *
- * Copyright (c) 2004-2010 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -85,8 +85,10 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 			goto alignment_8;
 		if(i & 16)
 			goto alignment_16;
+		if(i & 32)
+			goto alignment_32;
 		/* fall throuh */
-		goto alignment_32;
+		goto alignment_64;
 		/* make label used */
 		goto handle_remaining;
 	}
@@ -99,11 +101,9 @@ static void *DFUNC_NAME(memxorcpy, ARCH_NAME_SUFFIX)(void *dst, const void *src1
 	 * xor it with a hopefully bigger and
 	 * maschine-native datatype
 	 */
+alignment_64:
 alignment_32:
 #ifdef HAVE_AVX
-alignment_16:
-alignment_8:
-alignment_size_t:
 	/*
 	 * xoring 256 bit at once even sounds better!
 	 * and alignment is handeld more transparent!
@@ -159,6 +159,92 @@ alignment_size_t:
 			AVX_STORE(%%xmm1,  (%3))
 			"add	$16, %3\n"
 			"4:\n\t"
+			AVX_STOP
+			/* done! */
+			SSE_FENCE
+			: /* %0 */ "=&c" (d0),
+			  /* %1 */ "+&r" (src_char1),
+			  /* %2 */ "+&r" (src_char2),
+			  /* %3 */ "+&r" (dst_char)
+			: /* %4 */ "0" (len / 64),
+			  /* %5 */ "r" (len % 64)
+			: "cc",
+# ifdef __SSE__
+#  ifdef __avx__
+			  "ymm0", "ymm1", "ymm2", "ymm3",
+#  else
+			  /*
+			   * since these registers overlap, the compiler does not
+			   * need to know where exactly the party is hapening, when
+			   * he does not understand what ymm is
+			   */
+			  "xmm0", "xmm1", "xmm2", "xmm3",
+#  endif
+# endif
+			  "memory"
+		);
+		len %= 16;
+		goto handle_remaining;
+	}
+alignment_16:
+alignment_8:
+alignment_size_t:
+	/*
+	 * xoring 256 bit at once even sounds better!
+	 * and alignment is handeld more transparent!
+	 * they only forgot the pxor instruction for
+	 * avx, again...
+	 */
+	{
+		register intptr_t d0;
+
+		__asm__ __volatile__(
+			SSE_PREFETCH(  (%1))
+			SSE_PREFETCHW(  (%2))
+			"test	%0,%0\n\t"
+			"jz	2f\n\t"
+			SSE_PREFETCH(64(%1))
+			SSE_PREFETCH(128(%1))
+			SSE_PREFETCH(196(%1))
+			SSE_PREFETCHW(64(%2))
+			SSE_PREFETCHW(128(%2))
+			SSE_PREFETCHW(196(%2))
+			".p2align 3\n"
+			"1:\n\t"
+			SSE_PREFETCH(256(%1))
+			SSE_PREFETCHW(256(%2))
+			AVX_LOAD(   (%1), %%ymm0)
+			AVX_LOAD( 32(%1), %%ymm1)
+			"add	$64, %1\n\t"
+			AVX_XOR(    (%2), %%ymm0, %%ymm2)
+			AVX_XOR(  32(%2), %%ymm1, %%ymm3)
+			"add	$64, %2\n\t"
+			AVX_STORE(%%ymm2,   (%3))
+			AVX_STORE(%%ymm3, 32(%3))
+			"add	$64, %3\n\t"
+			"dec	%0\n\t"
+			"jnz	1b\n"
+			/* loop done, handle trailer */
+			"2:\n\t"
+			"test	$32, %5\n\t"
+			"je	3f\n\t"
+			AVX_LOAD(   (%1), %%ymm0)
+			"add	$32, %1\n\t"
+			AVX_XOR(    (%2), %%ymm0, %%ymm1)
+			"add	$32, %2\n\t"
+			AVX_STORE(%%ymm1,  (%3))
+			"add	$32, %3\n"
+			"3:\n\t"
+			"test	$16, %5\n\t"
+			"je	4f\n\t"
+			AVX_LOAD(   (%1), %%xmm0)
+			"add	$16, %1\n\t"
+			AVX_XOR(    (%2), %%xmm0, %%xmm1)
+			"add	$16, %2\n\t"
+			AVX_STORE(%%xmm1,  (%3))
+			"add	$16, %3\n"
+			"4:\n\t"
+			AVX_STOP
 			/* done! */
 			SSE_FENCE
 			: /* %0 */ "=&c" (d0),
