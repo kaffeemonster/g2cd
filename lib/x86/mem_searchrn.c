@@ -2,7 +2,7 @@
  * mem_searchrn.c
  * search mem for a \r\n, x86 implementation
  *
- * Copyright (c) 2008-2011 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -169,6 +169,7 @@ static void *mem_searchrn_AVX2(void *s, size_t len)
 		"bsf	%0, %0\n\t" /* find index */
 		"cmovz	%0, %1\n" /* no match, set p to zero */
 		"7:\n\t"
+		"vzeroupper\n\t" /* clear state */
 		"add	%1, %0\n\t" /* add match index to p */
 		/*
 		 * done!
@@ -295,7 +296,8 @@ static void *mem_searchrn_AVX(void *s, size_t len)
 # endif
 		"7:\n\t"
 		"movzx	%w2, %2\n\t" /* clear upper half, result is small */
-		"lea	(%1, %2), %0\n" /* add match index to p */
+		"lea	(%1, %2), %0\n\t" /* add match index to p */
+		"vzeroupper\n" /* clear state */
 		"9:\n\t"
 		/*
 		 * done!
