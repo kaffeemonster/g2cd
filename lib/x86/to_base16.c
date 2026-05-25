@@ -2,7 +2,7 @@
  * to_base16.c
  * convert binary string to hex, x86 impl.
  *
- * Copyright (c) 2010-2011 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -271,7 +271,7 @@ static unsigned char *to_base16_AVX(unsigned char *dst, const unsigned char *src
 		"cmp	$16, %2\n\t"
 		"jae	1b\n\t"
 		"cmp	$8, %2\n\t"
-		"jb	2f\n"
+		"jb	4f\n"
 		"3:\n\t"
 		"sub	$8, %2\n\t"
 		"vmovq	(%1), %%xmm0\n\t"
@@ -283,7 +283,9 @@ static unsigned char *to_base16_AVX(unsigned char *dst, const unsigned char *src
 		"vpshufb	%%xmm6, %%xmm0, %%xmm0\n\t"
 		"vmovdqu	%%xmm0,    (%0)\n\t"
 		"add	$16, %0\n"
-		"2:"
+		"4:\n\t"
+		"vzeroupper\n" /* clear state */
+		"2:\n"
 		: /* %0 */ "=r" (dst),
 		  /* %1 */ "=r" (src),
 		  /* %2 */ "=r" (len),
