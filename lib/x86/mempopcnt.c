@@ -86,7 +86,6 @@ static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 };
 
 //TODO: pimp for 64 bit (more regs)
-//TODO: using popcnt && SSE parallel?
 
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 232 && _GNUC_PREREQ(8,0)

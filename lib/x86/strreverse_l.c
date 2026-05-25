@@ -2,7 +2,7 @@
  * strreverse_l.c
  * strreverse_l, x86 implementation
  *
- * Copyright (c) 2010-2015 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -70,7 +70,7 @@ static void strreverse_l_AVX2(char *begin, char *end)
 			"lea	-31(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
 			"jae	2f\n\t"
-#  ifndef __x86_64__
+#  ifdef __x86_64__
 			"vmovdqa	%3, %%xmm4\n\t"
 #  endif
 			"lea	-63(%1), %2\n\t"
@@ -110,7 +110,9 @@ static void strreverse_l_AVX2(char *begin, char *end)
 #  ifndef __x86_64__
 			"lea	-15(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
-			"jae	4f\n"
+			"jae	6f\n"
+#  else
+			"vzeroupper\n" /* clear state */
 #  endif
 			"2:\n\t"
 #  ifndef __x86_64__
@@ -124,8 +126,10 @@ static void strreverse_l_AVX2(char *begin, char *end)
 			"vmovq	%%xmm0, (%0)\n\t"
 			"add	$8, %0\n\t"
 			"vmovq	%%xmm2, -7(%1)\n\t"
-			"sub	$8, %1\n\t"
-			"4:"
+			"sub	$8, %1\n"
+			"6:\n\t"
+			"vzeroupper\n" /* clear state */
+			"4:\n"
 #  endif
 		: /* %0 */ "=r" (begin),
 		  /* %1 */ "=r" (end),
@@ -183,7 +187,9 @@ static void strreverse_l_AVX(char *begin, char *end)
 #  ifndef __x86_64__
 			"lea	-15(%1), %2\n\t"
 			"cmp	%2, %0\n\t"
-			"jae	4f\n"
+			"jae	5f\n"
+#  else
+			"vzeroupper\n\t" /* clear state */
 #  endif
 			"2:\n\t"
 #  ifndef __x86_64__
@@ -197,8 +203,10 @@ static void strreverse_l_AVX(char *begin, char *end)
 			"vmovq	%%xmm0, (%0)\n\t"
 			"add	$8, %0\n\t"
 			"vmovq	%%xmm2, -7(%1)\n\t"
-			"sub	$8, %1\n\t"
-			"4:"
+			"sub	$8, %1\n"
+			"5:\n\t"
+			"vzeroupper\n" /* clear state */
+			"4:\n"
 #  endif
 		: /* %0 */ "=r" (begin),
 		  /* %1 */ "=r" (end),
