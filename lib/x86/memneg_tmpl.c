@@ -2,7 +2,7 @@
  * memneg_tmpl.c
  * neg a memory region efficient, x86 implementation, template
  *
- * Copyright (c) 2006-2011 Jan Seiffert
+ * Copyright (c) 2006-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -125,6 +125,7 @@ alignment_size_t:
 			AVX_STORE(%%xmm2,  (%1))
 			"add	$16, %1\n"
 			"4:\n\t"
+			AVX_STOP
 			/* done! */
 			SSE_FENCE
 			: "=&c" (d0), "+&r" (dst_char)
