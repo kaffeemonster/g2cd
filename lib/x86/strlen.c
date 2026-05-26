@@ -72,6 +72,71 @@
 #define SOV8	8
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+static size_t strlen_AVX512(const char *s)
+{
+	size_t len, t;
+	const char *p;
+
+	asm (
+		"prefetcht0	(%"PTRP"3)\n\t"
+		"mov	%3, %1\n\t"
+		"mov	%3, %2\n\t"
+		"and	$-64, %1\n\t"
+		"vpxorq	%%zmm4, %%zmm4, %%zmm4\n\t"
+		"xor	%1, %2\n\t"
+		"jz	6f\n\t"
+		"vpcmpeqb	(%"PTRP"1), %%zmm4, %%k1\n\t"
+		"kmovq	%%k1, %0\n\t"
+		"shr	%b2, %0\n\t"
+		"shl	%b2, %0\n\t"
+		"jnz	2f\n\t"
+		".p2align 2\n"
+		"1:\t"
+		"lea	256(%1), %1\n\t"
+		"vpcmpeqb	-192(%"PTRP"1), %%zmm4, %%k1\n\t"
+		"kortestq	%%k1, %%k1\n\t"
+		"jnz	5f\n\t"
+		"vpcmpeqb	-128(%"PTRP"1), %%zmm4, %%k1\n\t"
+		"kortestq	%%k1, %%k1\n\t"
+		"jnz	4f\n\t"
+		"vpcmpeqb	-64(%"PTRP"1), %%zmm4, %%k1\n\t"
+		"kortestq	%%k1, %%k1\n\t"
+		"jnz	3f\n"
+		"6:\n\t"
+		"vpcmpeqb	(%"PTRP"1), %%zmm4, %%k1\n\t"
+		"kortestq	%%k1, %%k1\n\t"
+		"jz	1b\n\t"
+		"jmp	7f\n\t"
+		"5:\t"
+		"sub	$64, %1\n"
+		"4:\t"
+		"sub	$64, %1\n"
+		"3:\t"
+		"sub	$64, %1\n"
+		"7:\t"
+		"kmovq	%%k1, %0\n"
+		"2:\t"
+		"tzcnt	%0, %0\n\t"
+		"add	%1, %0\n\t"
+		"sub	%3, %0\n\t"
+		: /* %0 */ "=&a" (len),
+		  /* %1 */ "=&r" (p),
+		  /* %2 */ "=&c" (t)
+		: /* %3 */ "r" (s)
+#ifdef __AVX512__
+		: "k1", "zmm4",
+#elif defined(__AVX__)
+		: "ymm4",
+#elif defined(__SSE__)
+		: "xmm4",
+#endif
+		  "cc"
+	);
+	return len;
+}
+# endif
+
 # if HAVE_BINUTILS >= 222
 static size_t strlen_AVX2(const char *s)
 {
@@ -625,6 +690,9 @@ static size_t strlen_x86(const char *s)
 static __init_cdata const struct test_cpu_feature tfeat_strlen[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+	{.func = (void (*)(void))strlen_AVX512, .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_BMI)}, .flags = CFF_AVX512_TST},
+# endif
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))strlen_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
