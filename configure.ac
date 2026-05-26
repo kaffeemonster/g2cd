@@ -561,7 +561,13 @@ if test x"$as_tst_needed" != xno; then
 			if test x"$as_cv_avx_tst" != xno; then
 				AS_CHECK_FEATURE(AVX2, as_cv_avx2_tst, [-c], [vpxor %ymm0, %ymm1, %ymm0], [susp_binutils=222])
 				if test x"$as_cv_avx2_tst" != xno; then
-					AS_CHECK_FEATURE(AVX512BITALG, as_cv_avx512bitalg_tst, [-c], [vpopcntb (%rax),%zmm0], [susp_binutils=232])
+					AS_CHECK_FEATURE(AVX512F, as_cv_avx512f_tst, [-c], [vpcmpeqq %zmm6, %zmm0, %k1], [susp_binutils=225])
+					if test x"$as_cv_avx512f_tst" != xno; then
+						AS_CHECK_FEATURE(AVX512BW, as_cv_avx512bw_tst, [-c], [vpcmpeqb (%rax), %zmm0, %k1], [susp_binutils=226])
+						if test x"$as_cv_avx512bw_tst" != xno; then
+							AS_CHECK_FEATURE(AVX512BITALG, as_cv_avx512bitalg_tst, [-c], [vpopcntb (%rax),%zmm0], [susp_binutils=232])
+						fi
+					fi
 				fi
 			fi
 		fi
