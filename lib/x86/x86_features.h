@@ -202,7 +202,7 @@ enum x86_cpu_features
 };
 # undef ENUM_CMD
 
-# define DONT_DO_IFUNCS
+//   # define DONT_DO_IFUNCS
 
 extern const char x86_cpu_feature_names[][17] GCC_ATTR_VIS("hidden");
 
@@ -313,7 +313,7 @@ extern const char x86_cpu_feature_names[][17] GCC_ATTR_VIS("hidden");
 #   endif
 #  else
 #   ifndef DONT_DO_IFUNCS
-#    define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
+#define _DYN_JMP_RT_SWITCH(rtype, name, prot, call) \
 static GCC_ATTR_USED void * name##_ifunc (void) { \
 	return test_cpu_feature(tfeat_##name, anum(tfeat_##name)); \
 }
@@ -386,12 +386,18 @@ static GCC_ATTR_USED void * name##_ifunc (void) { \
 #    define _DYN_JMP_REST_GEN(name, name_export, alias, alias_export) \
 	asm ( \
 		".pushsection .text\n\t" \
+		".p2align 2\n\t" \
 		name_export \
-		".type " #name ", @gnu_indirect_function\n" \
-		".set	" #name "," #name "_ifunc\n\t" \
+		".type	" #name ", @function\n" \
+		#name ":\n\t" \
+		"jmp	" #name "_tramp\n\t"\
+		".size	" #name ", .-" #name "\n\t" \
 		alias_export \
 		alias \
-		".popsection" \
+		".local	" #name "_tramp\n\t" \
+		".type " #name "_tramp, @gnu_indirect_function\n\t" \
+		".set	" #name "_tramp," #name "_ifunc\n\t" \
+		".popsection\n" \
 	);
 #   else
 /* endbr64, CET nop on older cpu */
