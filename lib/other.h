@@ -275,6 +275,12 @@
 # define GCC_FALL_THROUGH
 #endif
 
+#if _GNUC_PREREQ (10,1)
+# define GCC_SYMVER(x) GCC_ATTRIB(__symver__(x))
+#else
+# define GCC_SYMVER(x)
+#endif
+
 #if _GNUC_PREREQ (11,1)
 # define GCC_TARGET(x) GCC_ATTRIB(__target__(x))
 #else
