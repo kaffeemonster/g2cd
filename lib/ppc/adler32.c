@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   ppc implementation
- * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2009-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -16,7 +16,7 @@
 
 #if defined(__ALTIVEC__) && defined(__GNUC__)
 # define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 /* it needs some bytes till the vec version gets up to speed... */
 # define MIN_WORK 56
 #endif
@@ -68,7 +68,7 @@ static inline vector unsigned int vector_chop(vector unsigned int x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
 
@@ -84,7 +84,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		vector unsigned int vs1, vs2;
 		vector unsigned char in16, vord_a, v1_a, vperm;
 		unsigned int f, n;
-		unsigned int k, block_num;
+		unsigned int block_num;
+		size_t k;
 
 		/*
 		 * if i understand the Altivec PEM right, little

@@ -132,6 +132,7 @@
 typedef size_t nreg_t;
 #  define NOST SOST
 #  define PTRP ""
+#  define SZTP ""
 # else
 #  define SIZE_T_BYTE	8
 #  define SIZE_T_SHIFT	3
@@ -143,11 +144,13 @@ typedef unsigned long long nreg_t;
 #   define NOST (sizeof nreg_t)
 #   define MY_X32
 #   define PTRP "q"
+#   define SZTP ""
 #  else
 typedef size_t nreg_t;
 #   define NOST SOST
 #   define MY_AMD64
 #   define PTRP ""
+#   define SZTP "q"
 #  endif
 # endif
 #endif

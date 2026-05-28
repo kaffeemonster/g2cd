@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   mips implementation
- * Copyright (C) 1995-2004 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2009-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -31,7 +31,7 @@
 #define NO_DIVIDE
 #if (defined(__mips_loongson_vector_rev) || defined(__mips_dsp)) && defined(__GNUC__)
 # define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 # if defined(__mips_loongson_vector_rev)
 #  define MIN_WORK 64
 # else
@@ -71,7 +71,7 @@ static inline uint32x2_t vector_chop(uint32x2_t x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
 
@@ -89,7 +89,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		uint8x8_t v0 = {0};
 		uint8x8_t in8;
 		unsigned f, n;
-		unsigned k;
+		size_t k;
 
 		/*
 		 * Add stuff to achieve alignment
@@ -231,7 +231,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 			vs2 = vector_chop(vs2);
 			vs1 = vector_chop(vs1);
 			len += k;
-			k = len < VNMAX ? (unsigned)len : VNMAX;
+			k = len < VNMAX ? len : VNMAX;
 			len -= k;
 		} while(likely(k >= SOV8));
 
@@ -308,7 +308,7 @@ static char const rcsid_a32ml[] GCC_ATTR_USED_VAR = "$Id: $";
 #elif defined(__mips_dsp) && defined(__GNUC__)
 # define VNMAX ((5*NMAX)/2)
 /* We use the GCC vector internals, to make things simple for us. */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
 
@@ -327,7 +327,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		unsigned int vs1, vs2, vs1h, vs2h;
 		v4i8 in4;
 		unsigned f, n;
-		unsigned k;
+		size_t k;
 		unsigned int srl;
 
 		if(HOST_IS_BIGENDIAN) {

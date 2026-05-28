@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   ia64 implementation
- * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2009-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -16,7 +16,7 @@
 
 #ifdef __GNUC__
 # define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 # define MIN_WORK 64
 #endif
 
@@ -27,7 +27,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 
 # define VNMAX (7*NMAX)
 
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	union scale_order { unsigned short x[4][4]; unsigned long long d[4];};
 	static const union scale_order ord_le = {{{8,7,6,5},{4,3,2,1},{16,15,14,13},{12,11,10,9}}};
@@ -43,7 +43,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		const union scale_order *scale_order;
 		unsigned long long vs1, vs2;
 		unsigned long long in8;
-		unsigned int f, n, k;
+		unsigned int f, n;
+		size_t k;
 
 		if (!HOST_IS_BIGENDIAN)
 			scale_order = &ord_le;

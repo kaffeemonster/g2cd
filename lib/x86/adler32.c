@@ -1,7 +1,7 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   x86 implementation
- * Copyright (C) 1995-2007 Mark Adler
+ * Copyright (C) 1995-2011, 2016 Mark Adler
  * Copyright (C) 2009-2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
@@ -17,15 +17,16 @@
 #include "../other.h"
 #define HAVE_ADLER32_VEC
 #ifndef USE_SIMPLE_DISPATCH
-GCC_ATTRIB(externally_visible) uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+GCC_ATTRIB(externally_visible) uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 #else
-static uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 #endif
-static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, size_t len);
 #define MIN_WORK 56
 #define NO_ADLER32_GE16
 
 #include "../generic/adler32.c"
+#include "x86.h"
 #include "x86_features.h"
 
 /* ========================================================================= */
@@ -39,7 +40,7 @@ static const struct { char d[16]; } vord_b GCC_ATTR_ALIGNED(16) = {
 };
 
 /* ========================================================================= */
-static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, uint32_t *s2, unsigned k)
+static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, uint32_t *s2, size_t k)
 {
 	uint32_t t;
 	unsigned n = k % 16;
@@ -234,11 +235,11 @@ static noinline const uint8_t *adler32_jumped(const uint8_t *buf, uint32_t *s1, 
 
 /* ========================================================================= */
 #if (HAVE_BINUTILS-0) >= 219
-static uint32_t adler32_AVX(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_AVX(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	unsigned k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 16);
 	len -= k;
@@ -282,10 +283,10 @@ static uint32_t adler32_AVX(uint32_t adler, const uint8_t *buf, unsigned len)
 		".p2align 2\n"
 		"2:\n\t"
 		"mov	$128, %1\n\t"		/* inner_k = 128 bytes till vs2_i overflows */
-		"cmp	%1, %3\n\t"
-		"cmovb	%3, %1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
-		"and	$-16, %1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
-		"sub	%1, %3\n\t"		/* k -= inner_k */
+		"cmp	%"SZTP"1, %3\n\t"
+		"cmovb	%3, %"SZTP"1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
+		"and	$-16, %"SZTP"1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
+		"sub	%"SZTP"1, %3\n\t"		/* k -= inner_k */
 		"shr	$4, %1\n\t"		/* inner_k /= 16 */
 		"vpxor	%%xmm6, %%xmm6, %%xmm6\n\t"	/* zero vs2_i */
 		".p2align 4,,7\n"
@@ -359,11 +360,11 @@ static uint32_t adler32_AVX(uint32_t adler, const uint8_t *buf, unsigned len)
 #endif
 
 /* ========================================================================= */
-static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	unsigned k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 16);
 	len -= k;
@@ -413,10 +414,10 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 		".p2align 2\n"
 		"2:\n\t"
 		"mov	$128, %1\n\t"		/* inner_k = 128 bytes till vs2_i overflows */
-		"cmp	%1, %3\n\t"
-		"cmovb	%3, %1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
-		"and	$-16, %1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
-		"sub	%1, %3\n\t"		/* k -= inner_k */
+		"cmp	%"SZTP"1, %3\n\t"
+		"cmovb	%3, %"SZTP"1\n\t"		/* inner_k = k >= inner_k ? inner_k : k */
+		"and	$-16, %"SZTP"1\n\t"		/* inner_k = ROUND_TO(inner_k, 16) */
+		"sub	%"SZTP"1, %3\n\t"		/* k -= inner_k */
 		"shr	$4, %1\n\t"		/* inner_k /= 16 */
 		"pxor	%%xmm6, %%xmm6\n\t"	/* zero vs2_i */
 		".p2align 4,,7\n"
@@ -499,11 +500,11 @@ static uint32_t adler32_SSSE3(uint32_t adler, const uint8_t *buf, unsigned len)
 }
 
 /* ========================================================================= */
-static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	unsigned k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 16);
 	len -= k;
@@ -527,10 +528,10 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
 		"pxor	%%xmm6, %%xmm6\n\t"
 		"pxor	%%xmm7, %%xmm7\n\t"
 		"mov	$2048, %1\n\t"		/* get byte count till vs2_{l|h}_word overflows */
-		"cmp	%1, %3\n\t"
-		"cmovb	%3, %1\n"
-		"and	$-16, %1\n\t"
-		"sub	%1, %3\n\t"
+		"cmp	%"SZTP"1, %3\n\t"
+		"cmovb	%3, %"SZTP"1\n\t"
+		"and	$-16, %"SZTP"1\n\t"
+		"sub	%"SZTP"1, %3\n\t"
 		"shr	$4, %1\n\t"
 		".p2align 4,,7\n"
 		".p2align 3\n"
@@ -614,11 +615,11 @@ static uint32_t adler32_SSE2(uint32_t adler, const uint8_t *buf, unsigned len)
  * Out-Of-Order-Execution CPU can solve.
  * So this Version _may_ be better for the new old thing, Atom.
  */
-static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	unsigned k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 16);
 	len -= k;
@@ -714,11 +715,11 @@ static uint32_t adler32_SSE2_no_oooe(uint32_t adler, const uint8_t *buf, unsigne
 /*
  * SSE version to help VIA-C3_2, P2 & P3
  */
-static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	int k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 8);
 	len -= k;
@@ -847,11 +848,11 @@ static uint32_t adler32_SSE(uint32_t adler, const uint8_t *buf, unsigned len)
  * (maybe except AMD K6, Cyrix, Winchip/VIA).
  * I did my best to get at least 1 instruction between result -> use
  */
-static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1 = adler & 0xffff;
 	uint32_t s2 = (adler >> 16) & 0xffff;
-	int k;
+	size_t k;
 
 	k    = ALIGN_DIFF(buf, 8);
 	len -= k;
@@ -968,7 +969,7 @@ static uint32_t adler32_MMX(uint32_t adler, const uint8_t *buf, unsigned len)
 #endif
 
 /* ========================================================================= */
-static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
+static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	/* split Adler-32 into component sums */
 	uint32_t s1 = adler & 0xffff;
@@ -993,7 +994,7 @@ static uint32_t adler32_x86(uint32_t adler, const uint8_t *buf, unsigned len)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_ge16_any(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_ge16_any(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	/* split Adler-32 into component sums */
 	uint32_t s1 = adler & 0xffff;
@@ -1016,7 +1017,7 @@ static noinline uint32_t adler32_ge16_any(uint32_t adler, const uint8_t *buf, un
  * NMAX.
  * Only SSE2, since x86_64 always has SSE2.
  */
-static noinline uint32_t adler32_mod16(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_mod16(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	/* split Adler-32 into component sums */
 	uint32_t s1 = adler & 0xffff;
@@ -1085,7 +1086,7 @@ static noinline uint32_t adler32_mod16(uint32_t adler, const uint8_t *buf, unsig
 	return (s2 << 16) | s1;
 }
 
-static noinline uint32_t adler32_e16(uint32_t adler, const uint8_t *buf, unsigned len GCC_ATTR_UNUSED_PARAM)
+static noinline uint32_t adler32_e16(uint32_t adler, const uint8_t *buf, size_t len GCC_ATTR_UNUSED_PARAM)
 {
 	/* split Adler-32 into component sums */
 	uint32_t s1, s2;
@@ -1132,7 +1133,7 @@ static noinline uint32_t adler32_e16(uint32_t adler, const uint8_t *buf, unsigne
 	return (s2 << 16) | s1;
 }
 
-static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	if(len == 16)
 		return adler32_e16(adler, buf, len);
@@ -1141,7 +1142,7 @@ static noinline uint32_t adler32_16(uint32_t adler, const uint8_t *buf, unsigned
 #endif
 
 /* ========================================================================= */
-static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, size_t len)
 {
 #ifdef __x86_64__
 	if((len % 16) == 0)
@@ -1171,7 +1172,7 @@ static __init_cdata const struct test_cpu_feature tfeat_adler32_vec[] =
 	{.func = (void (*)(void))adler32_x86,   .features = {}, .flags = CFF_DEFAULT},
 };
 
-DYN_JMP_DISPATCH_ST(uint32_t, adler32_vec, (uint32_t adler, const uint8_t *buf, unsigned len), (adler, buf, len))
+DYN_JMP_DISPATCH_ST(uint32_t, adler32_vec, (uint32_t adler, const uint8_t *buf, size_t len), (adler, buf, len))
 
 static char const rcsid_a32x86[] GCC_ATTR_USED_VAR = "$Id: $";
 /* EOF */

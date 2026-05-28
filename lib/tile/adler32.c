@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   Tile implementation
- * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -12,7 +12,7 @@
 # define NO_DIVIDE
 #endif
 #define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 #define MIN_WORK 32
 
 #include "../generic/adler32.c"
@@ -38,10 +38,10 @@ static inline unsigned long vector_chop(unsigned long x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
-	unsigned k;
+	size_t k;
 
 	/* split Adler-32 into component sums */
 	s1 = adler & 0xffff;
@@ -119,10 +119,10 @@ static char const rcsid_pctigx[] GCC_ATTR_USED_VAR = "$Id:$";
 # define SOUL (sizeof(unsigned long))
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
-	unsigned k;
+	size_t k;
 
 	/* split Adler-32 into component sums */
 	s1 = adler & 0xffff;

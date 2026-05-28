@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   sparc/sparc64 implementation
- * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2009-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -41,7 +41,7 @@
  * Status Word (PSW), but reading the PSW is a privilidged instruction (same
  * as PowerPC...).
  */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 # define MIN_WORK 512
 #endif
 
@@ -74,7 +74,7 @@ static inline unsigned long long vector_chop(unsigned long long x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
 
@@ -89,7 +89,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 		unsigned long long v0 = fzero();
 		unsigned long long in;
 		const unsigned char *o_buf;
-		unsigned int k, f, n;
+		unsigned int f, n;
+		size_t k;
 
 		/* align hard down */
 		f = (unsigned int)ALIGN_DOWN_DIFF(buf, SOVV);

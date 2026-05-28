@@ -1,6 +1,6 @@
 /* adler32.c -- compute the Adler-32 checksum of a data stream
- * Copyright (C) 1995-2011 Mark Adler
- * Copyright (C) 2010-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2010-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -69,7 +69,7 @@
 #endif
 
 /* ========================================================================= */
-static noinline uint32_t adler32_1(uint32_t adler, const uint8_t *buf, unsigned len GCC_ATTR_UNUSED_PARAM)
+static noinline uint32_t adler32_1(uint32_t adler, const uint8_t *buf, size_t len GCC_ATTR_UNUSED_PARAM)
 {
 	uint32_t sum2;
 
@@ -87,7 +87,7 @@ static noinline uint32_t adler32_1(uint32_t adler, const uint8_t *buf, unsigned 
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t sum2;
 
@@ -126,10 +126,10 @@ static noinline uint32_t adler32_common(uint32_t adler, const uint8_t *buf, unsi
 #  undef VNMAX
 #  define VNMAX (2*NMAX+((9*NMAX)/10))
 
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
-	unsigned k;
+	size_t k;
 
 	/* split Adler-32 into component sums */
 	s1 = adler & 0xffff;
@@ -234,10 +234,9 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	return (s2 << 16) | s1;
 }
 # else
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t sum2;
-	unsigned n;
 
 	/* split Adler-32 into component sums */
 	sum2 = (adler >> 16) & 0xffff;
@@ -246,8 +245,8 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	/* do length NMAX blocks -- requires just one modulo operation */
 	while(len >= NMAX)
 	{
+		unsigned n = NMAX / 16;	/* NMAX is divisible by 16 */
 		len -= NMAX;
-		n = NMAX / 16;	/* NMAX is divisible by 16 */
 		do {
 			DO16(buf);	/* 16 sums unrolled */
 			buf += 16;
@@ -281,10 +280,10 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 /* ========================================================================= */
 #if MIN_WORK - 16 > 0
 #  ifndef NO_ADLER32_GE16
-static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t sum2;
-	unsigned n;
+	size_t n;
 
 	/* split Adler-32 into component sums */
 	sum2 = (adler >> 16) & 0xffff;
@@ -316,7 +315,7 @@ static noinline uint32_t adler32_ge16(uint32_t adler, const uint8_t *buf, unsign
 #endif
 
 /* ========================================================================= */
-uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
+uint32_t adler32_z(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	/* in case user likes doing a byte at a time, keep it fast */
 	if(1 == len)
@@ -335,6 +334,13 @@ uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
 #endif
 
 	return adler32_vec(adler, buf, len);
+}
+__asm__(".symver adler32_z, adler32_z@@@ZLIB_1.2.9");
+
+/* ========================================================================= */
+uint32_t adler32(uint32_t adler, const uint8_t *buf, unsigned len)
+{
+	return adler32_z(adler, buf, len);
 }
 
 static char const rcsid_a32g[] GCC_ATTR_USED_VAR = "$Id: $";

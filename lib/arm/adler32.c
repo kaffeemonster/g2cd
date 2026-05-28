@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   arm implementation
- * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2009-2015 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2009-2015, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -21,7 +21,7 @@
     defined(ARM_IWMMXT_SANE)
 //  defined(ARM_DSP_SANE)
 # define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 # if defined(ARM_NEON_SANE) || defined (ARM_IWMMXT_SANE)
 #  define MIN_WORK 32
 # else
@@ -59,7 +59,7 @@ static inline uint32x4_t vector_chop(uint32x4_t x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32x4_t v0_32 = (uint32x4_t){0,0,0,0};
 	uint8x16_t    v0 = (uint8x16_t)v0_32;
@@ -68,7 +68,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 	uint32x2_t v_tsum;
 	uint8x16_t in16;
 	uint32_t s1, s2;
-	unsigned k;
+	size_t k;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
@@ -341,10 +341,10 @@ static inline __m64 vector_chop(__m64 x)
 }
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
-	unsigned int k;
+	size_t k;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
@@ -512,10 +512,10 @@ static char const rcsid_a32iwmmxt[] GCC_ATTR_USED_VAR = "$Id: $";
 #  define VNMAX (NMAX+((NMAX*9)/10))
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
-	unsigned int k;
+	size_t k;
 
 	s1 = adler & 0xffff;
 	s2 = (adler >> 16) & 0xffff;
