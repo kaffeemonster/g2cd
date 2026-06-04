@@ -390,9 +390,8 @@ static GCC_TARGET("avx2") size_t mempopcnt_AVX2(const void *s, size_t len)
 		if(len >= t)
 			len -= t;
 		else {
-			const __m256i v_inv_ident = _mm256_xor_si256(v_ident, _mm256_set1_epi8(0x1F));
-			const __m256i v_len       = _mm256_set1_epi8((unsigned char)((len+x)-1));
-			blend_mask = _mm256_cmpgt_epi8(v_inv_ident, v_len);
+			const __m256i v_len = _mm256_set1_epi8((unsigned char)((len+x)-1));
+			blend_mask = _mm256_cmpgt_epi8(v_ident, v_len);
 			d = _mm256_blendv_epi8(d, v_zero, blend_mask);
 			len  = 0;
 		}
@@ -473,9 +472,8 @@ static GCC_TARGET("avx2") size_t mempopcnt_AVX2(const void *s, size_t len)
 	/* trailer */
 	if(len)
 	{
-		const __m256i v_inv_ident = _mm256_xor_si256(v_ident, _mm256_set1_epi8(0x1F));
-		const __m256i v_len       = _mm256_set1_epi8((unsigned char)(len-1));
-		const __m256i blend_mask  = _mm256_cmpgt_epi8(v_inv_ident, v_len);
+		const __m256i v_len      = _mm256_set1_epi8((unsigned char)(len-1));
+		const __m256i blend_mask = _mm256_cmpgt_epi8(v_ident, v_len);
 		__m256i d = _mm256_load_si256((const __m256i *)p);
 		d = _mm256_blendv_epi8(d, v_zero, blend_mask);
 		sums = _mm256_add_epi64(sums, _mm256_sad_epu8(popcount_256(d), v_zero));
@@ -542,7 +540,7 @@ size_t GCC_TARGET("avx") mempopcnt_AVX(const void *s, size_t len)
 		if(len >= t)
 			len -= t;
 		else {
-			const __m128i v_len       = _mm_set1_epi8((unsigned char)((len+x)-1));
+			const __m128i v_len = _mm_set1_epi8((unsigned char)((len+x)-1));
 			blend_mask = _mm_cmpgt_epi8(v_ident, v_len);
 			d = _mm_blendv_epi8(d, v_zero, blend_mask);
 			len  = 0;
@@ -633,8 +631,8 @@ size_t GCC_TARGET("avx") mempopcnt_AVX(const void *s, size_t len)
 	/* trailer */
 	if(len)
 	{
-		const __m128i v_len       = _mm_set1_epi8((unsigned char)(len-1));
-		const __m128i blend_mask  = _mm_cmpgt_epi8(v_ident, v_len);
+		const __m128i v_len      = _mm_set1_epi8((unsigned char)(len-1));
+		const __m128i blend_mask = _mm_cmpgt_epi8(v_ident, v_len);
 		__m128i d = _mm_load_si128((const __m128i *)p);
 		d = _mm_blendv_epi8(d, v_zero, blend_mask);
 		sums = _mm_add_epi64(sums, _mm_sad_epu8(popcount_128(d), v_zero));
