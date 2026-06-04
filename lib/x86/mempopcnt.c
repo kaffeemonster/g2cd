@@ -37,11 +37,9 @@ static size_t mempopcnt_AVX512(const void *s, size_t len);
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
 static size_t mempopcnt_AVX2(const void *s, size_t len);
 # endif
-#if 0
-# if HAVE_BINUTILS >= 219
+# if HAVE_BINUTILS >= 219 && _GNUC_PREREQ(4,9)
 static size_t mempopcnt_AVX(const void *s, size_t len);
 # endif
-#endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 static size_t mempopcnt_SSE4A(const void *s, size_t len);
 # endif
@@ -88,10 +86,8 @@ static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 	}
 };
 
-//TODO: pimp for 64 bit (more regs)
-
 #ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 232 && _GNUC_PREREQ(8,0)
+# if HAVE_BINUTILS >= 232 && defined(__x86_64__) && _GNUC_PREREQ(8,0)
 #  include <immintrin.h>
 
 #define SOV512 (sizeof(__m512i))
@@ -211,7 +207,7 @@ static size_t GCC_TARGET("avx512f,avx512bw,avx512bitalg,bmi2") mempopcnt_AVX512_
 	return _mm512_reduce_add_epi64(sums);
 }
 # endif
-# if HAVE_BINUTILS >= 226 && _GNUC_PREREQ(8,0)
+# if HAVE_BINUTILS >= 226 && defined(__x86_64__) && _GNUC_PREREQ(8,0)
 #  include <immintrin.h>
 
 # ifndef SOV512
@@ -344,13 +340,12 @@ static size_t GCC_TARGET("avx512f,avx512bw,bmi2") mempopcnt_AVX512(const void *s
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
 #  include <immintrin.h>
 
-#define SOV32 (sizeof(__m256i))
 /* 256-Bit Popcount: 32x8bit popcounts  */
 static GCC_TARGET("avx2") inline __m256i popcount_256(__m256i v) {
-	const __m256i lookup = _mm256_setr_epi8(
-			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
-			);
+	const __m128i pattern  = _mm_setr_epi8(
+		0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
+	);
+	const __m256i lookup = _mm256_permute2x128_si256(_mm256_inserti128_si256(_mm256_setzero_si256(), pattern, 0),_mm256_setzero_si256(), 0);
 	const __m256i low_mask = _mm256_set1_epi8(0x0F);
 
 	__m256i lo = _mm256_and_si256(v, low_mask);
@@ -365,444 +360,287 @@ static GCC_TARGET("avx2") inline __m256i popcount_256(__m256i v) {
 /* Horizontal add vector of 4x64bit to scalar 64bit */
 static GCC_TARGET("avx2") inline uint64_t sum_uint64_256(__m256i v)
 {
-	/* an equivalent what gcc generates for a _mm256_reduce_add_epi256 */
+	/* an equivalent to what gcc generates for a _mm256_reduce_add_epi256, because non-std. */
 	__m128i vx = _mm_add_epi64(_mm256_extracti128_si256(v, 0), _mm256_extracti128_si256(v, 1));
 	vx = _mm_add_epi64(vx, _mm_srli_si128(vx, 8));
 	return _mm_cvtsi128_si64(vx);
 }
 
-/* Horizontal add 32x8Bit vector to scalar 64bit */
-static GCC_TARGET("avx2") inline uint64_t sum_bytes_256(__m256i v)
-{
-	__m256i sum_64 = _mm256_sad_epu8(v, _mm256_setzero_si256());
-	return sum_uint64_256(sum_64);
-}
-
 #define SOV256 (sizeof(__m256i))
-
 static GCC_TARGET("avx2") size_t mempopcnt_AVX2(const void *s, size_t len)
 {
-	const uint8_t *p = (const uint8_t *)s;
-	uint64_t total_popcnt = 0;
+	const __m256i v_ident = _mm256_setr_epi8(
+		0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+		16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+	);
+	const __m256i v_zero = _mm256_setzero_si256();
+	const uint8_t *p = (unsigned char *)ALIGN_DOWN(s, sizeof(__m256i));
+	__m256i sums     = v_zero;
+	size_t x         = ALIGN_DOWN_DIFF(s, SOV512);
 
-	__m256i v_ones   = _mm256_setzero_si256();
-	__m256i v_twos   = _mm256_setzero_si256();
-	__m256i v_fours  = _mm256_setzero_si256();
-	__m256i v_sum_eights = _mm256_setzero_si256();
-
-	while (len >= 8*SOV256)
+	if(x)
 	{
-		/* limit to 31 passes à 256 Bytes at once */
-		size_t r = len / (8*SOV256);
-		if (r > 31) r = 31;
-		len -= r * (8*SOV256);
+		const __m256i v_off = _mm256_set1_epi8((unsigned char)x);
+		__m256i blend_mask  = _mm256_cmpgt_epi8(v_off, v_ident);
+		__m256i d           = _mm256_load_si256((const __m256i *)p);
+		size_t t            = ALIGN_DIFF((const uint8_t *)s, SOV256);
+		p += SOV256;
 
-		__m256i v_sumb = _mm256_setzero_si256();
+		d = _mm256_blendv_epi8(d, v_zero, blend_mask);
+		if(len >= t)
+			len -= t;
+		else {
+			const __m256i v_inv_ident = _mm256_xor_si256(v_ident, _mm256_set1_epi8(0x1F));
+			const __m256i v_len       = _mm256_set1_epi8((unsigned char)((len+x)-1));
+			blend_mask = _mm256_cmpgt_epi8(v_inv_ident, v_len);
+			d = _mm256_blendv_epi8(d, v_zero, blend_mask);
+			len  = 0;
+		}
+		sums = _mm256_add_epi64(sums, _mm256_sad_epu8(popcount_256(d), v_zero));
+	}
+	if(len >= 8*SOV256)
+	{
+		__m256i v_sum_eights = v_zero;
+		__m256i v_ones       = v_zero;
+		__m256i v_twos       = v_zero;
+		__m256i v_fours      = v_zero;
 
-		for (; r > 0; r--, p += 8*SOV256)
+		do
 		{
-			__m256i v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2, v_eights;
+			/* limit to 31 passes à 256 Bytes at once */
+			size_t r = len / (8*SOV256);
+			r = r > 31 ? 31 : r;
+			len -= r * (8*SOV256);
 
-			/* CSA macro */
+			__m256i v_sumb = v_zero;
+			for (; r > 0; r--, p += 8*SOV256)
+			{
+				__m256i v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2, v_eights;
+				/* CSA macro */
 #define CSA(h, l, a, b, c) do { \
 	__m256i u = _mm256_xor_si256((a), (b)); \
 	(h) = _mm256_or_si256(_mm256_and_si256((a), (b)), _mm256_and_si256(u, (c))); \
 	(l) = _mm256_xor_si256(u, (c)); } while(0)
-			/* built CSA tree Baum for 8 vektors (256 Bytes) */
-			/* Level 1 */
-			c1 = _mm256_loadu_si256((const __m256i*)(p + 0*32));
-			c2 = _mm256_loadu_si256((const __m256i*)(p + 1*32));
-			CSA(v_twos_l, v_ones, v_ones, c1, c2);
+				/* built CSA tree for 8 vektors (512 Bytes) */
+				/* Level 1 */
+				c1 = _mm256_load_si256((const __m256i*)(p + 0*SOV256));
+				c2 = _mm256_load_si256((const __m256i*)(p + 1*SOV256));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+				c1 = _mm256_load_si256((const __m256i*)(p + 2*SOV256));
+				c2 = _mm256_load_si256((const __m256i*)(p + 3*SOV256));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
+				/* Level 2 */
+				CSA(v_fours_l, v_twos, v_twos, v_twos_l, v_twos_h);
 
-			c1 = _mm256_loadu_si256((const __m256i*)(p + 2*32));
-			c2 = _mm256_loadu_si256((const __m256i*)(p + 3*32));
-			CSA(v_twos_h, v_ones, v_ones, c1, c2);
+				c1 = _mm256_load_si256((const __m256i*)(p + 4*SOV256));
+				c2 = _mm256_load_si256((const __m256i*)(p + 5*SOV256));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+				c1 = _mm256_load_si256((const __m256i*)(p + 6*SOV256));
+				c2 = _mm256_load_si256((const __m256i*)(p + 7*SOV256));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
 
-			/* Ebene 2 */
-			CSA(v_fours_l, v_twos, v_twos, v_twos_l, v_twos_h);
-
-			c1 = _mm256_loadu_si256((const __m256i*)(p + 4*32));
-			c2 = _mm256_loadu_si256((const __m256i*)(p + 5*32));
-			CSA(v_twos_l, v_ones, v_ones, c1, c2);
-
-			c1 = _mm256_loadu_si256((const __m256i*)(p + 6*32));
-			c2 = _mm256_loadu_si256((const __m256i*)(p + 7*32));
-			CSA(v_twos_h, v_ones, v_ones, c1, c2);
-
-			/* combine level 1 and 2 to level 3 */
-			CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h);
-			CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h);
+				/* combine level 1 and 2 to level 3 */
+				CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h);
+				CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h);
 #undef CSA
-			/* finally popcount lvl 3 and accumulate into bytes */
-			v_sumb = _mm256_add_epi8(v_sumb, popcount_256(v_eights));
-		}
-		/* every 31 rounds (or at tail) transfer 32xbyte sums to 64-bit accumulators */
-		v_sum_eights = _mm256_add_epi64(v_sum_eights, _mm256_sad_epu8(v_sumb, _mm256_setzero_si256()));
-	}
+				/* finally popcount lvl 3 and accumulate into bytes */
+				v_sumb = _mm256_add_epi8(v_sumb, popcount_256(v_eights));
+			}
+			/* every 31 rounds (or at tail) transfer 32xbyte sums to 64-bit accumulators */
+			v_sum_eights = _mm256_add_epi64(v_sum_eights, _mm256_sad_epu8(v_sumb, v_zero));
+		} while(len >= 8*SOV256);
 
-	/* final weighting */
-	{
+		/* final weighting */
 		__m256i tmp = _mm256_slli_epi64(v_sum_eights, 3); /* x8 sum eights */
-		tmp = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_fours), _mm256_setzero_si256()), 2)); /* x4 sum fours */
-		tmp = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_twos), _mm256_setzero_si256()), 1)); /* x2 sum twos */
-		tmp = _mm256_add_epi64(tmp, _mm256_sad_epu8(popcount_256(v_ones), _mm256_setzero_si256())); /* x1 sum ones */
-		total_popcnt += sum_uint64_256(tmp);
+		tmp  = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_fours), v_zero), 2)); /* x4 sum fours */
+		tmp  = _mm256_add_epi64(tmp, _mm256_slli_epi64(_mm256_sad_epu8(popcount_256(v_twos), v_zero), 1)); /* x2 sum twos */
+		tmp  = _mm256_add_epi64(tmp, _mm256_sad_epu8(popcount_256(v_ones), v_zero)); /* x1 sum ones */
+		sums = _mm256_add_epi64(sums, tmp);
 	}
-	/* Tail (max 255 Bytes) */
-	if (len >= SOV256) {
-		__m256i v_sumb = _mm256_setzero_si256();
-		for (; len >= SOV256; len -= SOV256, p += SOV256) {
-			v_sumb = _mm256_add_epi8(v_sumb, popcount_256(_mm256_loadu_si256((const __m256i*)(p))));
-		}
-		total_popcnt += sum_bytes_256(v_sumb);
+	/* now one 32 vector at a time */
+	if(len >= SOV256)
+	{
+		__m256i sumsb = v_zero;
+		size_t r = len / SOV256;
+		r = r > 31 ? 31 : r;
+		len -= r * SOV256;
+		/* load 32 byte, popcnt them and add the bytes up, up to 31 times */
+		for (; r > 0; r--, p += SOV256)
+			sumsb = _mm256_add_epi8(sumsb, popcount_256(_mm256_load_si256((const __m256i*)p)));
+		/* horizontal add all the bytes to build 64 bit sums and accumulate */
+		sums = _mm256_add_epi64(sums, _mm256_sad_epu8(sumsb, v_zero));
 	}
-	for (;len >= 8; len -= 8, p += 8)
-		total_popcnt += __builtin_popcountll(*(const uint64_t *)p);
-	if (len >= 4) {
-		len -= 4;
-		p += 4;
-		total_popcnt += __builtin_popcountl(*(const uint32_t *)p);
+	/* trailer */
+	if(len)
+	{
+		const __m256i v_inv_ident = _mm256_xor_si256(v_ident, _mm256_set1_epi8(0x1F));
+		const __m256i v_len       = _mm256_set1_epi8((unsigned char)(len-1));
+		const __m256i blend_mask  = _mm256_cmpgt_epi8(v_inv_ident, v_len);
+		__m256i d = _mm256_load_si256((const __m256i *)p);
+		d = _mm256_blendv_epi8(d, v_zero, blend_mask);
+		sums = _mm256_add_epi64(sums, _mm256_sad_epu8(popcount_256(d), v_zero));
 	}
-	if (len >= 2) {
-		len -= 2;
-		p += 2;
-		total_popcnt += __builtin_popcount(*(const uint16_t *)p);
-	}
-	if(len > 0) {
-		total_popcnt += __builtin_popcount(*p);
-		p++;
-		len--;
-	}
-
-	return total_popcnt;
+	return sum_uint64_256(sums);
 }
+
 # endif
-# if HAVE_BINUTILS >= 219
-#  if 0
-/* wrong results, marginally faster */
-static size_t mempopcnt_AVX(const void *s, size_t len)
+# if HAVE_BINUTILS >= 219 && _GNUC_PREREQ(4,9)
+#  include <immintrin.h>
+
+# ifndef SOV256
+#  define SOV256 (sizeof(__m256i))
+# endif
+static inline __m128i GCC_TARGET("avx") popcount_128(__m128i v)
 {
-	size_t ret, cnt1, cnt2;
+	const __m128i lookup  = _mm_setr_epi8(
+			0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4
+		);
+	const __m128i low_mask = _mm_set1_epi8(0x0F);
 
-//TODO: does this work?
-	asm(
-		"prefetchnta	(%3)\n\t"
-		"prefetchnta	0x20(%3)\n\t"
-		"prefetchnta	0x70(%3)\n\t"
-#  ifdef HAVE_SUBSECTION
-		".subsection 2\n\t"
-#  else
-		"jmp	88f\n\t"
-#  endif
-		".p2align 2\n"
-		"avx_full_popcnt:\n\t"
-		"vpandn	%%xmm0, %%xmm6, %%xmm3\n\t"
-		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
-		"vpsrlw	$4, %%xmm3, %%xmm3\n\t"
-		"vpshufb	%%xmm7, %%xmm0, %%xmm1\n\t"
-		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
-		"vpshufb	%%xmm7, %%xmm3, %%xmm2\n\t"
-		"vpaddb	%%xmm1, %%xmm2, %%xmm2\n\t"
-		"vpsadbw	%%xmm0, %%xmm2, %%xmm2\n\t"
-		"vpaddq %%xmm2, %%xmm5, %%xmm5\n\t"
-		"ret\n\t"
-#  ifdef HAVE_SUBSECTION
-		".previous\n\t"
-#  else
-		"88:\n\t"
-#  endif
-		"vmovdqa	128+%5, %%xmm7\n\t" /* lut_st */
-		"vmovdqa	32+%5, %%xmm6\n\t" /* 0x0f0f0f0f0f */
-		"vpxor	%%xmm5, %%xmm5, %%xmm5\n\t"
-		"vmovdqa	96+%5, %%xmm1\n\t"
-		"mov	$16, %0\n\t"
-		"mov	%3, %1\n\t"
-		"and	$-16, %3\n\t"
-		"vmovdqa	(%3), %%xmm0\n\t"
-		"sub	%3, %1\n\t"
-		"sub	%1, %0\n\t"
-		"imul	$0x01010101, %1\n\t"
-		"movd	%1, %%xmm2\n\t"
-		"mov	%6, %1\n\t"
-		"vpshufd	$0, %%xmm2, %%xmm2\n\t"
-		"vpcmpgtb	%%xmm2, %%xmm1, %%xmm1\n\t"
-		"vpand	%%xmm1, %%xmm0, %%xmm0\n\t"
-		"sub	%0, %1\n\t"
-		"mov	%1, %0\n\t"
-		"jbe	9f\n\t"
-		"shr	$5, %1\n"
-		"jz	7f\n\t"
-		"add	$16, %3\n\t"
-		"call	avx_full_popcnt\n\t"
-#  if CSA_SETUP == 1
-/*=======================*/
-		"test	$31, %3\n\t"
-		"jz	12f\n\t"
-		"vmovdqa	(%3), %%xmm0\n\t"
-		"add	$16, %3\n\t"
-		"sub	$16, %0\n\t"
-		"mov	%0, %1\n\t"
-		"call	avx_full_popcnt\n\t"
-		"shr	$5, %1\n\t"
-		"jz	7f\n"
-		"12:\n\t"
-		"cmp	$8, %1\n\t"
-		"jb	1f\n\t"
-		"push	%0\n\t"
-		"sub	$(32+16), "SP"\n\t"
-		"lea	15("SP"), %0\n\t"
-		"and	$-16, %0\n\t"
-		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"
-		"vmovdqa	%%xmm5, 16(%0)\n\t"
-		"vpcmpeqd	%%xmm1, %%xmm1, %%xmm1\n\t"
-		"vinsertf128	$1, %%xmm1, %%ymm1, %%ymm1\n\t"
-		"vmovdqa	%%ymm1, %%ymm3\n\t"
-		"vmovdqa	%%ymm1, %%ymm5\n\t"
-/*************************/
-		"11:\n\t"
-		"vmovdqa	%%xmm7, (%0)\n\t"
-		"mov	$124, %2\n\t"
-		"cmp	%2, %1\n\t"
-		"cmovb	%1, %2\n\t"
-		"and	$-8, %2\n\t"
-		"sub	%2, %1\n\t"
-		"shr	$3, %2\n\t"
-		"vpxor	%%xmm7, %%xmm7, %%xmm7\n\t"
-		".p2align 2\n"
-		"33:\n\t"
-/*&&&&&&&&&&&&&&&&&&&&&*/
-		"vmovdqa	(%3), %%ymm6\n\t"
-		"vxorpd	%%ymm6, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm6, %%ymm6\n\t"
-		"vmovdqa	32(%3), %%ymm0\n\t"
-		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
-		"vorpd	%%ymm0, %%ymm6, %%ymm6\n\t"
-		"vmovdqa	64(%3), %%ymm4\n\t"
-		"vxorpd	%%ymm4, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm4, %%ymm4\n\t"
-		"vmovdqa	96(%3), %%ymm0\n\t"
-		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
-		"vorpd	%%ymm0, %%ymm4, %%ymm4\n\t"
+	__m128i lo = _mm_and_si128(v, low_mask);
+	__m128i hi = _mm_and_si128(_mm_srli_epi16(v, 4), low_mask);
 
-		"vxorpd	%%ymm6, %%ymm3, %%ymm3\n\t"
-		"vandpd	%%ymm3, %%ymm6, %%ymm6\n\t"
-		"vxorpd	%%ymm4, %%ymm3, %%ymm3\n\t"
-		"vandpd	%%ymm3, %%ymm4, %%ymm4\n\t"
-		"vorpd	%%ymm4, %%ymm6, %%ymm6\n\t"
+	__m128i popcnt1 = _mm_shuffle_epi8(lookup, lo);
+	__m128i popcnt2 = _mm_shuffle_epi8(lookup, hi);
 
-		"vmovdqa	128(%3), %%ymm2\n\t"
-		"vxorpd	%%ymm2, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm2, %%ymm2\n\t"
-		"vmovdqa	160(%3), %%ymm0\n\t"
-		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
-		"vorpd	%%ymm0, %%ymm2, %%ymm2\n\t"
-		"vmovdqa	192(%3), %%ymm0\n\t"
-		"vxorpd	%%ymm0, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm0, %%ymm0\n\t"
-		"vmovdqa	224(%3), %%ymm4\n\t"
-		"vxorpd	%%ymm4, %%ymm1, %%ymm1\n\t"
-		"vandpd	%%ymm1, %%ymm4, %%ymm4\n\t"
-		"vorpd	%%ymm4, %%ymm0, %%ymm0\n\t"
-
-		"add	$256, %3\n\t"
-//		"prefetchnta	0x70(%3)\n\t"
-		"vmovdqa	160+%5,%%ymm4\n\t" /* 0x0f0f0f0f0f */
-//		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
-
-		"vxorpd	%%ymm2, %%ymm3, %%ymm3\n\t"
-		"vandpd	%%ymm3, %%ymm2, %%ymm2\n\t"
-		"vxorpd	%%ymm0, %%ymm3, %%ymm3\n\t"
-		"vandpd	%%ymm3, %%ymm0, %%ymm0\n\t"
-		"vorpd	%%ymm0, %%ymm2, %%ymm2\n\t"
-
-		"vxorpd	%%ymm6, %%ymm5, %%ymm5\n\t"
-		"vandpd	%%ymm5, %%ymm6, %%ymm6\n\t"
-		"vxorpd	%%ymm2, %%ymm5, %%ymm5\n\t"
-		"vandpd	%%ymm5, %%ymm2, %%ymm2\n\t"
-		"vorpd	%%ymm2, %%ymm6, %%ymm6\n\t"
-
-		"dec	%2\n\t"
-
-		"vmovdqa	128+%5, %%xmm2\n\t" /* lut_st */
-
-		"vandpd	%%ymm4, %%ymm6, %%ymm0\n\t"
-		"vandnpd	%%ymm4, %%ymm6, %%ymm6\n\t"
-		"vpshufb	%%xmm2, %%xmm0, %%xmm4\n\t"
-		"vextractf128	$1, %%ymm0, %%xmm0\n\t"
-		"vpshufb	%%xmm2, %%xmm0, %%xmm0\n\t"
-		"vpaddb	%%xmm4, %%xmm7, %%xmm7\n\t"
-		"vpaddb	%%xmm0, %%xmm7, %%xmm7\n\t"
-
-		"vpsrlw	$4, %%xmm6, %%xmm4\n\t"
-		"vextractf128	$1, %%ymm6, %%xmm6\n\t"
-		"vpsrlw	$4, %%xmm6, %%xmm6\n\t"
-		"vpshufb	%%xmm2, %%xmm4, %%xmm0\n\t"
-		"vpshufb	%%xmm2, %%xmm6, %%xmm4\n\t"
-		"vpaddb	%%xmm0, %%xmm7, %%xmm7\n\t"
-		"vpaddb	%%xmm4, %%xmm7, %%xmm7\n\t"
-		"jnz	33b\n\t"
-/*&&&&&&&&&&&&&&&&&&&&*/
-		"vmovdqa	(%0), %%xmm6\n\t"
-		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
-		"vpsadbw	%%xmm0, %%xmm7, %%xmm7\n\t"
-		"vpaddq	%%xmm6, %%xmm7, %%xmm7\n\t"
-		"cmp	$8, %1\n\t"
-		"jae	11b\n\t"
-/*************************/
-#   ifdef HAVE_SUBSECTION
-		".subsection 2\n\t"
-#   else
-		"jmp	99f\n\t"
-#   endif
-		".p2align 2\n"
-		"avx_wrap:\n\t"
-		"vandpd	%%ymm4, %%ymm5, %%ymm0\n\t"
-		"vandnpd	%%ymm4, %%ymm5, %%ymm2\n\t"
-		"vpshufb	%%xmm6, %%xmm0, %%xmm5\n\t"
-		"vextractf128	$1, %%ymm0, %%xmm0\n\t"
-		"vpshufb	%%xmm6, %%xmm0, %%xmm0\n\t"
-		"vpaddb	%%xmm0, %%xmm5, %%xmm5\n\t"
-
-		"vpsrlw	$4, %%xmm2, %%xmm0\n\t"
-		"vextractf128	$1, %%ymm2, %%xmm2\n\t"
-		"vpsrlw	$4, %%xmm2, %%xmm2\n\t"
-		"vpshufb	%%xmm6, %%xmm0, %%xmm0\n\t"
-		"vpshufb	%%xmm6, %%xmm2, %%xmm2\n\t"
-		"vpaddb	%%xmm0, %%xmm5, %%xmm5\n\t"
-		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
-		"vpaddb	%%xmm2, %%xmm5, %%xmm5\n\t"
-		"vpsadbw	%%xmm0, %%xmm5, %%xmm5\n\t"
-		"ret\n\t"
-#   ifdef HAVE_SUBSECTION
-		".previous\n\t"
-#   else
-		"99:\n\t"
-#   endif
-		"vmovdqa	%%xmm2, %%xmm6\n\t"
-		"vbroadcastf128	32+%5, %%ymm4\n\t" /* 0x0f0f0f0f0f */
-		"call	avx_wrap\n\t"
-		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
-		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
-		"vmovdqa	%%ymm3, %%ymm5\n\t"
-		"vbroadcastf128	32+%5, %%ymm3\n\t" /* 0x0f0f0f0f0f */
-		"vmovdqa	%%ymm3, %%ymm4\n\t"
-		"call	avx_wrap\n\t"
-		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
-		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
-		"vmovdqa	%%ymm1, %%ymm5\n\t"
-		"vmovdqa	%%ymm3, %%ymm4\n\t"
-		"call	avx_wrap\n\t"
-		"vpaddq	%%xmm7, %%xmm7, %%xmm7\n\t"
-		"vpsubq	%%xmm5, %%xmm7, %%xmm7\n\t"
-		"vmovdqa	64+%5, %%xmm2\n\t"
-//TODO: This needs another constant
-		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
-		/* twice as much bits, twice the constant??? */
-		"vpaddq	%%xmm2, %%xmm7, %%xmm7\n\t"
-/*~~~~~~~~ cleanup ~~~~~~*/
-		"vmovdqa	16(%0), %%xmm5\n\t"
-		"add	$(32+16), "SP"\n\t"
-		"pop	%0\n\t"
-		"test	%1, %1\n\t"
-		"vpaddq	%%xmm7, %%xmm5, %%xmm5\n\t"
-		"vmovdqa	%%xmm6, %%xmm7\n\t" /*  */
-		"vmovdqa	%%xmm3, %%xmm6\n\t" /* 0x0f0f0f0f0f */
-		"jz	5f\n\t"
-/*=======================*/
-#  endif
-		"1:\n\t"
-		"mov	$15, %2\n\t"
-		"cmp	%2, %1\n\t"
-		"cmovb	%1, %2\n\t"
-		"sub	%2, %1\n\t"
-		"vpxor	%%xmm4, %%xmm4, %%xmm4\n\t"
-		"2:\n\t"
-		"prefetchnta	0x70(%3)\n\t"
-		"vmovdqa	(%3), %%xmm0\n"
-		"vpandn	%%xmm0, %%xmm6, %%xmm1\n\t"
-		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
-		"vpsrlw	$4, %%xmm1, %%xmm1\n\t"
-		"vpshufb	%%xmm7, %%xmm0, %%xmm3\n\t"
-		"vmovdqa	16(%3), %%xmm0\n\t"
-		"add	$32, %3\n\t"
-		"vpshufb	%%xmm7, %%xmm1, %%xmm2\n\t"
-		"vpaddb	%%xmm3, %%xmm4, %%xmm4\n\t"
-		"vpandn	%%xmm0, %%xmm6, %%xmm1\n\t"
-		"vpaddb	%%xmm2, %%xmm4, %%xmm4\n\t"
-		"dec	%2\n\t"
-		"vpand	%%xmm0, %%xmm6, %%xmm0\n\t"
-		"vpsrlw	$4, %%xmm1, %%xmm1\n\t"
-		"vpshufb	%%xmm7, %%xmm0, %%xmm3\n\t"
-		"vpshufb	%%xmm7, %%xmm1, %%xmm2\n\t"
-		"vpaddb	%%xmm3, %%xmm4, %%xmm4\n\t"
-		"vpaddb	%%xmm2, %%xmm4, %%xmm4\n\t"
-		"jnz	2b\n\t"
-		"vpxor	%%xmm0, %%xmm0, %%xmm0\n\t"
-		"vpsadbw	%%xmm0, %%xmm4, %%xmm4\n\t"
-		"vpaddq %%xmm4, %%xmm5, %%xmm5\n\t"
-		"test	%1, %1\n\t"
-		"jnz	1b\n\t"
-		"jmp	5f\n"
-		"7:\n\t"
-		"and	$31, %0\n\t"
-		"jz	4f\n\t"
-		"jmp	8f\n"
-		"9:\n\t"
-		"add	$16, %0\n\t"
-		"jmp	3f\n\t"
-		"5:\n\t"
-		"and	$31, %0\n\t"
-		"jz	4f\n\t"
-		"cmp	$16, %0\n\t"
-		"jb	6f\n\t"
-		"vmovdqa	(%3), %%xmm0\n"
-		"8:\n\t"
-		"add	$16, %3\n\t"
-		"call	avx_full_popcnt\n\t"
-		"6:\n\t"
-		"and	$15, %0\n\t"
-		"jz	4f\n\t"
-		"mov	%0, %1\n\t"
-		"vmovdqa	(%3), %%xmm0\n"
-		"3:\n\t"
-		"vmovdqa	96+%5, %%xmm1\n\t"
-		"imul	$0x01010101, %0\n\t"
-		"movd	%0, %%xmm2\n\t"
-		"vpshufd	$0, %%xmm2, %%xmm2\n\t"
-		"vpcmpgtb	%%xmm2, %%xmm1, %%xmm1\n\t"
-		"vpandn	%%xmm0, %%xmm1, %%xmm0\n\t"
-		"call	avx_full_popcnt\n\t"
-		"4:\n\t"
-		"vpunpckhqdq	%%xmm5, %%xmm5, %%xmm0\n\t"
-		"vpaddq	%%xmm5, %%xmm0, %%xmm0\n\t"
-#  ifdef __x86_64__
-#   ifndef HAVE_MOVQ_XMM_GPR
-		".byte 0x66, 0x48, 0x0f, 0x7e, 0xc0\n\t"
-#   else
-		"movq	%%xmm0, %0\n\t"
-#   endif
-#  else
-		"movd	%%xmm0, %0\n\t"
-#  endif
-	: /* %0 */ "="CL"a" (ret),
-	  /* %1 */ "="CL"r" (cnt1),
-	  /* %2 */ "="CL"r" (cnt2),
-	  /* %3 */ "="CL"r" (s)
-	: /* %4 */ "3" (s),
-	  /* %5 */ "m" (vals),
-	  /* %6 */ CO  (len)
-	: "cc", "memory"
-#  ifdef __SSE__
-	, "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7"
-#  endif
-	);
-
-	return ret;
+	return _mm_add_epi8(popcnt1, popcnt2);
 }
-#  endif
+
+static inline __m128i GCC_TARGET("avx") popcount_2x128(__m256d v)
+{
+	__m128i lo = popcount_128(_mm_castpd_si128(_mm256_castpd256_pd128(v)));
+	__m128i hi = popcount_128(_mm_castpd_si128(_mm256_extractf128_pd(v, 1)));
+	return _mm_add_epi8(lo, hi);
+}
+
+static inline uint64_t GCC_TARGET("avx") sum_uint64_128(__m128i v)
+{
+	__m128i vx = _mm_add_epi64(v, _mm_srli_si128(v, 8));
+	return _mm_cvtsi128_si64(vx);
+}
+
+#define SOV128 (sizeof(__m128i))
+size_t GCC_TARGET("avx") mempopcnt_AVX(const void *s, size_t len)
+{
+	const __m128i v_ident = _mm_setr_epi8(
+		0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
+	);
+	const __m128i v_zero = _mm_setzero_si128();
+	const uint8_t *p = (unsigned char *)ALIGN_DOWN(s, SOV128);
+	__m128i sums     = v_zero;
+	size_t x         = ALIGN_DOWN_DIFF(s, SOV128);
+
+	if(x)
+	{
+		const __m128i v_off = _mm_set1_epi8((unsigned char)x);
+		__m128i blend_mask  = _mm_cmpgt_epi8(v_off, v_ident);
+		__m128i d           = _mm_load_si128((const __m128i *)p);
+		size_t t            = ALIGN_DIFF((const uint8_t *)s, SOV128);
+		p += SOV128;
+
+		d = _mm_blendv_epi8(d, v_zero, blend_mask);
+		if(len >= t)
+			len -= t;
+		else {
+			const __m128i v_len       = _mm_set1_epi8((unsigned char)((len+x)-1));
+			blend_mask = _mm_cmpgt_epi8(v_ident, v_len);
+			d = _mm_blendv_epi8(d, v_zero, blend_mask);
+			len  = 0;
+		}
+		sums = _mm_add_epi64(sums, _mm_sad_epu8(popcount_128(d), v_zero));
+	}
+	if(len >= SOV128 && ALIGN_DIFF((const uint8_t *)p, SOV256)) {
+		__m128i d = _mm_load_si128((const __m128i *)p);
+		sums = _mm_add_epi64(sums, _mm_sad_epu8(popcount_128(d), v_zero));
+		len -= SOV128;
+		p   += SOV128;
+	}
+	if(likely(len >= 8*SOV256))
+	{
+		__m256d v_ones       = _mm256_setzero_pd();
+		__m256d v_twos       = v_ones;
+		__m256d v_fours      = v_ones;
+		__m128i v_sum_eights = v_zero;
+
+		do
+		{
+			/* limit to 31 passes à 256 Bytes at once */
+			size_t r = len / (8*SOV256);
+			r = r > 31 ? 31 : r;
+			len -= r * (8*SOV256);
+
+			__m128i v_sumb_l = v_zero, v_sumb_h = v_zero;
+
+			for (; r > 0; r--, p += 8*SOV256)
+			{
+				__m256d v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2, v_eights;
+				/* CSA macro */
+#define CSA(h, l, a, b, c) do { \
+	__m256d u = _mm256_xor_pd((a), (b)); \
+	(h) = _mm256_or_pd(_mm256_and_pd((a), (b)), _mm256_and_pd(u, (c))); \
+	(l) = _mm256_xor_pd(u, (c)); } while(0)
+				/* built CSA tree for 8 vektors (512 Bytes) */
+				/* Level 1 */
+				c1 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 0*SOV256)));
+				c2 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 1*SOV256)));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+				c1 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 2*SOV256)));
+				c2 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 3*SOV256)));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
+				/* Level 2 */
+				CSA(v_fours_l, v_twos, v_twos, v_twos_l, v_twos_h);
+
+				c1 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 4*SOV256)));
+				c2 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 5*SOV256)));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+				c1 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 6*SOV256)));
+				c2 = _mm256_castsi256_pd(_mm256_load_si256((const __m256i*)(p + 7*SOV256)));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
+
+				/* combine level 1 and 2 to level 3 */
+				CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h);
+				CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h);
+#undef CSA
+				/* finally popcount lvl 3 and accumulate into bytes */
+				v_sumb_l = _mm_add_epi8(v_sumb_l, popcount_128(_mm_castpd_si128(_mm256_castpd256_pd128(v_eights))));
+				v_sumb_h = _mm_add_epi8(v_sumb_h, popcount_128(_mm_castpd_si128(_mm256_extractf128_pd(v_eights, 1))));
+			}
+			/* every 31 rounds (or at tail) transfer 32xbyte sums to 64-bit accumulators */
+			v_sum_eights = _mm_add_epi64(v_sum_eights, _mm_sad_epu8(v_sumb_l, v_zero));
+			v_sum_eights = _mm_add_epi64(v_sum_eights, _mm_sad_epu8(v_sumb_h, v_zero));
+		} while(len >= 8*SOV256);
+
+		/* final weighting */
+		__m128i tmp = _mm_slli_epi64(v_sum_eights, 3); /* x8 sum eights */
+		tmp  = _mm_add_epi64(tmp, _mm_slli_epi64(_mm_sad_epu8(popcount_2x128(v_fours), v_zero), 2)); /* x4 sum fours */
+		tmp  = _mm_add_epi64(tmp, _mm_slli_epi64(_mm_sad_epu8(popcount_2x128(v_twos), v_zero), 1)); /* x2 sum twos */
+		tmp  = _mm_add_epi64(tmp, _mm_sad_epu8(popcount_2x128(v_ones), v_zero)); /* x1 sum ones */
+		sums = _mm_add_epi64(sums, tmp);
+	}
+	/* now one 16 vector at a time */
+	if(len >= SOV128)
+	{
+		__m128i sumsb = v_zero;
+		size_t r = len / SOV128;
+		r = r > 31 ? 31 : r;
+		len -= r * SOV128;
+		/* load 16 byte, popcnt them and add the bytes up, up to 31 times */
+		for (; r > 0; r--, p += SOV128)
+			sumsb = _mm_add_epi8(sumsb, popcount_128(_mm_load_si128((const __m128i*)p)));
+		/* horizontal add all the bytes to build 64 bit sums and accumulate */
+		sums = _mm_add_epi64(sums, _mm_sad_epu8(sumsb, v_zero));
+	}
+	/* trailer */
+	if(len)
+	{
+		const __m128i v_len       = _mm_set1_epi8((unsigned char)(len-1));
+		const __m128i blend_mask  = _mm_cmpgt_epi8(v_ident, v_len);
+		__m128i d = _mm_load_si128((const __m128i *)p);
+		d = _mm_blendv_epi8(d, v_zero, blend_mask);
+		sums = _mm_add_epi64(sums, _mm_sad_epu8(popcount_128(d), v_zero));
+	}
+	return sum_uint64_128(sums);
+}
 # endif
 
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
@@ -820,7 +658,7 @@ static size_t mempopcnt_AVX(const void *s, size_t len)
  * Is it meh, or only in one pipeline, somthing like that,
  * SSSE3 CSA wins, but is the popcnt inst good, popcnt
  * takes the cake. Like on my ZEN3, popcnt is ~30% faster
- * then SIMD CSA.
+ * then SSSE3 SIMD CSA.
  */
 static inline size_t popcountst_intSSE4(size_t n)
 {
@@ -2269,20 +2107,18 @@ static size_t mempopcnt_MMX(const void *s, size_t len)
 static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 {
 #ifdef HAVE_BINUTILS
-# if HAVE_BINUTILS >= 232 && _GNUC_PREREQ(10,0)
+# if HAVE_BINUTILS >= 232 && defined(__x86_64__) && _GNUC_PREREQ(10,0)
 	{.func = (void (*)(void))mempopcnt_AVX512_bitalg,  .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_AVXV512BITALG)|CFB(CFEATURE_BMI2)}, .flags = CFF_AVX512_TST},
 # endif
-# if HAVE_BINUTILS >= 226 && _GNUC_PREREQ(10,0)
+# if HAVE_BINUTILS >= 226 && defined(__x86_64__) && _GNUC_PREREQ(10,0)
 	{.func = (void (*)(void))mempopcnt_AVX512,  .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_BMI2)}, .flags = CFF_AVX512_TST},
 # endif
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
 	{.func = (void (*)(void))mempopcnt_AVX2,    .features = {[1] = CFB(CFEATURE_AVX), [4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
-# if 0
-	/* only marginally faster then popcnt intr., wrong results */
-# if HAVE_BINUTILS >= 219
+# if HAVE_BINUTILS >= 219 && _GNUC_PREREQ(4,9)
+	/* AVX version is important for sandy/ivy bridge gens, slower for very short length, but faster for our 128kb */
 	{.func = (void (*)(void))mempopcnt_AVX,     .features = {[1] = CFB(CFEATURE_AVX)}, .flags = CFF_AVX_TST},
-# endif
 # endif
 # if HAVE_BINUTILS >= 218 && defined(__x86_64__) && CSA_SETUP != 1
 	{.func = (void (*)(void))mempopcnt_SSE4A,   .features = {[1] = CFB(CFEATURE_POPCNT)}},
