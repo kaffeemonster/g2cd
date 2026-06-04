@@ -92,55 +92,124 @@ static const struct { uint32_t d[12][4]; } vals GCC_ATTR_ALIGNED(32) =
 #  include <immintrin.h>
 
 #define SOV512 (sizeof(__m512i))
-static size_t GCC_TARGET("avx512f,avx512bw,avx512bitalg") mempopcnt_AVX512(const void *s, size_t len)
+static size_t GCC_TARGET("avx512f,avx512bw,avx512bitalg,bmi2") mempopcnt_AVX512(const void *s, size_t len)
 {
-	const uint8_t *p = (const uint8_t *)s;
-	uint64_t total_popcnt = 0;
+	__m512i v_zero   = _mm512_setzero_si512();
+	__m512i sums     = v_zero;
+	const uint8_t *p = (const uint8_t *)ALIGN_DOWN(s, SOV512);
+	size_t x         = ALIGN_DOWN_DIFF(s, SOV512);
 
-	__m512i sums = _mm512_setzero_si512();
-	/* we go one 64 vector at a time for now */
+	if (x)
+	{
+		__mmask64 msk    = ~_bzhi_u64(-1, x);
+		__m512i d        = _mm512_maskz_loadu_epi8(msk, (const __m512i *)p);
+		size_t t         = ALIGN_DIFF(s, SOV512);
+		p += SOV512;
+		if (len >= t)
+			len -= t;
+		else {
+			msk  = _bzhi_u64(-1, len + x);
+			d    = _mm512_maskz_mov_epi8(msk, d);
+			len  = 0;
+		}
+		sums = _mm512_add_epi64(sums, _mm512_sad_epu8(_mm512_popcnt_epi8(d), v_zero));
+	}
+	/*
+	 * as always, popcnt has a limitation: latency off three, so unrolling needed,
+	 * but on some cpu it can only be executed on one instruction port (of several),
+	 * so still: better CSA, use it sparringly
+	 */
+	if (len >= 8*SOV512)
+	{
+		__m512i v_sum_eights = v_zero;
+		__m512i v_ones   = v_zero;
+		__m512i v_twos   = v_zero;
+		__m512i v_fours  = v_zero;
+
+		do
+		{
+			/* limit to 31 passes à 512 Bytes at once */
+			size_t r = len / (8*SOV512);
+			r = r > 31 ? 31 : r;
+			len -= r * (8*SOV512);
+
+			__m512i v_sumb   = v_zero;
+
+			for (; r > 0; r--, p += 8*SOV512)
+			{
+				__m512i v_twos_l, v_twos_h, v_fours_l, v_fours_h, c1, c2, v_eights;
+
+				/* CSA macro */
+#define CSA(h, l, a, b, c) do { \
+		__m512i u = _mm512_xor_si512((a), (b)); \
+		(h) = _mm512_or_si512(_mm512_and_si512((a), (b)), _mm512_and_si512(u, (c))); \
+		(l) = _mm512_xor_si512(u, (c)); } while(0)
+				/*
+				 * gcc turns csa macro into vpternlogd which halves logic
+				 * instructions. Only hope is the reg moves are "free"
+				 * (register rename) and as still "simple logic" it is
+				 * one latency and multi-issue (on all ports)
+				 */
+
+				/* built CSA tree for 8 vektors (512 Bytes) */
+				/* Level 1 */
+				c1 = _mm512_load_epi64((const __m512i*)(p + 0*64));
+				c2 = _mm512_load_epi64((const __m512i*)(p + 1*64));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+
+				c1 = _mm512_load_epi64((const __m512i*)(p + 2*64));
+				c2 = _mm512_load_epi64((const __m512i*)(p + 3*64));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
+				/* Level 2 */
+				CSA(v_fours_l, v_twos, v_twos, v_twos_l, v_twos_h);
+
+				c1 = _mm512_load_epi64((const __m512i*)(p + 4*64));
+				c2 = _mm512_load_epi64((const __m512i*)(p + 5*64));
+				CSA(v_twos_l, v_ones, v_ones, c1, c2);
+
+				c1 = _mm512_load_epi64((const __m512i*)(p + 6*64));
+				c2 = _mm512_load_epi64((const __m512i*)(p + 7*64));
+				CSA(v_twos_h, v_ones, v_ones, c1, c2);
+
+				/* combine level 1 and 2 to level 3 */
+				CSA(v_fours_h, v_twos, v_twos, v_twos_l, v_twos_h);
+				CSA(v_eights, v_fours, v_fours, v_fours_l, v_fours_h);
+#undef CSA
+				/* finally popcount lvl 3 and accumulate into bytes */
+				v_sumb = _mm512_add_epi8(v_sumb, _mm512_popcnt_epi8(v_eights));
+			}
+			/* every 31 rounds (or at tail) transfer 32xbyte sums to 64-bit accumulators */
+			v_sum_eights = _mm512_add_epi64(v_sum_eights, _mm512_sad_epu8(v_sumb, v_zero));
+		} while (len >= 8*SOV512);
+
+		/* final weighting */
+		__m512i tmp = _mm512_slli_epi64(v_sum_eights, 3); /* x8 sum eights */
+		tmp = _mm512_add_epi64(tmp, _mm512_slli_epi64(_mm512_sad_epu8(_mm512_popcnt_epi8(v_fours), v_zero), 2));/* x4 sum fours */
+		tmp = _mm512_add_epi64(tmp, _mm512_slli_epi64(_mm512_sad_epu8(_mm512_popcnt_epi8(v_twos), v_zero), 1));/* x2 sum twos */
+		tmp = _mm512_add_epi64(tmp, _mm512_sad_epu8(_mm512_popcnt_epi8(v_ones), v_zero)); /* x1 sum ones */
+		sums = _mm512_add_epi64(sums, tmp);
+	}
+	/* now one 64 vector at a time */
 	while (len >= SOV512)
 	{
-		__m512i sumsb = _mm512_setzero_si512();
+		__m512i sumsb = v_zero;
 		size_t r = len / SOV512;
-		if (r > 31) r = 31;
+		r = r > 31 ? 31 : r;
 		len -= r * SOV512;
-
 		/* load 64 byte, popcnt them and add the bytes up, up to 31 times */
 		for (; r > 0; r--, p += SOV512)
-			sumsb = _mm512_add_epi8(sumsb, _mm512_popcnt_epi8(_mm512_loadu_si512((const __m512i*)p)));
+			sumsb = _mm512_add_epi8(sumsb, _mm512_popcnt_epi8(_mm512_load_epi64((const __m512i*)p)));
 		/* horizontal add all the bytes to build 64 bit sums and accumulate */
-		sums = _mm512_add_epi64(sums, _mm512_sad_epu8(sumsb, _mm512_setzero_si512()));
+		sums = _mm512_add_epi64(sums, _mm512_sad_epu8(sumsb, v_zero));
+	}
+	if (len) {
+		__mmask64 msk  = _bzhi_u64(-1, len);
+		__m512i d      = _mm512_maskz_loadu_epi8(msk, (const __m512i *)p);
+		sums = _mm512_add_epi64(sums, _mm512_sad_epu8(_mm512_popcnt_epi8(d), v_zero));
+		len  = 0;
 	}
 	/* horizontaly add and extract all 64 bit sums */
-	total_popcnt += _mm512_reduce_add_epi64(sums);
-/*	if (len >= 32) // AVX512VL
-	{
-		__m256i v = _mm256_loadu_si256((const __m256i *)p);
-		__m256i counts = _mm256_popcnt_epi8(v);
-//		__m256i sums = _mm256_sad_epu8(counts, _mm256_setzero_si256());
-		total_popcnt += _mm256_reduce_add_epi8(counts);
-		p += 32;
-		len -= 32;
-	}*/
-	for (;len >= 8; len -= 8, p += 8)
-		total_popcnt += __builtin_popcountll(*(const uint64_t *)p);
-	if (len >= 4) {
-		len -= 4;
-		p += 4;
-		total_popcnt += __builtin_popcountl(*(const uint32_t *)p);
-	}
-	if (len >= 2) {
-		len -= 2;
-		p += 2;
-		total_popcnt += __builtin_popcount(*(const uint16_t *)p);
-	}
-	if(len > 0) {
-		total_popcnt += __builtin_popcount(*p);
-		p++;
-		len--;
-	}
-	return total_popcnt;
+	return _mm512_reduce_add_epi64(sums);
 }
 # endif
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
@@ -2071,7 +2140,7 @@ static __init_cdata const struct test_cpu_feature tfeat_mempopcnt[] =
 {
 #ifdef HAVE_BINUTILS
 # if HAVE_BINUTILS >= 232 && _GNUC_PREREQ(10,0)
-	{.func = (void (*)(void))mempopcnt_AVX512,  .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_AVXV512BITALG)}, .flags = CFF_AVX512_TST},
+	{.func = (void (*)(void))mempopcnt_AVX512,  .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW), [5] = CFB(CFEATURE_AVXV512BITALG)|CFB(CFEATURE_BMI2)}, .flags = CFF_AVX512_TST},
 # endif
 # if HAVE_BINUTILS >= 222 && _GNUC_PREREQ(4,9)
 	{.func = (void (*)(void))mempopcnt_AVX2,    .features = {[1] = CFB(CFEATURE_AVX), [4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
