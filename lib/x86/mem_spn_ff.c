@@ -2,7 +2,7 @@
  * mem_spn_ff.c
  * count 0xff span length, x86 implementation
  *
- * Copyright (c) 2009-2012 Jan Seiffert
+ * Copyright (c) 2009-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -96,8 +96,76 @@
 #define SOV8	8
 #define SOV16	16
 #define SOV32	32
+#define SOV64	64
 
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+static size_t mem_spn_ff_AVX512(const void *s, size_t len)
+{
+	const char *p = (const char *)s;
+	size_t rem, ret;
+
+	asm volatile ("prefetcht0 (%0)" : : "r" (s));
+
+	asm volatile (
+			/* vpternlogd is the canonical way to blast all 1s (0xFF) into a ZMM register */
+			"vpternlogd	$0xFF, %%zmm1, %%zmm1, %%zmm1\n\t"
+			"cmp	%4, %[rem]\n\t"
+			"jb	4f\n\t"	/* Jump to tail handling if < 64 bytes */
+			".p2align 4\n"
+			"1:\n\t"
+			"vmovdqu8	(%[p]), %%zmm0\n\t"
+			/* vpcmpb predicate $4 is Not Equal (NEQ). k1 gets 1s where bytes != 0xFF */
+			"vpcmpb	$4, %%zmm1, %%zmm0, %%k1\n\t"
+			"ktestq	%%k1, %%k1\n\t"
+			"jnz	3f\n\t"	/* Found a mismatch! */
+			"add	%4, %[p]\n\t"
+			"sub	%4, %[rem]\n\t"
+			"cmp	%4, %[rem]\n\t"
+			"jae	1b\n"
+			"4:\n\t"	/* --- Tail Handling (< 64 Bytes) --- */
+			"test	%[rem], %[rem]\n\t"
+			"je	5f\n\t"	/* No bytes left, out we go */
+			/* Generate active lane mask for remaining bytes */
+			"mov	$1, %[ret]\n\t"
+			"shl	%b[rem], %[ret]\n\t"	/* %cl is safe because rem is locked to %rcx */
+			"dec	%[ret]\n\t"
+			"kmovq	%[ret], %%k2\n\t"
+			/* Fault-safe zero-masked load: suppresses page faults on out-of-bounds bytes */
+			"vmovdqu8	(%[p]), %%zmm0%{%%k2%}%{z%}\n\t"
+			/* Masked compare: out-of-bounds lanes automatically evaluate to 0 in k1 */
+			"vpcmpb	$4, %%zmm1, %%zmm0, %%k1%{%%k2%}\n\t"
+			"ktestq	%%k1, %%k1\n\t"
+			"jz	5f\n\t"	/* Entire tail matched, Advance pointer by remaining length */
+			"3:\n\t" /* --- Mismatch Found --- */
+			"kmovq	%%k1, %[rem]\n\t"
+			"tzcnt	%[rem], %[rem]\n\t"	/* Index of first non-0xFF byte */
+			"5:\n\t"
+			"lea	(%[p],%[rem]), %[ret]\n\t" /* Advance pointer to the mismatch */
+			"sub	%[s], %[ret]\n\t"
+			: /* %0 */ [p]   "=r" (p),	/* Read/Write overlap (maps input and updates it) */
+			  /* %1 */ [rem] "=c" (rem),	/* Forced to RCX for the dynamic shift */
+			  /* %2 */ [ret] "=&a" (ret)
+			: /* %3 */ [s] "r" (s),
+			  /* %4 */ "i" (SOV64),
+			  /*    */ "0" (p),
+			  /*    */ "1" (len),
+			  /*    */ "m" (p[len])
+			: "cc"
+#  ifdef __AVX512__
+			, "zmm0", "zmm1", "k1", "k2"
+#  elif defined(__AVX__)
+			, "ymm0", "ymm1"
+#  elif defined(__SSE__)
+			, "xmm0", "xmm1"
+#  endif
+	);
+
+	/* The span length is just the difference between the final and initial pointer */
+	return ret;
+}
+#endif
+
 # if HAVE_BINUTILS >= 222
 static size_t mem_spn_ff_AVX2(const void *s, size_t len)
 {
@@ -688,6 +756,9 @@ OUT:
 static __init_cdata const struct test_cpu_feature tfeat_mem_spn_ff[] =
 {
 #ifdef HAVE_BINUTILS
+# if HAVE_BINUTILS >= 226 && !defined(__i386__)
+	{.func = (void (*)(void))mem_spn_ff_AVX512, .features = {[4] = CFB(CFEATURE_AVX512F)|CFB(CFEATURE_AVX512BW)}, .flags = CFF_AVX512_TST},
+# endif
 # if HAVE_BINUTILS >= 222
 	{.func = (void (*)(void))mem_spn_ff_AVX2,  .features = {[4] = CFB(CFEATURE_AVX2)}, .flags = CFF_AVX_TST},
 # endif
