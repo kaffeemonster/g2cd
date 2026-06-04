@@ -1,8 +1,8 @@
 /*
  * adler32.c -- compute the Adler-32 checksum of a data stream
  *   alpha implementation
- * Copyright (C) 1995-2007 Mark Adler
- * Copyright (C) 2010-2011 Jan Seiffert
+ * Copyright (C) 1995-2011, 2016 Mark Adler
+ * Copyright (C) 2010-2011, 2026 Jan Seiffert
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
@@ -18,7 +18,7 @@
 
 #if defined(__GNUC__) &&  defined(__alpha_max__)
 # define HAVE_ADLER32_VEC
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len);
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len);
 # define MIN_WORK 32
 #endif
 
@@ -29,7 +29,7 @@ static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigne
 # define VNMAX (2*NMAX+((9*NMAX)/10))
 
 /* ========================================================================= */
-static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, unsigned len)
+static noinline uint32_t adler32_vec(uint32_t adler, const uint8_t *buf, size_t len)
 {
 	uint32_t s1, s2;
 	unsigned k;
