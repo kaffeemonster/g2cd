@@ -166,7 +166,7 @@ struct test_cpu_feature
 	void (*func)(void);
 	int flags;
 # if defined(__i386__) || defined(__x86_64__)
-	uint32_t features[9];
+	uint32_t features[10];
 # endif
 };
 

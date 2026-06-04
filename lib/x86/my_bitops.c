@@ -536,6 +536,12 @@ static __init void identify_cpu(void)
 	else /* no core info, estimate... */
 		our_cpu.num_cores = 1;
 
+
+	if(cpu_feature(CFEAUTURE_AVX10) && our_cpu.max_basic >= 0x00000024) {
+		cpuids(&a, 0x00000024UL);
+		our_cpu.feautures[9] = a.r.ebx;
+	}
+
 	/*
 	 * sigh....
 	 * At this point we would need to check OS support.
@@ -1057,6 +1063,18 @@ void emit_emms(void)
  * last bytes of the 512 byte space (till now marked as reserved),
  * and even that seems to be problematic (userspace reuses these
  * bytes).
+ *
+ * Update 2026:
+ * And round and round it goes....
+ * Now for AMX/AVX10 they pile on a syscall to ask the OS for
+ * permission:
+ * syscall(SYS_arch_prctl, ARCH_REQ_XCOMP_PERM, XFEATURE_XTILEDATA);
+ * And the same for AVX10. You know what: Screw you.
+ * If a certain someone can't get their shit together, i don't
+ * have time for this.
+ * I feel like Augustus:
+ * "Intel, give me my execution units back!"
+ *
  */
 #define XFEATURE_ENABLED_MASK_R 0
 /* SSE via new xsave */

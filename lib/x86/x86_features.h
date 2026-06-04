@@ -177,10 +177,12 @@
 	FEATURE5( AVX512CD  , 28, "AVX512 Conflict Detection"         ), \
 	FEATURE5( SHA       , 29, "Secure Hash Alg. Instr."           ), \
 	FEATURE5( AVX512BW  , 30, "AVX512 Byte/Word Instr."           ), \
-	FEATURE5( AVXVL     , 31, "AVX Vec. Length Ext.(512 on 128)"  ), \
+	FEATURE5( AVX512VL  , 31, "AVX Vec. Length Ext.(512 on 128)"  ), \
 	FEATURE6( PFTCHWT1  ,  0, "PREFETCHWT1"                       ), \
 	FEATURE6( AVXV512BITALG, 12, "AVX512 Bitinstructions"         ), \
 	FEATURE6( AVXV512VPOPCNTDQ, 14, "AVX512 Vector Popcount"      ), \
+	FEATURE6( AVX10     , 19, "AVX10 Support"                     ), \
+	FEATURE6( AMX,      , 24, "AMX Matrix extentions"             ), \
 	FEATURE8( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE8( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE8( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
@@ -193,7 +195,9 @@
 	FEATURE8( PL_PMM_E  , 13, "Padlock MM enabled"                ), \
 	FEATURE8( CX_MMX    , 31, "Cyrix MMX Ext." /* F3(MIR_FXSR) */ ), \
 	FEATURE9( AP_FP128  ,  0, "SSE is 128 bit wide"               ), \
-	FEATURE9( AP_MOVU   ,  1, "Movu instr. better then movl/movh" )
+	FEATURE9( AP_MOVU   ,  1, "Movu instr. better then movl/movh" ), \
+	FEATURE10( AVX10_256, 16, "AVX10 only 256 Bit"                ), \
+	FEATURE10( AVX10_512, 17, "AVX10 full 512 Bit"                )
 
 # define ENUM_CMD(x,y) CFEATURE_##x = y
 enum x86_cpu_features
