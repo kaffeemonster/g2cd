@@ -537,9 +537,9 @@ static __init void identify_cpu(void)
 		our_cpu.num_cores = 1;
 
 
-	if(cpu_feature(CFEAUTURE_AVX10) && our_cpu.max_basic >= 0x00000024) {
+	if(cpu_feature(CFEATURE_AVX10) && our_cpu.max_basic >= 0x00000024) {
 		cpuids(&a, 0x00000024UL);
-		our_cpu.feautures[9] = a.r.ebx;
+		our_cpu.features[9] = a.r.ebx;
 	}
 
 	/*

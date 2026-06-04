@@ -35,6 +35,7 @@
 # define FEATURE7(x,y,z) ENUM_CMD(x, (y + 192))
 # define FEATURE8(x,y,z) ENUM_CMD(x, (y + 224))
 # define FEATURE9(x,y,z) ENUM_CMD(x, (y + 256))
+# define FEATURE10(x,y,z) ENUM_CMD(x, (y + 288))
 # define X86_CPU_FEATURE_ENUM \
 	FEATURE1( FPU       ,  0, "FPU on chip"                       ), \
 	FEATURE1( VME       ,  1, "Virtual-8086 Mode Extensions"      ), \
@@ -182,7 +183,7 @@
 	FEATURE6( AVXV512BITALG, 12, "AVX512 Bitinstructions"         ), \
 	FEATURE6( AVXV512VPOPCNTDQ, 14, "AVX512 Vector Popcount"      ), \
 	FEATURE6( AVX10     , 19, "AVX10 Support"                     ), \
-	FEATURE6( AMX,      , 24, "AMX Matrix extentions"             ), \
+	FEATURE6( AMX       , 24, "AMX Matrix extentions"             ), \
 	FEATURE8( PL_RNG    ,  2, "Padlock Random Number Generator"   ), \
 	FEATURE8( PL_RNG_E  ,  3, "Padlock RNG enabled"               ), \
 	FEATURE8( PL_ACE    ,  6, "Padlock Advanced Coding ..."       ), \
