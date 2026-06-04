@@ -44,22 +44,22 @@
 # define ROUND_TO(x , n) \
 	((x) & ~((n) - 1L))
 	/* is pointer x aligned on a power of n */
-# define IS_ALIGN(x, n)	(!(((intptr_t)(x)) & ((n) - 1L)))
+# define IS_ALIGN(x, n)	(!(((uintptr_t)(x)) & ((n) - 1L)))
 	/* align pointer x on a power of n */
 # define ALIGN(x, n) \
-	((intptr_t)((x)+(n) - 1L) & ~((intptr_t)(n) - 1L))
+	((uintptr_t)((x)+(n) - 1L) & ~((uintptr_t)(n) - 1L))
 	/* get the bytes till alignment is met */
 #define ALIGN_DIFF(x, n) \
-	(((intptr_t)((x)+(n) - 1L) & ~((intptr_t)(n) - 1L)) - (intptr_t)(x))
+	(((uintptr_t)((x)+(n) - 1L) & ~((uintptr_t)(n) - 1L)) - (uintptr_t)(x))
 	/* roud up an int to match alignment */
 #define ALIGN_SIZE(x, n) \
 	(((x) + (n) - 1L) & ~((n) - 1L))
 	/* yup, sometimes we have to align down */
 #define ALIGN_DOWN(x, n) \
-	(((intptr_t)(x)) & ~((intptr_t)(n) - 1L))
+	(((uintptr_t)(x)) & ~((uintptr_t)(n) - 1L))
 	/* and the diff to it */
 #define ALIGN_DOWN_DIFF(x, n) \
-	(((intptr_t)(x)) & ((intptr_t)(n) - 1L))
+	(((uintptr_t)(x)) & ((uintptr_t)(n) - 1L))
 	/* divide while always rounding up */
 #define DIV_ROUNDUP(a, b) \
 	(((a) + (b) - 1) / (b))
