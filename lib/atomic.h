@@ -43,6 +43,7 @@
 /* array padding needed for load-linked-and-store architectures to prevent thrashing */
 /* powerpc is implimentation defined ... sigh ... doc say some 2**4 */
 # if defined(__alpha__) || defined(__powerpc__) || defined(__powerpc64__)
+// TODO: propably all ll/sc arch
 #  define ARCH_NEEDED_APAD 16
 # else
 #  define ARCH_NEEDED_APAD 1
@@ -143,21 +144,59 @@ typedef union xxxxxx5
 	/* that arm has no clear generation define is a PITA */
 #   include "arm/atomic.h"
 #  else
-#   if _GNUC_PREREQ(4, 1)
-#    define atomic_cmppx(nval, oval, ptr) (void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval))
-#    define atomic_cmpx(nval, oval, ptr) ((int)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
-#    define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
-#    define atomic_inc_return(ptr) __sync_fetch_and_add(&(ptr)->d, 1)
-#    define atomic_dec(ptr) ((void)__sync_fetch_and_sub(&(ptr)->d, 1))
-#    define atomic_dec_test(ptr) (!__sync_sub_and_fetch(&(ptr)->d, 1))
-#    define mb() __sync_synchronize()
-#    define rmb() __sync_synchronize()
-#    define wmb() __sync_synchronize()
-#   endif
-#   include "generic/atomic.h"
+#   define ATOMIC_NEED_FULLFALLBACK
 #  endif
 # else
-#  if _GNUC_PREREQ(4, 1)
+#  define ATOMIC_NEED_FULLFALLBACK
+# endif
+
+# ifdef ATOMIC_NEED_FULLFALLBACK
+#  if _GNUC_PREREQ(4, 7)
+static always_inline int atomic_x(int nval, atomic_t *ptr) {
+	int reval; __atomic_exchange(&ptr->d, &nval, &reval, __ATOMIC_ACQ_REL); return reval;
+}
+#   define atomic_x atomic_x
+static always_inline void *atomic_px(void *nval, atomicptr_t *ptr) {
+	void *reval; __atomic_exchange(&ptr->d, &nval, &reval, __ATOMIC_ACQ_REL); return reval;
+}
+#   define atomic_px atomic_px
+static always_inline void *atomic_cmppx(void *nval, void *oval, atomicptr_t *ptr) {
+	void *reval = oval; __atomic_compare_exchange_n(&ptr->d, &reval, nval, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE); return reval;
+}
+#   define atomic_cmppx atomic_cmppx
+static always_inline int atomic_cmpx(int nval, int oval, atomic_t *ptr) {
+	int reval = (oval); __atomic_compare_exchange_n(&ptr->d, &reval, nval, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE); return reval;
+}
+#   define atomic_cmpx atomic_cmpx
+#   define atomic_inc(ptr) ((void)__atomic_fetch_add(&(ptr)->d, 1, __ATOMIC_ACQ_REL))
+#   define atomic_inc_return(ptr) __atomic_fetch_add(&(ptr)->d, 1, __ATOMIC_ACQ_REL)
+#   define atomic_dec(ptr) ((void)__atomic_fetch_sub(&(ptr)->d, 1, __ATOMIC_ACQ_REL))
+#   define atomic_dec_test(ptr) (!__atomic_sub_fetch(&(ptr)->d, 1, __ATOMIC_ACQ_REL))
+#   define atomic_bit_set(ptr, n) ((void)__atomic_fetch_or(&(ptr)->d), 1 << (n)m __ATOMIC_ACQ_REL)
+#   define ATOMIC_BIT_SET_ARCH
+#   define mb() __atomic_thread_fence(__ATOMIC_ACQ_REL)
+#   define rmb() __atomic_thread_fence(__ATOMIC_ACQUIRE)
+#   define wmb() __atomic_thread_fence(__ATOMIC_RELEASE)
+#  elif _GNUC_PREREQ(4, 1)
+static always_inline int atomic_x(int nval, atomic_t *ptr)
+{
+	int oval = ptr->d, xval;
+	do { cpu_relax(); oval = xval;
+start_loop: xval = __sync_val_compare_and_swap(&ptr->d, oval, nval); }
+	while(xval != oval);
+	return xval;
+}
+#   define atomic_x atomic_x
+static always_inline void *atomic_px(void *nval, atomicptr_t *ptr)
+{
+	void *oval = ptr->d, *xval;
+	goto start_loop;
+	do { cpu_relax(); oval = xval;
+start_loop: xval = __sync_val_compare_and_swap(&ptr->d, oval, nval); }
+	while(xval != oval);
+	return xval;
+}
+#   define atomic_px atomic_px
 #   define atomic_cmppx(nval, oval, ptr) ((void *)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
 #   define atomic_cmpx(nval, oval, ptr) ((int)__sync_val_compare_and_swap(&(ptr)->d, (oval), (nval)))
 #   define atomic_inc(ptr) ((void)__sync_fetch_and_add(&(ptr)->d, 1))
@@ -170,6 +209,7 @@ typedef union xxxxxx5
 #  endif
 #  include "generic/atomic.h"
 # endif
+# undef ATOMIC_NEED_FULLFALLBACK
 
 # ifndef ATOMIC_PUSH_ARCH
 static always_inline void atomic_push(atomicst_t *head, atomicst_t *node)
