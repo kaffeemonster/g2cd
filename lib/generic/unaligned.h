@@ -1,5 +1,5 @@
 #ifndef _LIB_GENERIC_UNALIGNED_H
-# define _LIB_GENREIC_UNALIGNED_H
+# define _LIB_GENERIC_UNALIGNED_H
 
 /*
  * This is the most generic implementation of unaligned accesses
