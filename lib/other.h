@@ -446,8 +446,17 @@ static inline int isgraph_a(unsigned int c)
 #   define CPU_RELAX_CONTENT __asm__ volatile ("hint @pause" ::: "memory");
 #  elif defined(__sparc) || defined(__sparc__)
 #   define CPU_RELAX_CONTENT __asm__ volatile ("rd %%ccr, %%g0" : : : "memory");
-#  elif defined(__riscv) && defined(__riscv_zihintpause)
-#   define CPU_RELAX_CONTENT __asm__ volatile ("PAUSE" : : : "memory");
+#  elif defined(__riscv)
+/* pause is specifically designed as a nop/fence on chips without zhintpause
+ * but then offcourse the toolchain crew gets anal ... */
+/* && defined(__riscv_zihintpause) */
+#   define CPU_RELAX_CONTENT  __asm__ __volatile__( \
+	".option push\n\t" \
+	".option arch, +zihintpause\n\t" \
+	"pause\n\t" \
+	".option pop" \
+	::: "memory" \
+	);
 #  else
 #   define CPU_RELAX_CONTENT barrier();
 #  endif
