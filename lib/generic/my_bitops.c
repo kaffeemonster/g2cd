@@ -40,7 +40,7 @@ __init void patch_instruction(void *where GCC_ATTR_UNUSED_PARAM,
 {
 }
 
-__init void patch_got(void *where GCC_ATTR_UNUSED_PARAM,
+__init void patch_got(uintptr_t *where GCC_ATTR_UNUSED_PARAM,
                       const struct test_cpu_feature *t GCC_ATTR_UNUSED_PARAM,
                       size_t l GCC_ATTR_UNUSED_PARAM)
 {

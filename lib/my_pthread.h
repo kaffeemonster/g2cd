@@ -2,7 +2,7 @@
  * my_pthread.h
  * header-file to redirect pthread.h inclusion
  *
- * Copyright (c) 2010-2012 Jan Seiffert
+ * Copyright (c) 2010-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -231,6 +231,7 @@ LIB_MY_PTHREAD_EXTRN(void dbm_close(DBM *));
 LIB_MY_PTHREAD_EXTRN(datum dbm_fetch(DBM *, datum));
 LIB_MY_PTHREAD_EXTRN(datum dbm_firstkey(DBM *));
 LIB_MY_PTHREAD_EXTRN(datum dbm_nextkey(DBM *));
+#   define dbm_nextkey_safe(ctx, k) dbm_nextkey(ctx)
 #   define DBM_INSERT 1
 #   define DBM_REPLACE 2
 LIB_MY_PTHREAD_EXTRN(int dbm_store(DBM *, datum, datum, int));

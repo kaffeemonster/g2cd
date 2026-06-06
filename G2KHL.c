@@ -56,33 +56,45 @@
 #  define DB_DBM_HSEARCH 1
 #  define DBM_TYPE DBM *
 #  include <db.h>
+#  define dbm_nextkey_safe(ctx, k) dbm_nextkey(ctx)
 # elif defined(HAVE_NDBM_H)
 #  include <ndbm.h>
 #  define DBM_TYPE DBM *
+#  define dbm_nextkey_safe(ctx, k) dbm_nextkey(ctx)
 # else
 #  include <gdbm.h>
 #  define DBM_TYPE  GDBM_FILE
 static DBM_TYPE dbm_open(const char *f, int flags, int mode)
 {
-	int nflags, nmode;
+	int nflags, nmode = 0;
 
 	flags &= O_RDONLY | O_RDWR | O_CREAT | O_TRUNC;
-	if(O_RDONLY == flags)
-		nflags = GDBM_READER, nmode = 0;
-	else if((O_RDWR|O_CREAT))
-		nflags = GDBM_WRCREAT, mode = mode;
-	else if(O_TRUNC == (flags & O_TRUNC))
-		nflags = GDBM_NEWDB, mode = mode;
+	if((O_TRUNC & flags) && ((O_RDWR|O_CREAT) & flags))
+		nflags = GDBM_NEWDB, nmode = mode;
+	else if((O_CREAT & flags) && (O_RDWR & flags))
+		nflags = GDBM_WRCREAT, nmode = mode;
+	else if((O_ACCMODE & flags) == O_RDWR)
+		nflags = GDBM_WRITER;
 	else
-		nflags = GDBM_WRITER, mode = 0;
+		nflags = GDBM_READER;
 	return gdbm_open((char *)(intptr_t)f, 0, nflags, nmode, NULL);
+}
+
+static inline datum dbm_nextkey_safe(DBM_TYPE db, datum last_key)
+{
+	/* gdbm wants the last key, and we have to manage the memory...  */
+	if(!last_key.dptr)
+		return gdbm_firstkey(db);
+	datum next = gdbm_nextkey(db, last_key);
+	if(last_key.dptr)
+		free(last_key.dptr);
+	return next;
 }
 #  define dbm_close      gdbm_close
 #  define dbm_fetch      gdbm_fetch
 #  define dbm_store      gdbm_store
 #  define dbm_delete     gdbm_delete
 #  define dbm_firstkey   gdbm_firstkey
-#  define dbm_nextkey(a) gdbm_nextkey(a, gdbm_firstkey(a))
 #  define DBM_REPLACE    GDBM_REPLACE
 # endif
 #else
@@ -640,7 +652,7 @@ retry:
 	cycling = (unsigned)((((unsigned long long)rand())*8)/((unsigned long long)RAND_MAX));
 	do
 	{
-		*key = dbm_nextkey(gwc_db);
+		*key = dbm_nextkey_safe(gwc_db, *key);
 		if(!key->dptr)
 			*key = dbm_firstkey(gwc_db);
 		if(!key->dptr) {
@@ -671,7 +683,7 @@ retry:
 static bool gwc_switch(void)
 {
 	char *url;
-	datum key, value;
+	datum key = {NULL, 0}, value;
 
 	if(!gwc_get_rand(&key, &value))
 		return false;
@@ -690,12 +702,12 @@ static bool gwc_switch(void)
 
 const char *g2_khl_get_url(void)
 {
-	datum key, value;
+	datum key = {NULL, 0}, value;
 
 	if(!gwc_get_rand(&key, &value))
 		return NULL;
 
-// TODO: is this save? or will the db remove the data? and when?
+	/* db and ndbm work with internal static buffer, gdbm allocs */
 	return key.dptr;
 }
 
@@ -1247,6 +1259,7 @@ static int gwc_handle_response(void)
 		}
 		buff->pos += wptr + str_size("HTTP/") - buffer_start(*buff);
 		act_gwc.state++;
+		GCC_FALL_THROUGH
 	case GWC_RES_HTTP_11:
 		{
 			int tmp, a, b;
@@ -1264,6 +1277,7 @@ static int gwc_handle_response(void)
 			buff->pos += 4;
 			act_gwc.state++;
 		}
+		GCC_FALL_THROUGH
 	case GWC_RES_HTTP_SKIP_WHITE:
 		{
 			bool goto_to_next = false;
@@ -1284,6 +1298,7 @@ static int gwc_handle_response(void)
 				break;
 			}
 		}
+		GCC_FALL_THROUGH
 	case GWC_RES_HTTP_RESULT:
 		if(4 > buffer_remaining(*buff)) {
 			keep_going = false;
@@ -1315,6 +1330,7 @@ static int gwc_handle_response(void)
 			return false;
 		buff->pos++;
 		act_gwc.state++;
+		GCC_FALL_THROUGH
 	case GWC_RES_CRLFCRLF:
 		/*
 		 * if a server send \n\r or something like that,
@@ -1328,6 +1344,7 @@ static int gwc_handle_response(void)
 		}
 		buff->pos += wptr + str_size("\r\n\r\n") - buffer_start(*buff);
 		act_gwc.state++;
+		GCC_FALL_THROUGH
 	case GWC_RES_FIND_LINE:
 		if(buffer_remaining(*buff))
 		{
@@ -1493,6 +1510,7 @@ bool g2_khl_tick(void)
 				break;
 			}
 		}
+		GCC_FALL_THROUGH
 	case KHL_GWC_REQ:
 		if(gwc_request())
 		{
@@ -1515,6 +1533,7 @@ bool g2_khl_tick(void)
 			cache.state = KHL_FILL;
 			break;
 		}
+		GCC_FALL_THROUGH
 	case KHL_GWC_REC:
 		{
 			int result = gwc_receive();
