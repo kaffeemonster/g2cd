@@ -2,7 +2,7 @@
  * backtrace.c
  * try to spit out a backtrace on crashes
  *
- * Copyright (c) 2008-2012 Jan Seiffert
+ * Copyright (c) 2008-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -353,6 +353,11 @@ Another thread crashed and something went wrong.\nSo no BT, maybe a core.\n"
 #  undef NGREG
 #  define NGREG (sizeof(uc->uc_mcontext)/sizeof(unsigned long))
 	greg_iter = (unsigned long *)&uc->uc_mcontext.sc_flags;
+# elif defined(__riscv)
+#  undef NGREG
+#  define NGREG 32
+	/* and another one, and another one, and another one bites my shiny metal... */
+	greg_iter = (unsigned long *)&uc->uc_mcontext.__gregs[0];
 # else
 	greg_iter = (unsigned long *)&uc->uc_mcontext.gregs[0];
 # endif
