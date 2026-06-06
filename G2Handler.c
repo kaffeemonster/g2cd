@@ -211,7 +211,7 @@ retry_pack:
 					zstd_out.size = buffer_remaining(*w_entry->send);
 					zstd_out.pos  = 0;
 #else
-					logg_develd("connec with zstd out encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_out);
+					logg_develd("connec with zstd out encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->encoding_out);
 					return w_entry;
 #endif
 				}
@@ -258,10 +258,10 @@ retry_pack:
 				}
 				else if(ENC_ZSTD == w_entry->encoding_out)
 				{
+#ifdef HAVE_ZSTD
 					size_t zstd_res = ZSTD_compressStream2(w_entry->encoder.zstd, &zstd_out, &zstd_in, old_flush ? ZSTD_e_flush : ZSTD_e_continue);
 					if(ZSTD_isError(zstd_res))
 					{
-#ifdef HAVE_ZSTD
 						ZSTD_ErrorCode zstd_errc = ZSTD_getErrorCode(zstd_res);
 						switch(zstd_errc)
 						{
@@ -300,7 +300,7 @@ retry_pack:
 						w_entry->u.handler.z_flush = old_flush;
 					}
 #else
-					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->encoding_in);
 					return w_entry;
 #endif
 				}
@@ -394,7 +394,7 @@ retry_unpack:
 					zstd_out.size = buffer_remaining(*d_source);
 					zstd_out.pos  = 0;
 #else
-					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->encoding_in);
 					return w_entry;
 #endif
 				}
@@ -472,7 +472,7 @@ retry_unpack:
 					w_entry->recv->pos += zstd_in.pos;
 					d_source->pos += zstd_out.pos;
 #else
-					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->enconding_in);
+					logg_develd("connec with zstd in encoding without zstd support? This should not happen: IP %p#I %i\n", &w_entry->remote_host, w_entry->encoding_in);
 					return w_entry;
 #endif
 				}

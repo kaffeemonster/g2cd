@@ -612,7 +612,8 @@ static noinline void header_handle_line(g2_connection_t *to_con, size_t len)
 	char *ret_val, *f_end, *c_start;
 	size_t old_pos;
 	ssize_t f_dist, c_dist;
-	action_string *f_found, f_key;
+	const action_string *f_found;
+	action_string f_key;
 
 	line = buffer_start(*to_con->recv);
 	ret_val = my_memchr(line, ':', len);
@@ -722,9 +723,9 @@ static bool mediate_enc_in(g2_connection_t *to_con)
 	return true;
 }
 
+#ifdef HAVE_ZSTD
 static void *get_zstd_cstream(void)
 {
-#ifdef HAVE_ZSTD
 //TODO: zstd context pooling
 	ZSTD_CStream *ret = NULL;
 	size_t res;
@@ -750,14 +751,10 @@ static void *get_zstd_cstream(void)
 	}
 
 	return ret;
-#else
-	return NULL;
-#endif
 }
 
 static void *get_zstd_dstream(void)
 {
-#ifdef HAVE_ZSTD
 //TODO: zstd context pooling
 	ZSTD_DStream *ret = NULL;
 	size_t res;
@@ -784,10 +781,8 @@ static void *get_zstd_dstream(void)
 	}
 
 	return ret;
-#else
-	return NULL;
-#endif
 }
+#endif
 
 /*
  * This function handshakes a G2Connection from data in the recv-buffer
