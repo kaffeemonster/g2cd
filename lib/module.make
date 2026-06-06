@@ -49,6 +49,7 @@ TARED_DIRS += \
 	$(MPL)/ppc \
 	$(MPL)/parisc \
 	$(MPL)/sparc \
+	$(MPL)/riscv \
 	$(MPL)/tile \
 	$(MPL)/ia64 \
 	$(MPL)/alpha \
@@ -169,6 +170,7 @@ POPCOUNTSTSRC = \
 	$(MPL)/arm/popcountst.c \
 	$(MPL)/x86/popcountst.c \
 	$(MPL)/ia64/popcountst.c \
+	$(MPL)/riscv/popcountst.c \
 	$(MPL)/sparc/popcountst.c \
 	$(MPL)/tile/popcountst.c \
 	$(MPL)/ppc/popcountst.c \
