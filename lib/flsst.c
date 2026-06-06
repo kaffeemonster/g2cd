@@ -2,7 +2,7 @@
  * flsst.c
  * find last set in size_t
  *
- * Copyright (c) 2004-2012 Jan Seiffert
+ * Copyright (c) 2004-2026 Jan Seiffert
  *
  * This file is part of g2cd.
  *
@@ -57,6 +57,8 @@
 #  include "arm/flsst.c"
 # elif defined(__tile__)
 #  include "tile/flsst.c"
+# elif defined(__riscv)
+#  include "riscv/flsst.c"
 # else
 #  include "generic/flsst.c"
 # endif

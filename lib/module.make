@@ -160,6 +160,7 @@ FLSSTSRC = \
 	$(MPL)/generic/flsst.c \
 	$(MPL)/x86/flsst.c \
 	$(MPL)/mips/flsst.c \
+	$(MPL)/riscv/flsst.c \
 	$(MPL)/ppc/flsst.c \
 	$(MPL)/alpha/flsst.c \
 	$(MPL)/ia64/flsst.c \
