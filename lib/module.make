@@ -146,6 +146,7 @@ ATOMSRC = \
 	$(MPL)/mips/atomic.h \
 	$(MPL)/ia64/atomic.h \
 	$(MPL)/ppc/atomic.h \
+	$(MPL)/riscv/atomic.h \
 	$(MPL)/sparc/atomic.h \
 	$(MPL)/alpha/atomic.h \
 	$(MPL)/arm/atomic.h

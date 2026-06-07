@@ -143,6 +143,29 @@ typedef union xxxxxx5
         defined(__ARM_ARCH_7EM__)
 	/* that arm has no clear generation define is a PITA */
 #   include "arm/atomic.h"
+#  elif defined(__riscv)
+#   if 1
+#    define ATOMIC_NEED_FULLFALLBACK
+#   else
+	/* we have a set of inline asm funcs, but i guess RISCV
+	 * will be the first arch to simply use the compiler suppported
+	 * __atomic_* builtins. Its 2026 for f sake, what was the first
+	 * gcc to support RISCV? 7.1? Mucking with inline asm in such a
+	 * sensitive area is no fun.
+	 * And just with the old __sync* builtins fallback in place, it
+	 * built right out of the gate.
+	 * Here we are, at the tug of "let the tools/libs solve it" and
+	 * "better build a fallback, have seen enough compiler ICE when
+	 * you try the promised world of modern glitz and glam."
+	 * And if you have a fallback, why change, stay on stable ground:
+	 * I can't update my Alpha cross compiler since 4.x exactly
+	 * because the atomic builtins don't build.
+	 * But for some non-premier archs pawning off the problem to
+	 * the compiler could be nice.
+	 * *sigh*
+	 */
+#    include "riscv/atomic.h"
+#   endif
 #  else
 #   define ATOMIC_NEED_FULLFALLBACK
 #  endif
